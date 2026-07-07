@@ -1,0 +1,6 @@
+{
+  "name": "Ruqayya Transport ERP",
+  "description": "Enterprise Fleet & Transport Management ERP for Ruqayya Transport Limited",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

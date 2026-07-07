@@ -1,0 +1,77 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-success: var(--brand-success);
+  --color-brand-warning: var(--brand-warning);
+  --color-brand-danger: var(--brand-danger);
+  
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-border-main: var(--border-main);
+}
+
+:root {
+  --brand-navy: #0B132B; /* Dark Navy Slate */
+  --brand-gold: #D4AF37; /* Metallic Gold */
+  --brand-yellow: #EAB308; /* Yellow */
+  --brand-success: #10B981; /* Green */
+  --brand-warning: #F59E0B; /* Orange */
+  --brand-danger: #EF4444; /* Red */
+
+  --bg-base: #F8FAFC; /* Light slate base */
+  --bg-surface: #FFFFFF; /* Pure white card surface */
+  --text-main: #0B132B; /* Dark text */
+  --text-muted: #64748B; /* Slate 500 */
+  --border-main: #E2E8F0; /* Slate 200 border */
+}
+
+.dark {
+  --brand-navy: #1C2541; /* Slightly lighter navy for dark container */
+  --brand-gold: #F59E0B; /* Vivid golden amber */
+  --brand-yellow: #EAB308;
+  --brand-success: #10B981;
+  --brand-warning: #F59E0B;
+  --brand-danger: #EF4444;
+
+  --bg-base: #020617; /* Slate 950 deep canvas */
+  --bg-surface: #0B132B; /* Slate 900 surface */
+  --text-main: #F8FAFC; /* Warm off-white */
+  --text-muted: #94A3B8; /* Slate 400 */
+  --border-main: #1E293B; /* Slate 800 border */
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  overflow-x: hidden;
+}
+
+/* Custom fade in animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Hide scrollbar utility for clean dashboards */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

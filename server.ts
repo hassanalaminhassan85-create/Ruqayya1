@@ -1,0 +1,2941 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import { createServer as createViteServer } from 'vite';
+import { 
+  loadDB, 
+  saveDB, 
+  seedDBIfEmpty, 
+  hashPassword, 
+  verifyPassword, 
+  generateUUID, 
+  saveR2File, 
+  getR2FilePath,
+  setDBChangeListener
+} from './src/utils/server_db';
+
+const app = express();
+const PORT = 3000;
+
+// Setup generous JSON limits for passport photo and PDF uploads via base64
+app.use(express.json({ limit: '15mb' }));
+
+// Helper to write an audit log entry on the server
+function writeServerAuditLog(
+  userId: string | null, 
+  userEmail: string, 
+  userRole: string, 
+  action: string, 
+  prevVal: string | null, 
+  newVal: string | null, 
+  req: express.Request
+) {
+  const db = loadDB();
+  const ip = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1';
+  
+  const log = {
+    id: `AUD-${Date.now()}-${generateUUID().substring(0, 8).toUpperCase()}`,
+    user_id: userId,
+    user_email: userEmail,
+    user_role: userRole,
+    action,
+    previous_value: prevVal,
+    new_value: newVal,
+    ip_address: ip,
+    created_at: new Date().toISOString(),
+    status: 'active'
+  };
+  
+  db.audit_logs.unshift(log);
+  saveDB(db);
+}
+
+// Authentication Middleware
+function authenticateSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(412).json({ error: 'Authentication required. Active session parameters not found.' });
+  }
+
+  const token = authHeader.replace('Bearer ', '').trim();
+  const db = loadDB();
+  const session = db.sessions.find(s => s.token === token && s.status === 'active');
+
+  if (!session) {
+    return res.status(401).json({ error: 'Session expired or invalidated. Please login again.' });
+  }
+
+  // Check expiration
+  if (new Date(session.expires_at) < new Date()) {
+    session.status = 'expired';
+    saveDB(db);
+    return res.status(401).json({ error: 'Your corporate session has expired.' });
+  }
+
+  // Bind active user details to request object
+  const user = db.users.find(u => u.id === session.user_id);
+  if (!user) {
+    return res.status(401).json({ error: 'Associated user record not found.' });
+  }
+
+  const role = db.roles.find(r => r.id === user.role_id);
+  
+  (req as any).user = {
+    id: user.id,
+    email: user.email,
+    fullName: user.full_name,
+    role: role ? role.name : 'public',
+    roleId: user.role_id
+  };
+  (req as any).token = token;
+
+  next();
+}
+
+// --- REAL-TIME SYSTEM (SERVER-SENT EVENTS REGISTRY) ---
+let sseClients: any[] = [];
+
+// Register the database change listener to broadcast state snapshots to all browser clients
+setDBChangeListener(() => {
+  const db = loadDB();
+  const payload = JSON.stringify({
+    type: 'db_update',
+    drivers: db.drivers || [],
+    vehicles: db.vehicles || [],
+    vouchers: db.fuel_vouchers || [],
+    financials: db.financial_records || [],
+    notifications: db.notifications || [],
+    audit_logs: db.audit_logs || [],
+    users: db.users || [],
+    admins: db.admins || [],
+    shareholders: db.shareholders || [],
+    cycles: db.cycles || [],
+    company_settings: db.company_settings || {},
+    shareholder_settings: db.shareholder_settings || {},
+    trip_manifests: db.trip_manifests || []
+  });
+  
+  sseClients.forEach(client => {
+    try {
+      client.res.write(`data: ${payload}\n\n`);
+    } catch (err) {
+      // client connection closed or dead
+    }
+  });
+});
+
+app.get('/api/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const clientId = Date.now();
+  sseClients.push({ id: clientId, res });
+
+  // Send initial data instantly upon handshake
+  const db = loadDB();
+  const payload = JSON.stringify({
+    type: 'db_update',
+    drivers: db.drivers || [],
+    vehicles: db.vehicles || [],
+    vouchers: db.fuel_vouchers || [],
+    financials: db.financial_records || [],
+    notifications: db.notifications || [],
+    audit_logs: db.audit_logs || [],
+    users: db.users || [],
+    admins: db.admins || [],
+    shareholders: db.shareholders || [],
+    cycles: db.cycles || [],
+    company_settings: db.company_settings || {},
+    shareholder_settings: db.shareholder_settings || {},
+    trip_manifests: db.trip_manifests || []
+  });
+  res.write(`data: ${payload}\n\n`);
+
+  req.on('close', () => {
+    sseClients = sseClients.filter(c => c.id !== clientId);
+  });
+});
+
+// --- API ROUTES ---
+
+// 1. PUBLIC: Health Status
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', database: 'connected', environment: process.env.NODE_ENV || 'development' });
+});
+
+// 2. PUBLIC: Driver Self-Registration Form
+app.post('/api/auth/register-driver', (req, res) => {
+  try {
+    const { personal, guarantor, vehicle } = req.body;
+    
+    if (!personal || !guarantor || !vehicle) {
+      return res.status(400).json({ error: 'Missing registration details. Personal, guarantor, and vehicle are required.' });
+    }
+
+    const db = loadDB();
+
+    // Check unique constraints
+    const emailExists = db.users.some(u => u.email.toLowerCase() === personal.email.toLowerCase());
+    if (emailExists) {
+      return res.status(400).json({ error: 'This email address is already registered inside our fleet.' });
+    }
+
+    const ninExists = db.drivers.some(d => d.nin === personal.nin);
+    if (ninExists) {
+      return res.status(400).json({ error: 'National Identification Number (NIN) already associated with another driver.' });
+    }
+
+    const plateExists = db.vehicles.some(v => v.plate_number.toUpperCase() === vehicle.plateNumber.toUpperCase());
+    if (plateExists) {
+      return res.status(400).json({ error: 'Vehicle plate number already registered.' });
+    }
+
+    // Process secure files to R2
+    let driverPassportUrl = '';
+    let guarantorPassportUrl = '';
+
+    if (personal.passportPhoto) {
+      driverPassportUrl = saveR2File(`${personal.fullName.replace(/\s+/g, '_')}_passport`, personal.passportPhoto);
+    }
+    if (guarantor.passport) {
+      guarantorPassportUrl = saveR2File(`${guarantor.fullName.replace(/\s+/g, '_')}_guarantor_passport`, guarantor.passport);
+    }
+
+    // A. Create Core User
+    const userId = generateUUID();
+    const newUser = {
+      id: userId,
+      email: personal.email.toLowerCase(),
+      phone: personal.phone,
+      password_hash: hashPassword(personal.password || 'driver123'),
+      full_name: personal.fullName,
+      role_id: 'role-driver',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 'pending' // Pending approval workflow
+    };
+
+    // B. Create Driver Profile
+    const driverId = generateUUID();
+    const newDriver = {
+      id: driverId,
+      user_id: userId,
+      company_driver_id: personal.companyDriverId || `PEND-${generateUUID().substring(0, 4).toUpperCase()}`,
+      address: personal.address,
+      nin: personal.nin,
+      license_number: personal.licenseNumber || `LIC-${generateUUID().substring(0, 5).toUpperCase()}`,
+      license_expiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      classification: 'Assisted', // Default classification, editable by admins
+      rating: 5.0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 'pending' // Needs approval
+    };
+
+    // C. Create Guarantor
+    const guarantorId = generateUUID();
+    const newGuarantor = {
+      id: guarantorId,
+      driver_id: driverId,
+      full_name: guarantor.fullName,
+      phone: guarantor.phone,
+      address: guarantor.address,
+      relationship: guarantor.relationship,
+      nin: guarantor.nin,
+      passport_photo_url: guarantorPassportUrl,
+      created_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    // D. Create Vehicle (Link pending driver)
+    const vehicleId = generateUUID();
+    const newVehicle = {
+      id: vehicleId,
+      driver_id: driverId,
+      brand: vehicle.brand,
+      model: vehicle.model,
+      year: parseInt(vehicle.year) || 2020,
+      colour: vehicle.colour,
+      plate_number: vehicle.plateNumber.toUpperCase(),
+      registration_number: vehicle.registrationNumber,
+      chassis_number: vehicle.chassisNumber,
+      engine_number: vehicle.engineNumber,
+      capacity: vehicle.capacity || '30 Tons',
+      mileage: 0,
+      created_at: new Date().toISOString(),
+      status: 'idle'
+    };
+
+    // Save driver documents mapping
+    if (driverPassportUrl) {
+      db.driver_documents.push({
+        id: generateUUID(),
+        driver_id: driverId,
+        document_type: 'passport_photo',
+        file_url: driverPassportUrl,
+        created_at: new Date().toISOString(),
+        status: 'active'
+      });
+    }
+
+    // Save into D1 emulation
+    db.users.push(newUser);
+    db.drivers.push(newDriver);
+    db.guarantors.push(newGuarantor);
+    db.vehicles.push(newVehicle);
+
+    // Register active notification for admins
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'New Self-Registered Driver Candidate',
+      title_ha: 'Sabuwar Rijistar Direba',
+      message_en: `Driver ${personal.fullName} submitted profile & vehicle ${vehicle.plateNumber}. Review required.`,
+      message_ha: `Direba ${personal.fullName} ya mika bayanan motar sa ${vehicle.plateNumber}. Tana jiran amincewa.`,
+      type: 'warning',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    // Server Audit Logs
+    writeServerAuditLog(
+      null, 
+      personal.email, 
+      'public', 
+      'DRIVER_SELF_REGISTRATION', 
+      null, 
+      `Registered driver ${personal.fullName} with vehicle ${vehicle.plateNumber}`, 
+      req
+    );
+
+    res.json({ success: true, message: 'Your registration was submitted successfully. Pending Admin review.' });
+  } catch (error: any) {
+    console.error('Driver self registration failure:', error);
+    res.status(500).json({ error: `Internal registry compilation error: ${error.message}` });
+  }
+});
+
+// 3. PUBLIC: Director Self-Registration (Only for system bootstrap / first setup)
+app.post('/api/auth/register-director', (req, res) => {
+  try {
+    const { fullName, email, phone, password, companyId, passportPhoto } = req.body;
+    
+    if (!fullName || !email || !phone || !password || !companyId) {
+      return res.status(400).json({ error: 'All fields are mandatory for Director authentication.' });
+    }
+
+    const db = loadDB();
+    const hasExistingDirectors = db.users.some(u => u.role_id === 'role-director');
+
+    // Security rule: If a director already exists, require active director credentials to create another!
+    if (hasExistingDirectors) {
+      // Must verify token
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(403).json({ error: 'Executive director setup already bootstrapped. Authorization required to spawn additional nodes.' });
+      }
+
+      const token = authHeader.replace('Bearer ', '').trim();
+      const session = db.sessions.find(s => s.token === token && s.status === 'active');
+      if (!session) {
+        return res.status(401).json({ error: 'Invalid executive session token.' });
+      }
+
+      const creator = db.users.find(u => u.id === session.user_id);
+      if (!creator || creator.role_id !== 'role-director') {
+        return res.status(403).json({ error: 'Only authorized directors can spawn secondary director nodes.' });
+      }
+    }
+
+    // Check unique constraints
+    if (db.users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+      return res.status(400).json({ error: 'Email already mapped to an active ERP credential.' });
+    }
+
+    let passportUrl = '';
+    if (passportPhoto) {
+      passportUrl = saveR2File(`director_${fullName.replace(/\s+/g, '_')}`, passportPhoto);
+    }
+
+    const userId = generateUUID();
+    const newUser = {
+      id: userId,
+      email: email.toLowerCase(),
+      phone,
+      password_hash: hashPassword(password),
+      full_name: fullName,
+      role_id: 'role-director',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    db.users.push(newUser);
+    db.directors.push({
+      id: generateUUID(),
+      user_id: userId,
+      company_id: companyId,
+      passport_photo_url: passportUrl,
+      created_at: new Date().toISOString(),
+      status: 'active'
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      null,
+      email,
+      'director',
+      'DIRECTOR_SPAWNED',
+      null,
+      `New Director Node Created: ${fullName} (${companyId})`,
+      req
+    );
+
+    res.json({ success: true, message: 'Director account established successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. AUTHENTICATED (Directors only): Admin Registration
+app.post('/api/auth/register-admin', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Directors-only credential endpoint.' });
+    }
+
+    const { fullName, email, phone, password, companyId, passportPhoto } = req.body;
+    if (!fullName || !email || !phone || !password || !companyId) {
+      return res.status(400).json({ error: 'Complete all parameters.' });
+    }
+
+    const db = loadDB();
+    if (db.users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+      return res.status(400).json({ error: 'This email is already registered.' });
+    }
+
+    let passportUrl = '';
+    if (passportPhoto) {
+      passportUrl = saveR2File(`admin_${fullName.replace(/\s+/g, '_')}`, passportPhoto);
+    }
+
+    const userId = generateUUID();
+    const newUser = {
+      id: userId,
+      email: email.toLowerCase(),
+      phone,
+      password_hash: hashPassword(password),
+      full_name: fullName,
+      role_id: 'role-admin',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 'active' // Approved automatically by creating director
+    };
+
+    db.users.push(newUser);
+    db.admins.push({
+      id: generateUUID(),
+      user_id: userId,
+      company_id: companyId,
+      passport_photo_url: passportUrl,
+      created_at: new Date().toISOString(),
+      status: 'active'
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'ADMIN_CREATION',
+      null,
+      `Created Admin User: ${fullName} (${companyId})`,
+      req
+    );
+
+    res.json({ success: true, message: 'Operator/Admin registered successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5. PUBLIC: Secure Unified Login Endpoint
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password, rememberMe } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Please submit both validation credentials.' });
+    }
+
+    const db = loadDB();
+    const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+    if (!user) {
+      writeServerAuditLog(null, email, 'public', 'AUTH_FAILURE', `Attempt with unregistered email`, null, req);
+      return res.status(401).json({ error: 'Access Denied: Unregistered email or invalid passwords.' });
+    }
+
+    if (user.status === 'suspended') {
+      return res.status(403).json({ error: 'Your corporate access node has been suspended by an Administrator.' });
+    }
+
+    if (user.status === 'pending' && user.role_id === 'role-driver') {
+      return res.status(403).json({ error: 'Roster approval pending. Please wait for an administrator to authorize your profile.' });
+    }
+
+    // Verify hashed password sync
+    if (!verifyPassword(password, user.password_hash)) {
+      writeServerAuditLog(user.id, email, 'public', 'AUTH_FAILURE', 'Invalid password submission', null, req);
+      return res.status(401).json({ error: 'Access Denied: Invalid credentials.' });
+    }
+
+    // Determine Session Duration based on "Remember Me"
+    const sessionDurationHours = rememberMe ? 24 * 30 : 2; // 30 days or 2 hours
+    const expiresAt = new Date(Date.now() + sessionDurationHours * 60 * 60 * 1000).toISOString();
+
+    const token = `tok_${generateUUID().replace(/-/g, '')}${generateUUID().substring(0, 10)}`;
+    
+    // Track sessions in SQLite D1 mock
+    const session = {
+      id: generateUUID(),
+      user_id: user.id,
+      token,
+      expires_at: expiresAt,
+      user_ip: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1',
+      user_agent: req.headers['user-agent'] || 'Corporate API Consumer',
+      created_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    db.sessions.push(session);
+    saveDB(db);
+
+    const roleName = db.roles.find(r => r.id === user.role_id)?.name || 'public';
+
+    writeServerAuditLog(user.id, user.email, roleName, 'SESSION_CREATED', null, `Authorized login session valid until ${expiresAt}`, req);
+
+    res.json({
+      success: true,
+      token,
+      expiresAt,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.full_name,
+        phone: user.phone,
+        role: roleName
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 6. AUTHENTICATED: Get Active User Payload
+app.get('/api/auth/me', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  const db = loadDB();
+  const user = db.users.find(u => u.id === actor.id);
+  
+  if (!user) {
+    return res.status(404).json({ error: 'User record missing.' });
+  }
+
+  // Retrieve role description & permissions
+  const permissions = db.permissions.filter(p => {
+    // Basic hardcoded access mapping for robustness
+    if (actor.role === 'director') return true; // Directors hold all permissions
+    if (actor.role === 'admin' && p.name !== 'view_audit_logs') return true;
+    if (actor.role === 'driver' && p.name === 'request_vouchers') return true;
+    return false;
+  }).map(p => p.name);
+
+  // Load profile specific attributes
+  let profileDetails: any = {};
+  if (actor.role === 'driver') {
+    const dr = db.drivers.find(d => d.user_id === actor.id);
+    if (dr) {
+      const guarantor = db.guarantors.find(g => g.driver_id === dr.id) || null;
+      const vehicle = db.vehicles.find(v => v.driver_id === dr.id) || null;
+      profileDetails = { ...dr, guarantor, vehicle };
+    }
+  }
+
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      fullName: user.full_name,
+      phone: user.phone,
+      role: actor.role,
+      permissions,
+      profile: profileDetails
+    }
+  });
+});
+
+// 7. AUTHENTICATED: Secure Logout (Support All Devices)
+app.post('/api/auth/logout', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const token = (req as any).token;
+    const { logoutAllDevices } = req.body;
+
+    const db = loadDB();
+
+    if (logoutAllDevices) {
+      // Mark all sessions of this user as terminated
+      db.sessions = db.sessions.map(s => {
+        if (s.user_id === actor.id && s.status === 'active') {
+          return { ...s, status: 'logged_out_all_devices' };
+        }
+        return s;
+      });
+      writeServerAuditLog(actor.id, actor.email, actor.role, 'LOGOUT_ALL_DEVICES', 'Multiple active session keys', 'All sessions blacklisted', req);
+    } else {
+      // Mark only the current active session
+      db.sessions = db.sessions.map(s => {
+        if (s.token === token) {
+          return { ...s, status: 'logged_out' };
+        }
+        return s;
+      });
+      writeServerAuditLog(actor.id, actor.email, actor.role, 'LOGOUT', token, 'Session token invalidated', req);
+    }
+
+    saveDB(db);
+    res.json({ success: true, message: 'Logged out successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 8. AUTHENTICATED: Get Audit Logs Stream (Directors & Admins only)
+app.get('/api/audit-logs', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  if (actor.role !== 'director' && actor.role !== 'admin') {
+    return res.status(403).json({ error: 'Access Denied: Operations audit log permissions required.' });
+  }
+
+  const db = loadDB();
+  res.json(db.audit_logs.slice(0, 200)); // Limit to last 200 logs
+});
+
+// 9. AUTHENTICATED: Get Drivers Fleet Registry (Search, Approvals, Classifications)
+app.get('/api/drivers', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  if (actor.role !== 'admin' && actor.role !== 'director') {
+    return res.status(403).json({ error: 'Access Denied.' });
+  }
+
+  const { search } = req.query;
+  const db = loadDB();
+
+  let results = db.drivers.map(drv => {
+    const user = db.users.find(u => u.id === drv.user_id);
+    const guarantor = db.guarantors.find(g => g.driver_id === drv.id);
+    const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
+    return {
+      ...drv,
+      fullName: user?.full_name || 'Candidate',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      guarantor,
+      vehicle
+    };
+  });
+
+  if (search) {
+    const q = (search as string).toLowerCase().trim();
+    results = results.filter(r => 
+      r.fullName.toLowerCase().includes(q) ||
+      (r.company_driver_id && r.company_driver_id.toLowerCase().includes(q)) ||
+      r.phone.includes(q) ||
+      (r.vehicle?.plate_number && r.vehicle.plate_number.toLowerCase().includes(q)) ||
+      (r.vehicle?.registration_number && r.vehicle.registration_number.toLowerCase().includes(q))
+    );
+  }
+
+  res.json(results);
+});
+
+// 10. AUTHENTICATED: Get Driver Full Profile Detail
+app.get('/api/drivers/:id', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  if (actor.role !== 'admin' && actor.role !== 'director') {
+    return res.status(403).json({ error: 'Access Denied.' });
+  }
+
+  const db = loadDB();
+  const drv = db.drivers.find(d => d.id === req.params.id);
+  if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+
+  const user = db.users.find(u => u.id === drv.user_id);
+  const guarantor = db.guarantors.find(g => g.driver_id === drv.id);
+  const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
+  const documents = db.driver_documents.filter(doc => doc.driver_id === drv.id);
+
+  res.json({
+    ...drv,
+    fullName: user?.full_name || 'Candidate',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    guarantor,
+    vehicle,
+    documents
+  });
+});
+
+// 11. AUTHENTICATED (Admins and Directors): Approve / Reject Driver Roster Status
+app.put('/api/drivers/:id/status', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Administrator approval required.' });
+    }
+
+    const { status, remarks, companyDriverId } = req.body; // 'approved', 'rejected', 'correction_requested'
+    if (!status) return res.status(400).json({ error: 'Please submit decision parameter.' });
+
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.id === req.params.id);
+    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+
+    const prevStatus = drv.status;
+    drv.status = status;
+    drv.updated_at = new Date().toISOString();
+    drv.updated_by = actor.fullName;
+
+    // Link user status
+    const user = db.users.find(u => u.id === drv.user_id);
+    if (user) {
+      user.status = status === 'approved' ? 'active' : status;
+    }
+
+    if (status === 'approved') {
+      drv.company_driver_id = companyDriverId || `DRV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
+      
+      // Update linked vehicle status
+      const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
+      if (vehicle) {
+        vehicle.status = 'assigned';
+      }
+
+      // Automatically register 350L fuel vouchers as welcome
+      db.fuel_vouchers.unshift({
+        id: generateUUID(),
+        voucher_number: `FL-WELCOME-${Math.floor(1000 + Math.random() * 9000)}`,
+        vehicle_id: vehicle ? vehicle.id : 'N/A',
+        driver_id: drv.id,
+        liters_requested: 350,
+        estimated_cost: 507500,
+        status: 'approved',
+        request_date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        approval_date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        created_at: new Date().toISOString()
+      });
+    }
+
+    // Notify Driver via notifications
+    db.notifications.unshift({
+      id: generateUUID(),
+      user_id: drv.user_id,
+      title_en: `Roster Review: ${status.toUpperCase()}`,
+      title_ha: `Sakamakon Tattaunawa: ${status.toUpperCase()}`,
+      message_en: `Your professional transport credential is ${status}. ${remarks || ''}`,
+      message_ha: `Sakamakon takardun ka: an daidaita su zuwa ${status}. ${remarks || ''}`,
+      type: status === 'approved' ? 'success' : 'danger',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_STATUS_UPDATE',
+      `Status was ${prevStatus}`,
+      `Updated status of driver ${user?.full_name} to ${status.toUpperCase()}. Comments: ${remarks || 'None'}`,
+      req
+    );
+
+    res.json({ success: true, message: `Driver registration state committed successfully as ${status.toUpperCase()}.` });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 12. AUTHENTICATED: Admin Driver Classification (Smart vs Assisted)
+app.put('/api/drivers/:id/classify', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { classification } = req.body; // 'Smart' or 'Assisted'
+    if (classification !== 'Smart' && classification !== 'Assisted') {
+      return res.status(400).json({ error: 'Invalid classification node parameter.' });
+    }
+
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.id === req.params.id);
+    if (!drv) return res.status(404).json({ error: 'Driver not found.' });
+
+    const prevClass = drv.classification;
+    drv.classification = classification;
+    drv.updated_at = new Date().toISOString();
+    drv.updated_by = actor.fullName;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_CLASSIFICATION_CHANGE',
+      prevClass,
+      `Classified driver ${drv.company_driver_id} as ${classification}`,
+      req
+    );
+
+    res.json({ success: true, message: `Driver classification shifted to ${classification}.` });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 13. AUTHENTICATED: Upload Admin documents (Vehicle documents, Company files)
+app.post('/api/documents/upload-company', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { title, docType, fileBase64, driverId, vehicleId } = req.body;
+    if (!title || !docType || !fileBase64) {
+      return res.status(400).json({ error: 'Complete all file parameters.' });
+    }
+
+    const fileUrl = saveR2File(title.replace(/\s+/g, '_'), fileBase64);
+    const db = loadDB();
+
+    if (vehicleId) {
+      db.vehicle_documents.push({
+        id: generateUUID(),
+        vehicle_id: vehicleId,
+        document_type: docType,
+        file_url: fileUrl,
+        created_at: new Date().toISOString(),
+        created_by: actor.fullName,
+        status: 'active'
+      });
+    } else if (driverId) {
+      db.driver_documents.push({
+        id: generateUUID(),
+        driver_id: driverId,
+        document_type: docType,
+        file_url: fileUrl,
+        created_at: new Date().toISOString(),
+        created_by: actor.fullName,
+        status: 'active'
+      });
+    } else {
+      db.company_documents.push({
+        id: generateUUID(),
+        title,
+        document_type: docType,
+        file_url: fileUrl,
+        created_at: new Date().toISOString(),
+        created_by: actor.fullName,
+        status: 'active'
+      });
+    }
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'COMPANY_DOCUMENT_UPLOAD',
+      null,
+      `Uploaded doc: ${title} under ${docType}`,
+      req
+    );
+
+    res.json({ success: true, fileUrl, message: 'Document saved to Cloudflare R2 archive.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 14. AUTHENTICATED: Secure Document Previews (Validates active session first)
+app.get('/api/documents/preview/:filename', (req, res) => {
+  try {
+    // Basic verification (Token can be passed as query parameter for easy iFrame embedding!)
+    const token = req.query.token as string;
+    if (!token) {
+      return res.status(403).send('Forbidden: Active token parameter required.');
+    }
+
+    const db = loadDB();
+    const session = db.sessions.find(s => s.token === token && s.status === 'active');
+    if (!session) {
+      return res.status(401).send('Session expired or unauthorized.');
+    }
+
+    const filePath = getR2FilePath(req.params.filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send('Document not found inside R2 bucket.');
+    }
+
+    // Serve correct MIME type
+    const ext = path.extname(filePath).toLowerCase();
+    let mime = 'image/png';
+    if (ext === '.pdf') mime = 'application/pdf';
+    if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+
+    res.setHeader('Content-Type', mime);
+    res.sendFile(filePath);
+  } catch (error) {
+    res.status(500).send('File rendering fault.');
+  }
+});
+
+// 15. AUTHENTICATED: Shareholders Management (Add, Edit, Suspend, Remove)
+app.get('/api/shareholders', authenticateSession, (req, res) => {
+  const db = loadDB();
+  res.json(db.shareholders);
+});
+
+app.post('/api/shareholders', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { fullName, phone, email, address, investmentAmount, investmentDate, passportPhoto } = req.body;
+    if (!fullName || !phone || !email || !address || !investmentAmount || !investmentDate) {
+      return res.status(400).json({ error: 'All fields are mandatory.' });
+    }
+
+    const db = loadDB();
+    if (db.shareholders.some(s => s.email.toLowerCase() === email.toLowerCase())) {
+      return res.status(400).json({ error: 'Email registered to another investor node.' });
+    }
+
+    let passportUrl = '';
+    if (passportPhoto) {
+      passportUrl = saveR2File(`shareholder_${fullName.replace(/\s+/g, '_')}`, passportPhoto);
+    }
+
+    const newShareholder = {
+      id: generateUUID(),
+      full_name: fullName,
+      phone,
+      email: email.toLowerCase(),
+      address,
+      passport_photo_url: passportUrl,
+      investment_amount: parseFloat(investmentAmount) || 0.0,
+      investment_date: investmentDate,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: actor.fullName,
+      status: 'active'
+    };
+
+    db.shareholders.push(newShareholder);
+    
+    // Register finance record for corporate transparency
+    db.financial_records.unshift({
+      id: generateUUID(),
+      type: 'revenue',
+      category: 'other',
+      amount: parseFloat(investmentAmount),
+      date: investmentDate,
+      description: `Corporate equity capital investment - Shareholder ${fullName}`
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_ADDED',
+      null,
+      `Registered investor: ${fullName} | Investment: ₦${parseFloat(investmentAmount).toLocaleString()}`,
+      req
+    );
+
+    res.json({ success: true, message: 'Shareholder logged successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/shareholders/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { phone, address, status, investmentAmount } = req.body;
+    const db = loadDB();
+    const sh = db.shareholders.find(s => s.id === req.params.id);
+    if (!sh) return res.status(404).json({ error: 'Investor not found.' });
+
+    const prevValue = JSON.stringify(sh);
+    
+    if (phone) sh.phone = phone;
+    if (address) sh.address = address;
+    if (status) sh.status = status;
+    if (investmentAmount) sh.investment_amount = parseFloat(investmentAmount);
+    sh.updated_at = new Date().toISOString();
+    sh.updated_by = actor.fullName;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_MODIFIED',
+      prevValue,
+      JSON.stringify(sh),
+      req
+    );
+
+    res.json({ success: true, message: 'Shareholder parameters updated.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/shareholders/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const idx = db.shareholders.findIndex(s => s.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Investor not found.' });
+
+    const removed = db.shareholders[idx];
+    db.shareholders.splice(idx, 1);
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_REMOVED',
+      JSON.stringify(removed),
+      `Permanently removed shareholder node: ${removed.full_name}`,
+      req
+    );
+
+    res.json({ success: true, message: 'Shareholder record purged from active nodes.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 16. AUTHENTICATED: Get General Ledger Streams & Post Records
+app.get('/api/finance', authenticateSession, (req, res) => {
+  const db = loadDB();
+  res.json(db.financial_records);
+});
+
+app.post('/api/finance', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { type, category, amount, date, description } = req.body;
+    if (!type || !category || !amount || !date || !description) {
+      return res.status(400).json({ error: 'Missing parameters.' });
+    }
+
+    const db = loadDB();
+    const newRecord = {
+      id: generateUUID(),
+      type,
+      category,
+      amount: parseFloat(amount),
+      date,
+      description,
+      approvedBy: actor.fullName,
+      created_at: new Date().toISOString()
+    };
+
+    db.financial_records.unshift(newRecord);
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'LEDGER_POST',
+      null,
+      `Posted ₦${parseFloat(amount).toLocaleString()} (${type} -> ${category})`,
+      req
+    );
+
+    res.json({ success: true, record: newRecord });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 17. AUTHENTICATED: Quick Auto-Login Switcher for Preview Panel Demo
+app.post('/api/auth/login-as-role', (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!role) return res.status(400).json({ error: 'Role is required.' });
+
+    const db = loadDB();
+    
+    // Find first active user of this role
+    const targetRoleId = role === 'director' ? 'role-director' : role === 'admin' ? 'role-admin' : 'role-driver';
+    const user = db.users.find(u => u.role_id === targetRoleId && u.status === 'active' || u.status === 'approved');
+
+    if (!user) {
+      return res.status(404).json({ error: `Demo account for role ${role} not found.` });
+    }
+
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(); // 4 hours
+    const token = `tok_demo_${generateUUID().replace(/-/g, '')}`;
+
+    const session = {
+      id: generateUUID(),
+      user_id: user.id,
+      token,
+      expires_at: expiresAt,
+      user_ip: '127.0.0.1',
+      user_agent: 'AI Studio Demo Preview Switcher',
+      created_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    db.sessions.push(session);
+    saveDB(db);
+
+    writeServerAuditLog(user.id, user.email, role, 'DEMO_SWITCH_LOGIN', null, `Authorized via developer preview desk`, req);
+
+    res.json({
+      success: true,
+      token,
+      expiresAt,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.full_name,
+        phone: user.phone,
+        role: role
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 18. AUTHENTICATED: Get/Create Fuel Vouchers
+app.get('/api/vouchers', authenticateSession, (req, res) => {
+  const db = loadDB();
+  res.json(db.fuel_vouchers);
+});
+
+app.post('/api/vouchers', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { vehicleId, litersRequested, estimatedCost } = req.body;
+
+    if (!vehicleId || !litersRequested || !estimatedCost) {
+      return res.status(400).json({ error: 'Missing voucher payload parameters.' });
+    }
+
+    const db = loadDB();
+    const newVoucher = {
+      id: generateUUID(),
+      voucher_number: `FL-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      vehicle_id: vehicleId,
+      driver_id: actor.id,
+      liters_requested: parseFloat(litersRequested),
+      estimated_cost: parseFloat(estimatedCost),
+      status: 'pending',
+      request_date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      created_at: new Date().toISOString()
+    };
+
+    db.fuel_vouchers.unshift(newVoucher);
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'New Fuel Voucher Request Raised',
+      title_ha: 'Sabuwar Bukatar Takardar Mai',
+      message_en: `Driver ${actor.fullName} submitted a voucher request for ${litersRequested} Liters.`,
+      message_ha: `Direba ${actor.fullName} ya nemi takardar mai lita ${litersRequested}.`,
+      type: 'warning',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'FUEL_VOUCHER_REQUEST',
+      null,
+      `Driver requested ${litersRequested}L (₦${parseFloat(estimatedCost).toLocaleString()})`,
+      req
+    );
+
+    res.json({ success: true, voucher: newVoucher });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/vouchers/:id/approve', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const voucher = db.fuel_vouchers.find(v => v.id === req.params.id);
+    if (!voucher) return res.status(404).json({ error: 'Voucher not found.' });
+
+    if (voucher.status !== 'pending') {
+      return res.status(400).json({ error: 'Voucher has already been reviewed.' });
+    }
+
+    voucher.status = 'approved';
+    voucher.approval_date = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    voucher.updated_at = new Date().toISOString();
+    voucher.updated_by = actor.fullName;
+
+    // Post to financial ledger as fuel expense
+    db.financial_records.unshift({
+      id: generateUUID(),
+      type: 'expense',
+      category: 'fuel',
+      amount: voucher.estimated_cost,
+      date: new Date().toISOString().split('T')[0],
+      description: `Fuel disbursement - Voucher ${voucher.voucher_number}`,
+      approvedBy: actor.fullName
+    });
+
+    // Notify Driver
+    db.notifications.unshift({
+      id: generateUUID(),
+      user_id: voucher.driver_id,
+      title_en: 'Fuel Voucher Approved',
+      title_ha: 'An Amince Da Takardar Mai',
+      message_en: `Your voucher ${voucher.voucher_number} for ${voucher.liters_requested}L has been approved.`,
+      message_ha: `An amince da bukatar ka ta mai ${voucher.voucher_number} na lita ${voucher.liters_requested}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'FUEL_VOUCHER_APPROVAL',
+      'pending',
+      `Approved voucher ${voucher.voucher_number} of ₦${voucher.estimated_cost.toLocaleString()}`,
+      req
+    );
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 19. AUTHENTICATED: Get Notifications List & Mark read
+app.get('/api/notifications', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  const db = loadDB();
+  // Filter notifications for this specific user or general system ones
+  const list = db.notifications.filter(n => !n.user_id || n.user_id === actor.id);
+  res.json(list);
+});
+
+app.post('/api/notifications/read', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  const db = loadDB();
+  db.notifications = db.notifications.map(n => {
+    if (!n.user_id || n.user_id === actor.id) {
+      return { ...n, read_status: 1 };
+    }
+    return n;
+  });
+  saveDB(db);
+  res.json({ success: true });
+});
+
+// 20. AUTHENTICATED: Fleet Vehicles Management
+app.get('/api/vehicles', authenticateSession, (req, res) => {
+  const db = loadDB();
+  const list = db.vehicles.map(v => ({
+    id: v.id,
+    plateNumber: v.plate_number,
+    model: v.model,
+    status: v.status,
+    fuelType: v.fuel_type || 'diesel',
+    capacity: v.capacity || '30 Tons',
+    driverId: v.driver_id,
+    lastServiceDate: v.last_service_date || new Date().toISOString().split('T')[0],
+    mileage: v.mileage || 0
+  }));
+  res.json(list);
+});
+
+app.post('/api/vehicles', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { plateNumber, model, capacity, fuelType } = req.body;
+    if (!plateNumber || !model) {
+      return res.status(400).json({ error: 'Plate number and model parameters are mandatory.' });
+    }
+
+    const db = loadDB();
+    const plateExists = db.vehicles.some(v => v.plate_number.toUpperCase() === plateNumber.toUpperCase());
+    if (plateExists) {
+      return res.status(400).json({ error: 'Vehicle plate number already registered.' });
+    }
+
+    const newVehicle = {
+      id: generateUUID(),
+      plate_number: plateNumber.toUpperCase(),
+      model,
+      capacity: capacity || '30 Tons',
+      fuel_type: fuelType || 'diesel',
+      status: 'idle',
+      last_service_date: new Date().toISOString().split('T')[0],
+      mileage: 0,
+      created_at: new Date().toISOString(),
+      created_by: actor.fullName
+    };
+
+    db.vehicles.push(newVehicle);
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'VEHICLE_REGISTRATION',
+      null,
+      `Registered vehicle asset: ${plateNumber.toUpperCase()} (${model})`,
+      req
+    );
+
+    res.json({ success: true, vehicle: newVehicle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 21. AUTHENTICATED: Trip Manifests Dispatch Control
+app.get('/api/trips', authenticateSession, (req, res) => {
+  const db = loadDB();
+  const list = db.trip_manifests.map(t => ({
+    id: t.id,
+    manifestNumber: t.manifest_number,
+    vehicleId: t.vehicle_id,
+    driverId: t.driver_id,
+    origin: t.origin,
+    destination: t.destination,
+    departureTime: t.departure_time,
+    expectedArrivalTime: t.expected_arrival_time,
+    status: t.status,
+    cargoType: t.cargo_type,
+    weight: t.weight,
+    freightCharges: t.freight_charges
+  }));
+  res.json(list);
+});
+
+app.post('/api/trips', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { vehicleId, driverId, origin, destination, cargoType, weight, freightCharges } = req.body;
+    if (!vehicleId || !driverId || !origin || !destination || !cargoType) {
+      return res.status(400).json({ error: 'Missing mandatory dispatch parameters.' });
+    }
+
+    const db = loadDB();
+    const vehicle = db.vehicles.find(v => v.id === vehicleId);
+    const driver = db.drivers.find(d => d.id === driverId);
+
+    if (!vehicle) return res.status(404).json({ error: 'Carrier vehicle not found.' });
+    if (!driver) return res.status(404).json({ error: 'Certified driver not found.' });
+
+    const depTime = new Date().toISOString().replace('T', ' ').substring(0, 16);
+    const estArrival = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 16);
+
+    const newTrip = {
+      id: generateUUID(),
+      manifest_number: `MNF-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+      vehicle_id: vehicleId,
+      driver_id: driverId,
+      origin,
+      destination,
+      departure_time: depTime,
+      expected_arrival_time: estArrival,
+      status: 'in-transit',
+      cargo_type: cargoType,
+      weight: parseFloat(weight) || 30.0,
+      freight_charges: parseFloat(freightCharges) || 1500000.0,
+      created_at: new Date().toISOString(),
+      created_by: actor.fullName
+    };
+
+    // Transition vehicle and driver states to on-trip
+    vehicle.status = 'assigned';
+    driver.status = 'on-trip';
+
+    // Post estimated revenue to financial ledger pending delivery
+    db.financial_records.unshift({
+      id: generateUUID(),
+      type: 'revenue',
+      category: 'freight',
+      amount: parseFloat(freightCharges) || 1500000.0,
+      date: new Date().toISOString().split('T')[0],
+      description: `Dispatched Trip Revenue - Manifest ${newTrip.manifest_number}`,
+      approvedBy: actor.fullName,
+      created_at: new Date().toISOString()
+    });
+
+    db.trip_manifests.push(newTrip);
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'TRIP_MANIFEST_DISPATCH',
+      null,
+      `Dispatched Trip: ${newTrip.manifest_number} via Rig ${vehicle.plate_number}`,
+      req
+    );
+
+    res.json({ success: true, trip: newTrip });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/trips/:id/complete', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const trip = db.trip_manifests.find(t => t.id === req.params.id);
+    if (!trip) return res.status(404).json({ error: 'Trip manifest not found.' });
+
+    if (trip.status !== 'in-transit') {
+      return res.status(400).json({ error: 'Trip has already been completed or cancelled.' });
+    }
+
+    trip.status = 'delivered';
+    trip.updated_at = new Date().toISOString();
+    trip.updated_by = actor.fullName;
+
+    // Reset vehicle and driver status
+    const vehicle = db.vehicles.find(v => v.id === trip.vehicle_id);
+    const driver = db.drivers.find(d => d.id === trip.driver_id);
+
+    if (vehicle) vehicle.status = 'idle';
+    if (driver) driver.status = 'available';
+
+    // Notify driver of safe arrival
+    db.notifications.unshift({
+      id: generateUUID(),
+      user_id: driver ? driver.user_id : undefined,
+      title_en: 'Trip Completed Successfully',
+      title_ha: 'An Kammala Tafiya Lafiya',
+      message_en: `Your cargo trip manifest ${trip.manifest_number} has been marked as delivered.`,
+      message_ha: `An kammala jigilar ku ta manifest ${trip.manifest_number} lafiya.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'TRIP_MANIFEST_COMPLETED',
+      'in-transit',
+      `Delivered Cargo Manifest: ${trip.manifest_number}`,
+      req
+    );
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ==================================================
+// BUSINESS CALCULATION ENGINE & 30-DAY OPERATING CYCLE
+// ==================================================
+
+export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
+  const agreedAmount = driver.agreed_amount || 180000;
+  const installmentTarget = Math.round(agreedAmount / 6);
+  
+  // Find all approved payments for this driver during the active cycle
+  let startDate = activeCycle ? new Date(activeCycle.startDate) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  let endDate = activeCycle && activeCycle.endDate ? new Date(activeCycle.endDate) : new Date();
+  
+  const payments = (db.driver_payments || []).filter((p: any) => {
+    return p.driver_id === driver.id && p.status === 'approved' &&
+      new Date(p.date) >= startDate &&
+      (activeCycle && activeCycle.endDate ? new Date(p.date) <= endDate : true);
+  });
+
+  // Calculate total rest days during this active cycle to extend installments
+  let totalRestDays = 0;
+  const restHistory = driver.restHistory || [];
+  if (activeCycle) {
+    restHistory.forEach((rest: any) => {
+      const restStart = new Date(rest.startDate);
+      const restEnd = new Date(rest.endDate);
+      const cycleStart = new Date(activeCycle.startDate);
+      
+      // If rest period overlaps with cycle
+      if (restEnd >= cycleStart) {
+        const overlapStart = restStart < cycleStart ? cycleStart : restStart;
+        const overlapEnd = restEnd;
+        const diffTime = overlapEnd.getTime() - overlapStart.getTime();
+        const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        if (days > 0) {
+          totalRestDays += days;
+        }
+      }
+    });
+  }
+
+  // Check if driver is currently on rest
+  const today = new Date();
+  const isCurrentlyOnRest = driver.status === 'off-duty' || restHistory.some((rest: any) => {
+    const start = new Date(rest.startDate);
+    const end = new Date(rest.endDate);
+    return today >= start && today <= end;
+  });
+
+  const installments = [];
+  let carryForward = 0;
+
+  for (let k = 1; k <= 6; k++) {
+    const startDay = (k - 1) * 5 + 1;
+    const endDay = k * 5;
+
+    // Shift dates by rest days
+    const normalEndDate = new Date(startDate.getTime() + (endDay - 1) * 24 * 3600 * 1000);
+    const extendedEndDate = new Date(normalEndDate.getTime() + totalRestDays * 24 * 3600 * 1000);
+    
+    const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
+    const extendedStartDate = new Date(normalStartDate.getTime() + totalRestDays * 24 * 3600 * 1000);
+
+    const dueAmount = installmentTarget + carryForward;
+    const paidAmount = payments
+      .filter((p: any) => p.installment_number === k)
+      .reduce((sum: number, p: any) => sum + p.amount, 0);
+
+    const remaining = dueAmount - paidAmount;
+    carryForward = remaining; // outstanding balance carries forward to the next installment
+
+    let status = 'Pending';
+    if (remaining <= 0) {
+      status = 'Completed';
+    } else if (paidAmount > 0) {
+      status = 'Partially Paid';
+    } else if (!isCurrentlyOnRest && today > extendedEndDate) {
+      status = 'Overdue';
+    }
+
+    installments.push({
+      installmentNumber: k,
+      startDate: extendedStartDate.toISOString().split('T')[0],
+      endDate: extendedEndDate.toISOString().split('T')[0],
+      targetAmount: installmentTarget,
+      carriedForward: dueAmount - installmentTarget,
+      totalDue: dueAmount,
+      totalPaid: paidAmount,
+      remainingBalance: remaining,
+      status
+    });
+  }
+
+  return installments;
+}
+
+// GET dynamic driver installments list
+app.get('/api/drivers/:id/installments', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const driver = db.drivers.find(d => d.id === req.params.id);
+    if (!driver) return res.status(404).json({ error: 'Driver profile not found.' });
+    const activeCycle = db.cycles.find(c => c.status === 'active') || db.cycles[0];
+    const installments = calculateInstallmentsForDriver(driver, db, activeCycle);
+    res.json({ success: true, installments });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET all operational cycles (active, upcoming, history)
+app.get('/api/director/cycles', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    res.json({ success: true, cycles: db.cycles || [] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET completed cycles history
+app.get('/api/director/cycles/history', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const history = (db.cycles || []).filter(c => c.status === 'completed');
+    res.json({ success: true, cycles: history });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST to schedule an upcoming cycle
+app.post('/api/director/cycles/schedule', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+    const { startDate, endGoalTons } = req.body;
+    if (!startDate) return res.status(400).json({ error: 'Commencement date is mandatory.' });
+    
+    const db = loadDB();
+    const cycleId = `CYC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newCycle = {
+      id: cycleId,
+      startDate,
+      endDate: '',
+      status: 'upcoming',
+      locked: false,
+      endGoalTons: endGoalTons ? parseFloat(endGoalTons) : 200,
+      metrics: null,
+      created_at: new Date().toISOString()
+    };
+    if (!db.cycles) db.cycles = [];
+    db.cycles.push(newCycle);
+    saveDB(db);
+    
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'CYCLE_SCHEDULED',
+      null,
+      `Scheduled upcoming cycle ${cycleId} starting on ${startDate}`,
+      req
+    );
+    
+    res.json({ success: true, cycle: newCycle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ==================================================
+// 22. AUTHENTICATED: EXECUTIVE DIRECTOR CONTROLS & MANAGEMENT
+// ==================================================
+
+// Start New 30-Day Operation Cycle
+app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    }
+
+    const { startDate, endGoalTons } = req.body;
+    if (!startDate) {
+      return res.status(400).json({ error: 'Start date parameter is mandatory.' });
+    }
+
+    const db = loadDB();
+    const activeCycle = db.cycles.find(c => c.status === 'active');
+    if (activeCycle) {
+      return res.status(400).json({ error: 'An active operating cycle is already running. Complete and lock it first.' });
+    }
+
+    const cycleId = `CYC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newCycle = {
+      id: cycleId,
+      startDate,
+      endDate: null,
+      endGoalTons: parseFloat(endGoalTons) || 200,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      created_by: actor.fullName,
+      locked: false,
+      financials: []
+    };
+
+    db.cycles.push(newCycle);
+
+    // Notify all devices of cycle commencement
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'New Company Cycle Commenced',
+      title_ha: 'An Fara Sabon Zagayen Sufuri',
+      message_en: `30-Day Operation Cycle ${cycleId} started on ${startDate}. Goal set to ${newCycle.endGoalTons} Tons.`,
+      message_ha: `An fara zagayen aiki na kwanaki 30 ${cycleId} a ranar ${startDate}. Burin nauyi: lita/Tons ${newCycle.endGoalTons}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'CYCLE_START',
+      null,
+      `Started new 30-day operating cycle: ${cycleId}`,
+      req
+    );
+
+    res.json({ success: true, cycle: newCycle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// End and Permanently Archive Current Cycle
+app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    }
+
+    const { endDate } = req.body;
+    if (!endDate) {
+      return res.status(400).json({ error: 'End date parameter is mandatory.' });
+    }
+
+    const db = loadDB();
+    const activeCycleIndex = db.cycles.findIndex(c => c.status === 'active');
+    if (activeCycleIndex === -1) {
+      return res.status(400).json({ error: 'No active operating cycle found.' });
+    }
+
+    const activeCycle = db.cycles[activeCycleIndex];
+    const cycleStart = new Date(activeCycle.startDate);
+    const cycleEnd = new Date(endDate);
+    
+    // 1. Total Driver Collections
+    const driverPaymentsInCycle = (db.driver_payments || []).filter((p: any) => {
+      return p.status === 'approved' && new Date(p.date) >= cycleStart && new Date(p.date) <= cycleEnd;
+    });
+    const driverCollections = driverPaymentsInCycle.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+    // 2. Approved Company Expenses
+    const expensesInCycle = (db.financial_records || []).filter((f: any) => {
+      return f.type === 'expense' && new Date(f.date) >= cycleStart && new Date(f.date) <= cycleEnd;
+    });
+    const totalExpenses = expensesInCycle.reduce((sum: number, f: any) => sum + f.amount, 0);
+
+    // 3. Net Generated Amount (Revenue - Expenses)
+    const netGeneratedAmount = driverCollections - totalExpenses;
+
+    // 4. Shareholder settings & Pool
+    const distributionPercentage = db.shareholder_settings?.distributionPercentage || 2;
+    const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (distributionPercentage / 100)) : 0;
+
+    // 5. Individual shareholder earnings
+    const totalShareholderInvestment = (db.shareholders || []).reduce((sum: number, s: any) => sum + s.investment_amount, 0);
+    const shareholderSummary = (db.shareholders || []).map((s: any) => {
+      const weight = totalShareholderInvestment > 0 ? s.investment_amount / totalShareholderInvestment : 0;
+      return {
+        id: s.id,
+        fullName: s.full_name,
+        investmentAmount: s.investment_amount,
+        investmentWeight: weight * 100,
+        earnings: distributionPool * weight
+      };
+    });
+
+    // 6. Driver Payment Summary
+    const driverPaymentSummary = db.drivers.map((d: any) => {
+      const paymentsForDriver = driverPaymentsInCycle.filter((p: any) => p.driver_id === d.id);
+      const collected = paymentsForDriver.reduce((sum: number, p: any) => sum + p.amount, 0);
+      const user = db.users.find((u: any) => u.id === d.user_id);
+      
+      return {
+        driverId: d.id,
+        fullName: user ? user.full_name : d.fullName || 'Unknown Driver',
+        companyDriverId: d.company_driver_id || 'PENDING',
+        agreedAmount: d.agreed_amount || 180000,
+        totalPaid: collected,
+        remaining30DayBalance: Math.max(0, (d.agreed_amount || 180000) - collected),
+        remainingVehicleBalance: d.remaining_vehicle_balance || 15000000,
+        payments: paymentsForDriver.map((p: any) => ({
+          id: p.id,
+          amount: p.amount,
+          installmentNumber: p.installment_number,
+          receiptNumber: p.receipt_number,
+          date: p.date
+        }))
+      };
+    });
+
+    // 7. Expense Summary Category Breakdown
+    const expenseSummary = {
+      accidentRepairs: expensesInCycle.filter((e: any) => e.category === 'maintenance' && (e.description.toLowerCase().includes('accident') || e.description.toLowerCase().includes('crash') || e.description.toLowerCase().includes('collision'))).reduce((sum: number, e: any) => sum + e.amount, 0),
+      vehicleMaintenance: expensesInCycle.filter((e: any) => e.category === 'maintenance').reduce((sum: number, e: any) => sum + e.amount, 0),
+      operationalExpenses: expensesInCycle.filter((e: any) => e.category === 'fuel' || e.category === 'salary' || e.category === 'tax').reduce((sum: number, e: any) => sum + e.amount, 0),
+      otherExpenses: expensesInCycle.filter((e: any) => e.category !== 'maintenance' && e.category !== 'fuel' && e.category !== 'salary' && e.category !== 'tax').reduce((sum: number, e: any) => sum + e.amount, 0)
+    };
+
+    // 8. Vehicle Balance Summary
+    const vehicleBalanceSummary = db.vehicles.map((v: any) => {
+      const assignedDriver = db.drivers.find((d: any) => d.id === v.driver_id);
+      const assignedDriverUser = assignedDriver ? db.users.find((u: any) => u.id === assignedDriver.user_id) : null;
+      return {
+        vehicleId: v.id,
+        plateNumber: v.plate_number,
+        model: v.model,
+        driverName: assignedDriverUser ? assignedDriverUser.full_name : 'No Driver Assigned',
+        remainingVehicleBalance: assignedDriver ? (assignedDriver.remaining_vehicle_balance || 15000000) : 15000000
+      };
+    });
+
+    // Update activeCycle with standard and custom audited snapshot metrics
+    const closedCycle = {
+      ...activeCycle,
+      endDate,
+      status: 'completed',
+      locked: true,
+      metrics: {
+        totalRevenue: driverCollections, // Total Approved collections
+        totalExpenses, // Approved company expenses
+        netGeneratedAmount,
+        distributionPercentage,
+        distributionPool,
+        driverCollections,
+        driverPerformance: db.drivers.length > 0 ? parseFloat(((driverPaymentSummary.filter((x: any) => x.totalPaid >= x.agreedAmount).length / db.drivers.length) * 100).toFixed(1)) : 100,
+        activeDrivers: db.drivers.filter((d: any) => d.status === 'approved' || d.status === 'available').length,
+        totalFleetCount: db.vehicles.length,
+        shareholderSummary,
+        driverPaymentSummary,
+        expenseSummary,
+        vehicleBalanceSummary
+      },
+      updated_at: new Date().toISOString()
+    };
+
+    db.cycles[activeCycleIndex] = closedCycle;
+
+    // Post dividend disbursement to financial ledger for accountability
+    if (distributionPool > 0) {
+      db.financial_records.unshift({
+        id: generateUUID(),
+        type: 'expense',
+        category: 'dividend',
+        amount: distributionPool,
+        date: endDate,
+        description: `Disbursed Shareholders Pool (${distributionPercentage}%) for Cycle ${closedCycle.id}`,
+        approvedBy: actor.fullName,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    // Notify of cycle completion
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Operating Cycle Completed & Locked',
+      title_ha: 'An Kammala Kuma An Rufe Zagayen Sufuri',
+      message_en: `Operation Cycle ${closedCycle.id} has ended. Net profit: ₦${netGeneratedAmount.toLocaleString()}. Shareholder pool: ₦${distributionPool.toLocaleString()}.`,
+      message_ha: `Zagayen aiki ${closedCycle.id} ya kare. Ribar kudi: ₦${netGeneratedAmount.toLocaleString()}. Kudin Masu Hannun Jari: ₦${distributionPool.toLocaleString()}.`,
+      type: 'info',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'CYCLE_END',
+      'active',
+      `Closed and archived cycle: ${closedCycle.id}. Net Profit: ₦${netGeneratedAmount.toLocaleString()}`,
+      req
+    );
+
+    res.json({ success: true, cycle: closedCycle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Shareholder Settings (Rabon Jari Percentage)
+app.put('/api/director/shareholder-settings', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    }
+
+    const { distributionPercentage } = req.body;
+    if (distributionPercentage === undefined || distributionPercentage < 0 || distributionPercentage > 100) {
+      return res.status(400).json({ error: 'Please provide a valid percentage value between 0 and 100.' });
+    }
+
+    const db = loadDB();
+    const prevVal = JSON.stringify(db.shareholder_settings);
+    
+    db.shareholder_settings = {
+      distributionPercentage: parseFloat(distributionPercentage)
+    };
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_SETTINGS_UPDATE',
+      prevVal,
+      JSON.stringify(db.shareholder_settings),
+      req
+    );
+
+    // Broadcast update notification
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Shareholder Distribution Percentage Modified',
+      title_ha: 'An Sauya Rabon Jari na Masu Hannun Jari',
+      message_en: `Director modified shareholder pool percentage to ${distributionPercentage}%. Recalculating allocations.`,
+      message_ha: `Babban Darakta ya sauya rabon jari na masu hannun jari zuwa kashi ${distributionPercentage}%.`,
+      type: 'warning',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+    saveDB(db);
+
+    res.json({ success: true, settings: db.shareholder_settings });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Company corporate profile settings
+app.put('/api/director/company-settings', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    }
+
+    const { companyName, companyLogo, companyAddress, phone, email, currency, timeZone, languageDefault, themeDefault } = req.body;
+    if (!companyName) {
+      return res.status(400).json({ error: 'Company Name is a mandatory field.' });
+    }
+
+    const db = loadDB();
+    const prevVal = JSON.stringify(db.company_settings);
+
+    db.company_settings = {
+      companyName,
+      companyLogo: companyLogo || db.company_settings?.companyLogo || "",
+      companyAddress: companyAddress || "No 14 Zaria Road, Kano, Nigeria",
+      phone: phone || "+234 803 123 4567",
+      email: email || "info@ruqayyatransport.com",
+      currency: currency || "₦",
+      timeZone: timeZone || "Africa/Lagos",
+      languageDefault: languageDefault || "en",
+      themeDefault: themeDefault || "light"
+    };
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'COMPANY_SETTINGS_UPDATE',
+      prevVal,
+      JSON.stringify(db.company_settings),
+      req
+    );
+
+    res.json({ success: true, settings: db.company_settings });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create Admin Profile & Account
+app.post('/api/director/admins', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    }
+
+    const { email, password, fullName, phone } = req.body;
+    if (!email || !password || !fullName) {
+      return res.status(400).json({ error: 'Email, password, and full name parameters are mandatory.' });
+    }
+
+    const db = loadDB();
+    const emailExists = db.users.some(u => u.email.toLowerCase() === email.toLowerCase());
+    if (emailExists) {
+      return res.status(400).json({ error: 'This email address is already registered in the system.' });
+    }
+
+    const userId = generateUUID();
+    const newUser = {
+      id: userId,
+      email: email.toLowerCase(),
+      phone: phone || "",
+      password_hash: hashPassword(password),
+      full_name: fullName,
+      role_id: 'role-admin',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    const adminProfile = {
+      id: generateUUID(),
+      user_id: userId,
+      company_id: `ADM-2026-${Math.floor(100 + Math.random() * 900)}`,
+      passport_photo_url: '',
+      created_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    db.users.push(newUser);
+    db.admins.push(adminProfile);
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'ADMIN_CREATION',
+      null,
+      `Created Admin Account for: ${fullName} (${email})`,
+      req
+    );
+
+    res.json({ success: true, user: { id: userId, email, fullName, role: 'admin' } });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Edit Admin (Update, suspend, activate)
+app.put('/api/director/admins/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const user = db.users.find(u => u.id === req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Admin record not found.' });
+    }
+
+    const { fullName, phone, status, password } = req.body;
+    const prevVal = JSON.stringify(user);
+
+    if (fullName) user.full_name = fullName;
+    if (phone !== undefined) user.phone = phone;
+    if (status) {
+      user.status = status;
+      // Update admin profile status too
+      const profile = db.admins.find(a => a.user_id === user.id);
+      if (profile) profile.status = status;
+    }
+    if (password) {
+      user.password_hash = hashPassword(password);
+    }
+    user.updated_at = new Date().toISOString();
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'ADMIN_UPDATE',
+      prevVal,
+      JSON.stringify(user),
+      req
+    );
+
+    res.json({ success: true, user });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete Admin
+app.delete('/api/director/admins/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const userIndex = db.users.findIndex(u => u.id === req.params.id);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Admin record not found.' });
+    }
+
+    const adminUser = db.users[userIndex];
+    db.users.splice(userIndex, 1);
+
+    const profileIndex = db.admins.findIndex(a => a.user_id === req.params.id);
+    if (profileIndex !== -1) {
+      db.admins.splice(profileIndex, 1);
+    }
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'ADMIN_DELETION',
+      adminUser.email,
+      null,
+      req
+    );
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Log Driver Accident
+app.post('/api/director/drivers/:id/add-accident', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const driver = db.drivers.find(d => d.id === req.params.id);
+    if (!driver) return res.status(404).json({ error: 'Driver profile not found.' });
+
+    const { date, description, damageEstimate, severity } = req.body;
+    if (!date || !description) return res.status(400).json({ error: 'Date and description parameters are required.' });
+
+    if (!driver.accidentHistory) driver.accidentHistory = [];
+    
+    const accident = {
+      id: generateUUID().substring(0, 8).toUpperCase(),
+      date,
+      description,
+      damageEstimate: parseFloat(damageEstimate) || 0,
+      severity: severity || 'minor',
+      created_at: new Date().toISOString()
+    };
+
+    driver.accidentHistory.unshift(accident);
+    
+    if (parseFloat(damageEstimate) > 0) {
+      db.financial_records.unshift({
+        id: generateUUID(),
+        type: 'expense',
+        category: 'maintenance',
+        amount: parseFloat(damageEstimate),
+        date,
+        description: `Accident repair layout - Driver ${driver.company_driver_id || 'unassigned'}`,
+        approvedBy: actor.fullName,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_ACCIDENT_LOGGED',
+      null,
+      `Logged accident for driver: ${driver.id}. Damage: ₦${parseFloat(damageEstimate).toLocaleString()}`,
+      req
+    );
+
+    res.json({ success: true, accident });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Log Driver Rest
+app.post('/api/director/drivers/:id/add-rest', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const driver = db.drivers.find(d => d.id === req.params.id);
+    if (!driver) return res.status(404).json({ error: 'Driver profile not found.' });
+
+    const { startDate, endDate, reason } = req.body;
+    if (!startDate || !endDate) return res.status(400).json({ error: 'Start and end dates are required.' });
+
+    if (!driver.restHistory) driver.restHistory = [];
+    
+    const rest = {
+      id: generateUUID().substring(0, 8).toUpperCase(),
+      startDate,
+      endDate,
+      reason: reason || 'Routine physical rest guidelines',
+      created_at: new Date().toISOString()
+    };
+
+    driver.restHistory.unshift(rest);
+    driver.status = 'off-duty';
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_REST_LOGGED',
+      null,
+      `Logged off-duty rest window for driver: ${driver.id}`,
+      req
+    );
+
+    res.json({ success: true, rest });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Shareholder status (Activate/Suspend)
+app.put('/api/director/shareholders/:id/status', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ error: 'Status is required.' });
+
+    const db = loadDB();
+    const shareholder = db.shareholders.find(s => s.id === req.params.id);
+    if (!shareholder) return res.status(404).json({ error: 'Shareholder not found.' });
+
+    const prevVal = shareholder.status;
+    shareholder.status = status;
+    shareholder.updated_at = new Date().toISOString();
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_STATUS_UPDATE',
+      prevVal,
+      status,
+      req
+    );
+
+    res.json({ success: true, shareholder });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Shareholder Capital Weight
+app.put('/api/director/shareholders/:id/investment', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { investment_amount } = req.body;
+    if (investment_amount === undefined || investment_amount < 0) {
+      return res.status(400).json({ error: 'Please provide a valid investment amount.' });
+    }
+
+    const db = loadDB();
+    const shareholder = db.shareholders.find(s => s.id === req.params.id);
+    if (!shareholder) return res.status(404).json({ error: 'Shareholder not found.' });
+
+    const prevVal = shareholder.investment_amount;
+    shareholder.investment_amount = parseFloat(investment_amount);
+    shareholder.updated_at = new Date().toISOString();
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_INVESTMENT_UPDATE',
+      prevVal ? prevVal.toString() : '0',
+      investment_amount.toString(),
+      req
+    );
+
+    res.json({ success: true, shareholder });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ==================================================
+// 23. EXTRA DRIVER, PAYMENT & FLEET OPERATIONAL ENDPOINTS
+// ==================================================
+
+// Fetch all payments or payments for a specific driver
+app.get('/api/payments', authenticateSession, (req, res) => {
+  const { driverId } = req.query;
+  const db = loadDB();
+  if (!db.driver_payments) db.driver_payments = [];
+  
+  let list = db.driver_payments;
+  if (driverId) {
+    list = list.filter(p => p.driver_id === driverId);
+  }
+  res.json(list);
+});
+
+// Record a new driver payment
+app.post('/api/payments', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
+    }
+
+    const { driverId, amount, installmentNumber, outstandingAmount, date, receiptNumber, remarks } = req.body;
+    if (!driverId || !amount || !installmentNumber || !receiptNumber) {
+      return res.status(400).json({ error: 'Missing mandatory payment details.' });
+    }
+
+    const db = loadDB();
+    if (!db.driver_payments) db.driver_payments = [];
+
+    const drv = db.drivers.find(d => d.id === driverId);
+    if (!drv) return res.status(404).json({ error: 'Driver not found.' });
+
+    const newPayment = {
+      id: `PAY-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+      driver_id: driverId,
+      amount: parseFloat(amount),
+      installment_number: parseInt(installmentNumber),
+      outstanding_amount: parseFloat(outstandingAmount || 0),
+      date: date || new Date().toISOString().split('T')[0],
+      receipt_number: receiptNumber,
+      status: 'pending', // Pending approval by default
+      recorded_by: actor.fullName,
+      remarks: remarks || '',
+      created_at: new Date().toISOString()
+    };
+
+    db.driver_payments.unshift(newPayment);
+
+    // Register active notification for admins
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'New Driver Payment Submitted',
+      title_ha: 'An Shigar da Sabon Biyan Kudi',
+      message_en: `Driver payment of ₦${parseFloat(amount).toLocaleString()} submitted for ${drv.company_driver_id || 'unassigned'}. Review required.`,
+      message_ha: `An shigar da biyan kudi na ₦${parseFloat(amount).toLocaleString()} na direba ${drv.company_driver_id || 'unassigned'}. Tana jiran amincewa.`,
+      type: 'warning',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_PAYMENT_SUBMITTED',
+      null,
+      `Submitted payment of ₦${parseFloat(amount).toLocaleString()} for driver ${driverId} (Receipt: ${receiptNumber})`,
+      req
+    );
+
+    res.json({ success: true, payment: newPayment });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Approve or reject a driver payment
+app.put('/api/payments/:id/status', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
+    }
+
+    const { status, remarks } = req.body; // 'approved' or 'rejected'
+    if (status !== 'approved' && status !== 'rejected') {
+      return res.status(400).json({ error: 'Invalid status parameter.' });
+    }
+
+    const db = loadDB();
+    if (!db.driver_payments) db.driver_payments = [];
+
+    const payment = db.driver_payments.find(p => p.id === req.params.id);
+    if (!payment) return res.status(404).json({ error: 'Payment record not found.' });
+
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ error: 'Payment has already been reviewed.' });
+    }
+
+    payment.status = status;
+    payment.remarks = remarks || payment.remarks;
+    payment.approved_by = actor.fullName;
+    payment.updated_at = new Date().toISOString();
+
+    const drv = db.drivers.find(d => d.id === payment.driver_id);
+
+    if (status === 'approved') {
+      // Automatically post to financial ledger as corporate revenue
+      db.financial_records.unshift({
+        id: generateUUID(),
+        type: 'revenue',
+        category: 'freight',
+        amount: payment.amount,
+        date: payment.date,
+        description: `Installment Payment Approved - Driver ${drv?.company_driver_id || 'unassigned'} (Receipt: ${payment.receipt_number})`,
+        approvedBy: actor.fullName,
+        created_at: new Date().toISOString()
+      });
+
+      // Update remaining vehicle balance if applicable
+      if (drv) {
+        if (!drv.remaining_vehicle_balance) {
+          // Initialize remaining balance if not set (default purchase price: ₦15,000,000)
+          drv.remaining_vehicle_balance = 15000000;
+        }
+        drv.remaining_vehicle_balance = Math.max(0, drv.remaining_vehicle_balance - payment.amount);
+      }
+    }
+
+    // Notify Driver
+    if (drv) {
+      db.notifications.unshift({
+        id: generateUUID(),
+        user_id: drv.user_id,
+        title_en: `Payment ${status.toUpperCase()}`,
+        title_ha: `Biyan Kudi: ${status.toUpperCase()}`,
+        message_en: `Your installment payment of ₦${payment.amount.toLocaleString()} has been ${status}. ${remarks || ''}`,
+        message_ha: `An ${status === 'approved' ? 'amince da' : 'ki amince da'} biyan kudin ku na ₦${payment.amount.toLocaleString()}. ${remarks || ''}`,
+        type: status === 'approved' ? 'success' : 'danger',
+        read_status: 0,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_PAYMENT_STATUS_UPDATE',
+      'pending',
+      `Payment ${payment.id} set to ${status.toUpperCase()} by ${actor.fullName}`,
+      req
+    );
+
+    res.json({ success: true, payment });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Edit driver payment details (Admins with permission or Directors)
+app.put('/api/payments/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
+    }
+
+    const { amount, date, receiptNumber, remarks } = req.body;
+    const db = loadDB();
+    if (!db.driver_payments) db.driver_payments = [];
+
+    const payment = db.driver_payments.find(p => p.id === req.params.id);
+    if (!payment) return res.status(404).json({ error: 'Payment record not found.' });
+
+    const prevValue = JSON.stringify(payment);
+
+    // Adjust outstanding balance or remaining balance if approved and amount is edited
+    if (payment.status === 'approved' && amount !== undefined) {
+      const diff = parseFloat(amount) - payment.amount;
+      const drv = db.drivers.find(d => d.id === payment.driver_id);
+      if (drv && drv.remaining_vehicle_balance) {
+        drv.remaining_vehicle_balance = Math.max(0, drv.remaining_vehicle_balance - diff);
+      }
+      
+      // Update financial ledger record matching this receipt
+      const matchLedger = db.financial_records.find(f => f.description.includes(payment.receipt_number));
+      if (matchLedger) {
+        matchLedger.amount = parseFloat(amount);
+      }
+    }
+
+    if (amount !== undefined) payment.amount = parseFloat(amount);
+    if (date) payment.date = date;
+    if (receiptNumber) payment.receipt_number = receiptNumber;
+    if (remarks !== undefined) payment.remarks = remarks;
+    payment.updated_at = new Date().toISOString();
+    payment.updated_by = actor.fullName;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_PAYMENT_MODIFIED',
+      prevValue,
+      JSON.stringify(payment),
+      req
+    );
+
+    res.json({ success: true, payment });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Edit Driver Profile Complete (Admin/Director can edit complete driver profile details)
+app.put('/api/drivers/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.id === req.params.id);
+    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+
+    const { fullName, phone, address, nin, licenseNumber, licenseExpiry, agreedAmount, remainingVehicleBalance, status } = req.body;
+    
+    const user = db.users.find(u => u.id === drv.user_id);
+    const prevDrvVal = JSON.stringify(drv);
+
+    if (user) {
+      if (fullName) user.full_name = fullName;
+      if (phone) user.phone = phone;
+    }
+    if (address !== undefined) drv.address = address;
+    if (nin !== undefined) drv.nin = nin;
+    if (licenseNumber !== undefined) drv.license_number = licenseNumber;
+    if (licenseExpiry !== undefined) drv.license_expiry = licenseExpiry;
+    if (agreedAmount !== undefined) drv.agreed_amount = parseFloat(agreedAmount);
+    if (remainingVehicleBalance !== undefined) drv.remaining_vehicle_balance = parseFloat(remainingVehicleBalance);
+    
+    if (status) {
+      drv.status = status;
+      if (user) {
+        user.status = status === 'approved' || status === 'available' ? 'active' : status;
+      }
+    }
+
+    drv.updated_at = new Date().toISOString();
+    drv.updated_by = actor.fullName;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_PROFILE_EDIT',
+      prevDrvVal,
+      JSON.stringify(drv),
+      req
+    );
+
+    res.json({ success: true, driver: drv });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Driver Self Profile
+app.put('/api/drivers/self', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'driver') {
+      return res.status(403).json({ error: 'Access Denied. Only drivers can update their self profile.' });
+    }
+
+    const { phone, email, address, password } = req.body;
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.user_id === actor.id);
+    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+
+    const user = db.users.find(u => u.id === actor.id);
+    if (!user) return res.status(404).json({ error: 'User account not found.' });
+
+    const prevValue = JSON.stringify({ user, drv });
+
+    if (phone) {
+      user.phone = phone;
+    }
+    if (email) {
+      const emailExists = db.users.some(u => u.id !== actor.id && u.email.toLowerCase() === email.toLowerCase());
+      if (emailExists) {
+        return res.status(400).json({ error: 'Email already registered.' });
+      }
+      user.email = email.toLowerCase();
+      drv.email = email.toLowerCase();
+    }
+    if (address !== undefined) {
+      drv.address = address;
+    }
+    if (password) {
+      user.password_hash = hashPassword(password);
+    }
+
+    user.updated_at = new Date().toISOString();
+    drv.updated_at = new Date().toISOString();
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_SELF_PROFILE_UPDATE',
+      prevValue,
+      JSON.stringify({ user, drv }),
+      req
+    );
+
+    res.json({ success: true, driver: drv });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Retrieve Self Driver Documents (License, insurance, etc.)
+app.get('/api/drivers/self/documents', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'driver') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.user_id === actor.id);
+    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+
+    const driverDocs = db.driver_documents.filter(doc => doc.driver_id === drv.id);
+    const vehicleDocs = db.vehicle_documents.filter(doc => doc.driver_id === drv.id || (drv.vehicle_id && doc.vehicle_id === drv.vehicle_id));
+    const companyDocs = db.company_documents.filter(doc => doc.status === 'active');
+
+    res.json({
+      driverDocuments: driverDocs,
+      vehicleDocuments: vehicleDocs,
+      companyDocuments: companyDocs
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Retrieve Self Shareholder Calculations & Cycles
+app.get('/api/shareholders/me', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'shareholder') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const shareholder = db.shareholders.find(s => s.email.toLowerCase() === actor.email.toLowerCase());
+    if (!shareholder) {
+      return res.status(404).json({ error: 'Shareholder profile not found.' });
+    }
+
+    const totalInvestments = db.shareholders.reduce((sum, s) => sum + s.investment_amount, 0);
+    const investmentPercentage = totalInvestments > 0 ? (shareholder.investment_amount / totalInvestments) * 100 : 0;
+
+    const activeCycle = db.cycles.find(c => c.status === 'active');
+    const completedCycles = db.cycles.filter(c => c.status === 'completed');
+
+    const totalRevenues = db.financial_records
+      .filter(f => f.type === 'revenue')
+      .reduce((sum, r) => sum + r.amount, 0);
+
+    const totalExpenses = db.financial_records
+      .filter(f => f.type === 'expense')
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    const netGeneratedAmount = totalRevenues - totalExpenses;
+    const distributionPercentage = db.shareholder_settings?.distributionPercentage || 2;
+    const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (distributionPercentage / 100)) : 0;
+    const currentCycleEarnings = distributionPool * (investmentPercentage / 100);
+
+    let totalEarnings = 0;
+    completedCycles.forEach(c => {
+      if (c.metrics && c.metrics.distributionPool) {
+        totalEarnings += c.metrics.distributionPool * (investmentPercentage / 100);
+      }
+    });
+
+    res.json({
+      shareholder,
+      calculations: {
+        totalInvestments,
+        investmentPercentage,
+        distributionPercentage,
+        currentCycleEarnings,
+        totalEarnings,
+        netGeneratedAmount,
+        distributionPool,
+        activeCycle,
+        completedCycles
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Record direct expense with possible driver linkage
+app.post('/api/expenses', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { amount, category, description, date, driverId, receiptUrl } = req.body;
+    if (!amount || !category || !description || !date) {
+      return res.status(400).json({ error: 'Missing expense details.' });
+    }
+
+    const db = loadDB();
+    
+    // Post directly to ledger
+    const expenseRecord = {
+      id: generateUUID(),
+      type: 'expense' as const,
+      category: category,
+      amount: parseFloat(amount),
+      date,
+      description: `${description} ${driverId ? `(Linked Driver ID: ${driverId})` : ''}`,
+      approvedBy: actor.fullName,
+      receipt_url: receiptUrl || '',
+      driver_id: driverId || null,
+      created_at: new Date().toISOString()
+    };
+
+    db.financial_records.unshift(expenseRecord);
+
+    // If driver linked and category is 'maintenance' or 'accident', update their specific records if helpful
+    if (driverId) {
+      const drv = db.drivers.find(d => d.id === driverId);
+      if (drv) {
+        if (!drv.expenseHistory) drv.expenseHistory = [];
+        drv.expenseHistory.unshift({
+          id: expenseRecord.id,
+          amount: parseFloat(amount),
+          category,
+          description,
+          date,
+          receipt_url: receiptUrl || ''
+        });
+      }
+    }
+
+    // Register notification for live feedback
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Corporate Expense Recorded',
+      title_ha: 'An Shigar da Sabon Kashe Kudi',
+      message_en: `Expense of ₦${parseFloat(amount).toLocaleString()} posted under ${category} by ${actor.fullName}.`,
+      message_ha: `An shigar da kashe kudi na ₦${parseFloat(amount).toLocaleString()} karkashin ${category}.`,
+      type: 'danger',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'EXPENSE_ADDED',
+      null,
+      `Recorded expense: ₦${parseFloat(amount).toLocaleString()} for ${category}. Link driver: ${driverId || 'None'}`,
+      req
+    );
+
+    res.json({ success: true, record: expenseRecord });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Edit Vehicle details
+app.put('/api/vehicles/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const vehicle = db.vehicles.find(v => v.id === req.params.id);
+    if (!vehicle) return res.status(404).json({ error: 'Vehicle asset not found.' });
+
+    const { brand, model, year, colour, plateNumber, registrationNumber, chassisNumber, engineNumber, capacity, mileage, status, purchasePrice, remainingBalance } = req.body;
+    const prevVal = JSON.stringify(vehicle);
+
+    if (brand !== undefined) vehicle.brand = brand;
+    if (model !== undefined) vehicle.model = model;
+    if (year !== undefined) vehicle.year = parseInt(year);
+    if (colour !== undefined) vehicle.colour = colour;
+    if (plateNumber !== undefined) vehicle.plate_number = plateNumber.toUpperCase();
+    if (registrationNumber !== undefined) vehicle.registration_number = registrationNumber;
+    if (chassisNumber !== undefined) vehicle.chassis_number = chassisNumber;
+    if (engineNumber !== undefined) vehicle.engine_number = engineNumber;
+    if (capacity !== undefined) vehicle.capacity = capacity;
+    if (mileage !== undefined) vehicle.mileage = parseInt(mileage);
+    if (status !== undefined) vehicle.status = status;
+    if (purchasePrice !== undefined) vehicle.purchase_price = parseFloat(purchasePrice);
+    if (remainingBalance !== undefined) vehicle.remaining_balance = parseFloat(remainingBalance);
+
+    vehicle.updated_at = new Date().toISOString();
+    vehicle.updated_by = actor.fullName;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'VEHICLE_UPDATED',
+      prevVal,
+      JSON.stringify(vehicle),
+      req
+    );
+
+    res.json({ success: true, vehicle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// Boot and seed database parameters on start
+seedDBIfEmpty();
+
+// VITE MIDDLEWARE SETUP
+async function startServer() {
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Ruqayya ERP full-stack services running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();

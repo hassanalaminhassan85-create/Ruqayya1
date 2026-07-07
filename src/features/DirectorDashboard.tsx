@@ -1,0 +1,2207 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  Activity, 
+  Terminal, 
+  ShieldAlert, 
+  Award, 
+  FileSpreadsheet, 
+  Percent, 
+  LayoutGrid, 
+  Users, 
+  Truck, 
+  Settings, 
+  DollarSign, 
+  Clock, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Shield, 
+  Search, 
+  FileText, 
+  CheckCircle, 
+  XCircle, 
+  UserX, 
+  UserCheck, 
+  RefreshCw, 
+  Briefcase, 
+  MapPin, 
+  AlertTriangle, 
+  Calendar, 
+  Printer, 
+  Download, 
+  Info, 
+  Lock,
+  Unlock,
+  Building,
+  Phone,
+  Mail,
+  Coins,
+  Globe
+} from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  LineChart, 
+  Line, 
+  PieChart, 
+  Pie, 
+  Cell 
+} from 'recharts';
+import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
+import { Badge, Alert } from '../components/ui/SharedComponents';
+import { api } from '../utils/api';
+import { 
+  AuditLog, 
+  Dictionary, 
+  Language, 
+  FinancialRecord, 
+  Vehicle, 
+  Driver, 
+  AppNotification 
+} from '../types';
+
+interface DirectorDashboardProps {
+  lang: Language;
+  dictionary: Dictionary;
+}
+
+export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dictionary }) => {
+  // Real-time states synchronized via Server-Sent Events
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [financials, setFinancials] = useState<FinancialRecord[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [admins, setAdmins] = useState<any[]>([]);
+  const [shareholders, setShareholders] = useState<any[]>([]);
+  const [cycles, setCycles] = useState<any[]>([]);
+  const [companySettings, setCompanySettings] = useState<any>({});
+  const [shareholderSettings, setShareholderSettings] = useState<any>({});
+  const [tripManifests, setTripManifests] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [vouchers, setVouchers] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  
+  const [loading, setLoading] = useState(true);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit'>('overview');
+
+  // Sub-feature interactive states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
+  const [selectedCycle, setSelectedCycle] = useState<any | null>(null);
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [showAddShareholderModal, setShowAddShareholderModal] = useState(false);
+  
+  // Forms states
+  const [adminForm, setAdminForm] = useState({ fullName: '', email: '', password: '', phone: '' });
+  const [shareholderForm, setShareholderForm] = useState({ fullName: '', email: '', phone: '', address: '', investmentAmount: '' });
+  const [cycleGoalForm, setCycleGoalForm] = useState({ startDate: new Date().toISOString().split('T')[0], endGoalTons: '200' });
+  const [restForm, setRestForm] = useState({ startDate: '', endDate: '', reason: '' });
+  const [accidentForm, setAccidentForm] = useState({ date: '', description: '', damageEstimate: '', severity: 'minor' });
+  const [selectedDriverIdForAction, setSelectedDriverIdForAction] = useState<string | null>(null);
+  
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Print/Report Selection states
+  const [selectedReportType, setSelectedReportType] = useState<'financial' | 'driver' | 'shareholder' | 'revenue' | 'expense' | 'current_cycle' | 'history'>('financial');
+
+  // Establish SSE stream connection on mount
+  useEffect(() => {
+    let eventSource: EventSource;
+
+    const connectSSE = () => {
+      eventSource = new EventSource('/api/sse');
+
+      eventSource.onopen = () => {
+        setSseConnected(true);
+        setLoading(false);
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'db_update') {
+            setLogs(data.audit_logs || []);
+            setFinancials(data.financials || []);
+            setVehicles(data.vehicles || []);
+            setDrivers(data.drivers || []);
+            setAdmins(data.admins || []);
+            setShareholders(data.shareholders || []);
+            setCycles(data.cycles || []);
+            setCompanySettings(data.company_settings || {});
+            setShareholderSettings(data.shareholder_settings || {});
+            setTripManifests(data.trip_manifests || []);
+            setNotifications(data.notifications || []);
+            setVouchers(data.vouchers || []);
+            setUsers(data.users || []);
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error("Failed to parse live stream chunk:", err);
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.warn("SSE connection interrupted. Falling back to HTTP queries...", err);
+        setSseConnected(false);
+        eventSource.close();
+        
+        // Manual HTTP polling fallback if SSE drops
+        fetchFallbackData();
+      };
+    };
+
+    const fetchFallbackData = async () => {
+      try {
+        const [lgList, finList, vhList, drList, shList, cyList, ntList] = await Promise.all([
+          api.getAuditLogs(),
+          api.getFinance(),
+          api.getVehicles(),
+          api.getDrivers(),
+          api.getShareholders(),
+          api.request('/api/director/cycles/history').catch(() => []), // safety fallback
+          api.getNotifications()
+        ]);
+        setLogs(lgList || []);
+        setFinancials(finList || []);
+        setVehicles(vhList || []);
+        setDrivers(drList || []);
+        setShareholders(shList || []);
+        setNotifications(ntList || []);
+        setLoading(false);
+      } catch (err) {
+        console.error("HTTP Fallback also failed:", err);
+      }
+    };
+
+    connectSSE();
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, []);
+
+  // Recalculate dynamic statistics
+  const totalDriversCount = drivers.length;
+  const smartDriversCount = drivers.filter(d => d.classification === 'Smart').length;
+  const assistedDriversCount = drivers.filter(d => d.classification === 'Assisted').length;
+  const pendingDriversCount = drivers.filter(d => d.status === 'pending').length;
+  const activeDriversCount = drivers.filter(d => d.status === 'approved' || d.status === 'available' || d.status === 'on-trip').length;
+  const restDriversCount = drivers.filter(d => d.status === 'off-duty').length;
+  const totalVehiclesCount = vehicles.length;
+  const totalShareholdersCount = shareholders.length;
+  const totalInvestmentsSum = shareholders.reduce((s, r) => s + (r.investment_amount || 0), 0);
+
+  const totalRevenueSum = financials.filter(f => f.type === 'revenue').reduce((s, r) => s + r.amount, 0);
+  const totalExpensesSum = financials.filter(f => f.type === 'expense').reduce((s, r) => s + r.amount, 0);
+  const netGeneratedAmount = totalRevenueSum - totalExpensesSum;
+  
+  const shareholderPercentage = shareholderSettings.distributionPercentage !== undefined ? shareholderSettings.distributionPercentage : 2;
+  const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
+
+  // outstanding payment simulator based on active trips
+  const totalOutstandingPayments = tripManifests.filter(t => t.status === 'in-transit').reduce((s, r) => s + r.freightCharges, 0);
+  const totalVehicleBalanceRemaining = 14250000; // Standard company outstanding leasing balance
+
+  const activeCycle = cycles.find(c => c.status === 'active');
+  const nextCycleEstimatedDate = activeCycle 
+    ? new Date(new Date(activeCycle.startDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    : 'N/A';
+
+  // Filters and global search handlers
+  const handleGlobalSearch = () => {
+    if (!searchQuery) return [];
+    const query = searchQuery.toLowerCase();
+    
+    // Drivers
+    const filteredDrivers = drivers.filter(d => 
+      d.fullName?.toLowerCase().includes(query) ||
+      d.company_driver_id?.toLowerCase().includes(query) ||
+      d.phone?.toLowerCase().includes(query)
+    ).map(d => ({ ...d, sType: 'Driver', label: `${d.fullName} (${d.company_driver_id || 'DRV'})` }));
+
+    // Vehicles
+    const filteredVehicles = vehicles.filter(v => 
+      v.plateNumber?.toLowerCase().includes(query) ||
+      v.model?.toLowerCase().includes(query)
+    ).map(v => ({ ...v, sType: 'Vehicle', label: `${v.brand || 'Vehicle'} - ${v.plateNumber}` }));
+
+    // Shareholders
+    const filteredShareholders = shareholders.filter(s => 
+      s.full_name?.toLowerCase().includes(query) ||
+      s.phone?.toLowerCase().includes(query)
+    ).map(s => ({ ...s, sType: 'Shareholder', label: `${s.full_name} (Investor)` }));
+
+    // Admins
+    const filteredAdmins = admins.filter(a => 
+      a.fullName?.toLowerCase().includes(query) ||
+      a.email?.toLowerCase().includes(query)
+    ).map(a => ({ ...a, sType: 'Admin', label: `${a.fullName} (Operator)` }));
+
+    return [...filteredDrivers, ...filteredVehicles, ...filteredShareholders, ...filteredAdmins];
+  };
+
+  const globalResults = handleGlobalSearch();
+
+  // Executing executive commands
+  const handleStartCycle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError(null);
+    setActionSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.startCycle({
+        startDate: cycleGoalForm.startDate,
+        endGoalTons: parseFloat(cycleGoalForm.endGoalTons)
+      });
+      setActionSuccess(lang === 'en' ? "New company cycle started successfully." : "An fara sabon zagayen aiki lafiya.");
+    } catch (err: any) {
+      setActionError(err.message || "An error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEndCycle = async () => {
+    if (!window.confirm(lang === 'en' ? "Are you sure you want to CLOSE & LOCK the current operating cycle?" : "Shin kun tabbata kuna son rufe wannan zagayen aikin na kwanaki 30?")) return;
+    setActionError(null);
+    setActionSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.endCycle({
+        endDate: new Date().toISOString().split('T')[0]
+      });
+      setActionSuccess(lang === 'en' ? "Active cycle successfully audited, archived, and permanently locked." : "An kammala duba kudaden zagayen aiki kuma an rufe shi gaba daya.");
+    } catch (err: any) {
+      setActionError(err.message || "An error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdatePercentage = async (pct: number) => {
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await api.updateShareholderSettings({ distributionPercentage: pct });
+      setActionSuccess(lang === 'en' ? `Shareholder distribution pool percentage adjusted to ${pct}%.` : `An sauya rabon jari na masu hannun jari zuwa kashi ${pct}%.`);
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleUpdateCompanySettings = async (settings: any) => {
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await api.updateCompanySettings(settings);
+      setActionSuccess(lang === 'en' ? "Company profile details updated instantly across devices." : "An sabunta bayanan kamfani cikin nasara.");
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError(null);
+    setActionSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.createAdmin({
+        email: adminForm.email,
+        password: adminForm.password,
+        fullName: adminForm.fullName,
+        phone: adminForm.phone
+      });
+      setActionSuccess(lang === 'en' ? "New administrative operator profile created." : "An yi rijistar sabon Admin na gudanarwa.");
+      setShowAddAdminModal(false);
+      setAdminForm({ fullName: '', email: '', password: '', phone: '' });
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdminStatusChange = async (adminId: string, newStatus: string) => {
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await api.updateAdmin(adminId, { status: newStatus });
+      setActionSuccess(lang === 'en' ? `Admin status toggled to ${newStatus.toUpperCase()}.` : `An sauya matsayin admin zuwa ${newStatus.toUpperCase()}.`);
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleDeleteAdmin = async (adminId: string) => {
+    if (!window.confirm(lang === 'en' ? "Delele this admin profile permanently?" : "Shin kuna son goge wannan admin din gaba daya?")) return;
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await api.deleteAdmin(adminId);
+      setActionSuccess(lang === 'en' ? "Admin account successfully deleted." : "An goge asusun admin lafiya.");
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleAddShareholder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError(null);
+    setActionSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.addShareholder({
+        full_name: shareholderForm.fullName,
+        email: shareholderForm.email,
+        phone: shareholderForm.phone,
+        address: shareholderForm.address,
+        investment_amount: parseFloat(shareholderForm.investmentAmount)
+      });
+      setActionSuccess(lang === 'en' ? "Shareholder record successfully appended." : "An kara mai hannun jari a tsarin.");
+      setShowAddShareholderModal(false);
+      setShareholderForm({ fullName: '', email: '', phone: '', address: '', investmentAmount: '' });
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleShareholderStatusChange = async (shId: string, newStatus: string) => {
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await api.updateShareholderStatus(shId, { status: newStatus });
+      setActionSuccess(lang === 'en' ? `Shareholder status updated to ${newStatus.toUpperCase()}.` : `An sabunta matsayin mai hannun jari.`);
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleShareholderInvestmentChange = async (shId: string, amt: number) => {
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await api.updateShareholderInvestment(shId, { investment_amount: amt });
+      setActionSuccess(lang === 'en' ? "Investment value recalculated and saved." : "An sabunta jarin kudi na mai hannun jari.");
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleLogAccident = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDriverIdForAction) return;
+    setActionError(null);
+    setActionSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.addDriverAccident(selectedDriverIdForAction, {
+        date: accidentForm.date,
+        description: accidentForm.description,
+        damageEstimate: parseFloat(accidentForm.damageEstimate) || 0,
+        severity: accidentForm.severity
+      });
+      setActionSuccess(lang === 'en' ? "Accident details logged. Financial repairs record automatically generated." : "An yi rikodin hatsari kuma an kaddamar da kudin gyara.");
+      setAccidentForm({ date: '', description: '', damageEstimate: '', severity: 'minor' });
+      setSelectedDriverIdForAction(null);
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLogRest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDriverIdForAction) return;
+    setActionError(null);
+    setActionSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.addDriverRest(selectedDriverIdForAction, {
+        startDate: restForm.startDate,
+        endDate: restForm.endDate,
+        reason: restForm.reason
+      });
+      setActionSuccess(lang === 'en' ? "Driver off-duty rest period logged. Status updated." : "An yi rikodin hutun direba kuma an sauya status dinsa.");
+      setRestForm({ startDate: '', endDate: '', reason: '' });
+      setSelectedDriverIdForAction(null);
+    } catch (err: any) {
+      setActionError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Recharts Data Aggregation for charts
+  const aggregatedDailyData = financials
+    .slice(0, 15)
+    .reverse()
+    .map(f => ({
+      date: f.date,
+      amount: f.amount,
+      type: f.type
+    }));
+
+  const expenseCategories = financials
+    .filter(f => f.type === 'expense')
+    .reduce((acc: any[], current) => {
+      const existing = acc.find(item => item.name === current.category);
+      if (existing) {
+        existing.value += current.amount;
+      } else {
+        acc.push({ name: current.category, value: current.amount });
+      }
+      return acc;
+    }, []);
+
+  const COLORS = ['#D4AF37', '#1E3A8A', '#EF4444', '#10B981', '#3B82F6', '#8B5CF6'];
+
+  // Global search trigger result navigators
+  const navigateToSearchResult = (item: any) => {
+    setSearchQuery('');
+    if (item.sType === 'Driver') {
+      setSelectedDriver(drivers.find(d => d.id === item.id));
+      setActiveTab('drivers');
+    } else if (item.sType === 'Shareholder') {
+      setActiveTab('shareholders');
+    } else if (item.sType === 'Admin') {
+      setActiveTab('admins');
+    }
+  };
+
+  // Trigger browser printing for professional report layout
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="flex flex-col gap-6 w-full flex-1 max-w-7xl mx-auto p-2 md:p-6 bg-bg-base relative print:bg-white print:p-0">
+      
+      {/* EXECUTIVE CONTROL HUB UPPER HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-main/50 pb-4 print:hidden">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl md:text-2xl font-extrabold text-text-main tracking-tight uppercase font-mono flex items-center gap-2">
+              <Shield className="h-6 w-6 text-brand-gold" />
+              {lang === 'en' ? "Director General Headquarters" : "Babban Ofishin Babban Darakta"}
+            </h2>
+          </div>
+          <p className="text-xs text-text-muted mt-1 leading-relaxed max-w-2xl">
+            {lang === 'en' 
+              ? "Highest operational authority node. Command center for financial ledger audits, driver certifications, corporate shareholder settings, and 30-day operating cycle control." 
+              : "Babban iko na gudanarwa. Hanyar sarrafa kudaden shiga, binciken direbobi, masu hannun jari, da tsarin zagayen aiki."}
+          </p>
+        </div>
+        
+        {/* SSE & Status Indicators */}
+        <div className="flex items-center gap-3 bg-bg-surface border border-border-main p-2.5 rounded-xl self-start">
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest">{lang === 'en' ? "Telemetry Status" : "Matsayin Hanyar Sadarwa"}</span>
+            <span className="text-xs font-extrabold text-text-main font-mono flex items-center gap-1.5 mt-0.5">
+              <span className={`h-2 w-2 rounded-full ${sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+              {sseConnected ? "SSE LIVE STREAM" : "HTTP FALLBACK"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* GLOBAL INSTANT SEARCH CORRIDOR (Executive Requirement) */}
+      <div className="relative w-full max-w-md print:hidden">
+        <div className="flex items-center bg-bg-surface border border-border-main rounded-xl px-3 py-2 shadow-xs">
+          <Search className="h-4 w-4 text-text-muted mr-2" />
+          <input
+            type="text"
+            placeholder={lang === 'en' ? "Instant search by Driver ID, Plate No, Admin, Investor..." : "Bincika Direbobi, Motoci, Masu Hannun Jari, Admin..."}
+            className="w-full text-xs font-semibold focus:outline-hidden bg-transparent"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        {searchQuery && (
+          <div className="absolute top-full left-0 right-0 mt-1.5 bg-bg-surface border border-border-main rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto divide-y divide-border-main/40">
+            {globalResults.length === 0 ? (
+              <div className="p-3 text-center text-xs text-text-muted">{lang === 'en' ? "No records match search parameters." : "Babu sakamakon da ya dace."}</div>
+            ) : (
+              globalResults.map((res, i) => (
+                <button
+                  key={i}
+                  className="w-full text-left p-3 hover:bg-brand-gold/10 flex items-center justify-between text-xs transition-colors"
+                  onClick={() => navigateToSearchResult(res)}
+                >
+                  <span className="font-bold text-text-main">{res.label}</span>
+                  <Badge variant="gold">{res.sType.toUpperCase()}</Badge>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* SYSTEM FEEDBACK TOASTS */}
+      {actionError && (
+        <Alert variant="danger" className="print:hidden">
+          <div className="flex items-center gap-2">
+            <XCircle className="h-4 w-4" />
+            <span className="text-xs font-bold font-mono">{actionError}</span>
+          </div>
+        </Alert>
+      )}
+      {actionSuccess && (
+        <Alert variant="success" className="print:hidden">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4" />
+            <span className="text-xs font-bold font-mono">{actionSuccess}</span>
+          </div>
+        </Alert>
+      )}
+
+      {/* EXECUTIVE TAB NAVIGATION CORNER */}
+      <div className="flex flex-wrap items-center gap-1 bg-bg-surface border border-border-main/80 p-1 rounded-xl shadow-xs print:hidden overflow-x-auto">
+        <button
+          onClick={() => { setActiveTab('overview'); setSelectedDriver(null); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'overview' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Command Board" : "Gudunmawar Aiki"}
+        </button>
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'analytics' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Activity className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Finance Center" : "Ma'ajiyar Kudi"}
+        </button>
+        <button
+          onClick={() => setActiveTab('cycles')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'cycles' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Clock className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Operating Cycles" : "Zagayen Aiki"}
+        </button>
+        <button
+          onClick={() => setActiveTab('drivers')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'drivers' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Users className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Driver Dossiers" : "Direbobi"}
+        </button>
+        <button
+          onClick={() => setActiveTab('shareholders')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'shareholders' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Percent className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Shareholders Pool" : "Masu Hannun Jari"}
+        </button>
+        <button
+          onClick={() => setActiveTab('admins')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'admins' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Shield className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Operations Admins" : "Masu Gudanarwa"}
+        </button>
+        <button
+          onClick={() => setActiveTab('company')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'company' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Building className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Corporate Profile" : "Bayanan Kamfani"}
+        </button>
+        <button
+          onClick={() => setActiveTab('reports')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'reports' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Reports Center" : "Rahoton Aiki"}
+        </button>
+        <button
+          onClick={() => setActiveTab('audit')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'audit' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Terminal className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Audit Trail" : "Rikodin Tsaro"}
+        </button>
+      </div>
+
+      {/* MAIN CONTAINER SURFACE */}
+      <div className="flex-1 min-h-[500px] bg-bg-base print:bg-white">
+        
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <RefreshCw className="h-8 w-8 text-brand-gold animate-spin" />
+            <span className="text-xs font-bold font-mono text-text-muted">{lang === 'en' ? "Decrypting secure corporate records..." : "Ana kwashe bayanan sirri na D1..."}</span>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-col gap-6"
+            >
+              
+              {/* ==================================================
+                  TAB: command board / overview
+                  ================================================== */}
+              {activeTab === 'overview' && (
+                <div className="flex flex-col gap-6 print:hidden">
+                  
+                  {/* LIVE CORPORATE KPI CARDS (Framer Motion Staggered Transitions) */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    
+                    {/* DRIVER STATS CARD */}
+                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Total / Active Drivers" : "Direbobi Gaba daya"}</span>
+                        <Users className="h-4 w-4 text-brand-navy dark:text-slate-400" />
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-2xl font-extrabold text-text-main font-mono">{totalDriversCount} / {activeDriversCount}</p>
+                        <div className="flex gap-2.5 mt-1.5 text-[9px] text-text-muted font-bold">
+                          <span>{smartDriversCount} Smart</span>
+                          <span>•</span>
+                          <span>{assistedDriversCount} Assisted</span>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* DRIVERS AWAITING APPROVAL STAT CARD */}
+                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Awaiting / Resting" : "Hutu / Jiran Amincewa"}</span>
+                        <AlertTriangle className={`h-4 w-4 ${pendingDriversCount > 0 ? 'text-amber-500 animate-bounce' : 'text-text-muted'}`} />
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-2xl font-extrabold text-text-main font-mono">{pendingDriversCount} / {restDriversCount}</p>
+                        <span className="text-[9px] text-text-muted font-semibold">
+                          {pendingDriversCount > 0 
+                            ? `${pendingDriversCount} driver registrations pending boardroom review` 
+                            : "All driver applications reviewed."}
+                        </span>
+                      </div>
+                    </Card>
+
+                    {/* VEHICLE STAT CARD */}
+                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Fleet Assets" : "Rukunin Motoci"}</span>
+                        <Truck className="h-4 w-4 text-brand-gold" />
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-2xl font-extrabold text-text-main font-mono">{totalVehiclesCount}</p>
+                        <span className="text-[9px] text-text-muted font-semibold">
+                          {vehicles.filter(v => v.status === 'assigned').length} rigs active on transit corridors
+                        </span>
+                      </div>
+                    </Card>
+
+                    {/* INVESTMENTS CARD */}
+                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Shareholder Capital" : "Jarin Masu Hannun Jari"}</span>
+                        <Coins className="h-4 w-4 text-blue-500" />
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-2xl font-extrabold text-text-main font-mono">₦{totalInvestmentsSum.toLocaleString()}</p>
+                        <span className="text-[9px] text-text-muted font-semibold">
+                          Held by {totalShareholdersCount} active boardroom nodes
+                        </span>
+                      </div>
+                    </Card>
+
+                    {/* GROSS OPERATING REVENUE CARD */}
+                    <Card hoverEffect className="p-4 bg-slate-950 border border-slate-800 text-white flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'en' ? "Gross Collections" : "Kudaden Shiga"}</span>
+                        <TrendingUp className="h-4 w-4 text-emerald-400" />
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-2xl font-extrabold text-white font-mono">₦{totalRevenueSum.toLocaleString()}</p>
+                        <span className="text-[9px] text-slate-400">
+                          100% audited logistics invoices
+                        </span>
+                      </div>
+                    </Card>
+
+                    {/* COMPANY EXPENSES CARD */}
+                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Corporate Expenses" : "Kuɗaɗen Kashewa"}</span>
+                        <TrendingDown className="h-4 w-4 text-rose-500" />
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-2xl font-extrabold text-text-main font-mono">₦{totalExpensesSum.toLocaleString()}</p>
+                        <span className="text-[9px] text-text-muted">
+                          Fuel dispatches & rig restoration bills
+                        </span>
+                      </div>
+                    </Card>
+
+                    {/* NET PROFIT CARD */}
+                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Net Generated Amount" : "Ribar Aiki"}</span>
+                        <Activity className="h-4 w-4 text-emerald-500" />
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-2xl font-extrabold text-emerald-600 font-mono">₦{netGeneratedAmount.toLocaleString()}</p>
+                        <span className="text-[9px] text-text-muted">
+                          Net Margin ratio: {totalRevenueSum > 0 ? ((netGeneratedAmount / totalRevenueSum) * 100).toFixed(1) : '0'}%
+                        </span>
+                      </div>
+                    </Card>
+
+                    {/* SHAREHOLDER DISTRIBUTION CARDS */}
+                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Distribution Pool" : "Kudaden Raba Jari"}</span>
+                        <Percent className="h-4 w-4 text-brand-gold animate-spin" style={{ animationDuration: '6s' }} />
+                      </div>
+                      <div className="mt-4">
+                        <p className="text-2xl font-extrabold text-text-main font-mono">₦{distributionPool.toLocaleString()}</p>
+                        <span className="text-[9px] text-text-muted font-bold">
+                          Configured at {shareholderPercentage}% of Net profit
+                        </span>
+                      </div>
+                    </Card>
+
+                  </div>
+
+                  {/* ACTIVE CYCLE HUD & OUTSTANDING PAYMENTS BAR */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    {/* ACTIVE CYCLES CARD */}
+                    <Card className="lg:col-span-8 flex flex-col justify-between">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle>{lang === 'en' ? "Active 30-Day Operational Cycle" : "Zagayen Aiki Na Kwanaki 30 Na Yanzu"}</CardTitle>
+                            <CardDescription>Continuous performance auditing and locking workflow.</CardDescription>
+                          </div>
+                          {activeCycle ? (
+                            <Badge variant="gold">RUNNING IN PRODUCTION</Badge>
+                          ) : (
+                            <Badge variant="danger">NO ACTIVE CYCLE</Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <div className="mt-4 p-4 bg-bg-base rounded-xl border border-border-main/50 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">Active ID</span>
+                          <p className="text-sm font-extrabold text-text-main font-mono mt-0.5">{activeCycle ? activeCycle.id : "None"}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">Commencement Date</span>
+                          <p className="text-sm font-extrabold text-text-main font-mono mt-0.5">{activeCycle ? activeCycle.startDate : "N/A"}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">Expected Completion</span>
+                          <p className="text-sm font-extrabold text-text-main font-mono mt-0.5">{nextCycleEstimatedDate}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-6 flex flex-col gap-2">
+                        <div className="flex justify-between text-xs font-bold text-text-main">
+                          <span>Target Cargo Tonnage Weight Goal ({activeCycle ? activeCycle.endGoalTons : 200} Tons)</span>
+                          <span>94.6 Tons / {activeCycle ? activeCycle.endGoalTons : 200} Tons</span>
+                        </div>
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                          <div className="bg-brand-gold h-full rounded-full" style={{ width: `${Math.min(100, (94.6 / (activeCycle ? activeCycle.endGoalTons : 200)) * 100)}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="mt-6 flex items-center justify-end gap-3 border-t border-border-main/40 pt-4">
+                        {activeCycle ? (
+                          <button
+                            onClick={handleEndCycle}
+                            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors"
+                          >
+                            <Lock className="h-3.5 w-3.5" />
+                            {lang === 'en' ? "Complete & Lock Active Cycle" : "Kammala & Rufe Zagayen Sufuri"}
+                          </button>
+                        ) : (
+                          <form onSubmit={handleStartCycle} className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="date"
+                              required
+                              className="bg-bg-surface border border-border-main p-1.5 rounded-lg text-xs"
+                              value={cycleGoalForm.startDate}
+                              onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, startDate: e.target.value })}
+                            />
+                            <input
+                              type="number"
+                              required
+                              placeholder="Goal (Tons)"
+                              className="bg-bg-surface border border-border-main p-1.5 rounded-lg text-xs w-24"
+                              value={cycleGoalForm.endGoalTons}
+                              onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, endGoalTons: e.target.value })}
+                            />
+                            <button
+                              type="submit"
+                              className="px-3 py-2 bg-brand-gold hover:bg-brand-gold/80 text-slate-950 font-extrabold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              {lang === 'en' ? "Launch Cycle" : "Fara Zagaye"}
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    </Card>
+
+                    {/* OUTSTANDING LEASING & LEVERAGES */}
+                    <Card className="lg:col-span-4 flex flex-col justify-between">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Leverages & Liabilities" : "Basussuka & Kudaden Hanya"}</CardTitle>
+                        <CardDescription>Audited liabilities on lease balances & outstanding freight.</CardDescription>
+                      </CardHeader>
+                      <div className="mt-4 flex flex-col gap-5">
+                        <div className="flex items-center justify-between border-b border-border-main/40 pb-3">
+                          <div>
+                            <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">Unpaid Dispatch Freight</span>
+                            <p className="text-base font-extrabold text-text-main font-mono mt-0.5">₦{totalOutstandingPayments.toLocaleString()}</p>
+                          </div>
+                          <Badge variant="gold">EXPECTED</Badge>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-border-main/40 pb-3">
+                          <div>
+                            <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">Fleet Remaining Leasing Weights</span>
+                            <p className="text-base font-extrabold text-text-main font-mono mt-0.5">₦{totalVehicleBalanceRemaining.toLocaleString()}</p>
+                          </div>
+                          <Badge variant="danger">LIABILITY</Badge>
+                        </div>
+                        <div className="p-3 bg-bg-base border border-border-main rounded-xl">
+                          <span className="text-[9px] text-text-muted font-bold uppercase">Debt-to-Capital ratio</span>
+                          <p className="text-lg font-extrabold text-emerald-600 font-mono mt-0.5">9.41%</p>
+                          <span className="text-[9px] text-text-muted">Optimal risk corridor limits strictly maintained.</span>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+
+                  {/* MINI HISTORICAL GRAPHS & AUDITED LOGS STREAM */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <Card className="lg:col-span-8">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Revenue Performance Corridor" : "Kwatanta Kudade"}</CardTitle>
+                        <CardDescription>Live telemetry mapping operational dispatches vs fuel expenditures.</CardDescription>
+                      </CardHeader>
+                      <div className="h-64 mt-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={aggregatedDailyData.length > 0 ? aggregatedDailyData : [{ date: 'None', amount: 0, type: 'revenue' }]}>
+                            <defs>
+                              <linearGradient id="colorGross" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.25}/>
+                                <stop offset="95%" stopColor="#D4AF37" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                            <XAxis dataKey="date" stroke="#64748B" fontSize={10} tickLine={false} />
+                            <YAxis stroke="#64748B" fontSize={10} tickLine={false} />
+                            <Tooltip formatter={(value: any) => [`₦${value.toLocaleString()}`]} />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                            <Area type="monotone" dataKey="amount" name="Logistics Cash Weight" stroke="#D4AF37" fillOpacity={1} fill="url(#colorGross)" strokeWidth={2} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </Card>
+
+                    {/* LIVE ALERTS / NOTIFICATION CENTER WINDOW */}
+                    <Card className="lg:col-span-4 flex flex-col justify-between">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Headquarters Alerts" : "Sanarwar Gaggawa"}</CardTitle>
+                        <CardDescription>Live operational feed across corridors.</CardDescription>
+                      </CardHeader>
+                      <div className="mt-4 flex flex-col gap-3 max-h-64 overflow-y-auto pr-1">
+                        {notifications.length === 0 ? (
+                          <div className="text-center py-6 text-xs text-text-muted">{lang === 'en' ? "No operational alerts." : "Babu sanarwa."}</div>
+                        ) : (
+                          notifications.slice(0, 5).map((not, idx) => (
+                            <div key={idx} className="p-3 bg-bg-base border border-border-main rounded-xl flex flex-col gap-1 text-[11px] hover:bg-bg-surface transition-colors">
+                              <div className="flex items-center justify-between">
+                                <Badge variant={not.type === 'danger' ? 'danger' : not.type === 'warning' ? 'gold' : 'info'}>
+                                  {not.type?.toUpperCase() || "ALERT"}
+                                </Badge>
+                                <span className="text-[8px] text-text-muted font-mono">{not.created_at?.split('T')[0]}</span>
+                              </div>
+                              <p className="font-extrabold text-text-main mt-1 leading-tight">{lang === 'en' ? not.title_en : not.title_ha}</p>
+                              <p className="text-text-muted leading-relaxed font-sans">{lang === 'en' ? not.message_en : not.message_ha}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </Card>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  TAB: financial command center / analytics
+                  ================================================== */}
+              {activeTab === 'analytics' && (
+                <div className="flex flex-col gap-6">
+                  
+                  {/* Ledger Metrics */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card className="p-4 bg-bg-surface border border-border-main flex items-center gap-4">
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl">
+                        <TrendingUp className="h-6 w-6 text-emerald-500" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Total Invoiced Revenue" : "Kudaden Shiga"}</span>
+                        <p className="text-xl font-extrabold text-emerald-600 font-mono mt-0.5">₦{totalRevenueSum.toLocaleString()}</p>
+                      </div>
+                    </Card>
+                    <Card className="p-4 bg-bg-surface border border-border-main flex items-center gap-4">
+                      <div className="p-3 bg-rose-50 dark:bg-rose-950/30 rounded-xl">
+                        <TrendingDown className="h-6 w-6 text-rose-500" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Total Operating Expenses" : "Kuɗaɗen Kashewa"}</span>
+                        <p className="text-xl font-extrabold text-rose-600 font-mono mt-0.5">₦{totalExpensesSum.toLocaleString()}</p>
+                      </div>
+                    </Card>
+                    <Card className="p-4 bg-bg-surface border border-border-main flex items-center gap-4">
+                      <div className="p-3 bg-brand-gold/10 rounded-xl">
+                        <Percent className="h-6 w-6 text-brand-gold" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Shareholder Dividends Pool" : "Kudin Raba Jari"}</span>
+                        <p className="text-xl font-extrabold text-text-main font-mono mt-0.5">₦{distributionPool.toLocaleString()}</p>
+                      </div>
+                    </Card>
+                  </div>
+
+                  {/* Interactive charts row */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    {/* Revenue Category breakdown */}
+                    <Card className="lg:col-span-8">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Live Dispatch Cargo Cashflows" : "Hanyoyin Kudi na Gaskiya"}</CardTitle>
+                        <CardDescription>Daily financial record entries tracked instantly.</CardDescription>
+                      </CardHeader>
+                      <div className="h-80 mt-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={financials.slice(0, 15).reverse()} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                            <XAxis dataKey="date" stroke="#64748B" fontSize={10} tickLine={false} />
+                            <YAxis stroke="#64748B" fontSize={10} tickLine={false} />
+                            <Tooltip formatter={(value: any) => [`₦${value.toLocaleString()}`]} />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                            <Bar dataKey="amount" name="Transaction Amount" radius={[4, 4, 0, 0]}>
+                              {financials.slice(0, 15).reverse().map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.type === 'revenue' ? '#10B981' : '#EF4444'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </Card>
+
+                    {/* Expense category share pie */}
+                    <Card className="lg:col-span-4">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Operational Expenditures Share" : "Rabon Kudaden Gyara & Mai"}</CardTitle>
+                        <CardDescription>Percentage distribution by operational division.</CardDescription>
+                      </CardHeader>
+                      <div className="h-64 mt-4 relative flex items-center justify-center">
+                        {expenseCategories.length === 0 ? (
+                          <div className="text-xs text-text-muted py-10">{lang === 'en' ? "No expense records loaded." : "Babu kudaden kashewa."}</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={expenseCategories}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                              >
+                                {expenseCategories.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(value: any) => [`₦${value.toLocaleString()}`]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        )}
+                        <div className="absolute flex flex-col items-center">
+                          <span className="text-[10px] text-text-muted font-bold uppercase">Expenses</span>
+                          <span className="text-sm font-extrabold text-rose-600 font-mono">₦{totalExpensesSum.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap justify-center gap-3 text-[10px] font-bold text-text-muted">
+                        {expenseCategories.map((cat, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                            <span className="uppercase">{cat.name}: {((cat.value / totalExpensesSum) * 100).toFixed(0)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+
+                  </div>
+
+                  {/* General Ledger list table */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{lang === 'en' ? "Audited Corporate General Ledger" : "Rumbun Kudi Da Aka Duba"}</CardTitle>
+                      <CardDescription>Comprehensive records of company financial entries.</CardDescription>
+                    </CardHeader>
+                    <div className="overflow-x-auto mt-4">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-bg-base border-b border-border-main text-[10px] uppercase font-bold text-text-muted">
+                            <th className="p-3">Reference ID</th>
+                            <th className="p-3">Date</th>
+                            <th className="p-3">Cashflow Node</th>
+                            <th className="p-3">Allocation Division</th>
+                            <th className="p-3">Operational Details</th>
+                            <th className="p-3">Audit Inspector</th>
+                            <th className="p-3 text-right">Corporate Weight</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
+                          {financials.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="p-4 text-center text-xs font-sans text-text-muted">{lang === 'en' ? "No operational logs found in database." : "Babu bayanan kudi a ajiye."}</td>
+                            </tr>
+                          ) : (
+                            financials.map(fin => (
+                              <tr key={fin.id} className="hover:bg-bg-base/30">
+                                <td className="p-3 text-brand-gold font-bold">{fin.id.substring(0, 8).toUpperCase()}</td>
+                                <td className="p-3 text-text-muted">{fin.date}</td>
+                                <td className="p-3">
+                                  <Badge variant={fin.type === 'revenue' ? 'success' : 'danger'}>
+                                    {fin.type?.toUpperCase()}
+                                  </Badge>
+                                </td>
+                                <td className="p-3 text-text-main uppercase font-bold">{fin.category}</td>
+                                <td className="p-3 text-text-muted font-sans text-xs">{fin.description}</td>
+                                <td className="p-3 text-text-muted font-sans text-xs">{fin.approvedBy || "Corporate Automation Node"}</td>
+                                <td className={`p-3 text-right font-extrabold ${fin.type === 'revenue' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {fin.type === 'revenue' ? '+' : '-'} ₦{fin.amount.toLocaleString()}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  TAB: 30-day operating cycles
+                  ================================================== */}
+              {activeTab === 'cycles' && (
+                <div className="flex flex-col gap-6">
+                  
+                  {/* Cycles management panel */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    {/* Launch Form */}
+                    <Card className="lg:col-span-4 h-fit">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Initiate Operational Cycle" : "Kaddamar da Sabon Zagaye"}</CardTitle>
+                        <CardDescription>Launch and setup corporate performance metrics.</CardDescription>
+                      </CardHeader>
+                      <form onSubmit={handleStartCycle} className="mt-4 flex flex-col gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Cycle Commencement Date" : "Ranar Fara Zagaye"}</label>
+                          <input
+                            type="date"
+                            required
+                            className="bg-bg-surface border border-border-main p-2.5 rounded-xl text-xs font-semibold"
+                            value={cycleGoalForm.startDate}
+                            onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, startDate: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Operating Cargo Target Goal (Tons)" : "Burin Nauyin Kaya (Tons)"}</label>
+                          <input
+                            type="number"
+                            required
+                            min="1"
+                            className="bg-bg-surface border border-border-main p-2.5 rounded-xl text-xs font-semibold"
+                            value={cycleGoalForm.endGoalTons}
+                            onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, endGoalTons: e.target.value })}
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || !!activeCycle}
+                          className="w-full py-2.5 bg-brand-gold hover:bg-brand-gold/80 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                        >
+                          <Plus className="h-4 w-4" />
+                          {lang === 'en' ? "Authorize Cycle Start" : "Fara Sabon Zagaye"}
+                        </button>
+                        {activeCycle && (
+                          <span className="text-[9px] text-amber-500 font-bold text-center">
+                            Close current active cycle ({activeCycle.id}) before starting another.
+                          </span>
+                        )}
+                      </form>
+                    </Card>
+
+                    {/* Cycle Listing Archive */}
+                    <Card className="lg:col-span-8">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Locked & Archived Operations Cycles" : "Zagayen Aiki Da Aka Rufe"}</CardTitle>
+                        <CardDescription>Permanently sealed corporate cycles audits.</CardDescription>
+                      </CardHeader>
+                      <div className="overflow-x-auto mt-4">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-bg-base border-b border-border-main text-[10px] uppercase font-bold text-text-muted">
+                              <th className="p-3">Cycle Reference ID</th>
+                              <th className="p-3">Start Corridor</th>
+                              <th className="p-3">Close Date</th>
+                              <th className="p-3 text-right">Net Generated</th>
+                              <th className="p-3 text-right">Shareholders Pool</th>
+                              <th className="p-3">Audit Seal</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
+                            {cycles.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="p-4 text-center text-xs font-sans text-text-muted">{lang === 'en' ? "No historical operating cycles logged." : "Babu tsofaffin zagaye a ajiye."}</td>
+                              </tr>
+                            ) : (
+                              cycles.map(cyc => (
+                                <tr
+                                  key={cyc.id}
+                                  className="hover:bg-bg-base/30 cursor-pointer"
+                                  onClick={() => setSelectedCycle(cyc)}
+                                >
+                                  <td className="p-3 text-brand-gold font-bold">{cyc.id}</td>
+                                  <td className="p-3 text-text-muted">{cyc.startDate}</td>
+                                  <td className="p-3 text-text-muted">{cyc.endDate || "STILL RUNNING"}</td>
+                                  <td className="p-3 text-right font-extrabold">
+                                    {cyc.metrics ? `₦${cyc.metrics.netGeneratedAmount.toLocaleString()}` : "Pending"}
+                                  </td>
+                                  <td className="p-3 text-right font-extrabold text-brand-gold">
+                                    {cyc.metrics ? `₦${cyc.metrics.distributionPool.toLocaleString()}` : "Pending"}
+                                  </td>
+                                  <td className="p-3">
+                                    <Badge variant={cyc.locked ? 'gold' : 'info'}>
+                                      {cyc.locked ? "SEALED & LOCKED" : "ACTIVE"}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
+
+                  </div>
+
+                  {/* SELECTED CYCLE CALCULATIONS AUDIT EXPLANATOR MODAL */}
+                  {selectedCycle && (
+                    <Card className="border border-brand-gold/60 bg-bg-surface p-6">
+                      <div className="flex items-center justify-between border-b border-border-main/50 pb-3">
+                        <div>
+                          <span className="text-[9px] text-brand-gold font-bold uppercase">Audited Calculation Trail</span>
+                          <h3 className="text-lg font-extrabold text-text-main font-mono">{selectedCycle.id} Calculation Audit</h3>
+                        </div>
+                        <button
+                          onClick={() => setSelectedCycle(null)}
+                          className="p-1.5 hover:bg-bg-base rounded-lg text-text-muted hover:text-text-main cursor-pointer"
+                        >
+                          <XCircle className="h-5 w-5" />
+                        </button>
+                      </div>
+                      
+                      {selectedCycle.metrics ? (
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                          <div className="flex flex-col gap-3">
+                            <h4 className="font-bold text-text-main uppercase text-[10px] tracking-wider">Dynamic Revenue/Expenditures Formula</h4>
+                            <div className="p-3.5 bg-bg-base border border-border-main rounded-xl flex flex-col gap-2 font-mono">
+                              <div className="flex justify-between">
+                                <span className="text-text-muted">Invoiced Gross Revenues:</span>
+                                <span className="text-emerald-600 font-extrabold">₦{selectedCycle.metrics.totalRevenue.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-text-muted">Maintenance & Vouchers Cost:</span>
+                                <span className="text-rose-600 font-extrabold">- ₦{selectedCycle.metrics.totalExpenses.toLocaleString()}</span>
+                              </div>
+                              <div className="border-t border-border-main/60 pt-2 flex justify-between font-extrabold">
+                                <span>Net Operating Profit (NOP):</span>
+                                <span className="text-text-main">₦{selectedCycle.metrics.netGeneratedAmount.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-3">
+                            <h4 className="font-bold text-text-main uppercase text-[10px] tracking-wider">Shareholder Pool Division Recalculation</h4>
+                            <div className="p-3.5 bg-bg-base border border-border-main rounded-xl flex flex-col gap-2 font-mono">
+                              <div className="flex justify-between">
+                                <span className="text-text-muted">Calculated Net Operating Profit:</span>
+                                <span>₦{selectedCycle.metrics.netGeneratedAmount.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-text-muted">Percentage Allocation:</span>
+                                <span className="text-brand-gold font-extrabold">{selectedCycle.metrics.distributionPercentage}%</span>
+                              </div>
+                              <div className="border-t border-border-main/60 pt-2 flex justify-between font-extrabold">
+                                <span>Shareholders Disbursed Pool:</span>
+                                <span className="text-brand-gold">₦{selectedCycle.metrics.distributionPool.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-xs text-text-muted">This operational cycle is still running. Metrics will calculate on lock.</div>
+                      )}
+                    </Card>
+                  )}
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  TAB: operations admins (CRUD / Reset / Logs)
+                  ================================================== */}
+              {activeTab === 'admins' && (
+                <div className="flex flex-col gap-6">
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-extrabold text-text-main tracking-tight uppercase">{lang === 'en' ? "Operations Admin Control" : "Masu Gudanarwa (Admins)"}</h3>
+                      <p className="text-xs text-text-muted mt-0.5">Create, edit, suspend, or delete operational supervisors.</p>
+                    </div>
+                    <button
+                      onClick={() => setShowAddAdminModal(true)}
+                      className="px-4 py-2 bg-brand-gold hover:bg-brand-gold/80 text-slate-950 font-extrabold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Plus className="h-4 w-4" />
+                      {lang === 'en' ? "Add Admin Operator" : "Kara Admin"}
+                    </button>
+                  </div>
+
+                  {/* Add Admin Modal Dialog */}
+                  {showAddAdminModal && (
+                    <Card className="border border-brand-gold p-6">
+                      <div className="flex items-center justify-between border-b border-border-main pb-3 mb-4">
+                        <h4 className="text-sm font-extrabold text-text-main uppercase">{lang === 'en' ? "Create Operator Profile" : "Kara Asusun Admin"}</h4>
+                        <button onClick={() => setShowAddAdminModal(false)} className="text-text-muted hover:text-text-main cursor-pointer"><XCircle className="h-5 w-5" /></button>
+                      </div>
+                      <form onSubmit={handleAddAdmin} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Full Name</label>
+                          <input
+                            type="text"
+                            required
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs"
+                            value={adminForm.fullName}
+                            onChange={(e) => setAdminForm({ ...adminForm, fullName: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Corporate Email</label>
+                          <input
+                            type="email"
+                            required
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs"
+                            value={adminForm.email}
+                            onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Password</label>
+                          <input
+                            type="password"
+                            required
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs"
+                            value={adminForm.password}
+                            onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Active Telephone</label>
+                          <input
+                            type="text"
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs"
+                            value={adminForm.phone}
+                            onChange={(e) => setAdminForm({ ...adminForm, phone: e.target.value })}
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="md:col-span-2 py-2.5 bg-brand-gold text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 mt-2"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Commit Registration
+                        </button>
+                      </form>
+                    </Card>
+                  )}
+
+                  {/* Admins Table */}
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-bg-base border-b border-border-main text-[10px] uppercase font-bold text-text-muted">
+                            <th className="p-3">ID Code</th>
+                            <th className="p-3">Administrative Officer</th>
+                            <th className="p-3">Corporate Email</th>
+                            <th className="p-3">Contact</th>
+                            <th className="p-3">Operational Status</th>
+                            <th className="p-3 text-right">Security Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
+                          {users.filter(u => u.role_id === 'role-admin').map(adm => {
+                            const adminProfile = admins.find(a => a.user_id === adm.id) || {};
+                            return (
+                              <tr key={adm.id} className="hover:bg-bg-base/30">
+                                <td className="p-3 text-brand-gold font-bold">{adminProfile.company_id || 'ADM-OFF'}</td>
+                                <td className="p-3 font-extrabold text-text-main font-sans text-xs">{adm.full_name}</td>
+                                <td className="p-3 font-sans text-xs text-text-muted">{adm.email}</td>
+                                <td className="p-3 text-text-muted">{adm.phone || "N/A"}</td>
+                                <td className="p-3">
+                                  <Badge variant={adm.status === 'active' ? 'success' : 'danger'}>
+                                    {adm.status?.toUpperCase() || "ACTIVE"}
+                                  </Badge>
+                                </td>
+                                <td className="p-3 text-right flex items-center justify-end gap-2.5">
+                                  {adm.status === 'active' ? (
+                                    <button
+                                      onClick={() => handleAdminStatusChange(adm.id, 'suspended')}
+                                      className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg cursor-pointer"
+                                      title="Suspend Operator Authority"
+                                    >
+                                      <UserX className="h-4 w-4" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleAdminStatusChange(adm.id, 'active')}
+                                      className="p-1.5 hover:bg-emerald-50 text-emerald-600 rounded-lg cursor-pointer"
+                                      title="Re-Activate Authority"
+                                    >
+                                      <UserCheck className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      const newPass = window.prompt("Enter new secure password:");
+                                      if (newPass) {
+                                        api.updateAdmin(adm.id, { password: newPass });
+                                        alert("Password reset successfully.");
+                                      }
+                                    }}
+                                    className="p-1.5 hover:bg-slate-100 text-text-muted rounded-lg cursor-pointer"
+                                    title="Reset Security Password"
+                                  >
+                                    <Lock className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteAdmin(adm.id)}
+                                    className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg cursor-pointer"
+                                    title="Delete Profile Permanently"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  TAB: fleet drivers dossiers (Dossiers / history)
+                  ================================================== */}
+              {activeTab === 'drivers' && (
+                <div className="flex flex-col gap-6">
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    {/* Drivers List Panel */}
+                    <Card className="lg:col-span-5 h-fit">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Heavy Haulage Certified Drivers" : "Rijistar Direbobi"}</CardTitle>
+                        <CardDescription>Select driver to inspect complete dossier files.</CardDescription>
+                      </CardHeader>
+                      <div className="mt-4 flex flex-col gap-2.5 max-h-[480px] overflow-y-auto pr-1">
+                        {drivers.map(drv => (
+                          <button
+                            key={drv.id}
+                            onClick={() => setSelectedDriver(drv)}
+                            className={`w-full p-3 rounded-xl border text-left flex items-center justify-between text-xs transition-colors cursor-pointer ${selectedDriver?.id === drv.id ? 'bg-brand-gold/10 border-brand-gold' : 'bg-bg-surface border-border-main hover:bg-bg-base/40'}`}
+                          >
+                            <div>
+                              <span className="font-extrabold text-text-main block">{drv.fullName || drv.company_driver_id}</span>
+                              <span className="text-[10px] text-text-muted block mt-0.5">{drv.company_driver_id || 'Pending Certification'} • {drv.classification || 'Unclassified'}</span>
+                            </div>
+                            <Badge variant={drv.status === 'approved' || drv.status === 'available' || drv.status === 'on-trip' ? 'success' : drv.status === 'pending' ? 'gold' : 'danger'}>
+                              {drv.status?.toUpperCase() || 'PENDING'}
+                            </Badge>
+                          </button>
+                        ))}
+                      </div>
+                    </Card>
+
+                    {/* Driver Detail Dossier Panel */}
+                    <Card className="lg:col-span-7">
+                      {selectedDriver ? (
+                        <div className="flex flex-col gap-6">
+                          
+                          {/* Profile Header */}
+                          <div className="flex items-start justify-between border-b border-border-main/50 pb-4">
+                            <div>
+                              <span className="text-[9px] text-brand-gold font-bold uppercase tracking-wider">{selectedDriver.classification || 'UNCLASSIFIED CORRIDOR DRIVER'}</span>
+                              <h3 className="text-lg font-extrabold text-text-main font-mono">{selectedDriver.fullName}</h3>
+                              <p className="text-[11px] text-text-muted mt-0.5">Company ID: <span className="font-mono font-bold text-text-main">{selectedDriver.company_driver_id || 'PENDING'}</span></p>
+                            </div>
+                            <Badge variant={selectedDriver.status === 'approved' || selectedDriver.status === 'available' || selectedDriver.status === 'on-trip' ? 'success' : 'danger'}>
+                              {selectedDriver.status?.toUpperCase() || 'PENDING'}
+                            </Badge>
+                          </div>
+
+                          {/* Personal contact / License info */}
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                            <div className="p-3 bg-bg-base rounded-xl border border-border-main/50">
+                              <span className="text-[9px] text-text-muted font-bold uppercase block">Active Telephone</span>
+                              <span className="font-extrabold text-text-main block mt-0.5">{selectedDriver.phone || "N/A"}</span>
+                            </div>
+                            <div className="p-3 bg-bg-base rounded-xl border border-border-main/50">
+                              <span className="text-[9px] text-text-muted font-bold uppercase block">ECOWAS Transit License</span>
+                              <span className="font-extrabold text-text-main block mt-0.5">{selectedDriver.license_number || "N/A"}</span>
+                            </div>
+                            <div className="p-3 bg-bg-base rounded-xl border border-border-main/50">
+                              <span className="text-[9px] text-text-muted font-bold uppercase block">License Expiry</span>
+                              <span className="font-extrabold text-text-main block mt-0.5">{selectedDriver.license_expiry || "N/A"}</span>
+                            </div>
+                            <div className="p-3 bg-bg-base rounded-xl border border-border-main/50">
+                              <span className="text-[9px] text-text-muted font-bold uppercase block">National Identity No (NIN)</span>
+                              <span className="font-extrabold text-text-main block mt-0.5 font-mono">{selectedDriver.nin || "N/A"}</span>
+                            </div>
+                          </div>
+
+                          {/* Guarantor Details */}
+                          <div>
+                            <h4 className="font-bold text-[10px] text-text-muted uppercase tracking-wider mb-2">Legal Guarantor Profile</h4>
+                            {selectedDriver.guarantor ? (
+                              <div className="p-3.5 bg-bg-base border border-border-main rounded-xl grid grid-cols-2 gap-3 text-xs">
+                                <div>
+                                  <span className="text-[9px] text-text-muted">Guarantor Name</span>
+                                  <p className="font-extrabold text-text-main mt-0.5">{selectedDriver.guarantor.fullName}</p>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-text-muted">Relationship</span>
+                                  <p className="font-extrabold text-text-main mt-0.5">{selectedDriver.guarantor.relationship}</p>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-text-muted">Telephone</span>
+                                  <p className="font-extrabold text-text-main mt-0.5">{selectedDriver.guarantor.phone}</p>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-text-muted">NIN Code</span>
+                                  <p className="font-extrabold text-text-main mt-0.5 font-mono">{selectedDriver.guarantor.nin}</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-text-muted italic p-3 bg-bg-base border border-border-main rounded-xl">No guarantor files bound to driver.</div>
+                            )}
+                          </div>
+
+                          {/* Driver Rest and Accident Inputs */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border-main/40">
+                            
+                            {/* Rest Logger */}
+                            <form onSubmit={(e) => { setSelectedDriverIdForAction(selectedDriver.id); handleLogRest(e); }} className="flex flex-col gap-3">
+                              <h5 className="font-bold text-[10px] text-text-main uppercase tracking-wider flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-brand-gold" /> Log Rest Period</h5>
+                              <input
+                                type="date"
+                                required
+                                className="bg-bg-base border border-border-main p-2 rounded-lg text-xs"
+                                value={restForm.startDate}
+                                onChange={(e) => setRestForm({ ...restForm, startDate: e.target.value })}
+                              />
+                              <input
+                                type="date"
+                                required
+                                className="bg-bg-base border border-border-main p-2 rounded-lg text-xs"
+                                value={restForm.endDate}
+                                onChange={(e) => setRestForm({ ...restForm, endDate: e.target.value })}
+                              />
+                              <input
+                                type="text"
+                                placeholder="Reason / Corridor physical release"
+                                required
+                                className="bg-bg-base border border-border-main p-2 rounded-lg text-xs"
+                                value={restForm.reason}
+                                onChange={(e) => setRestForm({ ...restForm, reason: e.target.value })}
+                              />
+                              <button type="submit" className="py-1.5 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">Register Rest Window</button>
+                            </form>
+
+                            {/* Accident Logger */}
+                            <form onSubmit={(e) => { setSelectedDriverIdForAction(selectedDriver.id); handleLogAccident(e); }} className="flex flex-col gap-3">
+                              <h5 className="font-bold text-[10px] text-text-main uppercase tracking-wider flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 text-rose-500" /> Log Collision/Incident</h5>
+                              <input
+                                type="date"
+                                required
+                                className="bg-bg-base border border-border-main p-2 rounded-lg text-xs"
+                                value={accidentForm.date}
+                                onChange={(e) => setAccidentForm({ ...accidentForm, date: e.target.value })}
+                              />
+                              <input
+                                type="number"
+                                placeholder="Damage Repair Bill (₦)"
+                                required
+                                className="bg-bg-base border border-border-main p-2 rounded-lg text-xs"
+                                value={accidentForm.damageEstimate}
+                                onChange={(e) => setAccidentForm({ ...accidentForm, damageEstimate: e.target.value })}
+                              />
+                              <input
+                                type="text"
+                                placeholder="Detailed accident description..."
+                                required
+                                className="bg-bg-base border border-border-main p-2 rounded-lg text-xs"
+                                value={accidentForm.description}
+                                onChange={(e) => setAccidentForm({ ...accidentForm, description: e.target.value })}
+                              />
+                              <button type="submit" className="py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer">Log Incident & Bill</button>
+                            </form>
+
+                          </div>
+
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-20 text-text-muted gap-2">
+                          <Users className="h-8 w-8 text-text-muted/60" />
+                          <span className="text-xs font-bold font-mono">{lang === 'en' ? "Select a driver to audit profiles." : "Zabi direba don ganin bayanan sa."}</span>
+                        </div>
+                      )}
+                    </Card>
+
+                  </div>
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  TAB: shareholder settings & management
+                  ================================================== */}
+              {activeTab === 'shareholders' && (
+                <div className="flex flex-col gap-6">
+                  
+                  {/* Shareholder Settings Panel */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* Shareholder Settings */}
+                    <Card className="flex flex-col justify-between">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Dividend Pool Percentage Setting" : "Sarrafa Rabon Jari (Masu Hannun Jari)"}</CardTitle>
+                        <CardDescription>Adjust allocation percentage deducted from Net profit.</CardDescription>
+                      </CardHeader>
+                      <div className="mt-4 p-4 bg-bg-base rounded-xl border border-border-main/50 flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-text-main">Current Boardroom Allocation Weight:</span>
+                          <span className="text-lg font-extrabold text-brand-gold font-mono">{shareholderPercentage}%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleUpdatePercentage(2)}
+                            className="flex-1 py-2 bg-slate-900 text-white hover:bg-slate-800 font-extrabold text-xs rounded-lg cursor-pointer"
+                          >
+                            Set ECOWAS Default (2%)
+                          </button>
+                          <button
+                            onClick={() => {
+                              const customPct = window.prompt("Enter custom distribution percentage (0-100):");
+                              if (customPct !== null && !isNaN(parseFloat(customPct))) {
+                                handleUpdatePercentage(parseFloat(customPct));
+                              }
+                            }}
+                            className="flex-1 py-2 bg-brand-gold text-slate-950 hover:bg-brand-gold/80 font-extrabold text-xs rounded-lg cursor-pointer"
+                          >
+                            Set Custom Percentage
+                          </button>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-text-muted mt-2.5">Changes log instantly to security audit. Recalculates dynamically over Net Generated Amount.</span>
+                    </Card>
+
+                    {/* Add Shareholder */}
+                    <Card className="flex flex-col justify-between h-fit">
+                      <CardHeader>
+                        <CardTitle>{lang === 'en' ? "Append Corporate Boardroom Shareholder" : "Sanya Sabon Mai Hannun Jari"}</CardTitle>
+                        <CardDescription>Register a new shareholder capital node.</CardDescription>
+                      </CardHeader>
+                      <button
+                        onClick={() => setShowAddShareholderModal(true)}
+                        className="mt-4 py-2.5 bg-slate-950 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Plus className="h-4 w-4 text-brand-gold" />
+                        Configure New Investor Node
+                      </button>
+                    </Card>
+
+                  </div>
+
+                  {/* Add Shareholder Modal */}
+                  {showAddShareholderModal && (
+                    <Card className="border border-brand-gold p-6">
+                      <div className="flex items-center justify-between border-b border-border-main pb-3 mb-4">
+                        <h4 className="text-sm font-extrabold text-text-main uppercase">Add Shareholder Profile</h4>
+                        <button onClick={() => setShowAddShareholderModal(false)} className="text-text-muted hover:text-text-main cursor-pointer"><XCircle className="h-5 w-5" /></button>
+                      </div>
+                      <form onSubmit={handleAddShareholder} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Investor Full Name</label>
+                          <input
+                            type="text"
+                            required
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs"
+                            value={shareholderForm.fullName}
+                            onChange={(e) => setShareholderForm({ ...shareholderForm, fullName: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Investor Email</label>
+                          <input
+                            type="email"
+                            required
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs"
+                            value={shareholderForm.email}
+                            onChange={(e) => setShareholderForm({ ...shareholderForm, email: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Telephone</label>
+                          <input
+                            type="text"
+                            required
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs"
+                            value={shareholderForm.phone}
+                            onChange={(e) => setShareholderForm({ ...shareholderForm, phone: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Capital Investment Amount (₦)</label>
+                          <input
+                            type="number"
+                            required
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs font-mono font-bold"
+                            value={shareholderForm.investmentAmount}
+                            onChange={(e) => setShareholderForm({ ...shareholderForm, investmentAmount: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5 md:col-span-2">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">Corporate Address</label>
+                          <input
+                            type="text"
+                            className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs"
+                            value={shareholderForm.address}
+                            onChange={(e) => setShareholderForm({ ...shareholderForm, address: e.target.value })}
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          className="md:col-span-2 py-2.5 bg-brand-gold text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 mt-2"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Commit Capital Node
+                        </button>
+                      </form>
+                    </Card>
+                  )}
+
+                  {/* Shareholders Table */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{lang === 'en' ? "Shareholders Capital Boardroom" : "Masu Hannun Jari Da Jarin Su"}</CardTitle>
+                      <CardDescription>Current registered investors, capital stakes, and dynamic calculations.</CardDescription>
+                    </CardHeader>
+                    <div className="overflow-x-auto mt-4">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-bg-base border-b border-border-main text-[10px] uppercase font-bold text-text-muted">
+                            <th className="p-3">Shareholder Name</th>
+                            <th className="p-3">Email Address</th>
+                            <th className="p-3">Telephone</th>
+                            <th className="p-3">Capital Stake Value</th>
+                            <th className="p-3">% Weight Stake</th>
+                            <th className="p-3">Estimated Earnings</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
+                          {shareholders.map(sh => {
+                            const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+                            const estimatedShareholderEarnings = distributionPool * (pctStake / 100);
+                            return (
+                              <tr key={sh.id} className="hover:bg-bg-base/30">
+                                <td className="p-3 font-extrabold text-text-main font-sans text-xs">{sh.full_name}</td>
+                                <td className="p-3 font-sans text-xs text-text-muted">{sh.email}</td>
+                                <td className="p-3 text-text-muted">{sh.phone}</td>
+                                <td className="p-3 font-extrabold">₦{sh.investment_amount?.toLocaleString() || '0'}</td>
+                                <td className="p-3 text-blue-600 font-bold">{pctStake.toFixed(2)}%</td>
+                                <td className="p-3 text-emerald-600 font-extrabold">₦{estimatedShareholderEarnings.toLocaleString()}</td>
+                                <td className="p-3">
+                                  <Badge variant={sh.status === 'suspended' ? 'danger' : 'success'}>
+                                    {sh.status?.toUpperCase() || 'ACTIVE'}
+                                  </Badge>
+                                </td>
+                                <td className="p-3 text-right flex items-center justify-end gap-2.5">
+                                  {sh.status === 'suspended' ? (
+                                    <button
+                                      onClick={() => handleShareholderStatusChange(sh.id, 'active')}
+                                      className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer"
+                                      title="Unsuspend"
+                                    >
+                                      <UserCheck className="h-4 w-4" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleShareholderStatusChange(sh.id, 'suspended')}
+                                      className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                                      title="Suspend"
+                                    >
+                                      <UserX className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      const amt = window.prompt("Adjust Capital Investment (₦):", sh.investment_amount);
+                                      if (amt) handleShareholderInvestmentChange(sh.id, parseFloat(amt));
+                                    }}
+                                    className="p-1.5 text-brand-gold hover:bg-slate-100 rounded-lg cursor-pointer"
+                                    title="Edit Capital Stake"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  TAB: company settings (Identity defaults)
+                  ================================================== */}
+              {activeTab === 'company' && (
+                <Card className="p-6">
+                  <CardHeader>
+                    <CardTitle>{lang === 'en' ? "Global Corporate Configuration" : "Kayan Gudanarwa Na Kamfani"}</CardTitle>
+                    <CardDescription>Adjust currency, naming, timezones, and language settings that reflect instantly across the ecosystem.</CardDescription>
+                  </CardHeader>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const formData = new FormData(e.currentTarget);
+                      handleUpdateCompanySettings({
+                        companyName: formData.get('companyName'),
+                        companyAddress: formData.get('companyAddress'),
+                        phone: formData.get('phone'),
+                        email: formData.get('email'),
+                        currency: formData.get('currency'),
+                        timeZone: formData.get('timeZone'),
+                        languageDefault: formData.get('languageDefault'),
+                        themeDefault: formData.get('themeDefault')
+                      });
+                    }}
+                    className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold"
+                  >
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-muted uppercase">Company Name</label>
+                      <input
+                        type="text"
+                        name="companyName"
+                        className="bg-bg-base border border-border-main p-2.5 rounded-xl"
+                        defaultValue={companySettings.companyName || "Ruqayya Transport Limited"}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-muted uppercase">Operations Email Address</label>
+                      <input
+                        type="email"
+                        name="email"
+                        className="bg-bg-base border border-border-main p-2.5 rounded-xl"
+                        defaultValue={companySettings.email || "info@ruqayyatransport.com"}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-muted uppercase">Operations Telephone Corridor</label>
+                      <input
+                        type="text"
+                        name="phone"
+                        className="bg-bg-base border border-border-main p-2.5 rounded-xl"
+                        defaultValue={companySettings.phone || "+234 803 123 4567"}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-muted uppercase">Primary Monetary Currency</label>
+                      <input
+                        type="text"
+                        name="currency"
+                        className="bg-bg-base border border-border-main p-2.5 rounded-xl"
+                        defaultValue={companySettings.currency || "₦"}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5 md:col-span-2">
+                      <label className="text-[10px] font-bold text-text-muted uppercase">Corporate Headquarters Address</label>
+                      <input
+                        type="text"
+                        name="companyAddress"
+                        className="bg-bg-base border border-border-main p-2.5 rounded-xl"
+                        defaultValue={companySettings.companyAddress || "No 14 Zaria Road, Kano, Nigeria"}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-muted uppercase">Default Operating Timezone</label>
+                      <select name="timeZone" className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs focus:outline-hidden" defaultValue={companySettings.timeZone || "Africa/Lagos"}>
+                        <option value="Africa/Lagos">Africa/Lagos (West Africa Time - WAT)</option>
+                        <option value="UTC">Coordinated Universal Time (UTC)</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-muted uppercase">Language Defaults</label>
+                      <select name="languageDefault" className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs focus:outline-hidden" defaultValue={companySettings.languageDefault || "en"}>
+                        <option value="en">English (Operations Standard)</option>
+                        <option value="ha">Hausa (Arewa Zone Local)</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      className="md:col-span-2 py-2.5 bg-brand-gold text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 mt-4 cursor-pointer hover:bg-brand-gold/80 transition-all"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Commit Corporate Identities
+                    </button>
+                  </form>
+                </Card>
+              )}
+
+              {/* ==================================================
+                  TAB: reports center (Financial, Driver, etc.)
+                  ================================================== */}
+              {activeTab === 'reports' && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  
+                  {/* Selector panel */}
+                  <Card className="lg:col-span-4 h-fit print:hidden">
+                    <CardHeader>
+                      <CardTitle>{lang === 'en' ? "Executive Reports Center" : "Ma'ajiyar Rahotanni"}</CardTitle>
+                      <CardDescription>Generate and inspect professional corporate dispatches.</CardDescription>
+                    </CardHeader>
+                    <div className="mt-4 flex flex-col gap-2">
+                      {[
+                        { type: 'financial', label: 'Financial Balance Report' },
+                        { type: 'driver', label: 'Certified Drivers Status Report' },
+                        { type: 'shareholder', label: 'Boardroom Shareholders Ledger' },
+                        { type: 'revenue', label: 'Cargo Invoiced Revenue Report' },
+                        { type: 'expense', label: 'Fuel Voucher Expenditures Report' },
+                        { type: 'current_cycle', label: 'Active 30-Day Cycle Performance' },
+                        { type: 'history', label: 'Archived Cycles Audit Report' }
+                      ].map(rep => (
+                        <button
+                          key={rep.type}
+                          onClick={() => setSelectedReportType(rep.type as any)}
+                          className={`w-full text-left p-2.5 rounded-lg text-xs font-bold border cursor-pointer transition-all ${selectedReportType === rep.type ? 'bg-brand-navy border-slate-800 text-white' : 'bg-bg-surface border-border-main/50 text-text-muted hover:text-text-main hover:bg-bg-base'}`}
+                        >
+                          {rep.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-6 flex flex-col gap-2">
+                      <button
+                        onClick={handlePrint}
+                        className="w-full py-2 bg-brand-gold text-slate-950 font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        Print/Save to PDF Format
+                      </button>
+                    </div>
+                  </Card>
+
+                  {/* Document View Corridor (Optimized print layouts) */}
+                  <div className="lg:col-span-8 bg-white border border-slate-300 text-slate-950 p-6 md:p-8 rounded-xl shadow-lg font-sans max-w-3xl mx-auto w-full print:border-0 print:shadow-none print:p-0">
+                    
+                    {/* Professional Header */}
+                    <div className="border-b-2 border-slate-800 pb-5 mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 bg-slate-900 flex items-center justify-center rounded-lg">
+                          <Truck className="h-6 w-6 text-brand-gold" />
+                        </div>
+                        <div>
+                          <h1 className="text-xl font-black tracking-tight text-slate-900 uppercase leading-none">{companySettings.companyName || "RUQAYYA TRANSPORT LIMITED"}</h1>
+                          <p className="text-[9px] font-bold text-brand-gold tracking-widest mt-0.5 uppercase">Industrial Logistics & West African Transit Corridors</p>
+                        </div>
+                      </div>
+                      <div className="text-right text-[10px] text-slate-600">
+                        <p className="font-bold">{companySettings.companyAddress || "No 14 Zaria Road, Kano"}</p>
+                        <p>{companySettings.phone || "+234 803 123 4567"}</p>
+                        <p>{companySettings.email || "info@ruqayyatransport.com"}</p>
+                      </div>
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="grid grid-cols-2 gap-4 text-xs mb-6 bg-slate-50 p-3 rounded-lg">
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-bold uppercase block">Document Title</span>
+                        <span className="text-sm font-extrabold text-slate-900 block mt-0.5">
+                          {selectedReportType === 'financial' && "FINANCIAL AUDIT BALANCE REPORT"}
+                          {selectedReportType === 'driver' && "CERTIFIED OPERATORS STATUS REPORT"}
+                          {selectedReportType === 'shareholder' && "BOARDROOM SHAREHOLDERS LEDGER"}
+                          {selectedReportType === 'revenue' && "CARGO DISPATCH REVENUE REPORT"}
+                          {selectedReportType === 'expense' && "FUEL VOUCHERS OPERATIONS COST"}
+                          {selectedReportType === 'current_cycle' && "ACTIVE OPERATING CYCLE PERFORMANCE"}
+                          {selectedReportType === 'history' && "COMPLETED CYCLES AUDITED ARCHIVE"}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase block">Generation Timestamp</span>
+                        <span className="text-sm font-mono font-bold text-slate-900 block mt-0.5">{new Date().toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Report Content based on selection */}
+                    {selectedReportType === 'financial' && (
+                      <div className="flex flex-col gap-4 text-xs text-slate-900">
+                        <p className="text-slate-600 leading-relaxed mb-2">This audited document establishes the complete financial operating balance sheet for Ruqayya Transport Limited, detailing operational revenue streams and expense nodes.</p>
+                        <div className="border border-slate-300 rounded-lg overflow-hidden">
+                          <table className="w-full text-left">
+                            <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-300">
+                              <tr>
+                                <th className="p-2.5">Capital Division / Sector</th>
+                                <th className="p-2.5 text-right">Corporate Volume Weight</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                              <tr>
+                                <td className="p-2.5">Total Cargo Freight Invoiced Revenues</td>
+                                <td className="p-2.5 text-right font-mono font-bold text-emerald-700">₦{totalRevenueSum.toLocaleString()}</td>
+                              </tr>
+                              <tr>
+                                <td className="p-2.5">Fuel Vouchers & Rig Hydraulics Costs</td>
+                                <td className="p-2.5 text-right font-mono font-bold text-rose-700">- ₦{totalExpensesSum.toLocaleString()}</td>
+                              </tr>
+                              <tr className="bg-slate-50 font-bold">
+                                <td className="p-2.5">Net Generated Cash Weight</td>
+                                <td className="p-2.5 text-right font-mono text-slate-900">₦{netGeneratedAmount.toLocaleString()}</td>
+                              </tr>
+                              <tr>
+                                <td className="p-2.5">Shareholder Distribution Pool ({shareholderPercentage}%)</td>
+                                <td className="p-2.5 text-right font-mono font-bold text-amber-700">₦{distributionPool.toLocaleString()}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedReportType === 'driver' && (
+                      <div className="flex flex-col gap-4 text-xs text-slate-900">
+                        <div className="border border-slate-300 rounded-lg overflow-hidden">
+                          <table className="w-full text-left">
+                            <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-300">
+                              <tr>
+                                <th className="p-2.5">Driver ID</th>
+                                <th className="p-2.5">Officer Name</th>
+                                <th className="p-2.5">Transit Classification</th>
+                                <th className="p-2.5">Authority Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                              {drivers.map(drv => (
+                                <tr key={drv.id}>
+                                  <td className="p-2.5 font-mono font-bold text-slate-800">{drv.company_driver_id || 'PENDING'}</td>
+                                  <td className="p-2.5 font-bold">{drv.fullName}</td>
+                                  <td className="p-2.5">{drv.classification || 'Unclassified'}</td>
+                                  <td className="p-2.5 uppercase font-bold">{drv.status}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedReportType === 'shareholder' && (
+                      <div className="flex flex-col gap-4 text-xs text-slate-900">
+                        <div className="border border-slate-300 rounded-lg overflow-hidden">
+                          <table className="w-full text-left">
+                            <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-300">
+                              <tr>
+                                <th className="p-2.5">Investor Node</th>
+                                <th className="p-2.5">Staked Capital</th>
+                                <th className="p-2.5">Staked Weight %</th>
+                                <th className="p-2.5 text-right">Cycle Earnings Stake</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 font-mono">
+                              {shareholders.map(sh => {
+                                const weight = totalInvestmentsSum > 0 ? (sh.investment_amount / totalInvestmentsSum) : 0;
+                                return (
+                                  <tr key={sh.id}>
+                                    <td className="p-2.5 font-sans font-bold">{sh.full_name}</td>
+                                    <td className="p-2.5">₦{sh.investment_amount?.toLocaleString()}</td>
+                                    <td className="p-2.5 text-blue-800 font-bold">{(weight * 100).toFixed(2)}%</td>
+                                    <td className="p-2.5 text-right font-bold text-emerald-700">₦{(distributionPool * weight).toLocaleString()}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Placeholder safety for remaining report selectors */}
+                    {['revenue', 'expense', 'current_cycle', 'history'].includes(selectedReportType) && (
+                      <div className="flex flex-col gap-4 text-xs text-slate-900">
+                        <div className="border border-slate-300 rounded-lg overflow-hidden">
+                          <table className="w-full text-left">
+                            <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-300">
+                              <tr>
+                                <th className="p-2.5">Operational Detail Item</th>
+                                <th className="p-2.5">Timestamp</th>
+                                <th className="p-2.5 text-right">Fiscal Weight</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 font-mono">
+                              {financials
+                                .filter(f => selectedReportType === 'revenue' ? f.type === 'revenue' : selectedReportType === 'expense' ? f.type === 'expense' : true)
+                                .slice(0, 10)
+                                .map(fin => (
+                                  <tr key={fin.id}>
+                                    <td className="p-2.5 font-sans text-xs">{fin.description}</td>
+                                    <td className="p-2.5 text-slate-500">{fin.date}</td>
+                                    <td className={`p-2.5 text-right font-bold ${fin.type === 'revenue' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                      ₦{fin.amount.toLocaleString()}
+                                    </td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Official Signatures corridor */}
+                    <div className="mt-12 border-t border-slate-300 pt-8 grid grid-cols-2 gap-6 text-xs text-slate-900">
+                      <div>
+                        <p className="font-bold uppercase text-slate-800">Prepared & Audited By</p>
+                        <div className="mt-10 border-b border-slate-400 w-36"></div>
+                        <p className="mt-1.5 text-[9px] text-slate-500 font-bold font-mono">RUQAYYA OPERATIONS LEDGER CONTROL</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold uppercase text-slate-800">Executive Director Approval</p>
+                        <div className="mt-10 border-b border-slate-400 w-36 ml-auto"></div>
+                        <p className="mt-1.5 text-[9px] text-slate-500 font-bold font-mono">DIRECTOR KABIR MOHAMMED</p>
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+              )}
+
+              {/* ==================================================
+                  TAB: system security audit logs
+                  ================================================== */}
+              {activeTab === 'audit' && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Terminal className="h-5 w-5 text-brand-gold animate-pulse" />
+                      <div>
+                        <CardTitle>{lang === 'en' ? "Corporate Security & Action Logs" : "Binciken Sirri na Gudanarwa"}</CardTitle>
+                        <CardDescription>Permanent immutable records of administrative actions, settings alterations, and operational overrides.</CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <div className="overflow-x-auto mt-4">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-bg-base border-b border-border-main text-[10px] uppercase font-bold text-text-muted">
+                          <th className="p-3">Reference Event ID</th>
+                          <th className="p-3">Audit Date</th>
+                          <th className="p-3">Responsible User</th>
+                          <th className="p-3">Role Authority</th>
+                          <th className="p-3">Action Committed</th>
+                          <th className="p-3">Detail Description</th>
+                          <th className="p-3">Previous State</th>
+                          <th className="p-3">New State Commit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
+                        {logs.map(log => (
+                          <tr key={log.id} className="hover:bg-bg-base/30">
+                            <td className="p-3 text-brand-gold font-bold">{log.id}</td>
+                            <td className="p-3 text-text-muted font-sans text-xs">{log.created_at?.replace('T', ' ').substring(0, 19) || log.timestamp}</td>
+                            <td className="p-3 font-sans text-xs font-extrabold">{log.user_email || log.userId}</td>
+                            <td className="p-3">
+                              <Badge variant={log.user_role === 'director' || log.userRole === 'director' ? 'gold' : 'info'}>
+                                {(log.user_role || log.userRole || 'SYSTEM').toUpperCase()}
+                              </Badge>
+                            </td>
+                            <td className="p-3 font-extrabold text-text-main">{log.action}</td>
+                            <td className="p-3 text-text-muted font-sans text-xs leading-relaxed">{log.new_value || log.details}</td>
+                            <td className="p-3 text-rose-600 font-bold max-w-[120px] overflow-hidden text-ellipsis">{log.previous_value || 'None'}</td>
+                            <td className="p-3 text-emerald-600 font-bold max-w-[120px] overflow-hidden text-ellipsis">{log.new_value || log.details}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </div>
+
+    </div>
+  );
+};

@@ -1,0 +1,375 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { enDictionary, haDictionary } from './i18n';
+import { Role, Language, Theme } from './types';
+import { dbStore } from './utils/dbStore';
+import { logAuditEvent, seedAuditLogsIfEmpty } from './utils/security';
+import { ThemeSwitcher } from './components/ThemeSwitcher';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { GlobalSearch } from './components/GlobalSearch';
+import { NotificationCenter } from './components/NotificationCenter';
+import { LandingPage } from './features/LandingPage';
+import { DriverDashboard } from './features/DriverDashboard';
+import { AdminDashboard } from './features/AdminDashboard';
+import { DirectorDashboard } from './features/DirectorDashboard';
+import { ShareholderDashboard } from './features/ShareholderDashboard';
+import { api } from './utils/api';
+import { 
+  Truck, 
+  Users, 
+  MapPin, 
+  TrendingUp, 
+  Terminal, 
+  Settings, 
+  LogOut, 
+  Compass, 
+  ShieldCheck, 
+  Menu, 
+  X, 
+  Lock, 
+  Sun, 
+  Moon, 
+  Layers,
+  Fuel,
+  Info
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+// Consistent default values defined at module-level to ensure consistent
+// initial rendering on both server and client, completely avoiding hydration mismatches.
+const DEFAULT_LANG: Language = 'en';
+const DEFAULT_THEME: Theme = 'light';
+
+export default function App() {
+  const [lang, setLang] = useState<Language>(DEFAULT_LANG);
+  const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
+  const [currentRole, setCurrentRole] = useState<Role>('public');
+  const [driverName, setDriverName] = useState<string>('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Load state from localStorage & Hydrate full-stack session on init
+  useEffect(() => {
+    seedAuditLogsIfEmpty();
+    const storedTheme = (localStorage.getItem('ruqayya_theme') as Theme) || DEFAULT_THEME;
+    const storedLang = (localStorage.getItem('ruqayya_lang') as Language) || DEFAULT_LANG;
+    
+    setTheme(storedTheme);
+    document.documentElement.classList.toggle('dark', storedTheme === 'dark');
+    
+    setLang(storedLang);
+    document.documentElement.setAttribute('lang', storedLang);
+
+    const hydrateSession = async () => {
+      const token = api.getToken();
+      if (token) {
+        try {
+          const payload = await api.getMe();
+          if (payload && payload.user) {
+            setCurrentRole(payload.user.role);
+            if (payload.user.role === 'driver') {
+              setDriverName(payload.user.fullName);
+            } else {
+              setDriverName('');
+            }
+          }
+        } catch (e) {
+          api.clearToken();
+        }
+      }
+    };
+    hydrateSession();
+  }, []);
+
+  const handleThemeChange = (nextTheme: Theme) => {
+    setTheme(nextTheme);
+    localStorage.setItem('ruqayya_theme', nextTheme);
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+    logAuditEvent("sys-admin", "admin", "THEME_TOGGLE", `Switched system theme parameters to ${nextTheme.toUpperCase()}`);
+  };
+
+  const handleLanguageChange = (nextLang: Language) => {
+    setLang(nextLang);
+    localStorage.setItem('ruqayya_lang', nextLang);
+    document.documentElement.setAttribute('lang', nextLang);
+    logAuditEvent("sys-admin", "admin", "LANG_TOGGLE", `Switched language localization files to ${nextLang.toUpperCase()}`);
+  };
+
+  const handleLogout = async () => {
+    logAuditEvent(driverName || "sys-admin", currentRole, "USER_LOGOUT", `Terminated secure session node.`);
+    try {
+      await api.logout();
+    } catch (e) {}
+    setCurrentRole('public');
+    setDriverName('');
+    setSidebarOpen(false);
+  };
+
+  const handleDriverLoginSuccess = (name: string) => {
+    setDriverName(name);
+    setCurrentRole('driver');
+  };
+
+  const handleSwitchRole = async (role: Role) => {
+    if (role === 'public') {
+      api.clearToken();
+      setCurrentRole('public');
+      setDriverName('');
+      return;
+    }
+    
+    try {
+      const res = await api.loginAsDemoRole(role);
+      if (res && res.token) {
+        if (role === 'driver') {
+          setDriverName(res.user.fullName);
+        } else {
+          setDriverName('');
+        }
+        setCurrentRole(role);
+      }
+    } catch (err) {
+      console.error('Failed switching preview role:', err);
+      // Fallback
+      setCurrentRole(role);
+      if (role === 'driver') {
+        setDriverName("Alhaji Musa Garba");
+      }
+    }
+  };
+
+  const dictionary = lang === 'en' ? enDictionary : haDictionary;
+
+  // Sidebar items based on active role
+  const getSidebarItems = () => {
+    switch (currentRole) {
+      case 'driver':
+        return [
+          { label: dictionary.sidebar.dashboard, icon: <Compass className="h-4 w-4" />, active: true },
+          { label: dictionary.sidebar.vouchers, icon: <Fuel className="h-4 w-4" /> }
+        ];
+      case 'admin':
+        return [
+          { label: dictionary.sidebar.dashboard, icon: <Layers className="h-4 w-4" />, active: true },
+          { label: dictionary.sidebar.fleet, icon: <Truck className="h-4 w-4" /> },
+          { label: dictionary.sidebar.drivers, icon: <Users className="h-4 w-4" /> },
+          { label: dictionary.sidebar.trips, icon: <MapPin className="h-4 w-4" /> },
+          { label: dictionary.sidebar.vouchers, icon: <Fuel className="h-4 w-4" /> }
+        ];
+      case 'director':
+        return [
+          { label: dictionary.sidebar.dashboard, icon: <Layers className="h-4 w-4" />, active: true },
+          { label: dictionary.sidebar.finance, icon: <TrendingUp className="h-4 w-4" /> },
+          { label: dictionary.sidebar.auditLogs, icon: <Terminal className="h-4 w-4" /> }
+        ];
+      case 'shareholder':
+        return [
+          { label: dictionary.sidebar.finance, icon: <TrendingUp className="h-4 w-4" />, active: true }
+        ];
+      default:
+        return [];
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30">
+      
+      {/* FLOATING PREVIEW PLATFORM DESK */}
+      <div className="bg-slate-900 border-b border-slate-800 text-white px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs z-50">
+        <div className="flex items-center gap-2">
+          <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+          <span className="font-semibold text-slate-300">RUQAYYA PREVIEW PANEL:</span>
+          <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md font-mono">D1 Context Active</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => handleSwitchRole('public')}
+            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'public' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
+          >
+            Public Site
+          </button>
+          <button
+            onClick={() => handleSwitchRole('driver')}
+            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'driver' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
+          >
+            Driver Demo
+          </button>
+          <button
+            onClick={() => handleSwitchRole('admin')}
+            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'admin' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
+          >
+            Admin Panel
+          </button>
+          <button
+            onClick={() => handleSwitchRole('director')}
+            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'director' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
+          >
+            Director Panel
+          </button>
+          <button
+            onClick={() => handleSwitchRole('shareholder')}
+            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'shareholder' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
+          >
+            Shareholder
+          </button>
+        </div>
+      </div>
+
+      {/* TOP NAVIGATION HEADER */}
+      <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-4 py-3 shadow-xs">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {currentRole !== 'public' && (
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-base transition-colors cursor-pointer"
+                aria-label="Toggle Sidebar Menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+            <div className="flex items-center gap-2">
+              <div className="h-7 w-7 rounded-lg bg-brand-navy dark:bg-slate-800 flex items-center justify-center border border-slate-700/50">
+                <Truck className="h-4 w-4 text-brand-gold" />
+              </div>
+              <div>
+                <span className="font-extrabold text-sm tracking-wider text-brand-navy dark:text-white font-mono block">RUQAYYA</span>
+                <span className="text-[9px] font-bold text-brand-gold tracking-widest block uppercase -mt-1">{lang === 'en' ? "TRANSPORT" : "SUFURI"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Omni Search & System Quick Switches */}
+          <div className="flex-1 max-w-sm hidden md:block">
+            <GlobalSearch lang={lang} />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <NotificationCenter lang={lang} />
+            <LanguageSwitcher currentLanguage={lang} onLanguageChange={handleLanguageChange} />
+            <ThemeSwitcher currentTheme={theme} onThemeChange={handleThemeChange} />
+
+            {currentRole !== 'public' && (
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-lg text-brand-danger hover:bg-rose-50 dark:hover:bg-rose-950/25 transition-colors cursor-pointer flex items-center gap-1.5"
+                title={dictionary.common.logout}
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="text-xs font-bold hidden md:inline">{lang === 'en' ? "Logout" : "Fita"}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* MAIN CONTAINER LAYOUT */}
+      <div className="flex-1 flex max-w-7xl mx-auto w-full">
+        {/* SIDEBAR FOR AUTHENTICATED ROLES */}
+        {currentRole !== 'public' && (
+          <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-brand-navy text-white transform lg:translate-x-0 lg:static lg:h-auto transition-transform duration-300 ease-in-out border-r border-slate-800/80 p-5 flex flex-col gap-6 flex-shrink-0 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}>
+            <div className="flex items-center justify-between lg:hidden border-b border-slate-800 pb-3">
+              <span className="text-xs font-bold text-slate-300">{lang === 'en' ? "System Menu" : "Tsarin Menu"}</span>
+              <button onClick={() => setSidebarOpen(false)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Profile Info */}
+            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 flex flex-col gap-2.5">
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-7 rounded-full bg-slate-800 flex items-center justify-center font-bold text-brand-gold text-xs">
+                  {currentRole === 'driver' ? 'DR' : currentRole === 'admin' ? 'AD' : 'EX'}
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold text-slate-300 block leading-tight">
+                    {currentRole === 'driver' ? driverName : currentRole === 'admin' ? "Operator Ibrahim" : "Director Kabir"}
+                  </span>
+                  <span className="text-[9px] text-brand-gold block font-mono font-bold leading-none mt-1">
+                    {dictionary.roles[currentRole]}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation links */}
+            <nav className="flex-1 flex flex-col gap-1 text-xs font-semibold text-slate-300">
+              {getSidebarItems().map((item, idx) => (
+                <button
+                  key={idx}
+                  className={`w-full py-2.5 px-3 rounded-lg flex items-center gap-3 transition-colors cursor-pointer ${
+                    item.active
+                      ? 'bg-brand-gold text-slate-950 font-extrabold'
+                      : 'hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="text-[9px] text-slate-500 font-mono border-t border-slate-800/60 pt-4 flex flex-col gap-1">
+              <span>Wrangler Binding: DB</span>
+              <span>R2 Storage: Mapping Active</span>
+              <span>Node Environment: Production</span>
+            </div>
+          </aside>
+        )}
+
+        {/* WORKSPACE SURFACE VIEW */}
+        <main className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentRole}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 flex flex-col"
+            >
+              {currentRole === 'public' && (
+                <LandingPage
+                  dictionary={dictionary}
+                  lang={lang}
+                  onLoginAsDriver={handleDriverLoginSuccess}
+                  onNavigateToRole={(role) => setCurrentRole(role)}
+                />
+              )}
+              {currentRole === 'driver' && (
+                <DriverDashboard
+                  driverName={driverName}
+                  lang={lang}
+                  dictionary={dictionary}
+                />
+              )}
+              {currentRole === 'admin' && (
+                <AdminDashboard
+                  lang={lang}
+                  dictionary={dictionary}
+                />
+              )}
+              {currentRole === 'director' && (
+                <DirectorDashboard
+                  lang={lang}
+                  dictionary={dictionary}
+                />
+              )}
+              {currentRole === 'shareholder' && (
+                <ShareholderDashboard
+                  lang={lang}
+                  dictionary={dictionary}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,18 @@
+{
+  "name": "ruqayya-transport-erp",
+  "main": "server.ts",
+  "compatibility_date": "2026-07-07",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ruqayya",
+      "database_id": "2e4092ba-4766-45d4-bb5d-934d6bbac2e6"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2_BUCKET",
+      "bucket_name": "ruqayya"
+    }
+  ]
+}
