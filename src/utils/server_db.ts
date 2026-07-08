@@ -55,6 +55,8 @@ export interface DBState {
   trip_manifests: any[];
   cycles: any[];
   driver_payments: any[];
+  messages?: any[];
+  announcements?: any[];
   company_settings: any;
   shareholder_settings: any;
 }
@@ -81,6 +83,8 @@ const INITIAL_DB_STATE: DBState = {
   trip_manifests: [],
   cycles: [],
   driver_payments: [],
+  messages: [],
+  announcements: [],
   company_settings: {
     companyName: "Ruqayya Transport Limited",
     companyLogo: "",
@@ -121,6 +125,11 @@ export function loadDB(): DBState {
       if (!parsed.fuel_vouchers) { parsed.fuel_vouchers = []; changed = true; }
       if (!parsed.financial_records) { parsed.financial_records = []; changed = true; }
       if (!parsed.driver_payments) { parsed.driver_payments = []; changed = true; }
+      if (!parsed.messages) { parsed.messages = []; changed = true; }
+      if (!parsed.announcements) { parsed.announcements = []; changed = true; }
+      if (!parsed.vehicle_documents) { parsed.vehicle_documents = []; changed = true; }
+      if (!parsed.driver_documents) { parsed.driver_documents = []; changed = true; }
+      if (!parsed.company_documents) { parsed.company_documents = []; changed = true; }
 
       if (changed) {
         saveDB(parsed);
@@ -219,6 +228,28 @@ export function seedDBIfEmpty() {
         password_hash: hashPassword('driver123'),
         full_name: 'Alhaji Musa Garba',
         role_id: 'role-driver',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active'
+      },
+      {
+        id: generateUUID(),
+        email: 'kabir.m@ruqayyatransport.com',
+        phone: '+234 803 777 0001',
+        password_hash: hashPassword('shareholder123'),
+        full_name: 'Alhaji Kabir Mohammed',
+        role_id: 'role-shareholder',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active'
+      },
+      {
+        id: generateUUID(),
+        email: 'amina.g@ruqayyatransport.com',
+        phone: '+234 806 444 1111',
+        password_hash: hashPassword('shareholder123'),
+        full_name: 'Hajiya Amina Garba',
+        role_id: 'role-shareholder',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         status: 'active'

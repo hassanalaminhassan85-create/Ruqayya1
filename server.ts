@@ -99,35 +99,196 @@ function authenticateSession(req: express.Request, res: express.Response, next: 
 
 // --- REAL-TIME SYSTEM (SERVER-SENT EVENTS REGISTRY) ---
 let sseClients: any[] = [];
+let totalSseConnections = 0;
+let eventThroughput = 0;
+let failedDeliveries = 0;
+let reconnectionCount = 0;
+
+// Helper to filter and payload-optimize database updates based on role clearance levels
+function generateFilteredPayload(role: string, driverProfileId: string | null, shareholderId: string | null, db: any): any {
+  const common = {
+    type: 'db_update',
+    role: role,
+    company_settings: db.company_settings || {},
+    announcements: db.announcements || [],
+    timestamp: Date.now()
+  };
+
+  if (role === 'director') {
+    // Directors receive all events
+    return {
+      ...common,
+      drivers: db.drivers || [],
+      vehicles: db.vehicles || [],
+      vouchers: db.fuel_vouchers || [],
+      financials: db.financial_records || [],
+      notifications: db.notifications || [],
+      audit_logs: db.audit_logs || [],
+      users: db.users || [],
+      admins: db.admins || [],
+      shareholders: db.shareholders || [],
+      cycles: db.cycles || [],
+      shareholder_settings: db.shareholder_settings || {},
+      trip_manifests: db.trip_manifests || [],
+      driver_payments: db.driver_payments || [],
+      messages: db.messages || [],
+      vehicle_documents: db.vehicle_documents || [],
+      driver_documents: db.driver_documents || [],
+      company_documents: db.company_documents || []
+    };
+  } else if (role === 'admin') {
+    // Admins receive operational events, excluding sensitive audit logs & shareholder details (except basic list)
+    return {
+      ...common,
+      drivers: db.drivers || [],
+      vehicles: db.vehicles || [],
+      vouchers: db.fuel_vouchers || [],
+      financials: db.financial_records || [],
+      notifications: db.notifications || [],
+      users: db.users || [],
+      admins: db.admins || [],
+      shareholders: (db.shareholders || []).map((s: any) => ({ id: s.id, full_name: s.full_name, status: s.status })),
+      cycles: db.cycles || [],
+      trip_manifests: db.trip_manifests || [],
+      driver_payments: db.driver_payments || [],
+      messages: db.messages || [],
+      vehicle_documents: db.vehicle_documents || [],
+      driver_documents: db.driver_documents || [],
+      company_documents: db.company_documents || []
+    };
+  } else if (role === 'shareholder') {
+    // Shareholders receive shareholder-related events and their own details
+    const cleanShareholders = (db.shareholders || []).map((s: any) => {
+      if (s.id === shareholderId) return s;
+      return { id: s.id, full_name: s.full_name, status: s.status };
+    });
+
+    return {
+      ...common,
+      shareholders: cleanShareholders,
+      shareholder_settings: db.shareholder_settings || {},
+      financials: db.financial_records || [],
+      cycles: db.cycles || [],
+      messages: (db.messages || []).filter((m: any) => m.sender_id === shareholderId || m.receiver_id === shareholderId),
+      notifications: (db.notifications || []).filter((n: any) => n.user_id === shareholderId)
+    };
+  } else if (role === 'driver') {
+    // Drivers cannot receive other drivers' private events. They only get their own profile data, payments, etc.
+    const activeDriver = db.drivers.find((d: any) => d.id === driverProfileId) || {};
+    const driverVouchers = (db.fuel_vouchers || []).filter((v: any) => v.driver_id === driverProfileId);
+    const driverPayments = (db.driver_payments || []).filter((p: any) => p.driver_id === driverProfileId);
+    const driverDocuments = (db.driver_documents || []).filter((doc: any) => doc.driver_id === driverProfileId);
+    const driverTrips = (db.trip_manifests || []).filter((t: any) => t.driver_id === driverProfileId);
+    const driverNotifications = (db.notifications || []).filter((n: any) => n.user_id === activeDriver.user_id);
+    const driverMessages = (db.messages || []).filter((m: any) => m.sender_id === activeDriver.user_id || m.receiver_id === activeDriver.user_id);
+
+    return {
+      ...common,
+      drivers: [activeDriver],
+      vehicles: (db.vehicles || []).filter((v: any) => v.driver_id === driverProfileId),
+      vouchers: driverVouchers,
+      driver_payments: driverPayments,
+      driver_documents: driverDocuments,
+      trip_manifests: driverTrips,
+      notifications: driverNotifications,
+      messages: driverMessages
+    };
+  } else {
+    // Public or unidentified
+    return {
+      ...common,
+      company_settings: db.company_settings || {},
+      announcements: db.announcements || []
+    };
+  }
+}
+
+function broadcastStateUpdate() {
+  const db = loadDB();
+  sseClients.forEach(client => {
+    try {
+      const filteredPayload = generateFilteredPayload(client.role, client.driverProfileId, client.shareholderId, db);
+      client.res.write(`data: ${JSON.stringify(filteredPayload)}\n\n`);
+      eventThroughput++;
+    } catch (err) {
+      failedDeliveries++;
+    }
+  });
+}
 
 // Register the database change listener to broadcast state snapshots to all browser clients
 setDBChangeListener(() => {
-  const db = loadDB();
-  const payload = JSON.stringify({
-    type: 'db_update',
-    drivers: db.drivers || [],
-    vehicles: db.vehicles || [],
-    vouchers: db.fuel_vouchers || [],
-    financials: db.financial_records || [],
-    notifications: db.notifications || [],
-    audit_logs: db.audit_logs || [],
-    users: db.users || [],
-    admins: db.admins || [],
-    shareholders: db.shareholders || [],
-    cycles: db.cycles || [],
-    company_settings: db.company_settings || {},
-    shareholder_settings: db.shareholder_settings || {},
-    trip_manifests: db.trip_manifests || []
-  });
-  
+  broadcastStateUpdate();
+});
+
+// Periodic heartbeat message to prevent connections from being closed by ingress routers
+setInterval(() => {
   sseClients.forEach(client => {
     try {
-      client.res.write(`data: ${payload}\n\n`);
+      client.res.write(`data: ${JSON.stringify({ type: 'heartbeat', timestamp: Date.now() })}\n\n`);
     } catch (err) {
-      // client connection closed or dead
+      // dead connection
     }
   });
-});
+}, 15000);
+
+// Background automated engine for status checks, overdue alerts and progress updates
+setInterval(() => {
+  try {
+    const db = loadDB();
+    let dbChanged = false;
+    const now = new Date();
+
+    // Scan for vehicle purchase contract completions
+    const activeDrivers = (db.drivers || []).filter((d: any) => d.status === 'active');
+    activeDrivers.forEach((drv: any) => {
+      if (drv.remaining_vehicle_balance !== undefined && drv.remaining_vehicle_balance <= 0 && drv.status !== 'completed') {
+        drv.status = 'completed';
+        dbChanged = true;
+        
+        db.notifications.unshift({
+          id: generateUUID(),
+          user_id: drv.user_id,
+          title_en: 'Vehicle Contract Completed!',
+          title_ha: 'Kwangilar Mota Ta Cika!',
+          message_en: 'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!',
+          message_ha: 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!',
+          type: 'success',
+          read_status: 0,
+          created_at: now.toISOString()
+        });
+      }
+    });
+
+    // Automated rest mode tracking and recovery release
+    const restDrivers = (db.drivers || []).filter((d: any) => d.status === 'rest_mode');
+    restDrivers.forEach((drv: any) => {
+      if (drv.rest_release_date && new Date(drv.rest_release_date) <= now) {
+        drv.status = 'active';
+        drv.rest_release_date = null;
+        dbChanged = true;
+
+        db.notifications.unshift({
+          id: generateUUID(),
+          user_id: drv.user_id,
+          title_en: 'Rest Period Concluded',
+          title_ha: 'Lokacin Hutu Ya Cika',
+          message_en: 'Your medical rest period has completed. Your status is now reverted to Active duty.',
+          message_ha: 'Lokacin hutun lafiyar ku ya cika. An mayar da ku a matsayin mai aiki mai karshe.',
+          type: 'info',
+          read_status: 0,
+          created_at: now.toISOString()
+        });
+      }
+    });
+
+    if (dbChanged) {
+      saveDB(db);
+    }
+  } catch (err) {
+    console.error("Background automation task error:", err);
+  }
+}, 30000);
 
 app.get('/api/sse', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -135,32 +296,138 @@ app.get('/api/sse', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const clientId = Date.now();
-  sseClients.push({ id: clientId, res });
-
-  // Send initial data instantly upon handshake
+  const token = req.query.token as string;
   const db = loadDB();
-  const payload = JSON.stringify({
-    type: 'db_update',
-    drivers: db.drivers || [],
-    vehicles: db.vehicles || [],
-    vouchers: db.fuel_vouchers || [],
-    financials: db.financial_records || [],
-    notifications: db.notifications || [],
-    audit_logs: db.audit_logs || [],
-    users: db.users || [],
-    admins: db.admins || [],
-    shareholders: db.shareholders || [],
-    cycles: db.cycles || [],
-    company_settings: db.company_settings || {},
-    shareholder_settings: db.shareholder_settings || {},
-    trip_manifests: db.trip_manifests || []
-  });
-  res.write(`data: ${payload}\n\n`);
+  const session = token ? db.sessions.find(s => s.token === token && s.status === 'active') : null;
+  const user = session ? db.users.find(u => u.id === session.user_id) : null;
+  const roleRecord = user ? db.roles.find(r => r.id === user.role_id) : null;
+  const role = roleRecord ? roleRecord.name : 'public';
+
+  const driverProfileId = role === 'driver' && user ? (db.drivers.find(d => d.user_id === user.id)?.id || null) : null;
+  const shareholderId = role === 'shareholder' && user ? (db.shareholders.find(s => s.user_id === user.id)?.id || null) : null;
+
+  const clientId = Date.now();
+  totalSseConnections++;
+
+  // Track if they connected recently to count as a reconnection
+  const wasActiveRecently = sseClients.some(c => c.userId === (user ? user.id : null));
+  if (wasActiveRecently) {
+    reconnectionCount++;
+  }
+
+  const newClient = {
+    id: clientId,
+    res,
+    userId: user ? user.id : null,
+    role,
+    driverProfileId,
+    shareholderId
+  };
+  sseClients.push(newClient);
+
+  // Send initial filtered snapshot immediately
+  try {
+    const initialPayload = generateFilteredPayload(role, driverProfileId, shareholderId, db);
+    res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
+  } catch (err) {
+    failedDeliveries++;
+  }
 
   req.on('close', () => {
     sseClients = sseClients.filter(c => c.id !== clientId);
   });
+});
+
+app.get('/api/director/sse-monitoring', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  if (actor.role !== 'director') {
+    return res.status(403).json({ error: 'Access Denied: Director role required.' });
+  }
+
+  res.json({
+    activeConnections: sseClients.length,
+    cumulativeConnections: totalSseConnections,
+    eventThroughput: eventThroughput,
+    failedDeliveries: failedDeliveries,
+    reconnections: reconnectionCount,
+    systemHealth: {
+      status: 'healthy',
+      uptime: process.uptime(),
+      memoryUsage: process.memoryUsage(),
+      cpuUsage: process.cpuUsage()
+    },
+    connectedUsers: sseClients.map(c => ({
+      userId: c.userId,
+      role: c.role,
+      connectedAt: new Date(c.id).toISOString()
+    }))
+  });
+});
+
+app.get('/api/director/backup', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  if (actor.role !== 'director') {
+    return res.status(403).json({ error: 'Access Denied: Director role required for backups.' });
+  }
+
+  try {
+    const db = loadDB();
+    
+    // Log the sensitive action
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DATABASE_BACKUP_DOWNLOADED',
+      null,
+      `Full JSON backup generated. Contains ${db.users.length} users, ${db.vehicles.length} vehicles, ${db.audit_logs.length} log rows.`,
+      req
+    );
+
+    // Provide the backup file
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=ruqayya_backup_${Date.now()}.json`);
+    res.json(db);
+  } catch (err: any) {
+    res.status(500).json({ error: `Backup failed: ${err.message}` });
+  }
+});
+
+app.post('/api/director/restore', authenticateSession, (req, res) => {
+  const actor = (req as any).user;
+  if (actor.role !== 'director') {
+    return res.status(403).json({ error: 'Access Denied: Director role required for restoration.' });
+  }
+
+  try {
+    const backupData = req.body;
+    if (!backupData || !Array.isArray(backupData.users) || !Array.isArray(backupData.vehicles) || !Array.isArray(backupData.audit_logs)) {
+      return res.status(400).json({ error: 'Invalid backup structure. The file must be a valid Ruqayya ERP database dump.' });
+    }
+
+    const currentDb = loadDB();
+
+    // Preserve the backup as current state
+    saveDB(backupData);
+
+    // Log this critical action
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DATABASE_RESTORED',
+      `Previous DB state snapshotted (users: ${currentDb.users.length}, logs: ${currentDb.audit_logs.length})`,
+      `Restored backup successfully. (users: ${backupData.users.length}, logs: ${backupData.audit_logs.length})`,
+      req
+    );
+
+    // Broadcast update via SSE
+    broadcastStateUpdate();
+
+    res.json({ success: true, message: 'Database successfully restored from backup file.' });
+  } catch (err: any) {
+    res.status(500).json({ error: `Restoration failed: ${err.message}` });
+  }
 });
 
 // --- API ROUTES ---
@@ -915,6 +1182,348 @@ app.get('/api/documents/preview/:filename', (req, res) => {
     res.sendFile(filePath);
   } catch (error) {
     res.status(500).send('File rendering fault.');
+  }
+});
+
+// --- NEW PROMPT 7 APIs (DOCUMENTS, COMMUNICATIONS, ANNOUNCEMENTS, NOTIFICATIONS) ---
+
+// Replace/Version-up an existing document
+app.post('/api/documents/replace', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admins or Directors only.' });
+    }
+
+    const { docId, category, title, fileBase64 } = req.body;
+    if (!docId || !category || !fileBase64) {
+      return res.status(400).json({ error: 'Missing mandatory replacement arguments.' });
+    }
+
+    const db = loadDB();
+    let docList: any[] = [];
+    if (category === 'vehicle') docList = db.vehicle_documents || [];
+    else if (category === 'driver') docList = db.driver_documents || [];
+    else if (category === 'company') docList = db.company_documents || [];
+    else return res.status(400).json({ error: 'Invalid document category.' });
+
+    const doc = docList.find(d => d.id === docId);
+    if (!doc) {
+      return res.status(404).json({ error: 'Original document not found.' });
+    }
+
+    // Initialize version history if absent
+    if (!doc.version) doc.version = 1;
+    if (!doc.versions) doc.versions = [];
+
+    // Push current active state to version history
+    doc.versions.push({
+      version: doc.version,
+      file_url: doc.file_url,
+      created_at: doc.created_at,
+      created_by: doc.created_by || 'Unknown',
+      title: doc.title || title || doc.document_type
+    });
+
+    // Upload new file
+    const docTitle = title || doc.title || doc.document_type || 'Replaced_Doc';
+    const newFileUrl = saveR2File(docTitle.replace(/\s+/g, '_'), fileBase64);
+
+    // Update active document fields
+    doc.file_url = newFileUrl;
+    doc.created_at = new Date().toISOString();
+    doc.created_by = actor.fullName;
+    doc.version += 1;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DOCUMENT_REPLACED_VERSIONED',
+      docId,
+      `Replaced document ${docId} (${docTitle}) creating version ${doc.version}`,
+      req
+    );
+
+    res.json({ success: true, doc, message: 'Document version updated successfully in R2 archive.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete document (Permission controlled)
+app.delete('/api/documents/:category/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admins or Directors only.' });
+    }
+
+    const { category, id } = req.params;
+    const db = loadDB();
+
+    let docListKey: 'vehicle_documents' | 'driver_documents' | 'company_documents';
+    if (category === 'vehicle') docListKey = 'vehicle_documents';
+    else if (category === 'driver') docListKey = 'driver_documents';
+    else if (category === 'company') docListKey = 'company_documents';
+    else return res.status(400).json({ error: 'Invalid category.' });
+
+    const originalLength = db[docListKey].length;
+    db[docListKey] = db[docListKey].filter((d: any) => d.id !== id);
+
+    if (db[docListKey].length === originalLength) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DOCUMENT_DELETED',
+      id,
+      `Permanently deleted document ${id} from ${category} archive`,
+      req
+    );
+
+    res.json({ success: true, message: 'Document permanently deleted from corporate archive.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET Messages
+app.get('/api/messages', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.messages) db.messages = [];
+    res.json(db.messages);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST send message
+app.post('/api/messages', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { receiverId, receiverRole, text, attachmentUrl, attachmentType, attachmentName } = req.body;
+
+    if (!receiverId || !receiverRole) {
+      return res.status(400).json({ error: 'Receiver id and role parameters required.' });
+    }
+
+    const db = loadDB();
+    if (!db.messages) db.messages = [];
+
+    const newMessage = {
+      id: `MSG-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+      sender_id: actor.id,
+      sender_name: actor.fullName,
+      sender_role: actor.role,
+      receiver_id: receiverId,
+      receiver_role: receiverRole,
+      text: text || '',
+      attachment_url: attachmentUrl || '',
+      attachment_type: attachmentType || '',
+      attachment_name: attachmentName || '',
+      delivered_status: 1,
+      read_status: 0,
+      created_at: new Date().toISOString()
+    };
+
+    db.messages.push(newMessage);
+    saveDB(db);
+
+    res.json({ success: true, message: newMessage });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark messages in a thread as read
+app.put('/api/messages/read', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { senderId } = req.body; // Mark messages from senderId as read
+
+    const db = loadDB();
+    if (!db.messages) db.messages = [];
+
+    let updatedCount = 0;
+    db.messages.forEach((m: any) => {
+      if (m.sender_id === senderId && m.receiver_id === actor.id && m.read_status === 0) {
+        m.read_status = 1;
+        updatedCount++;
+      }
+    });
+
+    if (updatedCount > 0) {
+      saveDB(db);
+    }
+
+    res.json({ success: true, updatedCount });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET Announcements
+app.get('/api/announcements', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    if (!db.announcements) db.announcements = [];
+    res.json(db.announcements);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST publish announcement
+app.post('/api/announcements', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admins or Directors only.' });
+    }
+
+    const { title, message, targetAudience, imageUrl, attachmentUrl, attachmentName } = req.body;
+    if (!title || !message || !targetAudience) {
+      return res.status(400).json({ error: 'Title, message and target audience are required.' });
+    }
+
+    const db = loadDB();
+    if (!db.announcements) db.announcements = [];
+
+    const newAnnouncement = {
+      id: `ANN-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+      title,
+      message,
+      target_audience: targetAudience, // 'all', 'driver', 'admin', 'shareholder'
+      image_url: imageUrl || '',
+      attachment_url: attachmentUrl || '',
+      attachment_name: attachmentName || '',
+      published_by: actor.fullName,
+      created_at: new Date().toISOString()
+    };
+
+    db.announcements.unshift(newAnnouncement);
+
+    // Create a centralized notification targeting this audience
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: `Announcement: ${title}`,
+      title_ha: `Sanarwa: ${title}`,
+      message_en: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+      message_ha: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+      type: 'info',
+      target_role: targetAudience === 'all' ? undefined : targetAudience,
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'ANNOUNCEMENT_PUBLISHED',
+      newAnnouncement.id,
+      `Published broadcast announcement: ${title} to ${targetAudience}`,
+      req
+    );
+
+    res.json({ success: true, announcement: newAnnouncement });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET Notifications (Filtered based on user context)
+app.get('/api/notifications', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    
+    // Filter notifications: return if user_id matches, or if it has target_role matching actor.role, or if it is global
+    const userNotifications = db.notifications.filter((n: any) => {
+      if (n.user_id) {
+        return n.user_id === actor.id;
+      }
+      if (n.target_role) {
+        return n.target_role === actor.role;
+      }
+      return true; // global
+    });
+
+    res.json(userNotifications);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark single notification as read
+app.put('/api/notifications/:id/read', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const notification = db.notifications.find(n => n.id === req.params.id);
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found.' });
+    }
+
+    notification.read_status = 1;
+    saveDB(db);
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark all notifications as read
+app.put('/api/notifications/read-all', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+
+    let updated = false;
+    db.notifications.forEach((n: any) => {
+      const isForUser = (n.user_id === actor.id) || (n.target_role === actor.role) || (!n.user_id && !n.target_role);
+      if (isForUser && n.read_status === 0) {
+        n.read_status = 1;
+        updated = true;
+      }
+    });
+
+    if (updated) {
+      saveDB(db);
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete personal notification
+app.delete('/api/notifications/:id', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const originalLength = db.notifications.length;
+    db.notifications = db.notifications.filter(n => n.id !== req.params.id);
+
+    if (db.notifications.length === originalLength) {
+      return res.status(404).json({ error: 'Notification not found.' });
+    }
+
+    saveDB(db);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -2380,24 +2989,37 @@ app.get('/api/payments', authenticateSession, (req, res) => {
   res.json(list);
 });
 
-// Record a new driver payment
+// Record a new driver payment (by admin, director or driver themselves)
 app.post('/api/payments', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'admin' && actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
-    }
-
-    const { driverId, amount, installmentNumber, outstandingAmount, date, receiptNumber, remarks } = req.body;
-    if (!driverId || !amount || !installmentNumber || !receiptNumber) {
-      return res.status(400).json({ error: 'Missing mandatory payment details.' });
-    }
-
     const db = loadDB();
     if (!db.driver_payments) db.driver_payments = [];
 
+    let driverId = req.body.driverId;
+    let isDriverSelf = false;
+
+    if (actor.role === 'driver') {
+      isDriverSelf = true;
+      const drvRecord = db.drivers.find(d => d.user_id === actor.id);
+      if (!drvRecord) {
+        return res.status(404).json({ error: 'Driver profile not found.' });
+      }
+      driverId = drvRecord.id;
+    } else if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Drivers, Admins, or Directors only.' });
+    }
+
+    const { amount, installmentNumber, outstandingAmount, date, receiptNumber, remarks, paymentMethod, referenceNumber } = req.body;
+    if (!driverId || !amount || !installmentNumber) {
+      return res.status(400).json({ error: 'Missing mandatory payment details.' });
+    }
+
     const drv = db.drivers.find(d => d.id === driverId);
     if (!drv) return res.status(404).json({ error: 'Driver not found.' });
+
+    // Ensure we have a valid receipt number / reference
+    const rNumber = receiptNumber || referenceNumber || `RCP-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`;
 
     const newPayment = {
       id: `PAY-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
@@ -2406,8 +3028,10 @@ app.post('/api/payments', authenticateSession, (req, res) => {
       installment_number: parseInt(installmentNumber),
       outstanding_amount: parseFloat(outstandingAmount || 0),
       date: date || new Date().toISOString().split('T')[0],
-      receipt_number: receiptNumber,
-      status: 'pending', // Pending approval by default
+      receipt_number: rNumber,
+      payment_method: paymentMethod || 'bank_transfer',
+      reference_number: referenceNumber || rNumber,
+      status: isDriverSelf ? 'submitted' : 'pending', // 'submitted' if driver, 'pending' if admin
       recorded_by: actor.fullName,
       remarks: remarks || '',
       created_at: new Date().toISOString()
@@ -2415,13 +3039,13 @@ app.post('/api/payments', authenticateSession, (req, res) => {
 
     db.driver_payments.unshift(newPayment);
 
-    // Register active notification for admins
+    // Register active notification for admins/directors
     db.notifications.unshift({
       id: generateUUID(),
       title_en: 'New Driver Payment Submitted',
       title_ha: 'An Shigar da Sabon Biyan Kudi',
-      message_en: `Driver payment of ₦${parseFloat(amount).toLocaleString()} submitted for ${drv.company_driver_id || 'unassigned'}. Review required.`,
-      message_ha: `An shigar da biyan kudi na ₦${parseFloat(amount).toLocaleString()} na direba ${drv.company_driver_id || 'unassigned'}. Tana jiran amincewa.`,
+      message_en: `Driver payment of ₦${parseFloat(amount).toLocaleString()} submitted for ${drv.company_driver_id || 'unassigned'} (Installment ${installmentNumber}). Review required.`,
+      message_ha: `An shigar da biyan kudi na ₦${parseFloat(amount).toLocaleString()} na direba ${drv.company_driver_id || 'unassigned'} (Kashi ${installmentNumber}). Tana jiran amincewa.`,
       type: 'warning',
       read_status: 0,
       created_at: new Date().toISOString()
@@ -2435,7 +3059,7 @@ app.post('/api/payments', authenticateSession, (req, res) => {
       actor.role,
       'DRIVER_PAYMENT_SUBMITTED',
       null,
-      `Submitted payment of ₦${parseFloat(amount).toLocaleString()} for driver ${driverId} (Receipt: ${receiptNumber})`,
+      `Submitted payment of ₦${parseFloat(amount).toLocaleString()} for driver ${driverId} (Receipt/Ref: ${rNumber})`,
       req
     );
 

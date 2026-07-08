@@ -27,13 +27,17 @@ import {
   AlertTriangle,
   UserCheck,
   UserX,
-  RotateCcw
+  RotateCcw,
+  MessageSquare
 } from 'lucide-react';
 
 import { AdminKPIs } from '../components/admin/AdminKPIs';
 import { FinancialCommandCenter } from '../components/admin/FinancialCommandCenter';
 import { Driver360Modal } from '../components/admin/Driver360Modal';
 import { RegisterAssistedDriverModal } from '../components/admin/RegisterAssistedDriverModal';
+import { DocumentHub } from '../components/admin/DocumentHub';
+import { CommunicationCenter } from '../components/admin/CommunicationCenter';
+import { PaymentWorkflow } from '../components/admin/PaymentWorkflow';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -42,7 +46,7 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary }) => {
   // Tabs & Views
-  const [activeTab, setActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance'>('fleet');
+  const [activeTab, setActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications'>('fleet');
   
   // Storage states
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -139,11 +143,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     syncAllData();
     
     // Establish real-time SSE stream sync
-    const eventSource = new EventSource('/api/sse');
+    const token = localStorage.getItem('ruqayya_token') || '';
+    const eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'db_update') {
+          (window as any).lastSSEState = data;
+          window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
+
           setVehicles(data.vehicles || []);
           setDrivers(data.drivers || []);
           setTrips(data.trip_manifests || []);
@@ -313,8 +321,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   });
 
   const filteredVehicles = vehicles.filter(v => 
-    v.plateNumber.toLowerCase().includes(fleetSearch.toLowerCase()) ||
-    v.model.toLowerCase().includes(fleetSearch.toLowerCase())
+    String(v.plateNumber || '').toLowerCase().includes(String(fleetSearch || '').toLowerCase()) ||
+    String(v.model || '').toLowerCase().includes(String(fleetSearch || '').toLowerCase())
   );
 
   const paginatedVehicles = filteredVehicles.slice(
@@ -386,7 +394,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               { id: 'drivers', label: `${lang === 'en' ? "Driver Registry" : "Direbobi"} (${drivers.filter(d => d.status === 'pending').length} pending)`, icon: <Users className="h-3.5 w-3.5" /> },
               { id: 'trips', label: lang === 'en' ? "Manifest Dispatches" : "Takardun Tafiya", icon: <MapPin className="h-3.5 w-3.5" /> },
               { id: 'vouchers', label: `${lang === 'en' ? "Fuel Vouchers" : "Rasit na Mai"} (${pendingVouchers.length})`, icon: <Fuel className="h-3.5 w-3.5" /> },
-              { id: 'finance', label: lang === 'en' ? "Financial Center" : "Kudaden Shiga", icon: <span className="font-extrabold text-xs">₦</span> }
+              { id: 'finance', label: lang === 'en' ? "Financial Center" : "Kudaden Shiga", icon: <span className="font-extrabold text-xs">₦</span> },
+              { id: 'payments', label: lang === 'en' ? "Installments Approval" : "Biyan Kudi", icon: <span className="font-extrabold text-xs">₦</span> },
+              { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
+              { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> }
             ]}
           />
 
@@ -776,6 +787,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 payments={payments}
                 onSync={syncAllData}
               />
+            )}
+
+            {/* TAB 6: INSTALLMENTS APPROVAL WORKFLOW */}
+            {activeTab === 'payments' && (
+              <PaymentWorkflow lang={lang} />
+            )}
+
+            {/* TAB 7: DOCUMENT MANAGEMENT SYSTEM */}
+            {activeTab === 'documents' && (
+              <DocumentHub lang={lang} />
+            )}
+
+            {/* TAB 8: COMMUNICATIONS CONTROL */}
+            {activeTab === 'communications' && (
+              <CommunicationCenter lang={lang} />
             )}
           </div>
         </>

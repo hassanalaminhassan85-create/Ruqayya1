@@ -307,6 +307,17 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
   // Selected receipt for PDF printable receipt viewer
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
 
+  // Driver installment payment submission states
+  const [payReceiptNo, setPayReceiptNo] = useState('');
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('bank_transfer');
+  const [payRemarks, setPayRemarks] = useState('');
+  const [payFileBase64, setPayFileBase64] = useState('');
+  const [payFileName, setPayFileName] = useState('');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [paymentSubmitError, setPaymentSubmitError] = useState('');
+  const [paymentSubmitSuccess, setPaymentSubmitSuccess] = useState('');
+
   // Selected document preview url
   const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string } | null>(null);
 
@@ -458,11 +469,14 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
     syncDriverData();
 
     // HANDSHAKE DIRECTLY WITH SECURE ENDPOINT
-    const eventSource = new EventSource('/api/sse');
+    const token = localStorage.getItem('ruqayya_token') || '';
+    const eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'db_update') {
+          (window as any).lastSSEState = data;
+          window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
           syncDriverData(data);
         }
       } catch (err) {
@@ -478,6 +492,90 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
       eventSource.close();
     };
   }, [driverName]);
+
+  const handleDriverPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPaymentSubmitError('');
+    setPaymentSubmitSuccess('');
+
+    if (!payReceiptNo) {
+      setPaymentSubmitError(lang === 'en' ? "Please provide a receipt/reference number." : "Da fatan za a samar da lambar rasit.");
+      return;
+    }
+
+    const amt = parseFloat(payAmount);
+    if (isNaN(amt) || amt <= 0) {
+      setPaymentSubmitError(lang === 'en' ? "Please specify a valid payment amount." : "Da fatan za a shigar da adadin kuɗi mai kyau.");
+      return;
+    }
+
+    try {
+      setSubmittingPayment(true);
+      const token = localStorage.getItem('ruqayya_token') || '';
+      let remoteReceiptUrl = '';
+
+      // If driver uploaded a file receipt, push to secure DMS simulation first
+      if (payFileBase64) {
+        const uploadRes = await fetch('/api/documents/upload-company', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: `driver_payment_${Date.now()}_${payFileName.replace(/\s+/g, '_')}`,
+            docType: 'general',
+            fileBase64: payFileBase64
+          })
+        });
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          remoteReceiptUrl = uploadData.fileUrl;
+        }
+      }
+
+      // Submit actual installment payment
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: amt,
+          installmentNumber: selectedInstallment.installmentNumber,
+          outstandingAmount: selectedInstallment.amount - amt,
+          receiptNumber: payReceiptNo,
+          paymentMethod: payMethod,
+          remarks: payRemarks + (remoteReceiptUrl ? ` [Receipt: ${remoteReceiptUrl}]` : '')
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit payment receipt');
+
+      setPaymentSubmitSuccess(lang === 'en' ? "Payment receipt successfully submitted for Admin verification!" : "An riga an aika da rasit ga jami'an kula!");
+      
+      // Clear inputs
+      setPayReceiptNo('');
+      setPayAmount('');
+      setPayRemarks('');
+      setPayFileBase64('');
+      setPayFileName('');
+
+      setTimeout(() => {
+        setSelectedInstallment(null);
+        setPaymentSubmitSuccess('');
+        syncDriverData();
+      }, 1500);
+
+    } catch (err: any) {
+      setPaymentSubmitError(err.message || 'Submission error');
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
 
   const handleTripComplete = async () => {
     if (!activeTrip) return;
@@ -669,8 +767,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
 
   // Filter history logs
   const filteredPayments = payments.filter(p => {
-    const matchSearch = p.receipt_number.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                        (p.remarks && p.remarks.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchSearch = String(p.receipt_number || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                        (p.remarks && String(p.remarks || '').toLowerCase().includes(searchQuery.toLowerCase()));
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -1198,10 +1296,114 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                             )}
                           </>
                         ) : (
-                          <div className="p-4 bg-red-500/5 border border-red-500/10 rounded-xl text-[11px] text-text-muted leading-relaxed mt-2 text-center">
-                            {lang === 'en' 
-                              ? "No validated payments matching this installment have been verified by administrative auditors." 
-                              : "Babu wani biyan kudi da aka samu na wannan rabon a halin yanzu."}
+                          <div className="flex flex-col gap-4 mt-2">
+                            <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-xl text-[11px] text-text-muted leading-relaxed text-center">
+                              {lang === 'en' 
+                                ? "No validated payments matching this installment have been verified by administrative auditors." 
+                                : "Babu wani biyan kudi da aka samu na wannan rabon a halin yanzu."}
+                            </div>
+
+                            {/* Payment submission form */}
+                            <form onSubmit={handleDriverPaymentSubmit} className="border-t border-border-main/50 pt-4 flex flex-col gap-3">
+                              <span className="text-[11px] font-extrabold text-brand-gold uppercase tracking-wider block">
+                                {lang === 'en' ? "SUBMIT PAYMENT RECEIPT" : "TURA RASIT NA BIYA"}
+                              </span>
+
+                              {paymentSubmitError && <Alert type="danger">{paymentSubmitError}</Alert>}
+                              {paymentSubmitSuccess && <Alert type="success">{paymentSubmitSuccess}</Alert>}
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-bold text-text-muted uppercase">
+                                    {lang === 'en' ? "Paid Amount (₦)" : "Adadin Kudi (₦)"}
+                                  </label>
+                                  <input
+                                    type="number"
+                                    required
+                                    value={payAmount || selectedInstallment.amount}
+                                    onChange={(e) => setPayAmount(e.target.value)}
+                                    placeholder={selectedInstallment.amount.toString()}
+                                    className="w-full p-2 bg-bg-base border border-border-main rounded text-xs focus:outline-none"
+                                  />
+                                </div>
+
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] font-bold text-text-muted uppercase">
+                                    {lang === 'en' ? "Receipt/Ref No" : "Lambar Rasit/Ref"}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={payReceiptNo}
+                                    onChange={(e) => setPayReceiptNo(e.target.value)}
+                                    placeholder="e.g. TR-9874521"
+                                    className="w-full p-2 bg-bg-base border border-border-main rounded text-xs focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-text-muted uppercase">
+                                  {lang === 'en' ? "Payment Method" : "Hanyar Biya"}
+                                </label>
+                                <select
+                                  value={payMethod}
+                                  onChange={(e) => setPayMethod(e.target.value)}
+                                  className="w-full p-2 bg-bg-base border border-border-main rounded text-xs font-bold text-text-main focus:outline-none"
+                                >
+                                  <option value="bank_transfer">{lang === 'en' ? "Bank Transfer" : "Tura ta Banki"}</option>
+                                  <option value="pos">{lang === 'en' ? "POS / Agent" : "POS / Wakili"}</option>
+                                  <option value="cash">{lang === 'en' ? "Cash Deposit" : "Tsabar Kudi (Cash)"}</option>
+                                </select>
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-text-muted uppercase">
+                                  {lang === 'en' ? "Remarks / Comments" : "Karin Bayani"}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={payRemarks}
+                                  onChange={(e) => setPayRemarks(e.target.value)}
+                                  placeholder="e.g. Paid at Zenith Bank"
+                                  className="w-full p-2 bg-bg-base border border-border-main rounded text-xs focus:outline-none"
+                                />
+                              </div>
+
+                              {/* Upload Image receipt trigger */}
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-text-muted uppercase">
+                                  {lang === 'en' ? "Attach Paper/Digital Receipt" : "Saka Hoton Rasit"}
+                                </label>
+                                <div className="border border-dashed border-border-main rounded p-2 text-center relative cursor-pointer hover:border-brand-gold bg-bg-base/30">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        setPayFileName(file.name);
+                                        const r = new FileReader();
+                                        r.onloadend = () => setPayFileBase64(r.result as string);
+                                        r.readAsDataURL(file);
+                                      }
+                                    }}
+                                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                  />
+                                  <span className="text-[9px] font-bold text-text-main">
+                                    {payFileName ? `Attached: ${payFileName}` : "Click to select JPG/PNG snapshot"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <Button
+                                type="submit"
+                                disabled={submittingPayment}
+                                className="w-full mt-2 font-bold cursor-pointer text-slate-950 bg-brand-gold py-2"
+                              >
+                                {submittingPayment ? "Uploading..." : (lang === 'en' ? "Submit Installment Receipt" : "Tura Rasit din Biya")}
+                              </Button>
+                            </form>
                           </div>
                         )}
                       </div>

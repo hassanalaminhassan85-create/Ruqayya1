@@ -377,11 +377,14 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
     fetchShareholderData();
 
     // SSE Real-time Updates HANDSHAKE
-    const eventSource = new EventSource('/api/sse');
+    const token = localStorage.getItem('ruqayya_token') || '';
+    const eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'db_update') {
+          (window as any).lastSSEState = data;
+          window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
           fetchShareholderData(data);
         }
       } catch (err) {

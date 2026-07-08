@@ -18,6 +18,7 @@ import { AdminDashboard } from './features/AdminDashboard';
 import { DirectorDashboard } from './features/DirectorDashboard';
 import { ShareholderDashboard } from './features/ShareholderDashboard';
 import { api } from './utils/api';
+import { CircularLogo } from './components/CircularLogo';
 import { 
   Truck, 
   Users, 
@@ -35,7 +36,8 @@ import {
   Moon, 
   Layers,
   Fuel,
-  Info
+  Info,
+  WifiOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -50,6 +52,8 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<Role>('public');
   const [driverName, setDriverName] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pathname, setPathname] = useState<string>(typeof window !== 'undefined' ? window.location.pathname : '/');
 
   // Load state from localStorage & Hydrate full-stack session on init
   useEffect(() => {
@@ -62,6 +66,14 @@ export default function App() {
     
     setLang(storedLang);
     document.documentElement.setAttribute('lang', storedLang);
+
+    // Track online/offline status
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     const hydrateSession = async () => {
       const token = api.getToken();
@@ -82,7 +94,44 @@ export default function App() {
       }
     };
     hydrateSession();
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  // Listen for browser popstate routing changes
+  useEffect(() => {
+    const handlePopState = () => {
+      setPathname(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  // Role-based routing enforcement and redirection logic
+  useEffect(() => {
+    if (currentRole === 'public') {
+      const validPublicPaths = ['/', '/admin', '/director', '/shareholder'];
+      if (!validPublicPaths.includes(pathname)) {
+        window.history.replaceState({}, '', '/');
+        setPathname('/');
+      }
+    } else {
+      let expectedPath = '/';
+      if (currentRole === 'admin') expectedPath = '/admin';
+      else if (currentRole === 'director') expectedPath = '/director';
+      else if (currentRole === 'shareholder') expectedPath = '/shareholder';
+
+      if (pathname !== expectedPath) {
+        window.history.replaceState({}, '', expectedPath);
+        setPathname(expectedPath);
+      }
+    }
+  }, [currentRole, pathname]);
 
   const handleThemeChange = (nextTheme: Theme) => {
     setTheme(nextTheme);
@@ -106,6 +155,8 @@ export default function App() {
     setCurrentRole('public');
     setDriverName('');
     setSidebarOpen(false);
+    window.history.pushState({}, '', '/');
+    setPathname('/');
   };
 
   const handleDriverLoginSuccess = (name: string) => {
@@ -113,32 +164,8 @@ export default function App() {
     setCurrentRole('driver');
   };
 
-  const handleSwitchRole = async (role: Role) => {
-    if (role === 'public') {
-      api.clearToken();
-      setCurrentRole('public');
-      setDriverName('');
-      return;
-    }
-    
-    try {
-      const res = await api.loginAsDemoRole(role);
-      if (res && res.token) {
-        if (role === 'driver') {
-          setDriverName(res.user.fullName);
-        } else {
-          setDriverName('');
-        }
-        setCurrentRole(role);
-      }
-    } catch (err) {
-      console.error('Failed switching preview role:', err);
-      // Fallback
-      setCurrentRole(role);
-      if (role === 'driver') {
-        setDriverName("Alhaji Musa Garba");
-      }
-    }
+  const handleNavigateToRole = (role: 'driver' | 'admin' | 'director' | 'shareholder') => {
+    setCurrentRole(role);
   };
 
   const dictionary = lang === 'en' ? enDictionary : haDictionary;
@@ -177,46 +204,24 @@ export default function App() {
   return (
     <div className="min-h-screen bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30">
       
-      {/* FLOATING PREVIEW PLATFORM DESK */}
-      <div className="bg-slate-900 border-b border-slate-800 text-white px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs z-50">
-        <div className="flex items-center gap-2">
-          <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-          <span className="font-semibold text-slate-300">RUQAYYA PREVIEW PANEL:</span>
-          <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md font-mono">D1 Context Active</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => handleSwitchRole('public')}
-            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'public' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
+      {/* OFFLINE BANNER */}
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-red-600 text-white font-bold py-2 px-4 text-xs flex items-center justify-center gap-2 z-50 shrink-0"
           >
-            Public Site
-          </button>
-          <button
-            onClick={() => handleSwitchRole('driver')}
-            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'driver' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
-          >
-            Driver Demo
-          </button>
-          <button
-            onClick={() => handleSwitchRole('admin')}
-            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'admin' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
-          >
-            Admin Panel
-          </button>
-          <button
-            onClick={() => handleSwitchRole('director')}
-            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'director' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
-          >
-            Director Panel
-          </button>
-          <button
-            onClick={() => handleSwitchRole('shareholder')}
-            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${currentRole === 'shareholder' ? 'bg-brand-gold text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'}`}
-          >
-            Shareholder
-          </button>
-        </div>
-      </div>
+            <WifiOff className="h-4 w-4 animate-bounce" />
+            <span>
+              {lang === 'en' 
+                ? "CONNECTION LOST: You are currently offline. Ruqayya ERP is auto-reconnecting..." 
+                : "HANYAR SADARWA TA KATSE: Kana offline yanzu. Tsarin Ruqayya yana kokarin sake hadawa..."}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* TOP NAVIGATION HEADER */}
       <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-4 py-3 shadow-xs">
@@ -232,9 +237,7 @@ export default function App() {
               </button>
             )}
             <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-lg bg-brand-navy dark:bg-slate-800 flex items-center justify-center border border-slate-700/50">
-                <Truck className="h-4 w-4 text-brand-gold" />
-              </div>
+              <CircularLogo size="md" className="-my-1" />
               <div>
                 <span className="font-extrabold text-sm tracking-wider text-brand-navy dark:text-white font-mono block">RUQAYYA</span>
                 <span className="text-[9px] font-bold text-brand-gold tracking-widest block uppercase -mt-1">{lang === 'en' ? "TRANSPORT" : "SUFURI"}</span>
@@ -255,11 +258,11 @@ export default function App() {
             {currentRole !== 'public' && (
               <button
                 onClick={handleLogout}
-                className="p-2 rounded-lg text-brand-danger hover:bg-rose-50 dark:hover:bg-rose-950/25 transition-colors cursor-pointer flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/45 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
                 title={dictionary.common.logout}
               >
-                <LogOut className="h-4 w-4" />
-                <span className="text-xs font-bold hidden md:inline">{lang === 'en' ? "Logout" : "Fita"}</span>
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="text-xs font-bold">{lang === 'en' ? "Logout" : "Fita"}</span>
               </button>
             )}
           </div>
@@ -314,10 +317,19 @@ export default function App() {
               ))}
             </nav>
 
-            <div className="text-[9px] text-slate-500 font-mono border-t border-slate-800/60 pt-4 flex flex-col gap-1">
-              <span>Wrangler Binding: DB</span>
-              <span>R2 Storage: Mapping Active</span>
-              <span>Node Environment: Production</span>
+            <div className="border-t border-slate-800/60 pt-4 flex flex-col gap-2">
+              <button
+                onClick={handleLogout}
+                className="w-full py-2.5 px-3 rounded-lg flex items-center gap-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 font-bold transition-all cursor-pointer text-xs"
+              >
+                <LogOut className="h-4 w-4 text-red-500" />
+                <span>{lang === 'en' ? "Secure Logout" : "Fita Daga Tsarin"}</span>
+              </button>
+              <div className="text-[9px] text-slate-500 font-mono flex flex-col gap-1 mt-1">
+                <span>Wrangler Binding: DB</span>
+                <span>R2 Storage: Mapping Active</span>
+                <span>Node Environment: Production</span>
+              </div>
             </div>
           </aside>
         )}
