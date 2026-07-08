@@ -835,11 +835,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           </div>
 
           <div>
-            <span className="text-[9px] font-black tracking-widest text-brand-gold uppercase">
+            <span className="text-[14px] font-semibold tracking-wider text-brand-gold uppercase">
               {t.welcome.certified.replace('{class}', driver.classification)}
             </span>
-            <h2 className="text-2xl font-black text-text-main tracking-tight mt-0.5">{driver.fullName}</h2>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-xs font-mono text-text-muted">
+            <h2 className="text-[28px] md:text-[30px] lg:text-[36px] font-bold text-text-main tracking-tight mt-1">{driver.fullName}</h2>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2.5 text-[14px] font-medium text-text-muted">
               <span><strong>{t.welcome.driverId}:</strong> {driver.id.substring(0, 8).toUpperCase()}</span>
               <span>•</span>
               <span><strong>{t.welcome.license}:</strong> {driver.licenseNumber} ({t.welcome.licenseExp}: {driver.licenseExpiry})</span>
@@ -847,13 +847,13 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           </div>
         </div>
 
-        <div className="flex flex-row md:flex-col items-end gap-3 w-full md:w-auto border-t md:border-t-0 border-border-main/50 pt-4 md:pt-0 z-10 justify-between">
+        <div className="flex flex-row md:flex-col items-end gap-3.5 w-full md:w-auto border-t md:border-t-0 border-border-main/50 pt-4 md:pt-0 z-10 justify-between">
           <div className="text-right">
-            <span className="text-[9px] text-text-muted font-bold block uppercase">{t.welcome.rating}</span>
-            <span className="text-base font-black text-text-main font-mono">⭐ {driver.rating} / 5.0</span>
+            <span className="text-[14px] font-semibold text-text-muted block uppercase mb-1">{t.welcome.rating}</span>
+            <span className="text-[16px] font-semibold text-text-main tabular-nums">⭐ {driver.rating} / 5.0</span>
           </div>
           <div className="text-right">
-            <span className="text-[9px] text-text-muted font-bold block uppercase">{t.welcome.status}</span>
+            <span className="text-[14px] font-semibold text-text-muted block uppercase mb-1">{t.welcome.status}</span>
             <Badge variant={driver.status === 'on-trip' ? 'warning' : driver.status === 'rest' ? 'orange' : 'success'}>
               {driver.status.toUpperCase()}
             </Badge>
@@ -1121,21 +1121,21 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
               {/* Amortization Performance Banner */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-bg-surface border border-border-main p-5 rounded-xl">
-                  <span className="text-[10px] text-text-muted font-bold block uppercase">{t.metrics.agreedAmount}</span>
-                  <p className="text-2xl font-black text-text-main font-mono mt-1">₦{agreedAmount.toLocaleString()}</p>
+                  <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block mb-1">{t.metrics.agreedAmount}</span>
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">₦{agreedAmount.toLocaleString()}</p>
                 </div>
                 <div className="bg-bg-surface border border-border-main p-5 rounded-xl">
-                  <span className="text-[10px] text-text-muted font-bold block uppercase">{t.metrics.totalPaid}</span>
-                  <p className="text-2xl font-black text-emerald-600 font-mono mt-1">₦{totalPaid.toLocaleString()}</p>
+                  <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block mb-1">{t.metrics.totalPaid}</span>
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-emerald-600 tabular-nums leading-none mt-1">₦{totalPaid.toLocaleString()}</p>
                 </div>
                 <div className="bg-bg-surface border border-border-main p-5 rounded-xl">
-                  <span className="text-[10px] text-text-muted font-bold block uppercase">{t.metrics.outstanding}</span>
-                  <p className="text-2xl font-black text-brand-danger font-mono mt-1">₦{remainingAgreedBalance.toLocaleString()}</p>
-                  <span className="text-[10px] text-brand-danger font-semibold mt-1 block">{outstandingCount} {lang === 'en' ? "Installments Overdue" : "Rabe-raben Biyan da Suka Rage"}</span>
+                  <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block mb-1">{t.metrics.outstanding}</span>
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-brand-danger tabular-nums leading-none mt-1">₦{remainingAgreedBalance.toLocaleString()}</p>
+                  <span className="text-[14px] text-brand-danger font-medium mt-2 block">{outstandingCount} {lang === 'en' ? "Installments Overdue" : "Rabe-raben Biyan da Suka Rage"}</span>
                 </div>
                 <div className="bg-bg-surface border border-border-main p-5 rounded-xl">
-                  <span className="text-[10px] text-text-muted font-bold block uppercase">{t.metrics.vehicleBalance}</span>
-                  <p className="text-2xl font-black text-blue-600 font-mono mt-1">₦{driver.remainingVehicleBalance.toLocaleString()}</p>
+                  <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block mb-1">{t.metrics.vehicleBalance}</span>
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-blue-600 tabular-nums leading-none mt-1">₦{driver.remainingVehicleBalance.toLocaleString()}</p>
                 </div>
               </div>
 

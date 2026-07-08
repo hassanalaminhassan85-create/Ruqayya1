@@ -60,7 +60,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
   return (
     <div className="relative flex flex-col w-full">
       <div 
-        className={`relative flex items-center w-full h-[58px] rounded-xl border transition-all duration-300 bg-slate-950/45 backdrop-blur-md ${
+        className={`relative flex items-center w-full h-[64px] rounded-xl border transition-all duration-300 bg-slate-950/45 backdrop-blur-md ${
           isFocused 
             ? 'border-brand-gold ring-2 ring-brand-gold/20 shadow-[0_0_15px_rgba(212,163,89,0.15)] bg-slate-900/60' 
             : 'border-slate-800/80 hover:border-slate-700/80'
@@ -79,14 +79,14 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
           onBlur={() => setIsFocused(false)}
           onChange={onChange}
           placeholder={isFocused ? placeholder : " "}
-          className="w-full h-full pl-12 pr-12 pt-4 pb-1 text-xs bg-transparent border-0 text-white focus:outline-none focus:ring-0 placeholder:text-slate-700 font-medium"
+          className="w-full h-full pl-12 pr-12 pt-5 pb-1 text-[16px] bg-transparent border-0 text-white focus:outline-none focus:ring-0 placeholder:text-slate-700 font-medium"
         />
 
         <label
-          className={`absolute left-12 pointer-events-none transition-all duration-300 ease-out text-xs font-semibold ${
+          className={`absolute left-12 pointer-events-none transition-all duration-300 ease-out font-semibold ${
             isFocused || hasValue
-              ? 'top-2.5 text-[10px] text-brand-gold/90 font-bold uppercase tracking-wider'
-              : 'top-1/2 -translate-y-1/2 text-slate-400 text-[11px]'
+              ? 'top-2.5 text-[11px] text-brand-gold/90 font-bold uppercase tracking-wider'
+              : 'top-1/2 -translate-y-1/2 text-slate-400 text-[15px]'
           }`}
         >
           {label}
@@ -305,29 +305,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </div>
 
       {/* Unified Hero & Authentication Access Portal */}
-      <section className="relative bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-14 pb-20 px-4 md:px-6 border-b border-slate-800 flex flex-col items-center justify-center gap-10 w-full">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-4 text-center">
+      <section className="relative bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white pt-16 pb-24 px-4 md:px-6 border-b border-slate-800 flex flex-col items-center justify-center gap-12 w-full">
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-5 text-center">
           <span className="bg-slate-900/80 text-brand-gold border border-slate-800 px-3.5 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase shadow-xs">
             RUQAYYA TRANSPORT LIMITED
           </span>
-          <h1 className="text-3xl md:text-5xl font-black tracking-tight leading-tight text-white font-sans">
+          <h1 className="text-[34px] md:text-[42px] lg:text-[56px] font-extrabold tracking-tight leading-[1.1] text-white font-sans">
             {dictionary.landing.heroTitle}
           </h1>
-          <p className="text-slate-400 text-xs md:text-sm leading-relaxed max-w-xl font-sans px-2">
+          <p className="text-slate-400 text-[16px] lg:text-[18px] font-normal leading-[1.7] max-w-xl font-sans px-2">
             {dictionary.landing.heroSubtitle}
           </p>
         </div>
 
         <div className="w-full max-w-2xl px-1">
           {/* Glassmorphic Portal Card */}
-          <Card className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/80 text-white shadow-[0_25px_60px_rgba(0,0,0,0.6)] p-6 md:p-8 rounded-[24px] flex flex-col gap-6 w-full">
+          <Card className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/80 text-white shadow-[0_25px_60px_rgba(0,0,0,0.6)] p-6 md:p-8 rounded-[24px] flex flex-col gap-8 w-full">
             
             {/* Integrated Header */}
             <div className="flex items-center justify-between border-b border-slate-800/60 pb-5">
               <div className="flex items-center gap-3">
                 <CircularLogo size="md" className="shadow-lg shrink-0" />
                 <div className="flex flex-col">
-                  <span className="text-sm font-black tracking-wider text-white font-mono leading-none">
+                  <span className="text-[16px] font-bold tracking-wide text-white leading-none">
                     RUQAYYA ERP
                   </span>
                   <span className="text-[10px] font-bold text-brand-gold tracking-widest uppercase mt-1.5">
@@ -357,7 +357,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               <button
                 onClick={() => { setActivePortal('login'); setRegStep(1); }}
-                className={`relative flex-1 py-3 text-xs font-black rounded-lg transition-colors duration-200 z-10 flex items-center justify-center gap-2 cursor-pointer ${
+                className={`relative flex-1 py-3 text-[16px] font-semibold rounded-lg transition-colors duration-200 z-10 flex items-center justify-center gap-2 cursor-pointer ${
                   activePortal === 'login' ? 'text-brand-gold' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -366,7 +366,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
               <button
                 onClick={() => { setActivePortal('register'); setRegStep(1); }}
-                className={`relative flex-1 py-3 text-xs font-black rounded-lg transition-colors duration-200 z-10 flex items-center justify-center gap-2 cursor-pointer ${
+                className={`relative flex-1 py-3 text-[16px] font-semibold rounded-lg transition-colors duration-200 z-10 flex items-center justify-center gap-2 cursor-pointer ${
                   activePortal === 'register' ? 'text-brand-gold' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -377,12 +377,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             {activePortal === 'login' ? (
               // Unified Secure Login Form
-              <form onSubmit={handleLoginSubmit} className="flex flex-col gap-5">
+              <form onSubmit={handleLoginSubmit} className="flex flex-col gap-6">
                 <div>
-                  <h3 className="text-sm font-black text-white mb-1 uppercase tracking-wider text-brand-gold">
+                  <h3 className="text-[22px] font-bold text-brand-gold tracking-tight mb-2">
                     {lang === 'en' ? "Corporate Portal Access" : "Hanyar Shiga Tsarin"}
                   </h3>
-                  <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+                  <p className="text-[16px] text-slate-400 leading-[1.7] font-normal">
                     {lang === 'en' 
                       ? "Enter your registered email and secure password to authenticate."
                       : "Shigar da imel dinka da kalmar sirri don shiga tsarin sufuri."}
@@ -424,20 +424,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between mt-1">
-                  <label className="flex items-center gap-2.5 text-xs text-slate-400 cursor-pointer select-none">
+                  <label className="flex items-center gap-2.5 text-[14px] font-medium text-slate-400 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="rounded bg-slate-950 border-slate-800 text-brand-gold focus:ring-0 h-4 w-4 cursor-pointer"
+                      className="rounded bg-slate-950 border-slate-800 text-brand-gold focus:ring-0 h-4.5 w-4.5 cursor-pointer"
                     />
                     <span>{lang === 'en' ? "Remember Me" : "Tuna da ni"}</span>
                   </label>
-                  <span className="text-[10px] text-slate-500 font-mono font-bold uppercase tracking-wider">Session Protected</span>
+                  <span className="text-[12px] text-slate-500 font-mono font-bold uppercase tracking-wider">Session Protected</span>
                 </div>
 
                 <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-                  <Button variant="secondary" type="submit" size="sm" className="w-full mt-2 font-black cursor-pointer py-3.5 bg-brand-gold text-slate-950 hover:bg-brand-gold/90 transition-all rounded-xl text-xs uppercase tracking-widest">
+                  <Button variant="secondary" type="submit" size="md" className="w-full mt-2 font-semibold cursor-pointer py-3.5 bg-brand-gold text-slate-950 hover:bg-brand-gold/90 transition-all rounded-xl text-[16px]">
                     {lang === 'en' ? "Secure Login" : "Shiga Tsarin"}
                   </Button>
                 </motion.div>
@@ -447,10 +447,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="flex flex-col gap-5">
                 {/* Step Header Indicator */}
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-black text-brand-gold uppercase tracking-widest">
+                  <span className="text-[14px] font-bold text-brand-gold uppercase tracking-wider">
                     {lang === 'en' ? `STEP ${regStep} of 3` : `MATAKI ${regStep} daga 3`}
                   </span>
-                  <span className="text-[11px] font-black uppercase text-slate-300 font-mono">
+                  <span className="text-[14px] font-bold uppercase text-slate-300 font-mono">
                     {regStep === 1 && (lang === 'en' ? "Personal Info" : "Bayanan Sirri")}
                     {regStep === 2 && (lang === 'en' ? "Guarantor Details" : "Bayanan Guarantor")}
                     {regStep === 3 && (lang === 'en' ? "Carrier Vehicle" : "Motar Sufuri")}
@@ -652,16 +652,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     />
 
                     <div className="relative flex flex-col w-full">
-                      <div className="relative flex items-center w-full min-h-[58px] rounded-xl border border-slate-800/80 bg-slate-950/40 backdrop-blur-md px-4 py-2 hover:border-slate-700 transition-all duration-300">
+                      <div className="relative flex items-center w-full h-[64px] rounded-xl border border-slate-800/80 bg-slate-950/40 backdrop-blur-md px-4 py-2 hover:border-slate-700 transition-all duration-300">
                         <User className="h-4.5 w-4.5 text-slate-500 mr-4 shrink-0" />
-                        <div className="flex-1 flex flex-col">
-                          <span className="text-[9px] text-brand-gold font-bold uppercase tracking-wider">{lang === 'en' ? "Guarantor Passport (Required)" : "Hoton Fasfo na Mai Tsayawa"}</span>
+                        <div className="flex-1 flex flex-col pt-1">
+                          <span className="text-[11px] text-brand-gold font-bold uppercase tracking-wider">{lang === 'en' ? "Guarantor Passport (Required)" : "Hoton Fasfo na Mai Tsayawa"}</span>
                           <input
                             type="file"
                             accept="image/*"
                             required
                             onChange={(e) => handleFileChange(e, setGuarantorPassport)}
-                            className="text-[10px] text-slate-400 file:mr-2 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:bg-slate-800 file:text-white cursor-pointer mt-1"
+                            className="text-[14px] text-slate-400 file:mr-2 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:bg-slate-800 file:text-white cursor-pointer mt-0.5"
                           />
                         </div>
                       </div>
@@ -671,7 +671,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button 
                         type="button" 
                         onClick={prevStep}
-                        className="flex-1 py-3 bg-slate-850 rounded-xl hover:bg-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer text-white border border-slate-800"
+                        className="flex-1 py-3.5 bg-slate-850 rounded-xl hover:bg-slate-800 font-semibold text-[16px] flex items-center justify-center gap-1.5 transition-all cursor-pointer text-white border border-slate-800"
                       >
                         <ChevronLeft className="h-4 w-4" />
                         {lang === 'en' ? "Back" : "Koma"}
@@ -679,7 +679,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button 
                         type="button"
                         onClick={nextStep} 
-                        className="flex-1 py-3 bg-brand-gold hover:bg-brand-gold/90 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-widest"
+                        className="flex-1 py-3.5 bg-brand-gold hover:bg-brand-gold/90 text-slate-950 font-semibold rounded-xl text-[16px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         {lang === 'en' ? "Continue" : "Gaba"}
                         <ChevronRight className="h-4 w-4" />
@@ -740,14 +740,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                       <div className="col-span-1">
                         <div className="relative flex flex-col w-full">
-                          <div className="relative flex items-center w-full h-[58px] rounded-xl border border-slate-800/80 bg-slate-950/40 backdrop-blur-md px-3 py-1.5 focus-within:border-brand-gold focus-within:ring-2 focus-within:ring-brand-gold/20 transition-all duration-300">
+                          <div className="relative flex items-center w-full h-[64px] rounded-xl border border-slate-800/80 bg-slate-950/40 backdrop-blur-md px-3 py-1.5 focus-within:border-brand-gold focus-within:ring-2 focus-within:ring-brand-gold/20 transition-all duration-300">
                             <Truck className="h-4 w-4 text-slate-500 mr-2 shrink-0" />
-                            <div className="flex flex-col flex-1">
-                              <span className="text-[9px] text-brand-gold font-bold uppercase tracking-wider">{lang === 'en' ? "Capacity" : "Iko"}</span>
+                            <div className="flex flex-col flex-1 pt-1">
+                              <span className="text-[11px] text-brand-gold font-bold uppercase tracking-wider">{lang === 'en' ? "Capacity" : "Iko"}</span>
                               <select
                                 value={vehicleCapacity}
                                 onChange={(e) => setVehicleCapacity(e.target.value)}
-                                className="w-full bg-transparent text-white text-xs focus:outline-none placeholder-slate-700 font-medium border-0 p-0"
+                                className="w-full bg-transparent text-white text-[16px] focus:outline-none placeholder-slate-700 font-semibold border-0 p-0"
                               >
                                 <option value="30 Tons">30 Tons</option>
                                 <option value="40 Tons">40 Tons</option>
@@ -807,14 +807,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button 
                         type="button" 
                         onClick={prevStep}
-                        className="flex-1 py-3 bg-slate-850 rounded-xl hover:bg-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer text-white border border-slate-800"
+                        className="flex-1 py-3.5 bg-slate-850 rounded-xl hover:bg-slate-800 font-semibold text-[16px] flex items-center justify-center gap-1.5 transition-all cursor-pointer text-white border border-slate-800"
                       >
                         <ChevronLeft className="h-4 w-4" />
                         {lang === 'en' ? "Back" : "Koma"}
                       </button>
                       <button 
                         type="submit"
-                        className="flex-1 py-3 bg-brand-gold hover:bg-brand-gold/90 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-widest"
+                        className="flex-1 py-3.5 bg-brand-gold hover:bg-brand-gold/90 text-slate-950 font-semibold rounded-xl text-[16px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         {lang === 'en' ? "Complete Register" : "Kammala Rijistar"}
                       </button>
@@ -827,10 +827,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="text-center py-6 flex flex-col items-center gap-4 text-white">
                     <CheckCircle className="h-14 w-14 text-emerald-500 animate-bounce" />
                     <div>
-                      <h4 className="text-base font-extrabold text-white">
+                      <h4 className="text-[22px] font-bold text-white tracking-tight">
                         {lang === 'en' ? "Registration Submitted!" : "An Shigar Da Rijistar Ka!"}
                       </h4>
-                      <p className="text-xs text-slate-400 leading-relaxed mt-2 px-3 font-sans">
+                      <p className="text-[16px] text-slate-400 leading-[1.7] mt-3 px-3 font-sans">
                         {lang === 'en' 
                           ? "Your corporate driver candidate file is queued. A security auditor is reviewing your NIN, license, and guarantor. We will contact you upon decision."
                           : "Takardun ku suna jiran tantancewa daga Admin. Za mu sanar da ku idan mun kammala."}
@@ -838,9 +838,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <Button 
                       variant="outline" 
-                      size="sm" 
+                      size="md" 
                       onClick={() => { setActivePortal('login'); setRegStep(1); }}
-                      className="font-bold border-slate-800 hover:bg-slate-800 mt-2 text-white cursor-pointer px-6 py-2.5 rounded-xl text-xs"
+                      className="font-semibold border-slate-800 hover:bg-slate-800 mt-2 text-white cursor-pointer px-6 py-3 rounded-xl text-[16px]"
                     >
                       {lang === 'en' ? "Go to Login Portal" : "Koma shafin Shiga"}
                     </Button>

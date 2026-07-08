@@ -25,7 +25,7 @@ export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, cla
   };
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold tracking-wide ${styles[variant]} ${className}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[14px] font-semibold tracking-wide ${styles[variant]} ${className}`}>
       {children}
     </span>
   );
@@ -54,9 +54,9 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onChange, className
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
-            className={`relative py-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 cursor-pointer transition-all ${
+            className={`relative py-3 px-4 text-[16px] font-semibold flex items-center gap-2 border-b-2 cursor-pointer transition-all ${
               isActive 
-                ? 'border-brand-gold text-text-main font-bold' 
+                ? 'border-brand-gold text-text-main font-semibold' 
                 : 'border-transparent text-text-muted hover:text-text-main'
             }`}
           >
@@ -91,7 +91,7 @@ export const Accordion: React.FC<AccordionProps> = ({ title, children, defaultOp
     <div className={`border border-border-main rounded-lg overflow-hidden bg-bg-surface ${className}`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-text-main bg-bg-base/20 hover:bg-bg-base/50 transition-colors text-left"
+        className="w-full px-4 py-3.5 flex items-center justify-between text-[16px] font-semibold text-text-main bg-bg-base/20 hover:bg-bg-base/50 transition-colors text-left"
       >
         <span>{title}</span>
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
@@ -107,7 +107,7 @@ export const Accordion: React.FC<AccordionProps> = ({ title, children, defaultOp
             transition={{ duration: 0.25, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            <div className="p-4 text-xs text-text-muted leading-relaxed border-t border-border-main bg-bg-surface">
+            <div className="p-4 text-[16px] text-text-muted leading-[1.7] border-t border-border-main bg-bg-surface">
               {children}
             </div>
           </motion.div>
@@ -156,7 +156,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             className={`relative w-full ${widths[size]} bg-bg-surface border border-border-main rounded-xl shadow-2xl overflow-hidden z-10 flex flex-col`}
           >
             <div className="px-5 py-4 border-b border-border-main flex items-center justify-between bg-bg-base/10">
-              <h4 className="text-sm font-bold text-text-main">{title}</h4>
+              <h4 className="text-[22px] font-bold text-text-main tracking-tight">{title}</h4>
               <button onClick={onClose} className="text-text-muted hover:text-text-main rounded-lg p-1 hover:bg-bg-base transition-colors cursor-pointer">
                 <X className="h-4 w-4" />
               </button>
@@ -202,7 +202,7 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, title, children
             className="relative w-full max-w-md bg-bg-surface border-l border-border-main h-full shadow-2xl z-10 flex flex-col"
           >
             <div className="px-5 py-4 border-b border-border-main flex items-center justify-between bg-bg-base/10">
-              <h4 className="text-sm font-bold text-text-main">{title}</h4>
+              <h4 className="text-[22px] font-bold text-text-main tracking-tight">{title}</h4>
               <button onClick={onClose} className="text-text-muted hover:text-text-main rounded-lg p-1 hover:bg-bg-base transition-colors cursor-pointer">
                 <X className="h-4 w-4" />
               </button>
@@ -284,7 +284,7 @@ export const CircularProgress: React.FC<{ value: number; size?: number; strokeWi
           strokeLinecap="round"
         />
       </svg>
-      <span className="absolute text-[10px] font-bold text-text-main">{Math.round(value)}%</span>
+      <span className="absolute text-[14px] font-semibold text-text-main tabular-nums">{Math.round(value)}%</span>
     </div>
   );
 };
@@ -327,10 +327,10 @@ export const Timeline: React.FC<{ items: TimelineItem[] }> = ({ items }) => {
                 </div>
                 <div className="flex-1 min-w-0 pt-1.5 flex justify-between space-x-4">
                   <div>
-                    <p className="text-xs font-bold text-text-main">{item.title}</p>
-                    <p className="text-[11px] text-text-muted mt-0.5">{item.description}</p>
+                    <p className="text-[16px] font-semibold text-text-main">{item.title}</p>
+                    <p className="text-[14px] text-text-muted mt-1 leading-[1.7]">{item.description}</p>
                   </div>
-                  <div className="text-right text-[10px] whitespace-nowrap text-text-muted">
+                  <div className="text-right text-[14px] whitespace-nowrap text-text-muted font-medium">
                     <time>{item.time}</time>
                   </div>
                 </div>
@@ -361,9 +361,9 @@ export const Alert: React.FC<AlertProps> = ({ type = 'info', title, children }) 
   return (
     <div className={`p-4 border rounded-xl flex items-start gap-3 ${styles[type].bg}`}>
       <div className="mt-0.5">{styles[type].icon}</div>
-      <div className="flex-1 text-xs">
-        {title && <h5 className={`font-bold mb-1 ${styles[type].text}`}>{title}</h5>}
-        <div className="text-text-muted leading-relaxed">{children}</div>
+      <div className="flex-1 text-[14px]">
+        {title && <h5 className={`text-[16px] font-semibold mb-1 ${styles[type].text}`}>{title}</h5>}
+        <div className="text-text-muted leading-[1.7]">{children}</div>
       </div>
     </div>
   );
@@ -372,10 +372,10 @@ export const Alert: React.FC<AlertProps> = ({ type = 'info', title, children }) 
 // --- BREADCRUMB ---
 export const Breadcrumbs: React.FC<{ items: { label: string; active?: boolean }[] }> = ({ items }) => {
   return (
-    <nav className="flex text-xs font-medium text-text-muted gap-1.5 items-center">
+    <nav className="flex text-[14px] font-semibold text-text-muted gap-1.5 items-center">
       {items.map((item, idx) => (
         <React.Fragment key={idx}>
-          <span className={`${item.active ? 'text-text-main font-bold' : 'hover:text-text-main transition-colors cursor-pointer'}`}>
+          <span className={`${item.active ? 'text-text-main font-semibold' : 'hover:text-text-main transition-colors cursor-pointer'}`}>
             {item.label}
           </span>
           {idx < items.length - 1 && <span className="text-slate-300 dark:text-slate-600">/</span>}

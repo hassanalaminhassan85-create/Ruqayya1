@@ -45,19 +45,19 @@ export const Card: React.FC<CardProps> = ({
 };
 
 export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ children, className = '', ...props }) => (
-  <div className={`border-b border-border-main pb-3 mb-4 flex items-center justify-between ${className}`} {...props}>
+  <div className={`border-b border-border-main pb-4 mb-5 flex items-center justify-between ${className}`} {...props}>
     {children}
   </div>
 );
 
 export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({ children, className = '', ...props }) => (
-  <h3 className={`text-base font-semibold text-text-main tracking-tight ${className}`} {...props}>
+  <h3 className={`text-[22px] font-bold text-text-main tracking-tight ${className}`} {...props}>
     {children}
   </h3>
 );
 
 export const CardDescription: React.FC<React.HTMLAttributes<HTMLParagraphElement>> = ({ children, className = '', ...props }) => (
-  <p className={`text-xs text-text-muted mt-0.5 ${className}`} {...props}>
+  <p className={`text-[14px] font-medium text-text-muted mt-1.5 leading-relaxed ${className}`} {...props}>
     {children}
   </p>
 );

@@ -447,16 +447,16 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
       {/* Title Panel */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-main/50 pb-4">
         <div>
-          <h2 className="text-xl font-extrabold text-text-main tracking-tight uppercase">
+          <h2 className="text-[28px] md:text-[30px] lg:text-[36px] font-bold text-text-main tracking-tight uppercase">
             {t.welcome.title}
           </h2>
-          <p className="text-xs text-text-muted mt-0.5">
+          <p className="text-[16px] text-text-muted mt-1 leading-relaxed">
             {t.welcome.desc}
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1.5 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
+        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/20 px-3.5 py-1.5 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
           <ShieldCheck className="h-4 w-4 text-emerald-500" />
-          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">{t.welcome.investorConsole}</span>
+          <span className="text-[14px] font-semibold text-emerald-700 dark:text-emerald-300">{t.welcome.investorConsole}</span>
         </div>
       </div>
 
@@ -467,11 +467,11 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
             <User className="h-10 w-10 text-brand-gold/60" />
           </div>
           <div>
-            <span className="text-[9px] font-black tracking-widest text-brand-gold uppercase">
+            <span className="text-[14px] font-semibold tracking-wider text-brand-gold uppercase">
               {lang === 'en' ? "Verified Equity Shareholder" : "Gwarzon Mai Hannun Jari"}
             </span>
-            <h2 className="text-2xl font-black text-text-main tracking-tight mt-0.5">{shareholder.full_name}</h2>
-            <p className="text-xs text-text-muted mt-1 flex items-center gap-1.5 font-mono">
+            <h2 className="text-[28px] md:text-[30px] lg:text-[36px] font-bold text-text-main tracking-tight mt-1">{shareholder.full_name}</h2>
+            <p className="text-[14px] text-text-muted mt-2 flex items-center gap-1.5 font-medium">
               <Calendar className="h-3.5 w-3.5" />
               {lang === 'en' ? `Vested Since: ${shareholder.investment_date}` : `An Fara Jari Tun Ranar: ${shareholder.investment_date}`}
             </p>
@@ -482,7 +482,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
           <Badge variant={shareholder.status === 'active' ? 'success' : 'danger'}>
             {shareholder.status.toUpperCase()}
           </Badge>
-          <span className="text-xs font-bold text-text-main font-mono">ID: {shareholder.id.substring(0, 8).toUpperCase()}</span>
+          <span className="text-[14px] font-semibold text-text-main tabular-nums">ID: {shareholder.id.substring(0, 8).toUpperCase()}</span>
         </div>
       </div>
 
@@ -526,43 +526,43 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
               
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card hoverEffect className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">{t.stats.fleetValue}</span>
+                <Card hoverEffect className="flex flex-col gap-1.5 p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{t.stats.fleetValue}</span>
                     <Briefcase className="h-4 w-4 text-brand-gold" />
                   </div>
-                  <p className="text-2xl font-extrabold text-text-main font-mono">₦{totalFleetValuation.toLocaleString()}</p>
-                  <span className="text-[10px] text-text-muted">{t.stats.fleetDesc.replace('{count}', vehiclesCount.toString())}</span>
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">₦{totalFleetValuation.toLocaleString()}</p>
+                  <span className="text-[14px] font-medium text-text-muted mt-2 block">{t.stats.fleetDesc.replace('{count}', vehiclesCount.toString())}</span>
                 </Card>
 
-                <Card hoverEffect className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">{t.stats.totalInvested}</span>
+                <Card hoverEffect className="flex flex-col gap-1.5 p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{t.stats.totalInvested}</span>
                     <Coins className="h-4 w-4 text-emerald-500" />
                   </div>
-                  <p className="text-2xl font-extrabold text-emerald-600 font-mono">₦{shareholder.investment_amount.toLocaleString()}</p>
-                  <span className="text-[10px] text-emerald-500 font-semibold flex items-center gap-0.5">
-                    <Percent className="h-3 w-3" />
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-emerald-600 tabular-nums leading-none mt-1">₦{shareholder.investment_amount.toLocaleString()}</p>
+                  <span className="text-[14px] font-semibold text-emerald-500 flex items-center gap-0.5 mt-2 block">
+                    <Percent className="h-3 w-3 inline" />
                     {calculations.investmentPercentage.toFixed(2)}% {t.stats.weight}
                   </span>
                 </Card>
 
-                <Card hoverEffect className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">{t.stats.activeEarnings}</span>
+                <Card hoverEffect className="flex flex-col gap-1.5 p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{t.stats.activeEarnings}</span>
                     <TrendingUp className="h-4 w-4 text-blue-500" />
                   </div>
-                  <p className="text-2xl font-extrabold text-text-main font-mono">₦{Math.round(calculations.currentCycleEarnings).toLocaleString()}</p>
-                  <span className="text-[10px] text-text-muted">{t.stats.activeDesc}</span>
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">₦{Math.round(calculations.currentCycleEarnings).toLocaleString()}</p>
+                  <span className="text-[14px] font-medium text-text-muted mt-2 block">{t.stats.activeDesc}</span>
                 </Card>
 
-                <Card hoverEffect className="flex flex-col gap-1.5 bg-slate-950 border-slate-800 text-white p-4 md:p-6">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{t.stats.cumulativeEarnings}</span>
+                <Card hoverEffect className="flex flex-col gap-1.5 bg-slate-950 border-slate-800 text-white p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[14px] font-semibold text-slate-400 uppercase tracking-wider block">{t.stats.cumulativeEarnings}</span>
                     <HandCoins className="h-4 w-4 text-brand-gold animate-pulse" />
                   </div>
-                  <p className="text-2xl font-extrabold text-brand-gold font-mono">₦{Math.round(calculations.totalEarnings).toLocaleString()}</p>
-                  <span className="text-[10px] text-slate-400">{t.stats.cumulativeDesc}</span>
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-brand-gold tabular-nums leading-none mt-1">₦{Math.round(calculations.totalEarnings).toLocaleString()}</p>
+                  <span className="text-[14px] font-medium text-slate-400 mt-2 block">{t.stats.cumulativeDesc}</span>
                 </Card>
               </div>
 

@@ -55,6 +55,132 @@ body {
   color: var(--text-main);
   transition: background-color 0.2s ease, color 0.2s ease;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Premium Typography Baseline Resets */
+h1 {
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: clamp(24px, 3.5vw, 28px);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+h4 {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+p, span, div {
+  font-family: var(--font-sans);
+}
+
+/* Enable tabular numerals for all statistics and financial elements */
+.tabular-nums,
+table,
+.kpi-num,
+[data-tabular-nums="true"] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom premium responsive utilities */
+@utility text-premium-display {
+  font-size: clamp(34px, 5vw, 56px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+@utility text-premium-page-title {
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+@utility text-premium-section-title {
+  font-size: clamp(24px, 3.5vw, 28px);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+@utility text-premium-card-title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+@utility text-premium-body {
+  font-size: clamp(16px, 1.2vw, 18px);
+  font-weight: 400;
+  line-height: 1.7;
+}
+
+@utility text-premium-small {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@utility text-premium-label {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@utility text-premium-button {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+@utility text-premium-nav {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+@utility text-kpi-large {
+  font-size: clamp(42px, 6vw, 48px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+@utility text-kpi-medium {
+  font-size: clamp(30px, 5vw, 36px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+@utility text-kpi-small {
+  font-size: clamp(18px, 3vw, 22px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+@utility text-table-header {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+@utility text-table-row {
+  font-size: 15px;
+  font-weight: 500;
 }
 
 /* Custom fade in animation utilities */

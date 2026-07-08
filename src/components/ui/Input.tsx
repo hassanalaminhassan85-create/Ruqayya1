@@ -22,25 +22,25 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
   
   return (
-    <div className="w-full flex flex-col gap-1.5">
+    <div className="w-full flex flex-col gap-2">
       {label && (
-        <label htmlFor={inputId} className="text-xs font-semibold text-text-main">
+        <label htmlFor={inputId} className="text-[14px] font-semibold text-text-main tracking-wide">
           {label}
         </label>
       )}
       <input
         ref={ref}
         id={inputId}
-        className={`w-full px-3 py-2 text-sm bg-bg-surface border ${error ? 'border-brand-danger' : 'border-border-main'} rounded-lg text-text-main focus:outline-none focus:ring-2 ${error ? 'focus:ring-red-400' : 'focus:ring-slate-400'} placeholder:text-text-muted/60 transition-all ${className}`}
+        className={`w-full px-4 py-3 text-[16px] placeholder:text-[15px] bg-bg-surface border ${error ? 'border-brand-danger' : 'border-border-main'} rounded-xl text-text-main focus:outline-none focus:ring-2 ${error ? 'focus:ring-red-400' : 'focus:ring-slate-400'} placeholder:text-text-muted/60 transition-all ${className}`}
         {...props}
       />
       {error && (
-        <span className="text-[11px] font-medium text-brand-danger">
+        <span className="text-[12px] font-medium text-brand-danger">
           {error}
         </span>
       )}
       {helperText && !error && (
-        <span className="text-[10px] text-text-muted">
+        <span className="text-[12px] text-text-muted">
           {helperText}
         </span>
       )}
@@ -67,16 +67,16 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(({
   const selectId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
   
   return (
-    <div className="w-full flex flex-col gap-1.5">
+    <div className="w-full flex flex-col gap-2">
       {label && (
-        <label htmlFor={selectId} className="text-xs font-semibold text-text-main">
+        <label htmlFor={selectId} className="text-[14px] font-semibold text-text-main tracking-wide">
           {label}
         </label>
       )}
       <select
         ref={ref}
         id={selectId}
-        className={`w-full px-3 py-2 text-sm bg-bg-surface border ${error ? 'border-brand-danger' : 'border-border-main'} rounded-lg text-text-main focus:outline-none focus:ring-2 focus:ring-slate-400 transition-all ${className}`}
+        className={`w-full px-4 py-3 text-[16px] bg-bg-surface border ${error ? 'border-brand-danger' : 'border-border-main'} rounded-xl text-text-main focus:outline-none focus:ring-2 focus:ring-slate-400 transition-all ${className}`}
         {...props}
       >
         {options.map(opt => (
@@ -86,7 +86,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(({
         ))}
       </select>
       {error && (
-        <span className="text-[11px] font-medium text-brand-danger">
+        <span className="text-[12px] font-medium text-brand-danger">
           {error}
         </span>
       )}

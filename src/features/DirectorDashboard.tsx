@@ -799,121 +799,121 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     
                     {/* DRIVER STATS CARD */}
-                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Total / Active Drivers" : "Direbobi Gaba daya"}</span>
+                    <Card hoverEffect className="p-5 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{lang === 'en' ? "Total / Active Drivers" : "Direbobi Gaba daya"}</span>
                         <Users className="h-4 w-4 text-brand-navy dark:text-slate-400" />
                       </div>
                       <div className="mt-4">
-                        <p className="text-2xl font-extrabold text-text-main font-mono">{totalDriversCount} / {activeDriversCount}</p>
-                        <div className="flex gap-2.5 mt-1.5 text-[9px] text-text-muted font-bold">
+                        <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">{totalDriversCount} / {activeDriversCount}</p>
+                        <div className="flex gap-2.5 mt-2 text-[14px] text-text-muted font-medium">
                           <span>{smartDriversCount} Smart</span>
                           <span>•</span>
                           <span>{assistedDriversCount} Assisted</span>
                         </div>
                       </div>
                     </Card>
-
+ 
                     {/* DRIVERS AWAITING APPROVAL STAT CARD */}
-                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Awaiting / Resting" : "Hutu / Jiran Amincewa"}</span>
+                    <Card hoverEffect className="p-5 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{lang === 'en' ? "Awaiting / Resting" : "Hutu / Jiran Amincewa"}</span>
                         <AlertTriangle className={`h-4 w-4 ${pendingDriversCount > 0 ? 'text-amber-500 animate-bounce' : 'text-text-muted'}`} />
                       </div>
                       <div className="mt-4">
-                        <p className="text-2xl font-extrabold text-text-main font-mono">{pendingDriversCount} / {restDriversCount}</p>
-                        <span className="text-[9px] text-text-muted font-semibold">
+                        <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">{pendingDriversCount} / {restDriversCount}</p>
+                        <span className="text-[14px] text-text-muted font-medium mt-2 block">
                           {pendingDriversCount > 0 
                             ? `${pendingDriversCount} driver registrations pending boardroom review` 
                             : "All driver applications reviewed."}
                         </span>
                       </div>
                     </Card>
-
+ 
                     {/* VEHICLE STAT CARD */}
-                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Fleet Assets" : "Rukunin Motoci"}</span>
+                    <Card hoverEffect className="p-5 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{lang === 'en' ? "Fleet Assets" : "Rukunin Motoci"}</span>
                         <Truck className="h-4 w-4 text-brand-gold" />
                       </div>
                       <div className="mt-4">
-                        <p className="text-2xl font-extrabold text-text-main font-mono">{totalVehiclesCount}</p>
-                        <span className="text-[9px] text-text-muted font-semibold">
+                        <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">{totalVehiclesCount}</p>
+                        <span className="text-[14px] text-text-muted font-medium mt-2 block">
                           {vehicles.filter(v => v.status === 'assigned').length} rigs active on transit corridors
                         </span>
                       </div>
                     </Card>
-
+ 
                     {/* INVESTMENTS CARD */}
-                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Shareholder Capital" : "Jarin Masu Hannun Jari"}</span>
+                    <Card hoverEffect className="p-5 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{lang === 'en' ? "Shareholder Capital" : "Jarin Masu Hannun Jari"}</span>
                         <Coins className="h-4 w-4 text-blue-500" />
                       </div>
                       <div className="mt-4">
-                        <p className="text-2xl font-extrabold text-text-main font-mono">₦{totalInvestmentsSum.toLocaleString()}</p>
-                        <span className="text-[9px] text-text-muted font-semibold">
+                        <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">₦{totalInvestmentsSum.toLocaleString()}</p>
+                        <span className="text-[14px] text-text-muted font-medium mt-2 block">
                           Held by {totalShareholdersCount} active boardroom nodes
                         </span>
                       </div>
                     </Card>
-
+ 
                     {/* GROSS OPERATING REVENUE CARD */}
-                    <Card hoverEffect className="p-4 bg-slate-950 border border-slate-800 text-white flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'en' ? "Gross Collections" : "Kudaden Shiga"}</span>
+                    <Card hoverEffect className="p-5 bg-slate-950 border border-slate-800 text-white flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[14px] font-semibold text-slate-400 uppercase tracking-wider block">{lang === 'en' ? "Gross Collections" : "Kudaden Shiga"}</span>
                         <TrendingUp className="h-4 w-4 text-emerald-400" />
                       </div>
                       <div className="mt-4">
-                        <p className="text-2xl font-extrabold text-white font-mono">₦{totalRevenueSum.toLocaleString()}</p>
-                        <span className="text-[9px] text-slate-400">
+                        <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-white tabular-nums leading-none mt-1">₦{totalRevenueSum.toLocaleString()}</p>
+                        <span className="text-[14px] text-slate-400 mt-2 block">
                           100% audited logistics invoices
                         </span>
                       </div>
                     </Card>
-
+ 
                     {/* COMPANY EXPENSES CARD */}
-                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Corporate Expenses" : "Kuɗaɗen Kashewa"}</span>
+                    <Card hoverEffect className="p-5 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{lang === 'en' ? "Corporate Expenses" : "Kuɗaɗen Kashewa"}</span>
                         <TrendingDown className="h-4 w-4 text-rose-500" />
                       </div>
                       <div className="mt-4">
-                        <p className="text-2xl font-extrabold text-text-main font-mono">₦{totalExpensesSum.toLocaleString()}</p>
-                        <span className="text-[9px] text-text-muted">
+                        <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">₦{totalExpensesSum.toLocaleString()}</p>
+                        <span className="text-[14px] text-text-muted mt-2 block">
                           Fuel dispatches & rig restoration bills
                         </span>
                       </div>
                     </Card>
-
+ 
                     {/* NET PROFIT CARD */}
-                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Net Generated Amount" : "Ribar Aiki"}</span>
+                    <Card hoverEffect className="p-5 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{lang === 'en' ? "Net Generated Amount" : "Ribar Aiki"}</span>
                         <Activity className="h-4 w-4 text-emerald-500" />
                       </div>
                       <div className="mt-4">
-                        <p className="text-2xl font-extrabold text-emerald-600 font-mono">₦{netGeneratedAmount.toLocaleString()}</p>
-                        <span className="text-[9px] text-text-muted">
+                        <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-emerald-600 tabular-nums leading-none mt-1">₦{netGeneratedAmount.toLocaleString()}</p>
+                        <span className="text-[14px] text-text-muted mt-2 block">
                           Net Margin ratio: {totalRevenueSum > 0 ? ((netGeneratedAmount / totalRevenueSum) * 100).toFixed(1) : '0'}%
                         </span>
                       </div>
                     </Card>
-
+ 
                     {/* SHAREHOLDER DISTRIBUTION CARDS */}
-                    <Card hoverEffect className="p-4 bg-bg-surface border border-border-main flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Distribution Pool" : "Kudaden Raba Jari"}</span>
+                    <Card hoverEffect className="p-5 bg-bg-surface border border-border-main flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{lang === 'en' ? "Distribution Pool" : "Kudaden Raba Jari"}</span>
                         <Percent className="h-4 w-4 text-brand-gold animate-spin" style={{ animationDuration: '6s' }} />
                       </div>
                       <div className="mt-4">
-                        <p className="text-2xl font-extrabold text-text-main font-mono">₦{distributionPool.toLocaleString()}</p>
-                        <span className="text-[9px] text-text-muted font-bold">
+                        <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">₦{distributionPool.toLocaleString()}</p>
+                        <span className="text-[14px] text-text-muted font-bold mt-2 block">
                           Configured at {shareholderPercentage}% of Net profit
                         </span>
                       </div>
                     </Card>
-
+ 
                   </div>
 
                   {/* ACTIVE CYCLE HUD & OUTSTANDING PAYMENTS BAR */}

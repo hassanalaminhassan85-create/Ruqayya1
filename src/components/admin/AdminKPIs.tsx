@@ -209,18 +209,18 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: idx * 0.04 }}
         >
-          <Card className={`flex flex-col gap-2 p-4 h-full bg-bg-surface ${kpi.color} shadow-xs border border-border-main/40`}>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+          <Card className={`flex flex-col gap-2 p-5 h-full bg-bg-surface ${kpi.color} shadow-xs border border-border-main/40`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">
                 {kpi.title}
               </span>
               {kpi.icon}
             </div>
             <div>
-              <p className={`text-xl font-extrabold tracking-tight text-text-main ${kpi.valueColor || ''}`}>
+              <p className={`text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight tabular-nums leading-none text-text-main ${kpi.valueColor || ''}`}>
                 {kpi.value}
               </p>
-              <span className="text-[9px] text-text-muted mt-1 block">
+              <span className="text-[14px] font-medium text-text-muted mt-2 block">
                 {kpi.subtitle}
               </span>
             </div>
