@@ -282,6 +282,28 @@ setInterval(() => {
       }
     });
 
+    // Check for vehicle purchase contract completions using dynamic financials
+    const activeDriversList = (db.drivers || []).filter((d: any) => d.status === 'active' || d.status === 'approved' || d.status === 'available');
+    activeDriversList.forEach((drv: any) => {
+      const financials = getDriverFinancials(drv, db);
+      if (financials.remainingVehicleBalance <= 0 && drv.status !== 'completed') {
+        drv.status = 'completed';
+        dbChanged = true;
+        
+        db.notifications.unshift({
+          id: generateUUID(),
+          user_id: drv.user_id,
+          title_en: 'Vehicle Contract Completed!',
+          title_ha: 'Kwangilar Mota Ta Cika!',
+          message_en: 'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!',
+          message_ha: 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!',
+          type: 'success',
+          read_status: 0,
+          created_at: now.toISOString()
+        });
+      }
+    });
+
     if (dbChanged) {
       saveDB(db);
     }
@@ -673,6 +695,174 @@ app.post('/api/auth/register-director', (req, res) => {
   }
 });
 
+// 3b. AUTHENTICATED: Paper Record Migration (Driver Import)
+app.post('/api/drivers/import', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admins or Directors only.' });
+    }
+
+    const { personal, guarantor, vehicle } = req.body;
+    if (!personal || !guarantor || !vehicle) {
+      return res.status(400).json({ error: 'Missing import details. Personal, guarantor, and vehicle are required.' });
+    }
+
+    if (!personal.companyDriverId) {
+      return res.status(400).json({ error: 'Existing RTL Driver ID is mandatory for historical paper records migration.' });
+    }
+
+    const db = loadDB();
+
+    // Check unique constraints
+    const idExists = db.drivers.some(d => d.company_driver_id === personal.companyDriverId);
+    if (idExists) {
+      return res.status(400).json({ error: `RTL Driver ID ${personal.companyDriverId} already exists in the fleet database.` });
+    }
+
+    const emailExists = db.users.some(u => u.email.toLowerCase() === personal.email.toLowerCase());
+    if (emailExists) {
+      return res.status(400).json({ error: 'This email address is already registered inside our fleet.' });
+    }
+
+    const ninExists = db.drivers.some(d => d.nin === personal.nin);
+    if (ninExists) {
+      return res.status(400).json({ error: 'National Identification Number (NIN) already associated with another driver.' });
+    }
+
+    const plateExists = db.vehicles.some(v => v.plate_number.toUpperCase() === vehicle.plateNumber.toUpperCase());
+    if (plateExists) {
+      return res.status(400).json({ error: 'Vehicle plate number already registered.' });
+    }
+
+    // Process secure files to R2
+    let driverPassportUrl = personal.passportPhoto || '';
+    let guarantorPassportUrl = guarantor.passport || '';
+
+    // A. Create Core User
+    const userId = generateUUID();
+    const newUser = {
+      id: userId,
+      email: personal.email.toLowerCase(),
+      phone: personal.phone,
+      password_hash: hashPassword(personal.password || 'driver123'),
+      full_name: personal.fullName,
+      role_id: 'role-driver',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    // B. Create Driver Profile with Opening Balance Details
+    const driverId = generateUUID();
+    const newDriver = {
+      id: driverId,
+      user_id: userId,
+      company_driver_id: personal.companyDriverId,
+      address: personal.address,
+      nin: personal.nin,
+      license_number: personal.licenseNumber || `LIC-${generateUUID().substring(0, 5).toUpperCase()}`,
+      license_expiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      classification: personal.classification || 'Assisted',
+      rating: 5.0,
+      agreed_amount: parseFloat(personal.agreedAmount) || 180000,
+      vehicle_purchase_price: parseFloat(personal.vehiclePurchasePrice) || 15000000,
+      remaining_vehicle_balance: parseFloat(personal.remainingVehicleBalance),
+      status: 'approved',
+      opening_balance: {
+        is_imported: true,
+        remaining_vehicle_balance: parseFloat(personal.remainingVehicleBalance),
+        total_paid_to_date: parseFloat(personal.totalPaidToDate),
+        agreed_amount: parseFloat(personal.agreedAmount),
+        current_installment_position: parseInt(personal.currentInstallmentPosition) || 1,
+        opening_balance_date: personal.openingBalanceDate || new Date().toISOString().split('T')[0],
+        opening_notes: personal.openingNotes || 'Imported historical paper records'
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // C. Create Guarantor
+    const guarantorId = generateUUID();
+    const newGuarantor = {
+      id: guarantorId,
+      driver_id: driverId,
+      full_name: guarantor.fullName,
+      phone: guarantor.phone,
+      address: guarantor.address,
+      relationship: guarantor.relationship,
+      nin: guarantor.nin,
+      passport_photo_url: guarantorPassportUrl,
+      created_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    // D. Create Vehicle (Link pending driver)
+    const vehicleId = generateUUID();
+    const newVehicle = {
+      id: vehicleId,
+      driver_id: driverId,
+      brand: vehicle.brand,
+      model: vehicle.model,
+      year: parseInt(vehicle.year) || 2020,
+      colour: vehicle.colour,
+      plate_number: vehicle.plateNumber.toUpperCase(),
+      registration_number: vehicle.registrationNumber,
+      chassis_number: vehicle.chassisNumber,
+      engine_number: vehicle.engineNumber,
+      capacity: vehicle.capacity || '30 Tons',
+      status: 'assigned',
+      created_at: new Date().toISOString()
+    };
+
+    // Save driver documents mapping
+    if (driverPassportUrl) {
+      db.driver_documents.push({
+        id: generateUUID(),
+        driver_id: driverId,
+        document_type: 'passport_photo',
+        file_url: driverPassportUrl,
+        created_at: new Date().toISOString(),
+        status: 'active'
+      });
+    }
+
+    db.users.push(newUser);
+    db.drivers.push(newDriver);
+    db.guarantors.push(newGuarantor);
+    db.vehicles.push(newVehicle);
+
+    // Register active notification for admins/directors
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Paper Record Imported Successfully',
+      title_ha: 'An Shigar da Takardun Direba',
+      message_en: `Driver ${personal.fullName} (${personal.companyDriverId}) imported. Remaining vehicle balance: ₦${parseFloat(personal.remainingVehicleBalance).toLocaleString()}.`,
+      message_ha: `An shigar da direba ${personal.fullName} (${personal.companyDriverId}). Ragowar kudin mota: ₦${parseFloat(personal.remainingVehicleBalance).toLocaleString()}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_IMPORTED',
+      null,
+      `Import of historical paper records. RTL Driver ID: ${personal.companyDriverId}. Remaining vehicle balance: ₦${parseFloat(personal.remainingVehicleBalance).toLocaleString()}. Reason: Import of historical paper records.`,
+      req
+    );
+
+    res.json({ success: true, message: 'Driver historical records successfully migrated to digital ledger.' });
+  } catch (error: any) {
+    console.error('Driver import failure:', error);
+    res.status(500).json({ error: `Internal registry compilation error: ${error.message}` });
+  }
+});
+
 // 4. AUTHENTICATED (Directors only): Admin Registration
 app.post('/api/auth/register-admin', authenticateSession, (req, res) => {
   try {
@@ -836,7 +1026,16 @@ app.get('/api/auth/me', authenticateSession, (req, res) => {
     if (dr) {
       const guarantor = db.guarantors.find(g => g.driver_id === dr.id) || null;
       const vehicle = db.vehicles.find(v => v.driver_id === dr.id) || null;
-      profileDetails = { ...dr, guarantor, vehicle };
+      const financials = getDriverFinancials(dr, db);
+      profileDetails = { 
+        ...dr, 
+        guarantor, 
+        vehicle,
+        remaining_vehicle_balance: financials.remainingVehicleBalance,
+        total_amount_paid: financials.totalAmountPaid,
+        vehicle_purchase_price: financials.vehiclePurchasePrice,
+        total_payments_made: financials.totalPaymentsMade
+      };
     }
   }
 
@@ -914,13 +1113,18 @@ app.get('/api/drivers', authenticateSession, (req, res) => {
     const user = db.users.find(u => u.id === drv.user_id);
     const guarantor = db.guarantors.find(g => g.driver_id === drv.id);
     const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
+    const financials = getDriverFinancials(drv, db);
     return {
       ...drv,
       fullName: user?.full_name || 'Candidate',
       email: user?.email || '',
       phone: user?.phone || '',
       guarantor,
-      vehicle
+      vehicle,
+      remaining_vehicle_balance: financials.remainingVehicleBalance,
+      total_amount_paid: financials.totalAmountPaid,
+      vehicle_purchase_price: financials.vehiclePurchasePrice,
+      total_payments_made: financials.totalPaymentsMade
     };
   });
 
@@ -953,6 +1157,7 @@ app.get('/api/drivers/:id', authenticateSession, (req, res) => {
   const guarantor = db.guarantors.find(g => g.driver_id === drv.id);
   const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
   const documents = db.driver_documents.filter(doc => doc.driver_id === drv.id);
+  const financials = getDriverFinancials(drv, db);
 
   res.json({
     ...drv,
@@ -961,7 +1166,11 @@ app.get('/api/drivers/:id', authenticateSession, (req, res) => {
     phone: user?.phone || '',
     guarantor,
     vehicle,
-    documents
+    documents,
+    remaining_vehicle_balance: financials.remainingVehicleBalance,
+    total_amount_paid: financials.totalAmountPaid,
+    vehicle_purchase_price: financials.vehiclePurchasePrice,
+    total_payments_made: financials.totalPaymentsMade
   });
 });
 
@@ -1527,6 +1736,113 @@ app.delete('/api/notifications/:id', authenticateSession, (req, res) => {
   }
 });
 
+// GET Unified Directory
+app.get('/api/directory/all', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Administrative or Board credentials required.' });
+    }
+
+    const db = loadDB();
+
+    // 1. Map Drivers
+    const drivers = db.drivers.map((drv: any) => {
+      const user = db.users.find((u: any) => u.id === drv.user_id);
+      const guarantor = db.guarantors.find((g: any) => g.driver_id === drv.id);
+      const vehicle = db.vehicles.find((v: any) => v.driver_id === drv.id);
+      const financials = getDriverFinancials(drv, db);
+      const driverDocs = db.driver_documents.filter((doc: any) => doc.driver_id === drv.id);
+      return {
+        ...drv,
+        fullName: user?.full_name || 'Candidate',
+        email: user?.email || '',
+        phone: user?.phone || '',
+        status: drv.status,
+        registrationDate: drv.created_at || user?.created_at || new Date().toISOString(),
+        guarantor,
+        vehicle,
+        documents: driverDocs,
+        remaining_vehicle_balance: financials.remainingVehicleBalance,
+        total_amount_paid: financials.totalAmountPaid,
+        vehicle_purchase_price: financials.vehiclePurchasePrice,
+        total_payments_made: financials.totalPaymentsMade
+      };
+    });
+
+    // 2. Map Shareholders
+    const shareholders = db.shareholders.map((sh: any) => {
+      const fundedVehicles = db.vehicles.filter((v: any) => v.shareholder_id === sh.id).map((v: any) => v.plate_number);
+      const fundedDrivers = db.drivers.filter((d: any) => d.shareholder_id === sh.id).map((d: any) => {
+        const u = db.users.find((user: any) => user.id === d.user_id);
+        return u?.full_name || 'Driver';
+      });
+
+      return {
+        ...sh,
+        fullName: sh.full_name,
+        email: sh.email,
+        phone: sh.phone,
+        status: sh.status,
+        registrationDate: sh.created_at || sh.investment_date || new Date().toISOString(),
+        bank_name: sh.bank_name || "Access Bank PLC",
+        account_number: sh.account_number || "0094102945",
+        lifetime_dividends: sh.lifetime_dividends || 0,
+        funded_vehicles: fundedVehicles,
+        funded_drivers: fundedDrivers,
+        documents: db.company_documents.filter((doc: any) => doc.title.toLowerCase().includes(sh.full_name.toLowerCase()) || doc.document_type === 'Shareholder Agreement')
+      };
+    });
+
+    // 3. Map Admins
+    const admins = db.admins.map((adm: any) => {
+      const user = db.users.find((u: any) => u.id === adm.user_id);
+      const logsCount = db.audit_logs.filter((l: any) => l.userId === adm.user_id).length;
+      const lastActiveLog = db.audit_logs.find((l: any) => l.userId === adm.user_id);
+
+      return {
+        ...adm,
+        fullName: user?.full_name || 'Corporate Operator',
+        email: user?.email || '',
+        phone: user?.phone || '',
+        status: adm.status || user?.status || 'active',
+        registrationDate: adm.created_at || user?.created_at || new Date().toISOString(),
+        privilege_level: adm.privilege_level || 'Level 1: Fleet Operations',
+        assigned_tasks: adm.assigned_tasks || ['Fleet Dispatch', 'Voucher Issuance', 'Real-time Tracking'],
+        actions_audited: logsCount,
+        last_active: lastActiveLog ? lastActiveLog.timestamp : (adm.created_at || new Date().toISOString())
+      };
+    });
+
+    // 4. Map Directors
+    const directors = (db.directors || []).map((dir: any) => {
+      const user = db.users.find((u: any) => u.id === dir.user_id);
+      const signaturesCount = db.audit_logs.filter((l: any) => l.userId === dir.user_id && l.action.includes('APPROVED')).length;
+      return {
+        ...dir,
+        fullName: user?.full_name || 'Board Member',
+        email: user?.email || '',
+        phone: user?.phone || '',
+        status: dir.status || user?.status || 'active',
+        registrationDate: dir.created_at || user?.created_at || new Date().toISOString(),
+        portfolio: dir.portfolio || 'Executive Director',
+        shareholding_equity: dir.shareholding_equity || '10.0%',
+        approved_signatures: signaturesCount
+      };
+    });
+
+    res.json({
+      success: true,
+      drivers,
+      shareholders,
+      admins,
+      directors
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 15. AUTHENTICATED: Shareholders Management (Add, Edit, Suspend, Remove)
 app.get('/api/shareholders', authenticateSession, (req, res) => {
   const db = loadDB();
@@ -1728,8 +2044,8 @@ app.post('/api/auth/login-as-role', (req, res) => {
     const db = loadDB();
     
     // Find first active user of this role
-    const targetRoleId = role === 'director' ? 'role-director' : role === 'admin' ? 'role-admin' : 'role-driver';
-    const user = db.users.find(u => u.role_id === targetRoleId && u.status === 'active' || u.status === 'approved');
+    const targetRoleId = role === 'director' ? 'role-director' : role === 'admin' ? 'role-admin' : role === 'shareholder' ? 'role-shareholder' : 'role-driver';
+    const user = db.users.find(u => (u.role_id === targetRoleId && (u.status === 'active' || u.status === 'approved')));
 
     if (!user) {
       return res.status(404).json({ error: `Demo account for role ${role} not found.` });
@@ -2136,6 +2452,52 @@ app.put('/api/trips/:id/complete', authenticateSession, (req, res) => {
 // BUSINESS CALCULATION ENGINE & 30-DAY OPERATING CYCLE
 // ==================================================
 
+export function getDriverFinancials(driver: any, db: any) {
+  const purchasePrice = parseFloat(driver.vehicle_purchase_price) || 15000000;
+  const agreedAmount = parseFloat(driver.agreed_amount) || 180000;
+  
+  if (driver.opening_balance && driver.opening_balance.is_imported) {
+    const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance) || 0;
+    const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date) || 0;
+    
+    // Sum of all approved payments in ERP
+    const approvedPaymentsInERP = (db.driver_payments || [])
+      .filter((p: any) => p.driver_id === driver.id && p.status === 'approved');
+    const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
+    const countErpPaid = approvedPaymentsInERP.length;
+    
+    const totalAmountPaid = openingPaid + totalErpPaid;
+    const remainingVehicleBalance = Math.max(0, openingRemaining - totalErpPaid);
+    
+    return {
+      vehiclePurchasePrice: purchasePrice,
+      totalAmountPaid,
+      remainingVehicleBalance,
+      totalPaymentsMade: countErpPaid,
+      agreedAmount,
+      openingBalance: driver.opening_balance
+    };
+  } else {
+    // New Driver
+    const approvedPaymentsInERP = (db.driver_payments || [])
+      .filter((p: any) => p.driver_id === driver.id && p.status === 'approved');
+    const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
+    const countErpPaid = approvedPaymentsInERP.length;
+    
+    const totalAmountPaid = totalErpPaid;
+    const remainingVehicleBalance = Math.max(0, purchasePrice - totalErpPaid);
+    
+    return {
+      vehiclePurchasePrice: purchasePrice,
+      totalAmountPaid,
+      remainingVehicleBalance,
+      totalPaymentsMade: countErpPaid,
+      agreedAmount,
+      openingBalance: null
+    };
+  }
+}
+
 export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
   const agreedAmount = driver.agreed_amount || 180000;
   const installmentTarget = Math.round(agreedAmount / 6);
@@ -2434,14 +2796,28 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
       const collected = paymentsForDriver.reduce((sum: number, p: any) => sum + p.amount, 0);
       const user = db.users.find((u: any) => u.id === d.user_id);
       
+      const financials = getDriverFinancials(d, db);
+      const cycleInstallments = calculateInstallmentsForDriver(d, db, activeCycle);
+      const completedInstallments = cycleInstallments.filter((inst: any) => inst.status === 'Completed').length;
+      
+      // Expenses applied to this driver during this cycle
+      const expensesForDriver = expensesInCycle.filter((e: any) => e.driver_id === d.id);
+      const expensesApplied = expensesForDriver.reduce((sum: number, e: any) => sum + e.amount, 0);
+
+      const closingVehicleBalance = financials.remainingVehicleBalance;
+      const openingVehicleBalance = closingVehicleBalance + collected;
+
       return {
         driverId: d.id,
         fullName: user ? user.full_name : d.fullName || 'Unknown Driver',
         companyDriverId: d.company_driver_id || 'PENDING',
         agreedAmount: d.agreed_amount || 180000,
-        totalPaid: collected,
-        remaining30DayBalance: Math.max(0, (d.agreed_amount || 180000) - collected),
-        remainingVehicleBalance: d.remaining_vehicle_balance || 15000000,
+        paymentsDuringCycle: collected,
+        expensesApplied,
+        openingVehicleBalance,
+        closingVehicleBalance,
+        outstandingBalance: Math.max(0, (d.agreed_amount || 180000) - collected),
+        installmentsCompleted: completedInstallments,
         payments: paymentsForDriver.map((p: any) => ({
           id: p.id,
           amount: p.amount,
@@ -2648,7 +3024,7 @@ app.post('/api/director/admins', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
     }
 
-    const { email, password, fullName, phone } = req.body;
+    const { email, password, fullName, phone, privilegeLevel, assignedTasks } = req.body;
     if (!email || !password || !fullName) {
       return res.status(400).json({ error: 'Email, password, and full name parameters are mandatory.' });
     }
@@ -2677,6 +3053,8 @@ app.post('/api/director/admins', authenticateSession, (req, res) => {
       user_id: userId,
       company_id: `ADM-2026-${Math.floor(100 + Math.random() * 900)}`,
       passport_photo_url: '',
+      privilege_level: privilegeLevel || 'Level 1: Fleet Operations',
+      assigned_tasks: assignedTasks || ['Fleet Dispatch', 'Voucher Issuance', 'Real-time Tracking'],
       created_at: new Date().toISOString(),
       status: 'active'
     };
@@ -2716,20 +3094,26 @@ app.put('/api/director/admins/:id', authenticateSession, (req, res) => {
       return res.status(404).json({ error: 'Admin record not found.' });
     }
 
-    const { fullName, phone, status, password } = req.body;
+    const { fullName, phone, status, password, privilegeLevel, assignedTasks } = req.body;
     const prevVal = JSON.stringify(user);
 
     if (fullName) user.full_name = fullName;
     if (phone !== undefined) user.phone = phone;
     if (status) {
       user.status = status;
-      // Update admin profile status too
-      const profile = db.admins.find(a => a.user_id === user.id);
-      if (profile) profile.status = status;
     }
     if (password) {
       user.password_hash = hashPassword(password);
     }
+    
+    // Update admin profile status, clearance, and tasks
+    const profile = db.admins.find(a => a.user_id === user.id);
+    if (profile) {
+      if (status) profile.status = status;
+      if (privilegeLevel) profile.privilege_level = privilegeLevel;
+      if (assignedTasks) profile.assigned_tasks = assignedTasks;
+    }
+    
     user.updated_at = new Date().toISOString();
 
     saveDB(db);
@@ -2780,6 +3164,167 @@ app.delete('/api/director/admins/:id', authenticateSession, (req, res) => {
       actor.role,
       'ADMIN_DELETION',
       adminUser.email,
+      null,
+      req
+    );
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create Director
+app.post('/api/director/directors', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { email, password, fullName, phone, portfolio, shareholdingEquity } = req.body;
+    if (!email || !password || !fullName) {
+      return res.status(400).json({ error: 'Email, password, and full name parameters are mandatory.' });
+    }
+
+    const db = loadDB();
+    const emailExists = db.users.some(u => u.email.toLowerCase() === email.toLowerCase());
+    if (emailExists) {
+      return res.status(400).json({ error: 'This email address is already registered in the system.' });
+    }
+
+    const userId = generateUUID();
+    const newUser = {
+      id: userId,
+      email: email.toLowerCase(),
+      phone: phone || "",
+      password_hash: hashPassword(password),
+      full_name: fullName,
+      role_id: 'role-director',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    if (!db.directors) db.directors = [];
+
+    const directorProfile = {
+      id: generateUUID(),
+      user_id: userId,
+      company_id: `DIR-2026-${Math.floor(100 + Math.random() * 900)}`,
+      passport_photo_url: '',
+      portfolio: portfolio || 'Executive Director',
+      shareholding_equity: shareholdingEquity || '5.0%',
+      created_at: new Date().toISOString(),
+      status: 'active'
+    };
+
+    db.users.push(newUser);
+    db.directors.push(directorProfile);
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DIRECTOR_CREATION',
+      null,
+      `Created Director Account for: ${fullName} (${email})`,
+      req
+    );
+
+    res.json({ success: true, user: { id: userId, email, fullName, role: 'director' } });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Edit Director
+app.put('/api/director/directors/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const user = db.users.find(u => u.id === req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Director record not found.' });
+    }
+
+    const { fullName, phone, status, password, portfolio, shareholdingEquity } = req.body;
+    const prevVal = JSON.stringify(user);
+
+    if (fullName) user.full_name = fullName;
+    if (phone !== undefined) user.phone = phone;
+    if (status) {
+      user.status = status;
+    }
+    if (password) {
+      user.password_hash = hashPassword(password);
+    }
+    
+    if (!db.directors) db.directors = [];
+    const profile = db.directors.find(d => d.user_id === user.id);
+    if (profile) {
+      if (status) profile.status = status;
+      if (portfolio) profile.portfolio = portfolio;
+      if (shareholdingEquity) profile.shareholding_equity = shareholdingEquity;
+    }
+    
+    user.updated_at = new Date().toISOString();
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DIRECTOR_UPDATE',
+      prevVal,
+      JSON.stringify(user),
+      req
+    );
+
+    res.json({ success: true, user });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete Director
+app.delete('/api/director/directors/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const db = loadDB();
+    const userIndex = db.users.findIndex(u => u.id === req.params.id);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Director record not found.' });
+    }
+
+    const dirUser = db.users[userIndex];
+    db.users.splice(userIndex, 1);
+
+    if (!db.directors) db.directors = [];
+    const profileIndex = db.directors.findIndex(d => d.user_id === req.params.id);
+    if (profileIndex !== -1) {
+      db.directors.splice(profileIndex, 1);
+    }
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DIRECTOR_DELETION',
+      dirUser.email,
       null,
       req
     );

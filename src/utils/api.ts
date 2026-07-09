@@ -105,6 +105,13 @@ export const api = {
     });
   },
 
+  importDriver: async (payload: { personal: any; guarantor: any; vehicle: any }) => {
+    return api.request('/api/drivers/import', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   registerDirector: async (payload: any) => {
     return api.request('/api/auth/register-director', {
       method: 'POST',

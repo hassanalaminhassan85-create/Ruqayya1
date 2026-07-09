@@ -47,9 +47,18 @@ const DEFAULT_LANG: Language = 'en';
 const DEFAULT_THEME: Theme = 'light';
 
 export default function App() {
+  const getInitialRole = (): Role => {
+    if (typeof window === 'undefined') return 'public';
+    const path = window.location.pathname;
+    if (path === '/admin') return 'admin';
+    if (path === '/director') return 'director';
+    if (path === '/shareholder') return 'shareholder';
+    return 'public';
+  };
+
   const [lang, setLang] = useState<Language>(DEFAULT_LANG);
   const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
-  const [currentRole, setCurrentRole] = useState<Role>('public');
+  const [currentRole, setCurrentRole] = useState<Role>(getInitialRole());
   const [driverName, setDriverName] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -76,20 +85,52 @@ export default function App() {
     window.addEventListener('offline', handleOffline);
 
     const hydrateSession = async () => {
+      const path = window.location.pathname;
+      const targetRole = path === '/admin' ? 'admin' : path === '/director' ? 'director' : path === '/shareholder' ? 'shareholder' : null;
+
       const token = api.getToken();
       if (token) {
         try {
           const payload = await api.getMe();
           if (payload && payload.user) {
-            setCurrentRole(payload.user.role);
-            if (payload.user.role === 'driver') {
-              setDriverName(payload.user.fullName);
+            const userRole = payload.user.role;
+            if (targetRole && userRole !== targetRole) {
+              const demoRes = await api.loginAsDemoRole(targetRole);
+              setCurrentRole(targetRole);
+              setDriverName('');
             } else {
+              setCurrentRole(userRole);
+              if (userRole === 'driver') {
+                setDriverName(payload.user.fullName);
+              } else {
+                setDriverName('');
+              }
+            }
+          } else {
+            api.clearToken();
+            if (targetRole) {
+              await api.loginAsDemoRole(targetRole);
+              setCurrentRole(targetRole);
               setDriverName('');
             }
           }
         } catch (e) {
           api.clearToken();
+          if (targetRole) {
+            try {
+              await api.loginAsDemoRole(targetRole);
+              setCurrentRole(targetRole);
+              setDriverName('');
+            } catch (err) {}
+          }
+        }
+      } else {
+        if (targetRole) {
+          try {
+            await api.loginAsDemoRole(targetRole);
+            setCurrentRole(targetRole);
+            setDriverName('');
+          } catch (err) {}
         }
       }
     };
@@ -104,7 +145,24 @@ export default function App() {
   // Listen for browser popstate routing changes
   useEffect(() => {
     const handlePopState = () => {
-      setPathname(window.location.pathname);
+      const nextPath = window.location.pathname;
+      setPathname(nextPath);
+      const targetRole = nextPath === '/admin' ? 'admin' : nextPath === '/director' ? 'director' : nextPath === '/shareholder' ? 'shareholder' : 'public';
+      
+      const autoAuth = async () => {
+        if (targetRole !== 'public') {
+          try {
+            const demoRes = await api.loginAsDemoRole(targetRole);
+            setCurrentRole(targetRole);
+            setDriverName('');
+          } catch (e) {
+            console.error("Auto route shift failed:", e);
+          }
+        } else {
+          setCurrentRole('public');
+        }
+      };
+      autoAuth();
     };
     window.addEventListener('popstate', handlePopState);
     return () => {
@@ -164,8 +222,17 @@ export default function App() {
     setCurrentRole('driver');
   };
 
-  const handleNavigateToRole = (role: 'driver' | 'admin' | 'director' | 'shareholder') => {
-    setCurrentRole(role);
+  const handleNavigateToRole = async (role: 'driver' | 'admin' | 'director' | 'shareholder') => {
+    try {
+      const demoRes = await api.loginAsDemoRole(role);
+      setCurrentRole(role);
+      setDriverName(role === 'driver' ? demoRes.user.fullName : '');
+      const nextPath = role === 'admin' ? '/admin' : role === 'director' ? '/director' : role === 'shareholder' ? '/shareholder' : '/';
+      window.history.pushState({}, '', nextPath);
+      setPathname(nextPath);
+    } catch (e) {
+      console.error("Role navigation failed:", e);
+    }
   };
 
   const dictionary = lang === 'en' ? enDictionary : haDictionary;
@@ -236,7 +303,14 @@ export default function App() {
                 <Menu className="h-5 w-5" />
               </button>
             )}
-            <div className="flex items-center gap-2">
+            <div 
+              className="flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 transition-all"
+              onClick={() => {
+                setCurrentRole('public');
+                window.history.pushState({}, '', '/');
+                setPathname('/');
+              }}
+            >
               <CircularLogo size="md" className="-my-1" />
               <div>
                 <span className="font-extrabold text-sm tracking-wider text-brand-navy dark:text-white font-mono block">RUQAYYA</span>

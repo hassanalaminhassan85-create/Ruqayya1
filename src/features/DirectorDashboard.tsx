@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import EnterpriseDirectory from '../components/admin/EnterpriseDirectory';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   TrendingUp, 
@@ -100,7 +101,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
   
   const [loading, setLoading] = useState(true);
   const [sseConnected, setSseConnected] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory'>('overview');
   const [monitoringData, setMonitoringData] = useState<any>(null);
 
   const [backupLoading, setBackupLoading] = useState(false);
@@ -739,6 +740,13 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
         >
           <Shield className="h-3.5 w-3.5" />
           {lang === 'en' ? "Operations Admins" : "Masu Gudanarwa"}
+        </button>
+        <button
+          onClick={() => setActiveTab('directory')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'directory' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Users className="h-3.5 w-3.5" />
+          {lang === 'en' ? "Enterprise Directory" : "Kundayen Ma’aikata"}
         </button>
         <button
           onClick={() => setActiveTab('company')}
@@ -1946,6 +1954,15 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                     </div>
                   </Card>
 
+                </div>
+              )}
+
+              {/* ==================================================
+                  TAB: Enterprise Directory
+                  ================================================== */}
+              {activeTab === 'directory' && (
+                <div className="bg-bg-surface border border-border-main rounded-2xl p-6 shadow-xs">
+                  <EnterpriseDirectory lang={lang} dictionary={dictionary} />
                 </div>
               )}
 

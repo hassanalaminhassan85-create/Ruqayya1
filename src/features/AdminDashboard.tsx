@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import EnterpriseDirectory from '../components/admin/EnterpriseDirectory';
 import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge, Alert, Tabs, Modal, ProgressBar } from '../components/ui/SharedComponents';
@@ -46,7 +47,7 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary }) => {
   // Tabs & Views
-  const [activeTab, setActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications'>('fleet');
+  const [activeTab, setActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory'>('fleet');
   
   // Storage states
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -397,7 +398,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               { id: 'finance', label: lang === 'en' ? "Financial Center" : "Kudaden Shiga", icon: <span className="font-extrabold text-xs">₦</span> },
               { id: 'payments', label: lang === 'en' ? "Installments Approval" : "Biyan Kudi", icon: <span className="font-extrabold text-xs">₦</span> },
               { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
-              { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> }
+              { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> },
+              { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-3.5 w-3.5" /> }
             ]}
           />
 
@@ -802,6 +804,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             {/* TAB 8: COMMUNICATIONS CONTROL */}
             {activeTab === 'communications' && (
               <CommunicationCenter lang={lang} />
+            )}
+
+            {/* TAB 9: ENTERPRISE DIRECTORY */}
+            {activeTab === 'directory' && (
+              <EnterpriseDirectory lang={lang} dictionary={dictionary} />
             )}
           </div>
         </>
