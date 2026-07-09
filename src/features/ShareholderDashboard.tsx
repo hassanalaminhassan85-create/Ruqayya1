@@ -35,6 +35,8 @@ import {
 interface ShareholderDashboardProps {
   lang: Language;
   dictionary: Dictionary;
+  activeTab?: ShareholderTab;
+  setActiveTab?: (tab: ShareholderTab) => void;
 }
 
 type ShareholderTab = 'overview' | 'cycles' | 'ledger' | 'settings';
@@ -192,8 +194,10 @@ const localDict = {
   }
 };
 
-export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang, dictionary }) => {
-  const [activeTab, setActiveTab] = useState<ShareholderTab>('overview');
+export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
+  const [localActiveTab, setLocalActiveTab] = useState<ShareholderTab>('overview');
+  const activeTab = propActiveTab || localActiveTab;
+  const setActiveTab = propSetActiveTab || setLocalActiveTab;
   const [financials, setFinancials] = useState<FinancialRecord[]>([]);
   const [vehiclesCount, setVehiclesCount] = useState(0);
   const [shareholder, setShareholder] = useState<any | null>(null);

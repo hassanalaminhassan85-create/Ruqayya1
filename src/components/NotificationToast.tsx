@@ -242,15 +242,27 @@ export const NotificationToastCard: React.FC<NotificationToastProps> = ({
   );
 };
 
-export const NotificationToastContainer: React.FC<{ lang: 'en' | 'ha' }> = ({ lang }) => {
+export const NotificationToastContainer: React.FC<{ lang: 'en' | 'ha'; currentRole: string }> = ({ lang, currentRole }) => {
   const [toasts, setToasts] = useState<any[]>([]);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const initialSyncRef = useRef<boolean>(false);
 
   useEffect(() => {
+    if (currentRole === 'public') {
+      seenIdsRef.current.clear();
+      initialSyncRef.current = false;
+      setToasts([]);
+      return;
+    }
+
     // Initial fetch to mark existing notifications as "already seen" so they don't pop up on load
     const loadInitialNotifications = async () => {
       try {
+        const token = api.getToken();
+        if (!token) {
+          initialSyncRef.current = true;
+          return;
+        }
         const list = await api.request('/api/notifications');
         if (Array.isArray(list)) {
           list.forEach((n: any) => {
@@ -313,7 +325,7 @@ export const NotificationToastContainer: React.FC<{ lang: 'en' | 'ha' }> = ({ la
     return () => {
       window.removeEventListener('db-change', handleDBChange);
     };
-  }, []);
+  }, [currentRole]);
 
   const handleCloseToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));

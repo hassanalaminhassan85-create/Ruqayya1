@@ -43,6 +43,8 @@ interface DriverDashboardProps {
   driverName: string;
   lang: Language;
   dictionary: Dictionary;
+  activeTab?: TabType;
+  setActiveTab?: (tab: TabType) => void;
 }
 
 type TabType = 'overview' | 'payments' | 'history' | 'vehicle' | 'documents' | 'profile';
@@ -261,8 +263,10 @@ const localDict = {
   }
 };
 
-export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, lang, dictionary }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
+  const [localActiveTab, setLocalActiveTab] = useState<TabType>('overview');
+  const activeTab = propActiveTab || localActiveTab;
+  const setActiveTab = propSetActiveTab || setLocalActiveTab;
   const [driver, setDriver] = useState<any | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [activeTrip, setActiveTrip] = useState<TripManifest | null>(null);

@@ -81,9 +81,11 @@ import {
 interface DirectorDashboardProps {
   lang: Language;
   dictionary: Dictionary;
+  activeTab?: 'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory';
+  setActiveTab?: (tab: 'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory') => void;
 }
 
-export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dictionary }) => {
+export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
   // Real-time states synchronized via Server-Sent Events
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [financials, setFinancials] = useState<FinancialRecord[]>([]);
@@ -101,7 +103,9 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
   
   const [loading, setLoading] = useState(true);
   const [sseConnected, setSseConnected] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory'>('overview');
+  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory'>('overview');
+  const activeTab = propActiveTab || localActiveTab;
+  const setActiveTab = propSetActiveTab || setLocalActiveTab;
   const [monitoringData, setMonitoringData] = useState<any>(null);
 
   const [backupLoading, setBackupLoading] = useState(false);

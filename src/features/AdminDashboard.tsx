@@ -43,11 +43,15 @@ import { PaymentWorkflow } from '../components/admin/PaymentWorkflow';
 interface AdminDashboardProps {
   lang: Language;
   dictionary: Dictionary;
+  activeTab?: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory';
+  setActiveTab?: (tab: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory') => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
   // Tabs & Views
-  const [activeTab, setActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory'>('fleet');
+  const [localActiveTab, setLocalActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory'>('fleet');
+  const activeTab = propActiveTab || localActiveTab;
+  const setActiveTab = propSetActiveTab || setLocalActiveTab;
   
   // Storage states
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
