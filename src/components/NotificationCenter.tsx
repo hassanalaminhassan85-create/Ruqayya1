@@ -8,25 +8,60 @@ import { Bell, Check, Info, AlertTriangle, ShieldCheck, CheckCircle2, Trash2 } f
 import { AppNotification } from '../types';
 import { dbStore } from '../utils/dbStore';
 import { motion, AnimatePresence } from 'motion/react';
+import { api } from '../utils/api';
 
 interface NotificationCenterProps {
   lang: 'en' | 'ha';
 }
+
+const mapNotification = (n: any): AppNotification => {
+  return {
+    id: n.id,
+    titleEn: n.title_en || n.titleEn || '',
+    titleHa: n.title_ha || n.titleHa || '',
+    messageEn: n.message_en || n.messageEn || '',
+    messageHa: n.message_ha || n.messageHa || '',
+    timestamp: n.created_at || n.timestamp || new Date().toISOString(),
+    read: n.read_status !== undefined ? n.read_status === 1 || n.read_status === true : (n.read !== undefined ? !!n.read : false),
+    type: n.type || 'info'
+  };
+};
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = () => {
-    setNotifications(dbStore.getNotifications());
+  const fetchNotifications = async () => {
+    try {
+      const list = await api.request('/api/notifications');
+      if (Array.isArray(list)) {
+        setNotifications(list.map(mapNotification));
+      } else {
+        // Fallback to local store
+        setNotifications(dbStore.getNotifications().map(mapNotification));
+      }
+    } catch (err) {
+      console.warn("Failed to fetch notifications from backend, using localStorage fallback", err);
+      setNotifications(dbStore.getNotifications().map(mapNotification));
+    }
   };
 
   useEffect(() => {
     fetchNotifications();
-    // Poll for notifications occasionally to simulate background sync
-    const interval = setInterval(fetchNotifications, 5000);
-    return () => clearInterval(interval);
+
+    // Listen to real-time database update events via SSE
+    const handleDBChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && Array.isArray(detail.notifications)) {
+        setNotifications(detail.notifications.map(mapNotification));
+      }
+    };
+
+    window.addEventListener('db-change', handleDBChange);
+    return () => {
+      window.removeEventListener('db-change', handleDBChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -41,14 +76,43 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const handleMarkAllRead = () => {
-    dbStore.markAllNotificationsRead();
-    fetchNotifications();
+  const handleMarkAllRead = async () => {
+    try {
+      await api.request('/api/notifications/read-all', {
+        method: 'PUT'
+      });
+      // Fallback local update
+      dbStore.markAllNotificationsRead();
+      // Fetch fresh set
+      fetchNotifications();
+    } catch (err) {
+      console.error("Failed to mark all as read on server", err);
+      dbStore.markAllNotificationsRead();
+      fetchNotifications();
+    }
   };
 
-  const handleClearNotifications = () => {
-    dbStore.saveNotifications([]);
-    setNotifications([]);
+  const handleMarkSingleRead = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await api.request(`/api/notifications/${id}/read`, {
+        method: 'PUT'
+      });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (err) {
+      console.error("Failed to mark notification read", err);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    }
+  };
+
+  const handleClearNotifications = async () => {
+    try {
+      // Clear personal ones or call bulk delete if applicable, else clear local list
+      dbStore.saveNotifications([]);
+      setNotifications([]);
+    } catch (err) {
+      setNotifications([]);
+    }
   };
 
   const typeIcons = {
@@ -112,20 +176,33 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
                 notifications.map((n) => (
                   <div
                     key={n.id}
-                    className={`p-3.5 flex gap-3 transition-colors ${
+                    className={`p-3.5 flex gap-3 transition-colors relative group ${
                       n.read ? 'opacity-70 hover:bg-bg-base/20' : 'bg-brand-gold/5 hover:bg-brand-gold/10'
                     }`}
                   >
                     <div className="mt-0.5">{typeIcons[n.type] || <Bell className="h-4 w-4" />}</div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 pr-6">
                       <p className={`text-xs font-bold leading-tight ${n.read ? 'text-text-main' : 'text-text-main font-extrabold'}`}>
                         {lang === 'en' ? n.titleEn : n.titleHa}
                       </p>
                       <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
                         {lang === 'en' ? n.messageEn : n.messageHa}
                       </p>
-                      <span className="text-[9px] text-text-muted/65 font-mono block mt-1">{n.timestamp}</span>
+                      <span className="text-[9px] text-text-muted/65 font-mono block mt-1">
+                        {new Date(n.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
+                    
+                    {/* Floating mark as read action */}
+                    {!n.read && (
+                      <button
+                        onClick={(e) => handleMarkSingleRead(n.id, e)}
+                        className="absolute right-3 top-4 p-1 rounded bg-brand-gold/10 hover:bg-brand-gold/25 text-brand-gold opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer"
+                        title={lang === 'en' ? "Mark read" : "Karanta"}
+                      >
+                        <Check className="h-3 w-3 font-extrabold" />
+                      </button>
+                    )}
                   </div>
                 ))
               )}

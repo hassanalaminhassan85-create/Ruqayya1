@@ -12,6 +12,7 @@ import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { GlobalSearch } from './components/GlobalSearch';
 import { NotificationCenter } from './components/NotificationCenter';
+import { NotificationToastContainer } from './components/NotificationToast';
 import { LandingPage } from './features/LandingPage';
 import { DriverDashboard } from './features/DriverDashboard';
 import { AdminDashboard } from './features/AdminDashboard';
@@ -270,6 +271,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30">
+      
+      <NotificationToastContainer lang={lang} />
       
       {/* OFFLINE BANNER */}
       <AnimatePresence>

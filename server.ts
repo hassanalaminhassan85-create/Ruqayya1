@@ -170,7 +170,7 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       financials: db.financial_records || [],
       cycles: db.cycles || [],
       messages: (db.messages || []).filter((m: any) => m.sender_id === shareholderId || m.receiver_id === shareholderId),
-      notifications: (db.notifications || []).filter((n: any) => n.user_id === shareholderId)
+      notifications: (db.notifications || []).filter((n: any) => n.user_id === shareholderId || n.target_role === 'shareholder' || (!n.user_id && !n.target_role))
     };
   } else if (role === 'driver') {
     // Drivers cannot receive other drivers' private events. They only get their own profile data, payments, etc.
@@ -179,7 +179,7 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
     const driverPayments = (db.driver_payments || []).filter((p: any) => p.driver_id === driverProfileId);
     const driverDocuments = (db.driver_documents || []).filter((doc: any) => doc.driver_id === driverProfileId);
     const driverTrips = (db.trip_manifests || []).filter((t: any) => t.driver_id === driverProfileId);
-    const driverNotifications = (db.notifications || []).filter((n: any) => n.user_id === activeDriver.user_id);
+    const driverNotifications = (db.notifications || []).filter((n: any) => n.user_id === activeDriver.user_id || n.target_role === 'driver' || (!n.user_id && !n.target_role));
     const driverMessages = (db.messages || []).filter((m: any) => m.sender_id === activeDriver.user_id || m.receiver_id === activeDriver.user_id);
 
     return {
@@ -1343,6 +1343,18 @@ app.post('/api/documents/upload-company', authenticateSession, (req, res) => {
       });
     }
 
+    // Add notification for document upload
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'New System Document Archived',
+      title_ha: 'Sabuwar Takarda a Rumbun Ajiya',
+      message_en: `Document "${title || docType}" has been successfully uploaded to Cloudflare R2 archive by ${actor.fullName}.`,
+      message_ha: `An yi nasarar daura takarda "${title || docType}" zuwa Cloudflare R2 ta hannun ${actor.fullName}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
     saveDB(db);
 
     writeServerAuditLog(
@@ -1898,6 +1910,22 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       description: `Corporate equity capital investment - Shareholder ${fullName}`
     });
 
+    const targetUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+    // Notify shareholder of capital contribution
+    db.notifications.unshift({
+      id: generateUUID(),
+      user_id: targetUser ? targetUser.id : undefined,
+      target_role: 'shareholder',
+      title_en: 'Capital Contribution Registered',
+      title_ha: 'An Yi Rijistar Gudunmawar Kudi',
+      message_en: `Equity investment of ₦${parseFloat(investmentAmount).toLocaleString()} has been confirmed for ${fullName}.`,
+      message_ha: `An tabbatar da jarin kudi na karkashin sunan ${fullName} na naira ₦${parseFloat(investmentAmount).toLocaleString()}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
     saveDB(db);
 
     writeServerAuditLog(
@@ -2165,6 +2193,8 @@ app.put('/api/vouchers/:id/approve', authenticateSession, (req, res) => {
     voucher.updated_at = new Date().toISOString();
     voucher.updated_by = actor.fullName;
 
+    const targetDriver = db.drivers.find(d => d.id === voucher.driver_id);
+
     // Post to financial ledger as fuel expense
     db.financial_records.unshift({
       id: generateUUID(),
@@ -2179,11 +2209,11 @@ app.put('/api/vouchers/:id/approve', authenticateSession, (req, res) => {
     // Notify Driver
     db.notifications.unshift({
       id: generateUUID(),
-      user_id: voucher.driver_id,
+      user_id: targetDriver ? targetDriver.user_id : voucher.driver_id,
       title_en: 'Fuel Voucher Approved',
       title_ha: 'An Amince Da Takardar Mai',
-      message_en: `Your voucher ${voucher.voucher_number} for ${voucher.liters_requested}L has been approved.`,
-      message_ha: `An amince da bukatar ka ta mai ${voucher.voucher_number} na lita ${voucher.liters_requested}.`,
+      message_en: `Your voucher ${voucher.voucher_number} for ${voucher.liters_requested}L (Est. Cost: ₦${(voucher.estimated_cost || 0).toLocaleString()}) has been approved at ${voucher.station_name || 'the designated station'}.`,
+      message_ha: `An amince da takardar mai ${voucher.voucher_number} na lita ${voucher.liters_requested} (Kudi: ₦${(voucher.estimated_cost || 0).toLocaleString()}) a gidan mai na ${voucher.station_name || 'da aka ayyana'}.`,
       type: 'success',
       read_status: 0,
       created_at: new Date().toISOString()
@@ -2372,6 +2402,22 @@ app.post('/api/trips', authenticateSession, (req, res) => {
     });
 
     db.trip_manifests.push(newTrip);
+
+    // Notify driver of trip assignment
+    if (driver && driver.user_id) {
+      db.notifications.unshift({
+        id: generateUUID(),
+        user_id: driver.user_id,
+        title_en: 'New Trip Manifest Assigned!',
+        title_ha: 'An Ba Ku Sabon Manifest Na Tafiya!',
+        message_en: `You have been assigned to trip ${newTrip.manifest_number} from ${origin} to ${destination}.`,
+        message_ha: `An ba ku aikin tafiya ${newTrip.manifest_number} daga ${origin} zuwa ${destination}.`,
+        type: 'info',
+        read_status: 0,
+        created_at: new Date().toISOString()
+      });
+    }
+
     saveDB(db);
 
     writeServerAuditLog(
