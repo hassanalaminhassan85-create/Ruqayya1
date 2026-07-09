@@ -270,8 +270,12 @@ export const NotificationToastContainer: React.FC<{ lang: 'en' | 'ha'; currentRo
           });
         }
         initialSyncRef.current = true;
-      } catch (err) {
-        console.error("Failed to load initial notifications for seen list", err);
+      } catch (err: any) {
+        const errMsg = err?.message || '';
+        // Suppress expected authentication errors when a session is expired or not yet loaded
+        if (!errMsg.includes('Authentication required') && !errMsg.includes('Session expired') && !errMsg.includes('login again')) {
+          console.error("Failed to load initial notifications for seen list", err);
+        }
         initialSyncRef.current = true;
       }
     };
