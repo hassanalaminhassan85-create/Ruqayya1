@@ -342,60 +342,62 @@ export default function App() {
       </AnimatePresence>
 
       {/* TOP NAVIGATION HEADER */}
-      <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-4 py-3 shadow-xs">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {currentRole !== 'public' && (
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-base transition-colors cursor-pointer"
-                aria-label="Toggle Sidebar Menu"
+      {currentRole !== 'public' && (
+        <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-4 py-3 shadow-xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {currentRole !== 'public' && (
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="lg:hidden p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-base transition-colors cursor-pointer"
+                  aria-label="Toggle Sidebar Menu"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+              )}
+              <div 
+                className="flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 transition-all"
+                onClick={() => {
+                  setCurrentRole('public');
+                  window.history.pushState({}, '', '/');
+                  setPathname('/');
+                }}
               >
-                <Menu className="h-5 w-5" />
-              </button>
-            )}
-            <div 
-              className="flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-              onClick={() => {
-                setCurrentRole('public');
-                window.history.pushState({}, '', '/');
-                setPathname('/');
-              }}
-            >
-              <CircularLogo size="md" className="-my-1" />
-              <div>
-                <span className="font-extrabold text-sm tracking-wider text-brand-navy dark:text-white font-mono block">RUQAYYA</span>
-                <span className="text-[9px] font-bold text-brand-gold tracking-widest block uppercase -mt-1">{lang === 'en' ? "TRANSPORT" : "SUFURI"}</span>
+                <CircularLogo size="md" className="-my-1" />
+                <div>
+                  <span className="font-extrabold text-sm tracking-wider text-brand-navy dark:text-white font-mono block">RUQAYYA</span>
+                  <span className="text-[9px] font-bold text-brand-gold tracking-widest block uppercase -mt-1">{lang === 'en' ? "TRANSPORT" : "SUFURI"}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Omni Search & System Quick Switches */}
-          <div className="flex-1 max-w-sm hidden md:block">
-            <GlobalSearch lang={lang} />
-          </div>
+            {/* Omni Search & System Quick Switches */}
+            <div className="flex-1 max-w-sm hidden md:block">
+              <GlobalSearch lang={lang} />
+            </div>
 
-          <div className="flex items-center gap-3">
-            <NotificationCenter lang={lang} />
-            <LanguageSwitcher currentLanguage={lang} onLanguageChange={handleLanguageChange} />
-            <ThemeSwitcher currentTheme={theme} onThemeChange={handleThemeChange} />
+            <div className="flex items-center gap-3">
+              <NotificationCenter lang={lang} />
+              <LanguageSwitcher currentLanguage={lang} onLanguageChange={handleLanguageChange} />
+              <ThemeSwitcher currentTheme={theme} onThemeChange={handleThemeChange} />
 
-            {currentRole !== 'public' && (
-              <button
-                onClick={handleLogout}
-                className="px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/45 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
-                title={dictionary.common.logout}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span className="text-xs font-bold hidden sm:inline">{lang === 'en' ? "Logout" : "Fita"}</span>
-              </button>
-            )}
+              {currentRole !== 'public' && (
+                <button
+                  onClick={handleLogout}
+                  className="px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/45 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                  title={dictionary.common.logout}
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span className="text-xs font-bold hidden sm:inline">{lang === 'en' ? "Logout" : "Fita"}</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* MAIN CONTAINER LAYOUT */}
-      <div className="flex-1 flex max-w-7xl mx-auto w-full">
+      <div className={`flex-1 flex w-full ${currentRole === 'public' ? 'max-w-none' : 'max-w-7xl mx-auto'}`}>
         {/* SIDEBAR BACKDROP FOR MOBILE */}
         {sidebarOpen && currentRole !== 'public' && (
           <div 
@@ -469,7 +471,7 @@ export default function App() {
         )}
 
         {/* WORKSPACE SURFACE VIEW */}
-        <main className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col">
+        <main className={`flex-1 flex flex-col ${currentRole === 'public' ? 'p-0 overflow-visible' : 'p-4 md:p-6 overflow-hidden'}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={currentRole}
@@ -485,6 +487,9 @@ export default function App() {
                   lang={lang}
                   onLoginAsDriver={handleDriverLoginSuccess}
                   onNavigateToRole={(role) => setCurrentRole(role)}
+                  currentTheme={theme}
+                  onThemeChange={handleThemeChange}
+                  onLanguageChange={handleLanguageChange}
                 />
               )}
               {currentRole === 'driver' && (
