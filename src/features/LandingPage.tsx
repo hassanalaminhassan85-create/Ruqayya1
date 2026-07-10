@@ -800,8 +800,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button
                         type="button"
                         onClick={async () => {
-                          setLoginEmail('operator@ruqayya.com');
-                          setLoginPassword('operator123');
+                          setLoginEmail('admin@ruqayyatransport.com');
+                          setLoginPassword('admin123');
                         }}
                         className="text-[#D4AF37] hover:underline font-bold"
                       >
@@ -811,7 +811,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <button
                         type="button"
                         onClick={async () => {
-                          setLoginEmail('director@ruqayya.com');
+                          setLoginEmail('director@ruqayyatransport.com');
                           setLoginPassword('director123');
                         }}
                         className="text-[#D4AF37] hover:underline font-bold"

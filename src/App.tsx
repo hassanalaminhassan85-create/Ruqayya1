@@ -265,20 +265,39 @@ export default function App() {
   const dictionary = lang === 'en' ? enDictionary : haDictionary;
 
   // Sidebar items based on active role with unique IDs and active state mapping
-  const getSidebarItems = () => [
-    { id: 'dashboard', label: lang === 'en' ? "Dashboard" : "Gudunmawar Aiki", icon: <Layers className="h-4 w-4 shrink-0" />, active: activeSection === 'dashboard' },
-    { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
-    { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
-    { id: 'payments', label: lang === 'en' ? "Payments" : "Biyan Kudade", icon: <ShieldCheck className="h-4 w-4 shrink-0" />, active: activeSection === 'payments' },
-    { id: 'shareholders', label: lang === 'en' ? "Shareholders" : "Masu Hannun Jari", icon: <TrendingUp className="h-4 w-4 shrink-0" />, active: activeSection === 'shareholders' },
-    { id: 'trips', label: lang === 'en' ? "Trips" : "Takardun Tafiya", icon: <MapPin className="h-4 w-4 shrink-0" />, active: activeSection === 'trips' },
-    { id: 'reports', label: lang === 'en' ? "Reports" : "Rahoton Aiki", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'reports' },
-    { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-4 w-4 shrink-0" />, active: activeSection === 'communications' },
-    { id: 'documents', label: lang === 'en' ? "Documents" : "Taskar Takardu", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'documents' },
-    { id: 'notifications', label: lang === 'en' ? "Notifications" : "Sanarwa", icon: <Bell className="h-4 w-4 shrink-0" />, active: activeSection === 'notifications' },
-    { id: 'settings', label: lang === 'en' ? "Settings" : "Kula da Akun", icon: <Settings className="h-4 w-4 shrink-0" />, active: activeSection === 'settings' },
-    { id: 'help', label: lang === 'en' ? "Help & Support" : "Taimako da Support", icon: <HelpCircle className="h-4 w-4 shrink-0" />, active: activeSection === 'help' },
-  ];
+  const getSidebarItems = () => {
+    const items = [
+      { id: 'dashboard', label: lang === 'en' ? "Dashboard" : "Gudunmawar Aiki", icon: <Layers className="h-4 w-4 shrink-0" />, active: activeSection === 'dashboard' },
+      { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
+      { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
+      { id: 'payments', label: lang === 'en' ? "Payments" : "Biyan Kudade", icon: <ShieldCheck className="h-4 w-4 shrink-0" />, active: activeSection === 'payments' },
+      { id: 'shareholders', label: lang === 'en' ? "Shareholders" : "Masu Hannun Jari", icon: <TrendingUp className="h-4 w-4 shrink-0" />, active: activeSection === 'shareholders' },
+      { id: 'trips', label: lang === 'en' ? "Trips" : "Takardun Tafiya", icon: <MapPin className="h-4 w-4 shrink-0" />, active: activeSection === 'trips' },
+      { id: 'reports', label: lang === 'en' ? "Reports" : "Rahoton Aiki", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'reports' },
+      { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-4 w-4 shrink-0" />, active: activeSection === 'communications' },
+      { id: 'documents', label: lang === 'en' ? "Documents" : "Taskar Takardu", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'documents' },
+      { id: 'notifications', label: lang === 'en' ? "Notifications" : "Sanarwa", icon: <Bell className="h-4 w-4 shrink-0" />, active: activeSection === 'notifications' },
+      { id: 'settings', label: lang === 'en' ? "Settings" : "Kula da Akun", icon: <Settings className="h-4 w-4 shrink-0" />, active: activeSection === 'settings' },
+      { id: 'help', label: lang === 'en' ? "Help & Support" : "Taimako da Support", icon: <HelpCircle className="h-4 w-4 shrink-0" />, active: activeSection === 'help' },
+    ];
+
+    if (currentRole === 'driver') {
+      return items.filter(item => 
+        ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'documents', 'notifications', 'settings', 'help'].includes(item.id)
+      );
+    }
+    if (currentRole === 'admin') {
+      return items.filter(item => 
+        ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'reports', 'communications', 'documents', 'notifications', 'settings', 'help'].includes(item.id)
+      );
+    }
+    if (currentRole === 'shareholder') {
+      return items.filter(item => 
+        ['dashboard', 'shareholders', 'notifications', 'settings', 'help'].includes(item.id)
+      );
+    }
+    return items; // Director can view all
+  };
 
   const handleSidebarClick = (id: string) => {
     setActiveSection(id);
@@ -346,6 +365,9 @@ export default function App() {
       else if (activeSection === 'trips') adminTabValue = 'trips';
       else if (activeSection === 'communications') adminTabValue = 'communications';
       else if (activeSection === 'documents') adminTabValue = 'documents';
+      else if (activeSection === 'vouchers') adminTabValue = 'vouchers';
+      else if (activeSection === 'finance') adminTabValue = 'finance';
+      else if (activeSection === 'directory') adminTabValue = 'directory';
       else if (activeSection === 'reports') {
         adminTabValue = 'directory';
       }
@@ -374,6 +396,9 @@ export default function App() {
             else if (tab === 'payments') setActiveSection('payments');
             else if (tab === 'documents') setActiveSection('documents');
             else if (tab === 'communications') setActiveSection('communications');
+            else if (tab === 'vouchers') setActiveSection('vouchers');
+            else if (tab === 'finance') setActiveSection('finance');
+            else if (tab === 'directory') setActiveSection('directory');
           }}
         />
       );
