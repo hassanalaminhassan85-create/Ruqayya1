@@ -382,26 +382,33 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
 
     // SSE Real-time Updates HANDSHAKE
     const token = localStorage.getItem('ruqayya_token') || '';
-    const eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'db_update') {
-          (window as any).lastSSEState = data;
-          window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
-          fetchShareholderData(data);
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'db_update') {
+            (window as any).lastSSEState = data;
+            window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
+            fetchShareholderData(data);
+          }
+        } catch (err) {
+          console.error("SSE parse error:", err);
         }
-      } catch (err) {
-        console.error("SSE parse error:", err);
-      }
-    };
+      };
 
-    eventSource.onerror = () => {
-      console.warn("SSE disconnected. Reverting to basic interval polling.");
-    };
+      eventSource.onerror = () => {
+        console.warn("SSE disconnected. Reverting to basic interval polling.");
+      };
+    } catch (e) {
+      console.warn("EventSource creation blocked or unsupported in this sandboxed context:", e);
+    }
 
     return () => {
-      eventSource.close();
+      if (eventSource) {
+        eventSource.close();
+      }
     };
   }, []);
 

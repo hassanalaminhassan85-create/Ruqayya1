@@ -149,48 +149,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     
     // Establish real-time SSE stream sync
     const token = localStorage.getItem('ruqayya_token') || '';
-    const eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'db_update') {
-          (window as any).lastSSEState = data;
-          window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'db_update') {
+            (window as any).lastSSEState = data;
+            window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
 
-          setVehicles(data.vehicles || []);
-          setDrivers(data.drivers || []);
-          setTrips(data.trip_manifests || []);
-          setVouchers(data.vouchers || []);
-          setFinance(data.financials || []);
-          setPayments(data.driver_payments || []);
-          
-          const revTotal = (data.financials || [])
-            .filter((f: any) => f.type === 'revenue')
-            .reduce((sum: number, r: any) => sum + r.amount, 0);
-          setTotalEarnings(revTotal);
+            setVehicles(data.vehicles || []);
+            setDrivers(data.drivers || []);
+            setTrips(data.trip_manifests || []);
+            setVouchers(data.vouchers || []);
+            setFinance(data.financials || []);
+            setPayments(data.driver_payments || []);
+            
+            const revTotal = (data.financials || [])
+              .filter((f: any) => f.type === 'revenue')
+              .reduce((sum: number, r: any) => sum + r.amount, 0);
+            setTotalEarnings(revTotal);
 
-          const activeCyc = (data.cycles || []).find((c: any) => c.status === 'active');
-          if (activeCyc) {
-            setActiveCycle(activeCyc);
-          } else if (data.financials && data.financials.length > 0) {
-            setActiveCycle({
-              startDate: data.financials[data.financials.length - 1].date || new Date().toISOString(),
-              status: 'active'
-            });
+            const activeCyc = (data.cycles || []).find((c: any) => c.status === 'active');
+            if (activeCyc) {
+              setActiveCycle(activeCyc);
+            } else if (data.financials && data.financials.length > 0) {
+              setActiveCycle({
+                startDate: data.financials[data.financials.length - 1].date || new Date().toISOString(),
+                status: 'active'
+              });
+            }
           }
+        } catch (err) {
+          console.error("Failed to parse live stream chunk in AdminDashboard:", err);
         }
-      } catch (err) {
-        console.error("Failed to parse live stream chunk in AdminDashboard:", err);
-      }
-    };
+      };
 
-    eventSource.onerror = () => {
-      console.warn("SSE connection interrupted. Reverting to backup interval polling.");
-    };
+      eventSource.onerror = () => {
+        console.warn("SSE connection interrupted. Reverting to backup interval polling.");
+      };
+    } catch (e) {
+      console.warn("EventSource creation blocked or unsupported in this sandboxed context:", e);
+    }
 
     const interval = setInterval(syncAllData, 5000);
     return () => {
-      eventSource.close();
+      if (eventSource) {
+        eventSource.close();
+      }
       clearInterval(interval);
     };
   }, []);

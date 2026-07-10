@@ -68,6 +68,7 @@ export default function App() {
   const [lang, setLang] = useState<Language>(DEFAULT_LANG);
   const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
   const [currentRole, setCurrentRole] = useState<Role>(getInitialRole());
+  const [authToken, setAuthToken] = useState<string | null>(typeof window !== 'undefined' ? localStorage.getItem('ruqayya_token') : null);
   const [driverName, setDriverName] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -123,9 +124,11 @@ export default function App() {
             const userRole = payload.user.role;
             if (targetRole && userRole !== targetRole) {
               const demoRes = await api.loginAsDemoRole(targetRole);
+              setAuthToken(demoRes.token);
               setCurrentRole(targetRole);
               setDriverName('');
             } else {
+              setAuthToken(token);
               setCurrentRole(userRole);
               if (userRole === 'driver') {
                 setDriverName(payload.user.fullName);
@@ -135,17 +138,21 @@ export default function App() {
             }
           } else {
             api.clearToken();
+            setAuthToken(null);
             if (targetRole) {
-              await api.loginAsDemoRole(targetRole);
+              const demoRes = await api.loginAsDemoRole(targetRole);
+              setAuthToken(demoRes.token);
               setCurrentRole(targetRole);
               setDriverName('');
             }
           }
         } catch (e) {
           api.clearToken();
+          setAuthToken(null);
           if (targetRole) {
             try {
-              await api.loginAsDemoRole(targetRole);
+              const demoRes = await api.loginAsDemoRole(targetRole);
+              setAuthToken(demoRes.token);
               setCurrentRole(targetRole);
               setDriverName('');
             } catch (err) {}
@@ -154,7 +161,8 @@ export default function App() {
       } else {
         if (targetRole) {
           try {
-            await api.loginAsDemoRole(targetRole);
+            const demoRes = await api.loginAsDemoRole(targetRole);
+            setAuthToken(demoRes.token);
             setCurrentRole(targetRole);
             setDriverName('');
           } catch (err) {}
@@ -180,12 +188,14 @@ export default function App() {
         if (targetRole !== 'public') {
           try {
             const demoRes = await api.loginAsDemoRole(targetRole);
+            setAuthToken(demoRes.token);
             setCurrentRole(targetRole);
             setDriverName('');
           } catch (e) {
             console.error("Auto route shift failed:", e);
           }
         } else {
+          setAuthToken(null);
           setCurrentRole('public');
         }
       };
@@ -237,6 +247,7 @@ export default function App() {
     try {
       await api.logout();
     } catch (e) {}
+    setAuthToken(null);
     setCurrentRole('public');
     setDriverName('');
     setSidebarOpen(false);
@@ -246,12 +257,14 @@ export default function App() {
 
   const handleDriverLoginSuccess = (name: string) => {
     setDriverName(name);
+    setAuthToken(api.getToken());
     setCurrentRole('driver');
   };
 
   const handleNavigateToRole = async (role: 'driver' | 'admin' | 'director' | 'shareholder') => {
     try {
       const demoRes = await api.loginAsDemoRole(role);
+      setAuthToken(demoRes.token);
       setCurrentRole(role);
       setDriverName(role === 'driver' ? demoRes.user.fullName : '');
       const nextPath = role === 'admin' ? '/admin' : role === 'director' ? '/director' : role === 'shareholder' ? '/shareholder' : '/';
@@ -336,6 +349,7 @@ export default function App() {
       }
       return (
         <DriverDashboard
+          key={currentRole + '-' + (authToken || 'no-token')}
           driverName={driverName}
           lang={lang}
           dictionary={dictionary}
@@ -385,6 +399,7 @@ export default function App() {
       }
       return (
         <AdminDashboard
+          key={currentRole + '-' + (authToken || 'no-token')}
           lang={lang}
           dictionary={dictionary}
           activeTab={adminTabValue}
@@ -422,6 +437,7 @@ export default function App() {
       else if (activeSection === 'settings') directorTabValue = 'company';
       return (
         <DirectorDashboard
+          key={currentRole + '-' + (authToken || 'no-token')}
           lang={lang}
           dictionary={dictionary}
           activeTab={directorTabValue}
@@ -480,6 +496,7 @@ export default function App() {
       }
       return (
         <ShareholderDashboard
+          key={currentRole + '-' + (authToken || 'no-token')}
           lang={lang}
           dictionary={dictionary}
           activeTab={shareholderTabValue}

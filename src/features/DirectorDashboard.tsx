@@ -244,52 +244,60 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
 
   // Establish SSE stream connection on mount
   useEffect(() => {
-    let eventSource: EventSource;
+    let eventSource: EventSource | null = null;
 
     const connectSSE = () => {
       const token = localStorage.getItem('ruqayya_token') || '';
-      eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
+      try {
+        eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
 
-      eventSource.onopen = () => {
-        setSseConnected(true);
-        setLoading(false);
-      };
+        eventSource.onopen = () => {
+          setSseConnected(true);
+          setLoading(false);
+        };
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'db_update') {
-            (window as any).lastSSEState = data;
-            window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'db_update') {
+              (window as any).lastSSEState = data;
+              window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
 
-            setLogs(data.audit_logs || []);
-            setFinancials(data.financials || []);
-            setVehicles(data.vehicles || []);
-            setDrivers(data.drivers || []);
-            setAdmins(data.admins || []);
-            setShareholders(data.shareholders || []);
-            setCycles(data.cycles || []);
-            setCompanySettings(data.company_settings || {});
-            setShareholderSettings(data.shareholder_settings || {});
-            setTripManifests(data.trip_manifests || []);
-            setNotifications(data.notifications || []);
-            setVouchers(data.vouchers || []);
-            setUsers(data.users || []);
-            setLoading(false);
+              setLogs(data.audit_logs || []);
+              setFinancials(data.financials || []);
+              setVehicles(data.vehicles || []);
+              setDrivers(data.drivers || []);
+              setAdmins(data.admins || []);
+              setShareholders(data.shareholders || []);
+              setCycles(data.cycles || []);
+              setCompanySettings(data.company_settings || {});
+              setShareholderSettings(data.shareholder_settings || {});
+              setTripManifests(data.trip_manifests || []);
+              setNotifications(data.notifications || []);
+              setVouchers(data.vouchers || []);
+              setUsers(data.users || []);
+              setLoading(false);
+            }
+          } catch (err) {
+            console.error("Failed to parse live stream chunk:", err);
           }
-        } catch (err) {
-          console.error("Failed to parse live stream chunk:", err);
-        }
-      };
+        };
 
-      eventSource.onerror = (err) => {
-        console.warn("SSE connection interrupted. Falling back to HTTP queries...", err);
+        eventSource.onerror = (err) => {
+          console.warn("SSE connection interrupted. Falling back to HTTP queries...", err);
+          setSseConnected(false);
+          if (eventSource) {
+            eventSource.close();
+          }
+          
+          // Manual HTTP polling fallback if SSE drops
+          fetchFallbackData();
+        };
+      } catch (e) {
+        console.warn("EventSource creation blocked or unsupported in this sandboxed context:", e);
         setSseConnected(false);
-        eventSource.close();
-        
-        // Manual HTTP polling fallback if SSE drops
         fetchFallbackData();
-      };
+      }
     };
 
     const fetchFallbackData = async () => {
