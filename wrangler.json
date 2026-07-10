@@ -1,6 +1,6 @@
 {
   "name": "ruqayya-transport-erp",
-  "main": "server.ts",
+  "pages_build_output_dir": "dist",
   "compatibility_date": "2026-07-07",
   "d1_databases": [
     {
