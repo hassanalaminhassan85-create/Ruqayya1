@@ -703,82 +703,82 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
       )}
 
       {/* EXECUTIVE TAB NAVIGATION CORNER */}
-      <div className="flex flex-wrap items-center gap-1 bg-bg-surface border border-border-main/80 p-1 rounded-xl shadow-xs print:hidden overflow-x-auto">
+      <div className="flex flex-nowrap items-center gap-1 bg-bg-surface border border-border-main/80 p-1 rounded-xl shadow-xs print:hidden overflow-x-auto scrollbar-none whitespace-nowrap">
         <button
           onClick={() => { setActiveTab('overview'); setSelectedDriver(null); }}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'overview' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'overview' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <LayoutGrid className="h-3.5 w-3.5" />
+          <LayoutGrid className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Command Board" : "Gudunmawar Aiki"}
         </button>
         <button
           onClick={() => setActiveTab('analytics')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'analytics' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'analytics' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Activity className="h-3.5 w-3.5" />
+          <Activity className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Finance Center" : "Ma'ajiyar Kudi"}
         </button>
         <button
           onClick={() => setActiveTab('cycles')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'cycles' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'cycles' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Clock className="h-3.5 w-3.5" />
+          <Clock className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Operating Cycles" : "Zagayen Aiki"}
         </button>
         <button
           onClick={() => setActiveTab('drivers')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'drivers' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'drivers' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Users className="h-3.5 w-3.5" />
+          <Users className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Driver Dossiers" : "Direbobi"}
         </button>
         <button
           onClick={() => setActiveTab('shareholders')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'shareholders' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'shareholders' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Percent className="h-3.5 w-3.5" />
+          <Percent className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Shareholders Pool" : "Masu Hannun Jari"}
         </button>
         <button
           onClick={() => setActiveTab('admins')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'admins' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'admins' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Shield className="h-3.5 w-3.5" />
+          <Shield className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Operations Admins" : "Masu Gudanarwa"}
         </button>
         <button
           onClick={() => setActiveTab('directory')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'directory' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'directory' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Users className="h-3.5 w-3.5" />
+          <Users className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Enterprise Directory" : "Kundayen Ma’aikata"}
         </button>
         <button
           onClick={() => setActiveTab('company')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'company' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'company' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Building className="h-3.5 w-3.5" />
+          <Building className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Corporate Profile" : "Bayanan Kamfani"}
         </button>
         <button
           onClick={() => setActiveTab('reports')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'reports' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'reports' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <FileText className="h-3.5 w-3.5" />
+          <FileText className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Reports Center" : "Rahoton Aiki"}
         </button>
         <button
           onClick={() => setActiveTab('audit')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'audit' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'audit' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Terminal className="h-3.5 w-3.5" />
+          <Terminal className="h-3.5 w-3.5 shrink-0" />
           {lang === 'en' ? "Audit Trail" : "Rikodin Tsaro"}
         </button>
         <button
           onClick={() => setActiveTab('monitoring')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${activeTab === 'monitoring' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'monitoring' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
-          <Activity className="h-3.5 w-3.5 animate-pulse" />
+          <Activity className="h-3.5 w-3.5 shrink-0 animate-pulse" />
           {lang === 'en' ? "SSE Monitor" : "Kula da SSE"}
         </button>
       </div>

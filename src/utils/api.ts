@@ -5,7 +5,7 @@
 
 import { Role } from '../types';
 
-const TOKEN_KEY = 'ruqayya_session_token';
+const TOKEN_KEY = 'ruqayya_token';
 
 export const api = {
   setToken: (token: string) => {
