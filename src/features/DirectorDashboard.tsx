@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import EnterpriseDirectory from '../components/admin/EnterpriseDirectory';
+import { OverviewTab } from '../components/director/OverviewTab';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   TrendingUp, 
@@ -805,6 +806,40 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                   TAB: command board / overview
                   ================================================== */}
               {activeTab === 'overview' && (
+                <OverviewTab
+                  lang={lang}
+                  dictionary={dictionary}
+                  logs={logs}
+                  financials={financials}
+                  vehicles={vehicles}
+                  drivers={drivers}
+                  admins={admins}
+                  shareholders={shareholders}
+                  cycles={cycles}
+                  companySettings={companySettings}
+                  shareholderSettings={shareholderSettings}
+                  tripManifests={tripManifests}
+                  notifications={notifications}
+                  vouchers={vouchers}
+                  users={users}
+                  sseConnected={sseConnected}
+                  onStartCycle={handleStartCycle}
+                  onEndCycle={handleEndCycle}
+                  cycleGoalForm={cycleGoalForm}
+                  setCycleGoalForm={setCycleGoalForm}
+                  onAddAdmin={() => setShowAddAdminModal(true)}
+                  onAddShareholder={() => setShowAddShareholderModal(true)}
+                  setActiveTab={setActiveTab}
+                  setSelectedDriver={setSelectedDriver}
+                  backupLoading={backupLoading}
+                  restoreLoading={restoreLoading}
+                  onDownloadBackup={handleDownloadBackup}
+                  onUploadRestore={handleUploadRestore}
+                  restoreSuccess={restoreSuccess}
+                  restoreError={restoreError}
+                />
+              )}
+              {false && activeTab === 'overview' && (
                 <div className="flex flex-col gap-6 print:hidden">
                   
                   {/* LIVE CORPORATE KPI CARDS (Framer Motion Staggered Transitions) */}
