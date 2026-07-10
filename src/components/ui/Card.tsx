@@ -20,7 +20,7 @@ export const Card: React.FC<CardProps> = ({
   delayIndex = 0,
   ...props
 }) => {
-  const baseClass = "bg-bg-surface border border-border-main rounded-xl p-5 shadow-xs overflow-hidden";
+  const baseClass = "bg-bg-surface border border-border-main rounded-[20px] p-6 shadow-xs overflow-hidden";
   const hoverClass = hoverEffect ? "hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-300" : "";
   
   if (animateEntrance) {

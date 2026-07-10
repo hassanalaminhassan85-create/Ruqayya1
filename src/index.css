@@ -20,18 +20,18 @@
 }
 
 :root {
-  --brand-navy: #0B132B; /* Dark Navy Slate */
+  --brand-navy: #0F172A; /* Deep Slate/Navy */
   --brand-gold: #D4AF37; /* Metallic Gold */
   --brand-yellow: #EAB308; /* Yellow */
   --brand-success: #10B981; /* Green */
   --brand-warning: #F59E0B; /* Orange */
   --brand-danger: #EF4444; /* Red */
 
-  --bg-base: #F8FAFC; /* Light slate base */
+  --bg-base: #F7F8FC; /* Soft off-white base background */
   --bg-surface: #FFFFFF; /* Pure white card surface */
-  --text-main: #0B132B; /* Dark text */
-  --text-muted: #64748B; /* Slate 500 */
-  --border-main: #E2E8F0; /* Slate 200 border */
+  --text-main: #0F172A; /* Deep slate text */
+  --text-muted: #64748B; /* Slate 500 secondary text */
+  --border-main: #E5E7EB; /* Light border */
 }
 
 .dark {

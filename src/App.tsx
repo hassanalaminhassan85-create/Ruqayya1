@@ -18,6 +18,8 @@ import { DriverDashboard } from './features/DriverDashboard';
 import { AdminDashboard } from './features/AdminDashboard';
 import { DirectorDashboard } from './features/DirectorDashboard';
 import { ShareholderDashboard } from './features/ShareholderDashboard';
+import { NotificationInbox } from './components/NotificationInbox';
+import { HelpCenter } from './components/HelpCenter';
 import { api } from './utils/api';
 import { CircularLogo } from './components/CircularLogo';
 import { 
@@ -40,7 +42,11 @@ import {
   Info,
   WifiOff,
   FileText,
-  MessageSquare
+  MessageSquare,
+  HelpCircle,
+  ChevronDown,
+  Zap,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -64,8 +70,11 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState<Role>(getInitialRole());
   const [driverName, setDriverName] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [pathname, setPathname] = useState<string>(typeof window !== 'undefined' ? window.location.pathname : '/');
+  const [activeSection, setActiveSection] = useState<string>('dashboard');
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
   // Tab states for active roles to link hamburger sidebar & dashboards
   const [driverTab, setDriverTab] = useState<'overview' | 'payments' | 'history' | 'vehicle' | 'documents' | 'profile'>('overview');
@@ -79,6 +88,7 @@ export default function App() {
     setAdminTab('fleet');
     setDirectorTab('overview');
     setShareholderTab('overview');
+    setActiveSection('dashboard');
   }, [currentRole]);
 
   // Load state from localStorage & Hydrate full-stack session on init
@@ -255,66 +265,210 @@ export default function App() {
   const dictionary = lang === 'en' ? enDictionary : haDictionary;
 
   // Sidebar items based on active role with unique IDs and active state mapping
-  const getSidebarItems = () => {
-    switch (currentRole) {
-      case 'driver':
-        return [
-          { id: 'overview', label: lang === 'en' ? "Overview" : "Bayani Gaba Daya", icon: <Compass className="h-4 w-4" />, active: driverTab === 'overview' },
-          { id: 'payments', label: lang === 'en' ? "Installments & Billing" : "Tsarin Biyan Kudade", icon: <Fuel className="h-4 w-4" />, active: driverTab === 'payments' },
-          { id: 'history', label: lang === 'en' ? "Trip History" : "Tarihin Tafiye-tafiye", icon: <Layers className="h-4 w-4" />, active: driverTab === 'history' },
-          { id: 'vehicle', label: lang === 'en' ? "Assigned Vehicle" : "Motar Sufuri", icon: <Truck className="h-4 w-4" />, active: driverTab === 'vehicle' },
-          { id: 'documents', label: lang === 'en' ? "Driver Documents" : "Takardun Tuki", icon: <FileText className="h-4 w-4" />, active: driverTab === 'documents' },
-          { id: 'profile', label: lang === 'en' ? "Profile Settings" : "Kula da Akun", icon: <Settings className="h-4 w-4" />, active: driverTab === 'profile' }
-        ];
-      case 'admin':
-        return [
-          { id: 'fleet', label: dictionary.sidebar.fleet, icon: <Truck className="h-4 w-4" />, active: adminTab === 'fleet' },
-          { id: 'drivers', label: dictionary.sidebar.drivers, icon: <Users className="h-4 w-4" />, active: adminTab === 'drivers' },
-          { id: 'trips', label: dictionary.sidebar.trips, icon: <MapPin className="h-4 w-4" />, active: adminTab === 'trips' },
-          { id: 'vouchers', label: dictionary.sidebar.vouchers, icon: <Fuel className="h-4 w-4" />, active: adminTab === 'vouchers' },
-          { id: 'finance', label: lang === 'en' ? "Financial Center" : "Littafin Kuɗi", icon: <TrendingUp className="h-4 w-4" />, active: adminTab === 'finance' },
-          { id: 'payments', label: lang === 'en' ? "Installments Approval" : "Biyan Kudi", icon: <ShieldCheck className="h-4 w-4" />, active: adminTab === 'payments' },
-          { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-4 w-4" />, active: adminTab === 'documents' },
-          { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-4 w-4" />, active: adminTab === 'communications' },
-          { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-4 w-4" />, active: adminTab === 'directory' }
-        ];
-      case 'director':
-        return [
-          { id: 'overview', label: lang === 'en' ? "Command Board" : "Gudunmawar Aiki", icon: <Layers className="h-4 w-4" />, active: directorTab === 'overview' },
-          { id: 'analytics', label: lang === 'en' ? "Finance Center" : "Ma'ajiyar Kudi", icon: <TrendingUp className="h-4 w-4" />, active: directorTab === 'analytics' },
-          { id: 'cycles', label: lang === 'en' ? "Operating Cycles" : "Zagayen Aiki", icon: <Terminal className="h-4 w-4" />, active: directorTab === 'cycles' },
-          { id: 'drivers', label: lang === 'en' ? "Driver Dossiers" : "Direbobi", icon: <Users className="h-4 w-4" />, active: directorTab === 'drivers' },
-          { id: 'shareholders', label: lang === 'en' ? "Shareholders Pool" : "Masu Hannun Jari", icon: <TrendingUp className="h-4 w-4" />, active: directorTab === 'shareholders' },
-          { id: 'admins', label: lang === 'en' ? "Operations Admins" : "Masu Gudanarwa", icon: <ShieldCheck className="h-4 w-4" />, active: directorTab === 'admins' },
-          { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Ma’aikata", icon: <Users className="h-4 w-4" />, active: directorTab === 'directory' },
-          { id: 'company', label: lang === 'en' ? "Corporate Profile" : "Bayanan Kamfani", icon: <Settings className="h-4 w-4" />, active: directorTab === 'company' },
-          { id: 'reports', label: lang === 'en' ? "Reports Center" : "Rahoton Aiki", icon: <FileText className="h-4 w-4" />, active: directorTab === 'reports' },
-          { id: 'audit', label: lang === 'en' ? "Audit Trail" : "Rikodin Tsaro", icon: <Terminal className="h-4 w-4" />, active: directorTab === 'audit' },
-          { id: 'monitoring', label: lang === 'en' ? "SSE Monitor" : "Kula da SSE", icon: <Layers className="h-4 w-4" />, active: directorTab === 'monitoring' }
-        ];
-      case 'shareholder':
-        return [
-          { id: 'overview', label: lang === 'en' ? "Equity Overview" : "Hannun Jari", icon: <Layers className="h-4 w-4" />, active: shareholderTab === 'overview' },
-          { id: 'cycles', label: lang === 'en' ? "Operating Cycles" : "Zagayen Aiki", icon: <Terminal className="h-4 w-4" />, active: shareholderTab === 'cycles' },
-          { id: 'ledger', label: lang === 'en' ? "Financial Ledger" : "Littafin Kuɗi", icon: <TrendingUp className="h-4 w-4" />, active: shareholderTab === 'ledger' },
-          { id: 'settings', label: lang === 'en' ? "Profile Settings" : "Kula da Akun", icon: <Settings className="h-4 w-4" />, active: shareholderTab === 'settings' }
-        ];
-      default:
-        return [];
-    }
-  };
+  const getSidebarItems = () => [
+    { id: 'dashboard', label: lang === 'en' ? "Dashboard" : "Gudunmawar Aiki", icon: <Layers className="h-4 w-4 shrink-0" />, active: activeSection === 'dashboard' },
+    { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
+    { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
+    { id: 'payments', label: lang === 'en' ? "Payments" : "Biyan Kudade", icon: <ShieldCheck className="h-4 w-4 shrink-0" />, active: activeSection === 'payments' },
+    { id: 'shareholders', label: lang === 'en' ? "Shareholders" : "Masu Hannun Jari", icon: <TrendingUp className="h-4 w-4 shrink-0" />, active: activeSection === 'shareholders' },
+    { id: 'trips', label: lang === 'en' ? "Trips" : "Takardun Tafiya", icon: <MapPin className="h-4 w-4 shrink-0" />, active: activeSection === 'trips' },
+    { id: 'reports', label: lang === 'en' ? "Reports" : "Rahoton Aiki", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'reports' },
+    { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-4 w-4 shrink-0" />, active: activeSection === 'communications' },
+    { id: 'documents', label: lang === 'en' ? "Documents" : "Taskar Takardu", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'documents' },
+    { id: 'notifications', label: lang === 'en' ? "Notifications" : "Sanarwa", icon: <Bell className="h-4 w-4 shrink-0" />, active: activeSection === 'notifications' },
+    { id: 'settings', label: lang === 'en' ? "Settings" : "Kula da Akun", icon: <Settings className="h-4 w-4 shrink-0" />, active: activeSection === 'settings' },
+    { id: 'help', label: lang === 'en' ? "Help & Support" : "Taimako da Support", icon: <HelpCircle className="h-4 w-4 shrink-0" />, active: activeSection === 'help' },
+  ];
 
   const handleSidebarClick = (id: string) => {
-    if (currentRole === 'driver') {
-      setDriverTab(id as any);
-    } else if (currentRole === 'admin') {
-      setAdminTab(id as any);
-    } else if (currentRole === 'director') {
-      setDirectorTab(id as any);
-    } else if (currentRole === 'shareholder') {
-      setShareholderTab(id as any);
-    }
+    setActiveSection(id);
     setSidebarOpen(false); // Auto close mobile drawer on click
+  };
+
+  const renderMainContent = () => {
+    if (activeSection === 'notifications') {
+      return <NotificationInbox lang={lang} />;
+    }
+    if (activeSection === 'help') {
+      return <HelpCenter lang={lang} />;
+    }
+
+    // Role-specific routing
+    if (currentRole === 'driver') {
+      let driverTabValue: 'overview' | 'payments' | 'history' | 'vehicle' | 'documents' | 'profile' = 'overview';
+      if (activeSection === 'dashboard') driverTabValue = 'overview';
+      else if (activeSection === 'drivers') driverTabValue = 'profile'; // self
+      else if (activeSection === 'fleet') driverTabValue = 'vehicle';
+      else if (activeSection === 'payments') driverTabValue = 'payments';
+      else if (activeSection === 'trips') driverTabValue = 'history';
+      else if (activeSection === 'documents') driverTabValue = 'documents';
+      else if (activeSection === 'settings') driverTabValue = 'profile';
+      else {
+        // Restricted / unsupported sections for drivers
+        return (
+          <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
+            <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
+            <h3 className="text-xl font-bold text-text-main">Restricted Section</h3>
+            <p className="text-sm text-text-muted mt-2 leading-relaxed">
+              Clearance Level insufficient to access this administrative record. Your role is restricted to self-management.
+            </p>
+          </div>
+        );
+      }
+      return (
+        <DriverDashboard
+          driverName={driverName}
+          lang={lang}
+          dictionary={dictionary}
+          activeTab={driverTabValue}
+          setActiveTab={(tab) => {
+            setDriverTab(tab);
+            // sync section
+            if (tab === 'overview') setActiveSection('dashboard');
+            else if (tab === 'vehicle') setActiveSection('fleet');
+            else if (tab === 'payments') setActiveSection('payments');
+            else if (tab === 'history') setActiveSection('trips');
+            else if (tab === 'documents') setActiveSection('documents');
+            else if (tab === 'profile') setActiveSection('settings');
+          }}
+        />
+      );
+    }
+
+    if (currentRole === 'admin') {
+      let adminTabValue: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' = 'fleet';
+      if (activeSection === 'dashboard') {
+        adminTabValue = 'fleet'; // Shows active fleet dashboard stats
+      }
+      else if (activeSection === 'drivers') adminTabValue = 'drivers';
+      else if (activeSection === 'fleet') adminTabValue = 'fleet';
+      else if (activeSection === 'payments') adminTabValue = 'payments';
+      else if (activeSection === 'trips') adminTabValue = 'trips';
+      else if (activeSection === 'communications') adminTabValue = 'communications';
+      else if (activeSection === 'documents') adminTabValue = 'documents';
+      else if (activeSection === 'reports') {
+        adminTabValue = 'directory';
+      }
+      else if (activeSection === 'settings') adminTabValue = 'fleet';
+      else {
+        return (
+          <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
+            <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
+            <h3 className="text-xl font-bold text-text-main">Executive Clearance Required</h3>
+            <p className="text-sm text-text-muted mt-2 leading-relaxed">
+              This module requires Clearance Level 3 (Executive Director). Access is restricted for Operations Administrators.
+            </p>
+          </div>
+        );
+      }
+      return (
+        <AdminDashboard
+          lang={lang}
+          dictionary={dictionary}
+          activeTab={adminTabValue}
+          setActiveTab={(tab) => {
+            setAdminTab(tab);
+            if (tab === 'fleet') setActiveSection('fleet');
+            else if (tab === 'drivers') setActiveSection('drivers');
+            else if (tab === 'trips') setActiveSection('trips');
+            else if (tab === 'payments') setActiveSection('payments');
+            else if (tab === 'documents') setActiveSection('documents');
+            else if (tab === 'communications') setActiveSection('communications');
+          }}
+        />
+      );
+    }
+
+    if (currentRole === 'director') {
+      let directorTabValue: 'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory' = 'overview';
+      if (activeSection === 'dashboard') directorTabValue = 'overview';
+      else if (activeSection === 'drivers') directorTabValue = 'drivers';
+      else if (activeSection === 'fleet') directorTabValue = 'directory';
+      else if (activeSection === 'payments') directorTabValue = 'analytics';
+      else if (activeSection === 'shareholders') directorTabValue = 'shareholders';
+      else if (activeSection === 'trips') directorTabValue = 'monitoring';
+      else if (activeSection === 'reports') directorTabValue = 'reports';
+      else if (activeSection === 'communications') {
+        directorTabValue = 'directory';
+      }
+      else if (activeSection === 'documents') {
+        directorTabValue = 'reports';
+      }
+      else if (activeSection === 'settings') directorTabValue = 'company';
+      return (
+        <DirectorDashboard
+          lang={lang}
+          dictionary={dictionary}
+          activeTab={directorTabValue}
+          setActiveTab={(tab) => {
+            setDirectorTab(tab);
+            if (tab === 'overview') setActiveSection('dashboard');
+            else if (tab === 'drivers') setActiveSection('drivers');
+            else if (tab === 'analytics') setActiveSection('payments');
+            else if (tab === 'shareholders') setActiveSection('shareholders');
+            else if (tab === 'reports') setActiveSection('reports');
+            else if (tab === 'company') setActiveSection('settings');
+          }}
+        />
+      );
+    }
+
+    if (currentRole === 'shareholder') {
+      let shareholderTabValue: 'overview' | 'cycles' | 'ledger' | 'settings' = 'overview';
+      if (activeSection === 'dashboard') shareholderTabValue = 'overview';
+      else if (activeSection === 'drivers') {
+        return (
+          <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
+            <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
+            <h3 className="text-xl font-bold text-text-main">Operational Operations Restricted</h3>
+            <p className="text-sm text-text-muted mt-2 leading-relaxed">
+              Operational directories are restricted for Shareholders. Please refer to executive financial ledgers.
+            </p>
+          </div>
+        );
+      }
+      else if (activeSection === 'fleet') {
+        return (
+          <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
+            <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
+            <h3 className="text-xl font-bold text-text-main">Operational Operations Restricted</h3>
+            <p className="text-sm text-text-muted mt-2 leading-relaxed">
+              Physical fleet inventories are restricted for Shareholders. Please refer to financial asset registers.
+            </p>
+          </div>
+        );
+      }
+      else if (activeSection === 'payments') shareholderTabValue = 'ledger';
+      else if (activeSection === 'shareholders') shareholderTabValue = 'overview';
+      else if (activeSection === 'trips') shareholderTabValue = 'cycles';
+      else if (activeSection === 'settings') shareholderTabValue = 'settings';
+      else {
+        return (
+          <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
+            <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
+            <h3 className="text-xl font-bold text-text-main">Operational Operations Restricted</h3>
+            <p className="text-sm text-text-muted mt-2 leading-relaxed">
+              This operational module is restricted for investor-level accounts.
+            </p>
+          </div>
+        );
+      }
+      return (
+        <ShareholderDashboard
+          lang={lang}
+          dictionary={dictionary}
+          activeTab={shareholderTabValue}
+          setActiveTab={(tab) => {
+            setShareholderTab(tab);
+            if (tab === 'overview') setActiveSection('dashboard');
+            else if (tab === 'ledger') setActiveSection('payments');
+            else if (tab === 'settings') setActiveSection('settings');
+          }}
+        />
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -377,6 +531,74 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Quick Actions Dropdown */}
+              {currentRole !== 'public' && (
+                <div className="relative">
+                  <button
+                    onClick={() => setQuickActionsOpen(!quickActionsOpen)}
+                    className="px-3 py-1.5 rounded-lg bg-brand-gold text-slate-950 hover:bg-brand-gold/90 transition-all font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Zap className="h-3.5 w-3.5 fill-slate-950 animate-pulse shrink-0" />
+                    <span className="hidden sm:inline">{lang === 'en' ? "Quick Actions" : "Ayyuka Sauri"}</span>
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${quickActionsOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {quickActionsOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setQuickActionsOpen(false)} />
+                      <div className="absolute right-0 mt-2 w-56 bg-white border border-border-main rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-border-main/50 font-sans">
+                        <div className="px-3.5 py-2 bg-slate-50/50 text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                          {lang === 'en' ? "Shortcuts" : "Hanyoyin Sauri"}
+                        </div>
+                        <div className="py-1">
+                          <button
+                            onClick={() => {
+                              setActiveSection('fleet');
+                              setQuickActionsOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
+                          >
+                            <Truck className="h-3.5 w-3.5 text-brand-gold shrink-0" />
+                            {lang === 'en' ? "Register Heavy Asset" : "Rijistar Sabuwar Mota"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setActiveSection('trips');
+                              setQuickActionsOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
+                          >
+                            <MapPin className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            {lang === 'en' ? "Dispatch Cargo Trip" : "Tura Tafiyar Kaya"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setActiveSection('payments');
+                              setQuickActionsOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            {lang === 'en' ? "Record Driver Payment" : "Shigar da Biyan Kudi"}
+                          </button>
+                        </div>
+                        <div className="py-1">
+                          <button
+                            onClick={() => {
+                              setActiveSection('help');
+                              setQuickActionsOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                            {lang === 'en' ? "Help Command Center" : "Cibiyar Taimako"}
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               <NotificationCenter lang={lang} />
               <LanguageSwitcher currentLanguage={lang} onLanguageChange={handleLanguageChange} />
               <ThemeSwitcher currentTheme={theme} onThemeChange={handleThemeChange} />
@@ -408,7 +630,7 @@ export default function App() {
 
         {/* SIDEBAR FOR AUTHENTICATED ROLES */}
         {currentRole !== 'public' && (
-          <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-brand-navy text-white transform lg:translate-x-0 lg:static lg:h-auto transition-transform duration-300 ease-in-out border-r border-slate-800/80 p-5 flex flex-col gap-6 flex-shrink-0 ${
+          <aside className={`fixed inset-y-0 left-0 z-40 ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-64'} w-64 bg-brand-navy text-white transform lg:translate-x-0 lg:static lg:h-auto transition-all duration-300 ease-in-out border-r border-slate-800/80 p-4 flex flex-col gap-5 flex-shrink-0 ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}>
             <div className="flex items-center justify-between lg:hidden border-b border-slate-800 pb-3">
@@ -419,36 +641,48 @@ export default function App() {
             </div>
 
             {/* Profile Info */}
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 flex flex-col gap-2.5">
-              <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-full bg-slate-800 flex items-center justify-center font-bold text-brand-gold text-xs">
+            <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2 relative group">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-brand-gold text-xs shrink-0 ring-2 ring-slate-700">
                   {currentRole === 'driver' ? 'DR' : currentRole === 'admin' ? 'AD' : 'EX'}
                 </div>
-                <div>
-                  <span className="text-[11px] font-bold text-slate-300 block leading-tight">
-                    {currentRole === 'driver' ? driverName : currentRole === 'admin' ? "Operator Ibrahim" : "Director Kabir"}
-                  </span>
-                  <span className="text-[9px] text-brand-gold block font-mono font-bold leading-none mt-1">
-                    {dictionary.roles[currentRole]}
-                  </span>
-                </div>
+                {!sidebarCollapsed && (
+                  <div className="min-w-0 flex-1">
+                    <span className="text-xs font-bold text-slate-200 block truncate leading-tight">
+                      {currentRole === 'driver' ? driverName : currentRole === 'admin' ? "Operator Ibrahim" : "Director Kabir"}
+                    </span>
+                    <span className="text-[10px] text-brand-gold block font-mono font-bold leading-none mt-1 truncate">
+                      {dictionary.roles[currentRole]}
+                    </span>
+                  </div>
+                )}
               </div>
+              
+              {/* Desktop collapse button */}
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="hidden lg:flex absolute -right-6 top-1/2 -translate-y-1/2 bg-slate-850 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-750 p-1 rounded-full shadow-md cursor-pointer z-50 scale-90 transition-transform"
+                title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {sidebarCollapsed ? "→" : "←"}
+              </button>
             </div>
 
             {/* Navigation links */}
-            <nav className="flex-1 flex flex-col gap-1 text-xs font-semibold text-slate-300 overflow-y-auto max-h-[50vh] lg:max-h-[none] pr-1">
+            <nav className="flex-1 flex flex-col gap-1 text-xs font-semibold text-slate-300 overflow-y-auto max-h-[50vh] lg:max-h-[none] pr-1 scrollbar-none">
               {getSidebarItems().map((item, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSidebarClick(item.id)}
                   className={`w-full py-2.5 px-3 rounded-lg flex items-center gap-3 transition-colors cursor-pointer text-left ${
                     item.active
-                      ? 'bg-brand-gold text-slate-950 font-extrabold shadow-xs'
+                      ? 'bg-brand-gold text-slate-950 font-extrabold shadow-sm'
                       : 'hover:bg-slate-800 hover:text-white'
                   }`}
+                  title={sidebarCollapsed ? item.label : ""}
                 >
                   {item.icon}
-                  <span>{item.label}</span>
+                  {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
                 </button>
               ))}
             </nav>
@@ -458,14 +692,16 @@ export default function App() {
                 onClick={handleLogout}
                 className="w-full py-2.5 px-3 rounded-lg flex items-center gap-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 font-bold transition-all cursor-pointer text-xs"
               >
-                <LogOut className="h-4 w-4 text-red-500" />
-                <span>{lang === 'en' ? "Secure Logout" : "Fita Daga Tsarin"}</span>
+                <LogOut className="h-4 w-4 text-red-500 shrink-0" />
+                {!sidebarCollapsed && <span>{lang === 'en' ? "Secure Logout" : "Fita Daga Tsarin"}</span>}
               </button>
-              <div className="text-[9px] text-slate-500 font-mono flex flex-col gap-1 mt-1">
-                <span>Wrangler Binding: DB</span>
-                <span>R2 Storage: Mapping Active</span>
-                <span>Node Environment: Production</span>
-              </div>
+              {!sidebarCollapsed && (
+                <div className="text-[9px] text-slate-500 font-mono flex flex-col gap-1 mt-1 pl-1">
+                  <span>Wrangler Binding: DB</span>
+                  <span>R2 Storage: Mapping Active</span>
+                  <span>Node Environment: Production</span>
+                </div>
+              )}
             </div>
           </aside>
         )}
@@ -474,14 +710,14 @@ export default function App() {
         <main className={`flex-1 flex flex-col ${currentRole === 'public' ? 'p-0 overflow-visible' : 'p-4 md:p-6 overflow-hidden'}`}>
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentRole}
+              key={currentRole + '-' + activeSection}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
               className="flex-1 flex flex-col"
             >
-              {currentRole === 'public' && (
+              {currentRole === 'public' ? (
                 <LandingPage
                   dictionary={dictionary}
                   lang={lang}
@@ -491,39 +727,8 @@ export default function App() {
                   onThemeChange={handleThemeChange}
                   onLanguageChange={handleLanguageChange}
                 />
-              )}
-              {currentRole === 'driver' && (
-                <DriverDashboard
-                  driverName={driverName}
-                  lang={lang}
-                  dictionary={dictionary}
-                  activeTab={driverTab}
-                  setActiveTab={setDriverTab}
-                />
-              )}
-              {currentRole === 'admin' && (
-                <AdminDashboard
-                  lang={lang}
-                  dictionary={dictionary}
-                  activeTab={adminTab}
-                  setActiveTab={setAdminTab}
-                />
-              )}
-              {currentRole === 'director' && (
-                <DirectorDashboard
-                  lang={lang}
-                  dictionary={dictionary}
-                  activeTab={directorTab}
-                  setActiveTab={setDirectorTab}
-                />
-              )}
-              {currentRole === 'shareholder' && (
-                <ShareholderDashboard
-                  lang={lang}
-                  dictionary={dictionary}
-                  activeTab={shareholderTab}
-                  setActiveTab={setShareholderTab}
-                />
+              ) : (
+                renderMainContent()
               )}
             </motion.div>
           </AnimatePresence>
