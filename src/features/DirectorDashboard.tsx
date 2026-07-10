@@ -703,7 +703,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
       )}
 
       {/* EXECUTIVE TAB NAVIGATION CORNER */}
-      <div className="flex flex-nowrap items-center gap-1 bg-bg-surface border border-border-main/80 p-1 rounded-xl shadow-xs print:hidden overflow-x-auto scrollbar-none whitespace-nowrap">
+      <div className="w-full max-w-full flex flex-nowrap items-center gap-1 bg-bg-surface border border-border-main/80 p-1 rounded-xl shadow-xs print:hidden overflow-x-auto scrollbar-none whitespace-nowrap">
         <button
           onClick={() => { setActiveTab('overview'); setSelectedDriver(null); }}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'overview' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
@@ -2404,7 +2404,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                     </CardHeader>
 
                     {/* Stats Metrics Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
                       <div className="bg-bg-base border border-border-main p-4 rounded-xl flex flex-col justify-between">
                         <span className="text-[10px] text-text-muted font-mono font-bold uppercase tracking-wider">
                           {lang === 'en' ? "Active Connections" : "Hanyoyin Sadarwa Active"}

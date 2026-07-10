@@ -472,7 +472,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30">
       
       <NotificationToastContainer lang={lang} currentRole={currentRole} />
       
@@ -707,7 +707,7 @@ export default function App() {
         )}
 
         {/* WORKSPACE SURFACE VIEW */}
-        <main className={`flex-1 flex flex-col ${currentRole === 'public' ? 'p-0' : 'p-4 md:p-6'} overflow-visible`}>
+        <main className={`flex-1 ${currentRole === 'public' ? 'p-0 flex flex-col' : 'p-4 md:p-6 grid grid-cols-1'} w-full max-w-full overflow-x-hidden`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={currentRole + '-' + activeSection}
@@ -715,7 +715,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="flex-1 flex flex-col"
+              className={`flex-1 ${currentRole === 'public' ? 'flex flex-col' : 'grid grid-cols-1 w-full max-w-full'}`}
             >
               {currentRole === 'public' ? (
                 <LandingPage

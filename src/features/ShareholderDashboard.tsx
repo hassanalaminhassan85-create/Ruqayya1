@@ -529,7 +529,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
             <div className="flex flex-col gap-6">
               
               {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card hoverEffect className="flex flex-col gap-1.5 p-5">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{t.stats.fleetValue}</span>

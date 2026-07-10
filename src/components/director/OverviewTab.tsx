@@ -186,7 +186,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     <div className="flex flex-col gap-6 animate-fadeIn pb-12">
       
       {/* 1. HERO SECTION & COMPACT EXECUTIVE OVERVIEW */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-950 text-white p-6 rounded-2xl border border-slate-900 shadow-xl relative overflow-hidden">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-950 text-white p-4 sm:p-6 rounded-2xl border border-slate-900 shadow-xl relative overflow-hidden">
         {/* Subtle background glow */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-brand-gold/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         
