@@ -2186,7 +2186,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                     {selectedReportType === 'financial' && (
                       <div className="flex flex-col gap-4 text-xs text-slate-900">
                         <p className="text-slate-600 leading-relaxed mb-2">This audited document establishes the complete financial operating balance sheet for Ruqayya Transport Limited, detailing operational revenue streams and expense nodes.</p>
-                        <div className="border border-slate-300 rounded-lg overflow-hidden">
+                        <div className="border border-slate-300 rounded-lg overflow-x-auto">
                           <table className="w-full text-left">
                             <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-300">
                               <tr>
@@ -2219,7 +2219,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
 
                     {selectedReportType === 'driver' && (
                       <div className="flex flex-col gap-4 text-xs text-slate-900">
-                        <div className="border border-slate-300 rounded-lg overflow-hidden">
+                        <div className="border border-slate-300 rounded-lg overflow-x-auto">
                           <table className="w-full text-left">
                             <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-300">
                               <tr>
@@ -2246,7 +2246,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
 
                     {selectedReportType === 'shareholder' && (
                       <div className="flex flex-col gap-4 text-xs text-slate-900">
-                        <div className="border border-slate-300 rounded-lg overflow-hidden">
+                        <div className="border border-slate-300 rounded-lg overflow-x-auto">
                           <table className="w-full text-left">
                             <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-300">
                               <tr>
@@ -2277,7 +2277,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                     {/* Placeholder safety for remaining report selectors */}
                     {['revenue', 'expense', 'current_cycle', 'history'].includes(selectedReportType) && (
                       <div className="flex flex-col gap-4 text-xs text-slate-900">
-                        <div className="border border-slate-300 rounded-lg overflow-hidden">
+                        <div className="border border-slate-300 rounded-lg overflow-x-auto">
                           <table className="w-full text-left">
                             <thead className="bg-slate-100 font-bold text-[10px] uppercase border-b border-slate-300">
                               <tr>

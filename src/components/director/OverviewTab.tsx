@@ -386,7 +386,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
       </div>
 
       {/* 4. EXECUTIVE TOP KPI GRID (Stripe / Ramp Style) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         
         {/* Drivers Card */}
         <div 
@@ -567,7 +567,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         <h2 className="text-xs font-extrabold text-slate-500 tracking-wider uppercase font-mono">
           {lang === 'en' ? "Today's Corridor Operations" : "Ayyukan Sufuri na Yau"}
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/50 flex flex-col gap-1 hover:bg-white hover:border-slate-300/80 transition-all cursor-pointer">
             <span className="text-[9px] text-slate-400 font-extrabold uppercase">{lang === 'en' ? "Driver Registrations" : "Rijistar Direbobi"}</span>

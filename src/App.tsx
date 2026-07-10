@@ -707,7 +707,7 @@ export default function App() {
         )}
 
         {/* WORKSPACE SURFACE VIEW */}
-        <main className={`flex-1 flex flex-col ${currentRole === 'public' ? 'p-0 overflow-visible' : 'p-4 md:p-6 overflow-hidden'}`}>
+        <main className={`flex-1 flex flex-col ${currentRole === 'public' ? 'p-0' : 'p-4 md:p-6'} overflow-visible`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={currentRole + '-' + activeSection}
