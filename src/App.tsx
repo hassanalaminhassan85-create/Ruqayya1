@@ -55,13 +55,22 @@ import { motion, AnimatePresence } from 'motion/react';
 const DEFAULT_LANG: Language = 'en';
 const DEFAULT_THEME: Theme = 'light';
 
+// Helper to normalize paths by stripping query parameters, hashes, and trailing slashes
+const normalizePath = (path: string): string => {
+  let clean = path.trim().split('?')[0].split('#')[0];
+  if (clean.endsWith('/') && clean !== '/') {
+    clean = clean.slice(0, -1);
+  }
+  return clean || '/';
+};
+
 export default function App() {
   const getInitialRole = (): Role => {
     if (typeof window === 'undefined') return 'public';
-    const path = window.location.pathname;
-    if (path === '/admin') return 'admin';
-    if (path === '/director') return 'director';
-    if (path === '/shareholder') return 'shareholder';
+    const cleanPath = normalizePath(window.location.pathname);
+    if (cleanPath === '/admin') return 'admin';
+    if (cleanPath === '/director') return 'director';
+    if (cleanPath === '/shareholder') return 'shareholder';
     return 'public';
   };
 
@@ -73,7 +82,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
-  const [pathname, setPathname] = useState<string>(typeof window !== 'undefined' ? window.location.pathname : '/');
+  const [pathname, setPathname] = useState<string>(typeof window !== 'undefined' ? normalizePath(window.location.pathname) : '/');
   const [activeSection, setActiveSection] = useState<string>('dashboard');
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
@@ -113,8 +122,8 @@ export default function App() {
     window.addEventListener('offline', handleOffline);
 
     const hydrateSession = async () => {
-      const path = window.location.pathname;
-      const targetRole = path === '/admin' ? 'admin' : path === '/director' ? 'director' : path === '/shareholder' ? 'shareholder' : null;
+      const cleanPath = normalizePath(window.location.pathname);
+      const targetRole = cleanPath === '/admin' ? 'admin' : cleanPath === '/director' ? 'director' : cleanPath === '/shareholder' ? 'shareholder' : null;
 
       const token = api.getToken();
       if (token) {
@@ -180,7 +189,7 @@ export default function App() {
   // Listen for browser popstate routing changes
   useEffect(() => {
     const handlePopState = () => {
-      const nextPath = window.location.pathname;
+      const nextPath = normalizePath(window.location.pathname);
       setPathname(nextPath);
       const targetRole = nextPath === '/admin' ? 'admin' : nextPath === '/director' ? 'director' : nextPath === '/shareholder' ? 'shareholder' : 'public';
       
@@ -209,9 +218,10 @@ export default function App() {
 
   // Role-based routing enforcement and redirection logic
   useEffect(() => {
+    const cleanPath = normalizePath(pathname);
     if (currentRole === 'public') {
       const validPublicPaths = ['/', '/admin', '/director', '/shareholder'];
-      if (!validPublicPaths.includes(pathname)) {
+      if (!validPublicPaths.includes(cleanPath)) {
         window.history.replaceState({}, '', '/');
         setPathname('/');
       }
@@ -221,7 +231,7 @@ export default function App() {
       else if (currentRole === 'director') expectedPath = '/director';
       else if (currentRole === 'shareholder') expectedPath = '/shareholder';
 
-      if (pathname !== expectedPath) {
+      if (cleanPath !== expectedPath) {
         window.history.replaceState({}, '', expectedPath);
         setPathname(expectedPath);
       }
