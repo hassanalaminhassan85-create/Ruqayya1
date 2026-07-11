@@ -29,11 +29,11 @@ export const HelpCenter: React.FC<HelpCenterProps> = ({ lang }) => {
     },
     {
       q: "What is an operational cycle?",
-      a: "An operational cycle is a consolidated time window (typically weekly or monthly) initiated by the Executive Director. It tracks all freight revenues, driver installment contributions, fuel expenditures, and dividend payouts to ensure complete financial alignment."
+      a: "An operational cycle is a consolidated time window (typically weekly or monthly) initiated by the Executive Director. It tracks all remittance revenues, driver installment contributions, fuel expenditures, and dividend payouts to ensure complete financial alignment."
     },
     {
       q: "How are driver installments calculated?",
-      a: "Installments are structured rent-to-own or operational contributions tied to the assigned truck model. Payments are recorded by administrators and pending cycles are updated live upon operational clearance."
+      a: "Installments are structured rent-to-own or operational contributions tied to the assigned tricycle model. Payments are recorded by administrators and pending cycles are updated live upon operational clearance."
     },
     {
       q: "Is offline synchronization supported?",
@@ -135,7 +135,7 @@ export const HelpCenter: React.FC<HelpCenterProps> = ({ lang }) => {
               {lang === 'en' ? "HQ Physical Terminal" : "Babban Ofishi"}
             </span>
             <span className="text-md font-bold text-text-main block mt-1">
-              {lang === 'en' ? "Kano Haulage Hub, Nigeria" : "Babban Tashar Kano, Najeriya"}
+              {lang === 'en' ? "Kano Operations Hub, Nigeria" : "Babban Ofishin Kano, Najeriya"}
             </span>
             <span className="text-xs text-text-muted mt-0.5 block">
               {lang === 'en' ? "Operational yard and service bays" : "Ofishin gudanarwa da gyaran motoci"}

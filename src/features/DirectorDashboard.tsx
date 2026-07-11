@@ -1006,8 +1006,8 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                       
                       <div className="mt-6 flex flex-col gap-2">
                         <div className="flex justify-between text-xs font-bold text-text-main">
-                          <span>Target Cargo Tonnage Weight Goal ({activeCycle ? activeCycle.endGoalTons : 200} Tons)</span>
-                          <span>94.6 Tons / {activeCycle ? activeCycle.endGoalTons : 200} Tons</span>
+                          <span>Target Daily Remittance Cycle Goal ({activeCycle ? activeCycle.endGoalTons : 200} Cycles)</span>
+                          <span>94.6 Cycles / {activeCycle ? activeCycle.endGoalTons : 200} Cycles</span>
                         </div>
                         <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
                           <div className="bg-brand-gold h-full rounded-full" style={{ width: `${Math.min(100, (94.6 / (activeCycle ? activeCycle.endGoalTons : 200)) * 100)}%` }} />
@@ -1056,12 +1056,12 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                     <Card className="lg:col-span-4 flex flex-col justify-between">
                       <CardHeader>
                         <CardTitle>{lang === 'en' ? "Leverages & Liabilities" : "Basussuka & Kudaden Hanya"}</CardTitle>
-                        <CardDescription>Audited liabilities on lease balances & outstanding freight.</CardDescription>
+                        <CardDescription>Audited liabilities on lease balances & outstanding remittances.</CardDescription>
                       </CardHeader>
                       <div className="mt-4 flex flex-col gap-5">
                         <div className="flex items-center justify-between border-b border-border-main/40 pb-3">
                           <div>
-                            <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">Unpaid Dispatch Freight</span>
+                            <span className="text-[9px] text-text-muted font-bold uppercase tracking-wider">Unpaid Daily Remittance</span>
                             <p className="text-base font-extrabold text-text-main font-mono mt-0.5">₦{totalOutstandingPayments.toLocaleString()}</p>
                           </div>
                           <Badge variant="gold">EXPECTED</Badge>
@@ -1182,7 +1182,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                     {/* Revenue Category breakdown */}
                     <Card className="lg:col-span-8">
                       <CardHeader>
-                        <CardTitle>{lang === 'en' ? "Live Dispatch Cargo Cashflows" : "Hanyoyin Kudi na Gaskiya"}</CardTitle>
+                        <CardTitle>{lang === 'en' ? "Live Remittance Cashflows" : "Hanyoyin Kudi na Gaskiya"}</CardTitle>
                         <CardDescription>Daily financial record entries tracked instantly.</CardDescription>
                       </CardHeader>
                       <div className="h-80 mt-4">
@@ -1327,7 +1327,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                           />
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Operating Cargo Target Goal (Tons)" : "Burin Nauyin Kaya (Tons)"}</label>
+                          <label className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Operating Remittance Cycle Goal (Cycles)" : "Burin Remittance na Zagaye"}</label>
                           <input
                             type="number"
                             required
@@ -1637,7 +1637,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                     {/* Drivers List Panel */}
                     <Card className="lg:col-span-5 h-fit">
                       <CardHeader>
-                        <CardTitle>{lang === 'en' ? "Heavy Haulage Certified Drivers" : "Rijistar Direbobi"}</CardTitle>
+                        <CardTitle>{lang === 'en' ? "Tricycle Certified Drivers" : "Rijistar Direbobi"}</CardTitle>
                         <CardDescription>Select driver to inspect complete dossier files.</CardDescription>
                       </CardHeader>
                       <div className="mt-4 flex flex-col gap-2.5 max-h-[480px] overflow-y-auto pr-1">
@@ -2147,7 +2147,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                         { type: 'financial', label: 'Financial Balance Report' },
                         { type: 'driver', label: 'Certified Drivers Status Report' },
                         { type: 'shareholder', label: 'Boardroom Shareholders Ledger' },
-                        { type: 'revenue', label: 'Cargo Invoiced Revenue Report' },
+                        { type: 'revenue', label: 'Daily Remittance Revenue Report' },
                         { type: 'expense', label: 'Fuel Voucher Expenditures Report' },
                         { type: 'current_cycle', label: 'Active 30-Day Cycle Performance' },
                         { type: 'history', label: 'Archived Cycles Audit Report' }
@@ -2181,7 +2181,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                         <CircularLogo size="lg" className="border-2 border-slate-900 shadow-md" />
                         <div>
                           <h1 className="text-xl font-black tracking-tight text-slate-900 uppercase leading-none">{companySettings.companyName || "RUQAYYA TRANSPORT LIMITED"}</h1>
-                          <p className="text-[9px] font-bold text-brand-gold tracking-widest mt-0.5 uppercase">Industrial Logistics & West African Transit Corridors</p>
+                          <p className="text-[9px] font-bold text-brand-gold tracking-widest mt-0.5 uppercase">Tricycle Fleet Operations & West African Transit Corridors</p>
                         </div>
                       </div>
                       <div className="text-right text-[10px] text-slate-600">
@@ -2199,7 +2199,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                           {selectedReportType === 'financial' && "FINANCIAL AUDIT BALANCE REPORT"}
                           {selectedReportType === 'driver' && "CERTIFIED OPERATORS STATUS REPORT"}
                           {selectedReportType === 'shareholder' && "BOARDROOM SHAREHOLDERS LEDGER"}
-                          {selectedReportType === 'revenue' && "CARGO DISPATCH REVENUE REPORT"}
+                          {selectedReportType === 'revenue' && "DAILY REMITTANCE REVENUE REPORT"}
                           {selectedReportType === 'expense' && "FUEL VOUCHERS OPERATIONS COST"}
                           {selectedReportType === 'current_cycle' && "ACTIVE OPERATING CYCLE PERFORMANCE"}
                           {selectedReportType === 'history' && "COMPLETED CYCLES AUDITED ARCHIVE"}
@@ -2225,11 +2225,11 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                             </thead>
                             <tbody className="divide-y divide-slate-200">
                               <tr>
-                                <td className="p-2.5">Total Cargo Freight Invoiced Revenues</td>
+                                <td className="p-2.5">Total Daily Remittance Revenues</td>
                                 <td className="p-2.5 text-right font-mono font-bold text-emerald-700">₦{totalRevenueSum.toLocaleString()}</td>
                               </tr>
                               <tr>
-                                <td className="p-2.5">Fuel Vouchers & Rig Hydraulics Costs</td>
+                                <td className="p-2.5">Fuel Vouchers & Tricycle Maintenance Costs</td>
                                 <td className="p-2.5 text-right font-mono font-bold text-rose-700">- ₦{totalExpensesSum.toLocaleString()}</td>
                               </tr>
                               <tr className="bg-slate-50 font-bold">

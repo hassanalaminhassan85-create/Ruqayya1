@@ -513,10 +513,10 @@ export function seedDBIfEmpty() {
 
     // Seed Ledger Records
     db.financial_records = [
-      { id: generateUUID(), type: 'revenue', category: 'freight', amount: 1950000, date: '2026-06-30', description: 'Freight contract completion - Kaduna to Maiduguri Corridor' },
+      { id: generateUUID(), type: 'revenue', category: 'freight', amount: 1950000, date: '2026-06-30', description: 'Remittance contract completion - Kaduna to Maiduguri Corridor' },
       { id: generateUUID(), type: 'expense', category: 'fuel', amount: 652500, date: '2026-07-05', description: 'Fuel Voucher FL-2026-7781 authorized disbursement', approvedBy: 'Operator Ibrahim' },
       { id: generateUUID(), type: 'expense', category: 'maintenance', amount: 320000, date: '2026-07-01', description: 'Engine hydraulic seals restoration - V-001' },
-      { id: generateUUID(), type: 'revenue', category: 'freight', amount: 3500000, date: '2026-07-02', description: 'Corporate logistics contract downpayment - BUA Cement Group' }
+      { id: generateUUID(), type: 'revenue', category: 'freight', amount: 3500000, date: '2026-07-02', description: 'Corporate remittance contract downpayment - BUA Cement Group' }
     ];
 
     // Seed Notifications

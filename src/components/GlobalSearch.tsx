@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, Truck, User, ArrowRight, X, Clock as ClockIcon } from 'lucide-react';
+import { Search, MapPin, Bike, User, ArrowRight, X, Clock as ClockIcon } from 'lucide-react';
 import { dbStore } from '../utils/dbStore';
-import { Vehicle, Driver, TripManifest } from '../types';
+import { Vehicle, Driver, DailyRemittance } from '../types';
 
 interface GlobalSearchProps {
   onSelectResult?: (type: 'vehicle' | 'driver' | 'trip', id: string) => void;
@@ -19,7 +19,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectResult, lang
   const [results, setResults] = useState<{
     vehicles: Vehicle[];
     drivers: Driver[];
-    trips: TripManifest[];
+    trips: DailyRemittance[];
   }>({ vehicles: [], drivers: [], trips: [] });
   const [showDropdown, setShowDropdown] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
@@ -77,7 +77,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectResult, lang
       d => String(d.fullName || '').toLowerCase().includes(q) || String(d.licenseNumber || '').toLowerCase().includes(q) || String(d.phone || '').includes(q)
     );
     const trips = dbStore.getTrips().filter(
-      t => String(t.manifestNumber || '').toLowerCase().includes(q) || String(t.origin || '').toLowerCase().includes(q) || String(t.destination || '').toLowerCase().includes(q) || String(t.cargoType || '').toLowerCase().includes(q)
+      t => String(t.remittanceNumber || '').toLowerCase().includes(q) || String(t.origin || '').toLowerCase().includes(q) || String(t.destination || '').toLowerCase().includes(q) || String(t.tricycleType || '').toLowerCase().includes(q)
     );
 
     setResults({ vehicles, drivers, trips });
@@ -131,7 +131,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectResult, lang
             setShowDropdown(true);
           }}
           onFocus={() => setShowDropdown(true)}
-          placeholder={lang === 'en' ? "Search fleet, drivers, manifest IDs..." : "Bincika motoci, direbobi, ko lamba..."}
+          placeholder={lang === 'en' ? "Search fleet, drivers, remittance IDs..." : "Bincika motoci, direbobi, ko lamba..."}
           className="w-full pl-9 pr-8 py-2 text-xs bg-bg-surface border border-border-main rounded-lg text-text-main focus:outline-none focus:ring-2 focus:ring-slate-400 placeholder:text-text-muted/50 transition-all shadow-2xs"
         />
         {query && (
@@ -187,11 +187,11 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectResult, lang
 
           {query.trim() && hasResults && (
             <div className="flex flex-col gap-3 p-1">
-              {/* Trips */}
+              {/* Trips / Remittances */}
               {results.trips.length > 0 && (
                 <div>
                   <h5 className="text-[10px] font-bold text-brand-gold uppercase tracking-wider px-2 mb-1">
-                    {lang === 'en' ? "Manifests" : "Takardun Tafiya"}
+                    {lang === 'en' ? "Daily Remittances" : "Kudaden Remittance"}
                   </h5>
                   <div className="flex flex-col gap-0.5">
                     {results.trips.map(t => (
@@ -208,7 +208,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectResult, lang
                           <MapPin className="h-3.5 w-3.5 text-brand-gold" />
                           <div>
                             <p className="text-[11px] font-bold text-text-main">
-                              {highlightText(t.manifestNumber, query)}
+                              {highlightText(t.remittanceNumber, query)}
                             </p>
                             <p className="text-[10px] text-text-muted">
                               {highlightText(t.origin, query)} → {highlightText(t.destination, query)}
@@ -222,11 +222,11 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectResult, lang
                 </div>
               )}
 
-              {/* Vehicles */}
+              {/* Vehicles / Tricycles */}
               {results.vehicles.length > 0 && (
                 <div>
                   <h5 className="text-[10px] font-bold text-brand-gold uppercase tracking-wider px-2 mb-1">
-                    {lang === 'en' ? "Fleet Vehicles" : "Manyan Motoci"}
+                    {lang === 'en' ? "Fleet Tricycles" : "Rukunin Kekuna"}
                   </h5>
                   <div className="flex flex-col gap-0.5">
                     {results.vehicles.map(v => (
@@ -240,7 +240,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectResult, lang
                         className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-base/80 cursor-pointer transition-colors"
                       >
                         <div className="flex items-center gap-2">
-                          <Truck className="h-3.5 w-3.5 text-blue-500" />
+                          <Bike className="h-3.5 w-3.5 text-blue-500" />
                           <div>
                             <p className="text-[11px] font-bold text-text-main">
                               {highlightText(v.plateNumber, query)}

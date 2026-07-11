@@ -509,7 +509,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         </div>
                         <div className="p-2 bg-slate-900/50 rounded border border-white/5">
                           <p className="text-[#D4AF37] font-bold">● PUBLIC GATEWAY v4.1</p>
-                          <p className="mt-0.5 text-slate-400">Drivers dossier system synchronized with West African Haulage Registry.</p>
+                          <p className="mt-0.5 text-slate-400">Drivers dossier system synchronized with West African Transport Registry.</p>
                         </div>
                       </div>
                     </motion.div>

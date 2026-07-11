@@ -491,7 +491,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
 
         <div className="flex items-center gap-2">
           <Badge variant={shareholder.status === 'active' ? 'success' : 'danger'}>
-            {shareholder.status.toUpperCase()}
+            {(shareholder.status || '').toUpperCase()}
           </Badge>
           <span className="text-[14px] font-semibold text-text-main tabular-nums">ID: {shareholder.id.substring(0, 8).toUpperCase()}</span>
         </div>
@@ -854,7 +854,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
                             <td className="p-3 font-bold text-[11px] text-text-muted">{fn.id.substring(0, 8).toUpperCase()}</td>
                             <td className="p-3">
                               <Badge variant={fn.type === 'revenue' ? 'success' : 'danger'}>
-                                {fn.category.toUpperCase()}
+                                {(fn.category || '').toUpperCase()}
                               </Badge>
                             </td>
                             <td className="p-3 font-semibold text-xs font-sans">{fn.description}</td>

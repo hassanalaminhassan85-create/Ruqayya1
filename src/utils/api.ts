@@ -241,15 +241,23 @@ export const api = {
     });
   },
 
-  // Cargo Trip Manifests
+  // Daily Remittance Manifests
   getTrips: async () => {
     return api.request('/api/trips');
   },
 
-  addTrip: async (payload: { vehicleId: string; driverId: string; origin: string; destination: string; cargoType: string; weight: number; freightCharges: number }) => {
+  addTrip: async (payload: { vehicleId: string; driverId: string; origin: string; destination: string; tricycleType: string; weight: number; remittanceAmount: number }) => {
     return api.request('/api/trips', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        vehicleId: payload.vehicleId,
+        driverId: payload.driverId,
+        origin: payload.origin,
+        destination: payload.destination,
+        cargoType: payload.tricycleType,
+        weight: payload.weight,
+        freightCharges: payload.remittanceAmount
+      })
     });
   },
 

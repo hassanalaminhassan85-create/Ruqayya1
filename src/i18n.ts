@@ -7,15 +7,15 @@ import { Dictionary } from './types';
 
 export const enDictionary: Dictionary = {
   landing: {
-    heroTitle: "Enterprise Fleet & Transport Logistics",
-    heroSubtitle: "Premium high-capacity transport, industrial haulage, and integrated fleet logistics for West Africa. Efficient, secure, and modern.",
+    heroTitle: "Enterprise Tricycle Fleet Management",
+    heroSubtitle: "Premium tricycle leasing, structured driver payments, and integrated fleet management. Efficient, secure, and modern.",
     servicesTitle: "Our Premier Services",
-    servicesSubtitle: "Comprehensive logistics and transportation management engineered for maximum uptime and security.",
+    servicesSubtitle: "Comprehensive tricycle leasing and driver payment management engineered for maximum uptime and security.",
     aboutTitle: "About RUQAYYA TRANSPORT LIMITED",
-    aboutText: "RUQAYYA TRANSPORT LIMITED is a premier heavy-duty logistics and transport provider. We specialize in cross-border haulage, corporate transit contracts, and nationwide cargo shipping. Utilizing standard-setting tracking, professional-grade drivers, and a meticulously managed fleet, we power key industries across Nigeria and neighboring West African states.",
+    aboutText: "RUQAYYA TRANSPORT LIMITED is a premier tricycle fleet and driver leasing provider. We specialize in affordable rent-to-own tricycle models, structured driver payment plans, and digital fleet remittance solutions. Utilizing standard-setting tracking, professional-grade drivers, and a meticulously managed fleet, we power key transport networks across Nigeria.",
     statsDrivers: "Certified Drivers",
-    statsVehicles: "Active Heavy Duty Vehicles",
-    statsTrips: "Completed Cargo Trips",
+    statsVehicles: "Active Tricycles",
+    statsCollections: "Completed Remittances",
     statsCoverage: "States Covered",
     whyChooseUs: "Why Leaders Choose Ruqayya",
     contactUs: "Corporate Operations Headquarters",
@@ -26,11 +26,11 @@ export const enDictionary: Dictionary = {
   },
   sidebar: {
     dashboard: "Operations Console",
-    fleet: "Fleet Inventory",
+    fleet: "Tricycle Fleet",
     drivers: "Driver Registry",
-    trips: "Trip Manifests",
+    remittances: "Daily Remittances",
     finance: "Financial Ledger",
-    vouchers: "Fuel Vouchers",
+    vouchers: "Driver Wallets",
     auditLogs: "Audit & Security Logs",
     settings: "System Configuration"
   },
@@ -42,7 +42,7 @@ export const enDictionary: Dictionary = {
     public: "Public Terminal"
   },
   common: {
-    search: "Search everything (e.g. Plate, Driver, Manifest ID)...",
+    search: "Search everything (e.g. Plate, Driver, Remittance ID)...",
     notifications: "Notification Stream",
     language: "Language (Yare)",
     theme: "Aesthetic Theme",
@@ -64,10 +64,10 @@ export const enDictionary: Dictionary = {
     email: "Corporate Email Address",
     phone: "Active Telephone",
     licenseNo: "National Driver's License No.",
-    vehicleNo: "Assigned Vehicle Plate No.",
+    vehicleNo: "Assigned Tricycle Plate No.",
     plateNumber: "Registration Plate Number",
-    model: "Vehicle Model / Engine Size",
-    capacity: "Tonnage Capacity (Tons)",
+    model: "Tricycle Model / Engine Size",
+    capacity: "Tricycle Capacity",
     requiredField: "This validation parameter is mandatory.",
     invalidEmail: "Please provide a valid corporate email.",
     successSubmit: "Transaction request processed successfully."
@@ -76,15 +76,15 @@ export const enDictionary: Dictionary = {
 
 export const haDictionary: Dictionary = {
   landing: {
-    heroTitle: "Kayan Aiki & Gudanar Da Sufuri Na Kasuwanci",
-    heroSubtitle: "Sufuri na musamman mai babban ƙarfi, jigilar kaya na masana'antu, da haɗe-haɗen kayan aikin sufuri don Yammacin Afirka.",
+    heroTitle: "Keken Napep & Gudanar Da Sufuri Na Kasuwanci",
+    heroSubtitle: "Tsarin ba da tukun keken napep, gudanar da kudaden direbobi, da rukunin kekuna masu dorewa.",
     servicesTitle: "Ayyukanmu Na Musamman",
-    servicesSubtitle: "Cikakken tsarin gudanar da sufuri da dabaru don tabbatar da tsaro da inganci mafi girma.",
+    servicesSubtitle: "Cikakken tsarin gudanar da keken napep da kudaden direbobi don tabbatar da aminci da inganci mafi girma.",
     aboutTitle: "Game da RUQAYYA TRANSPORT LIMITED",
-    aboutText: "RUQAYYA TRANSPORT LIMITED babban kamfani ne na jigilar kaya da sufuri. Mun ƙware a kan jigilar kayayyaki tsakanin iyakoki, kwangilolin sufuri na kamfanoni, da jigilar kaya a duk faɗin ƙasar. Yin amfani da ingantaccen tsarin bincike, ƙwararrun direbobi, da motocin da ake kulawa da su sosai, muna tallafawa manyan masana'antu a Najeriya da makwabtan kasashen yammacin Afirka.",
+    aboutText: "RUQAYYA TRANSPORT LIMITED babban kamfani ne na gudanar da rukunin tukun keken napep. Mun ƙware a kan ba da kekunan napep ga direbobi a kan yarjejeniyar mallaka, da tsara kudaden biya na direbobi a Najeriya. Yin amfani da ingantaccen tsarin bincike da kula da kudade, muna taimakawa matasa da direbobi a fadin kasar.",
     statsDrivers: "Direbobi Masu Shaidar Kamfani",
-    statsVehicles: "Manyan Motoci Masu Aiki",
-    statsTrips: "Tafiye-Tafiyen Kaya Da Aka Kammala",
+    statsVehicles: "Kekunan Napep Masu Aiki",
+    statsCollections: "Kudaden Remittance Da Aka Kammala",
     statsCoverage: "Jihohin Da Muke Aiki",
     whyChooseUs: "Dalilin Da Ya Sa Shugabanni Suke Zabar Ruqayya",
     contactUs: "Babban Ofishin Gudanarwa",
@@ -95,11 +95,11 @@ export const haDictionary: Dictionary = {
   },
   sidebar: {
     dashboard: "Gudunmawar Ayyuka",
-    fleet: "Rukunin Motoci",
+    fleet: "Rukunin Kekuna",
     drivers: "Rijistar Direbobi",
-    trips: "Takardun Tafiya",
+    remittances: "Kudaden Remittance",
     finance: "Littafin Kuɗi",
-    vouchers: "Rasit din Mai (Voucher)",
+    vouchers: "Asusun Direbobi",
     auditLogs: "Rikodin Tsaro & Bincike",
     settings: "Tsarin Na'ura"
   },
@@ -111,7 +111,7 @@ export const haDictionary: Dictionary = {
     public: "Filin Jama'a"
   },
   common: {
-    search: "Bincika komai (kamar Lamba, Direba, ID na Tafiya)...",
+    search: "Bincika komai (kamar Lamba, Direba, ID na Remittance)...",
     notifications: "Sanarwa Na Kamfani",
     language: "Yare (Language)",
     theme: "Tsarin Launi",
@@ -133,10 +133,10 @@ export const haDictionary: Dictionary = {
     email: "Adireshin Imel Na Kamfani",
     phone: "Lambar Waya Mai Aiki",
     licenseNo: "Lambar Lasisin Tuki Na Ƙasa",
-    vehicleNo: "Lambar Motar Da Aka Sanya",
+    vehicleNo: "Lambar Keke Da Aka Sanya",
     plateNumber: "Lambar Mota (Plate Number)",
-    model: "Irin Mota / Girman Inji",
-    capacity: "Ƙarfin Nauyin Mota (Tons)",
+    model: "Irin Keke / Girman Inji",
+    capacity: "Ƙarfin Keke",
     requiredField: "Wannan filin yana da matuƙar mahimmanci.",
     invalidEmail: "Da fatan za a shigar da imel na kamfani mai aiki.",
     successSubmit: "An yi nasarar tura buƙatarku ta hada-hada."

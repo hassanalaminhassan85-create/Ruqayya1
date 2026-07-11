@@ -62,10 +62,10 @@ export interface Driver {
   }>;
 }
 
-// Manifest & Trip Data Types
-export interface TripManifest {
+// Daily Remittance & Collection Data Types
+export interface DailyRemittance {
   id: string;
-  manifestNumber: string;
+  remittanceNumber: string;
   vehicleId: string;
   driverId: string;
   origin: string;
@@ -73,16 +73,16 @@ export interface TripManifest {
   departureTime: string;
   expectedArrivalTime: string;
   status: 'scheduled' | 'loading' | 'in-transit' | 'delivered' | 'cancelled';
-  cargoType: string;
-  weight: number; // in tons
-  freightCharges: number;
+  tricycleType: string;
+  remittanceCount: number;
+  remittanceAmount: number;
 }
 
 // Financial Record
 export interface FinancialRecord {
   id: string;
   type: 'revenue' | 'expense';
-  category: 'freight' | 'fuel' | 'maintenance' | 'salary' | 'tax' | 'dividend' | 'other';
+  category: 'remittance' | 'fuel' | 'maintenance' | 'salary' | 'tax' | 'dividend' | 'other';
   amount: number;
   date: string;
   referenceId?: string;
@@ -137,7 +137,7 @@ export interface Dictionary {
     aboutText: string;
     statsDrivers: string;
     statsVehicles: string;
-    statsTrips: string;
+    statsCollections: string;
     statsCoverage: string;
     whyChooseUs: string;
     contactUs: string;
@@ -150,7 +150,7 @@ export interface Dictionary {
     dashboard: string;
     fleet: string;
     drivers: string;
-    trips: string;
+    remittances: string;
     finance: string;
     vouchers: string;
     auditLogs: string;

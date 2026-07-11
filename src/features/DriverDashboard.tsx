@@ -8,10 +8,10 @@ import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/C
 import { Button } from '../components/ui/Button';
 import { Badge, Alert, ProgressBar } from '../components/ui/SharedComponents';
 import { api } from '../utils/api';
-import { Vehicle, Driver, TripManifest, FuelVoucher, Dictionary, Language } from '../types';
+import { Vehicle, Driver, DailyRemittance, FuelVoucher, Dictionary, Language } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Truck, 
+  Bike, 
   MapPin, 
   ClipboardList, 
   Fuel, 
@@ -123,8 +123,8 @@ const localDict = {
       paymentVoucher: "PAYMENT VOUCHER"
     },
     vehicle: {
-      title: "Heavy Transport Asset Specifications",
-      desc: "Corporate assigned high-capacity heavy freight vehicle details.",
+      title: "Tricycle Lease Asset Specifications",
+      desc: "Corporate assigned rental tricycle details.",
       odometer: "Odometer Reading",
       tonnage: "Tonnage Capacity",
       service: "Last Service Date",
@@ -269,7 +269,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
   const setActiveTab = propSetActiveTab || setLocalActiveTab;
   const [driver, setDriver] = useState<any | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [activeTrip, setActiveTrip] = useState<TripManifest | null>(null);
+  const [activeTrip, setActiveTrip] = useState<DailyRemittance | null>(null);
   const [vouchers, setVouchers] = useState<FuelVoucher[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -594,7 +594,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
       await api.completeTrip(activeTrip.id);
       syncDriverData();
     } catch (err: any) {
-      console.error("Failed to mark trip manifest delivery complete:", err);
+      console.error("Failed to mark daily remittance collection complete:", err);
     }
   };
 
@@ -806,7 +806,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-black tracking-widest text-orange-600 dark:text-orange-400 uppercase">{t.restBanner.title}</span>
-              <Badge variant="orange">{driver.status.toUpperCase()}</Badge>
+              <Badge variant="orange">{(driver.status || '').toUpperCase()}</Badge>
             </div>
             <p className="text-xs text-text-main font-bold mt-1.5">{t.restBanner.explanation}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-[11px] font-mono border-t border-orange-500/10 pt-3">
@@ -866,7 +866,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           <div className="text-right">
             <span className="text-[14px] font-semibold text-text-muted block uppercase mb-1">{t.welcome.status}</span>
             <Badge variant={driver.status === 'on-trip' ? 'warning' : driver.status === 'rest' ? 'orange' : 'success'}>
-              {driver.status.toUpperCase()}
+              {(driver.status || '').toUpperCase()}
             </Badge>
           </div>
         </div>
@@ -889,7 +889,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
               {tab === 'overview' && <Compass className="h-4 w-4" />}
               {tab === 'payments' && <CreditCard className="h-4 w-4" />}
               {tab === 'history' && <History className="h-4 w-4" />}
-              {tab === 'vehicle' && <Truck className="h-4 w-4" />}
+              {tab === 'vehicle' && <Bike className="h-4 w-4" />}
               {tab === 'documents' && <FileText className="h-4 w-4" />}
               {tab === 'profile' && <Settings className="h-4 w-4" />}
               <span>{t.tabs[tab]}</span>
@@ -927,9 +927,9 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                   <CardHeader className="border-brand-gold/10">
                     <div className="flex items-center gap-2">
                       <Navigation className="h-4 w-4 text-brand-gold animate-pulse" />
-                      <CardTitle>{lang === 'en' ? "Active Dispatched Manifest" : "Takardar Tafiya Ta Yanzu"}</CardTitle>
+                      <CardTitle>{lang === 'en' ? "Active Daily Remittance" : "Asusun Remittance Na Yanzu"}</CardTitle>
                     </div>
-                    {activeTrip && <Badge variant="gold">{activeTrip.manifestNumber}</Badge>}
+                    {activeTrip && <Badge variant="gold">{activeTrip.remittanceNumber}</Badge>}
                   </CardHeader>
 
                   {activeTrip ? (
@@ -943,16 +943,16 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                           </span>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold text-text-muted uppercase block">{lang === 'en' ? "Cargo Destination" : "Kaya Zuwa"}</span>
+                          <span className="text-[10px] font-bold text-text-muted uppercase block">{lang === 'en' ? "Remittance Station" : "Biya Zuwa"}</span>
                           <span className="text-xs font-extrabold text-text-main mt-1 block flex items-center gap-1.5">
                             <MapPin className="h-3.5 w-3.5 text-brand-gold" />
                             {activeTrip.destination}
                           </span>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold text-text-muted uppercase block">{lang === 'en' ? "Transit Tonnage" : "Nauyin Kaya"}</span>
+                          <span className="text-[10px] font-bold text-text-muted uppercase block">{lang === 'en' ? "Remittance Cycles" : "Nauyin Remittance"}</span>
                           <span className="text-xs font-extrabold text-text-main mt-1 block">
-                            {activeTrip.weight} Tons ({activeTrip.cargoType})
+                            {activeTrip.remittanceCount} Cycles ({activeTrip.tricycleType})
                           </span>
                         </div>
                       </div>
@@ -970,7 +970,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                             className="font-bold flex items-center gap-1 w-full md:w-auto cursor-pointer"
                           >
                             <CheckCircle className="h-4 w-4" />
-                            {lang === 'en' ? "Log Delivery Complete" : "Kammala & Sauke Kaya"}
+                            {lang === 'en' ? "Log Remittance Complete" : "Kammala Remittance"}
                           </Button>
                         </div>
                       </div>
@@ -979,10 +979,10 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                     <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
                       <Compass className="h-8 w-8 text-text-muted/40 animate-spin-slow" />
                       <p className="text-xs text-text-muted font-bold">
-                        {lang === 'en' ? "No active dispatch manifests assigned." : "Babu takardar tafiya a halin yanzu."}
+                        {lang === 'en' ? "No active daily remittances assigned." : "Babu remittance a halin yanzu."}
                       </p>
                       <p className="text-[10px] text-text-muted">
-                        {lang === 'en' ? "Awaiting next heavy freight assignment from Operations Admin." : "Kamfani zai turo muku takardar tafiya nan ba da jimawa ba."}
+                        {lang === 'en' ? "Awaiting next daily collection lease assignment from Operations Admin." : "Kamfani zai turo muku bayanan remittance nan ba da jimawa ba."}
                       </p>
                     </div>
                   )}
@@ -1494,7 +1494,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                             <td className="p-3 text-text-main font-semibold">{p.approved_by || 'Awaiting Review'}</td>
                             <td className="p-3">
                               <Badge variant={p.status === 'approved' ? 'success' : p.status === 'rejected' ? 'danger' : 'warning'}>
-                                {p.status.toUpperCase()}
+                                {(p.status || '').toUpperCase()}
                               </Badge>
                             </td>
                             <td className="p-3 text-right">
@@ -1601,7 +1601,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                           <div className="text-right">
                             <span className="text-slate-500 block uppercase text-[9px]">Secure Hash Reference:</span>
                             <span className="font-extrabold text-slate-900 text-[10px] block font-mono bg-slate-50 p-1 rounded mt-2 select-all overflow-hidden text-ellipsis whitespace-nowrap">
-                              RTL-SEC-{selectedReceipt.id.replace('PAY-', '').toUpperCase()}-X77
+                              RTL-SEC-{(selectedReceipt?.id || '').replace('PAY-', '').toUpperCase()}-X77
                             </span>
                             <span className="text-[8px] text-slate-400 uppercase">Verification Ref Code</span>
                           </div>
@@ -1698,7 +1698,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                         </div>
                         <div className="flex flex-col gap-0.5">
                           <span className="text-[10px] text-text-muted font-bold uppercase">{t.vehicle.fuel}</span>
-                          <span className="text-xl font-black text-brand-gold font-mono">{vehicle.fuelType.toUpperCase()}</span>
+                          <span className="text-xl font-black text-brand-gold font-mono">{(vehicle.fuelType || '').toUpperCase()}</span>
                         </div>
                       </div>
                     </div>
@@ -1717,12 +1717,12 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                     <CardTitle>{t.vehicle.rigImages}</CardTitle>
                   </CardHeader>
                   <div className="p-4 flex flex-col gap-4">
-                    {/* Illustrative modern heavy rig cargo container drawing */}
+                    {/* Illustrative modern tricycle drawing */}
                     <div className="h-44 bg-slate-950 rounded-xl border border-slate-800 flex flex-col items-center justify-center text-slate-400 p-4 relative overflow-hidden">
                       <div className="absolute inset-0 bg-radial-at-t from-brand-gold/10 to-transparent pointer-events-none"></div>
-                      <Truck className="h-16 w-16 text-brand-gold animate-pulse mb-3" />
-                      <span className="text-xs font-bold text-white font-mono">{vehicle ? vehicle.plateNumber : 'RTL-HEAVY'}</span>
-                      <span className="text-[9px] text-slate-500 font-mono mt-1 uppercase">AUDITED FLEET CARGO RIG</span>
+                      <Bike className="h-16 w-16 text-brand-gold animate-pulse mb-3" />
+                      <span className="text-xs font-bold text-white font-mono">{vehicle ? vehicle.plateNumber : 'RTL-TRICYCLE'}</span>
+                      <span className="text-[9px] text-slate-500 font-mono mt-1 uppercase">AUDITED FLEET TRICYCLE</span>
                     </div>
 
                     <div className="p-3.5 bg-bg-base border border-border-main/50 rounded-xl text-[11px] text-text-muted leading-relaxed font-mono">
@@ -1818,7 +1818,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                       </p>
                       <div className="mt-6 p-4 bg-slate-900/50 border border-slate-800 rounded-lg text-[10px] text-slate-400 leading-relaxed max-w-sm">
                         <strong>Official Compliance Attestation:</strong><br />
-                        This certifies that the vehicle assigned is registered under federal haulage corridors and is fully certified for nationwide operations.
+                        This certifies that the vehicle assigned is registered under federal transport corridors and is fully certified for nationwide operations.
                       </div>
                     </div>
                   </Card>
@@ -1924,7 +1924,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                     <div className="flex flex-col gap-2.5 font-mono text-[10px] bg-bg-base/50 p-4 border border-border-main/50 rounded-xl">
                       <div className="flex justify-between">
                         <span>CLASSIFICATION:</span>
-                        <span className="font-bold text-text-main">{driver.classification.toUpperCase()}</span>
+                        <span className="font-bold text-text-main">{(driver.classification || '').toUpperCase()}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>AGREED RATE:</span>

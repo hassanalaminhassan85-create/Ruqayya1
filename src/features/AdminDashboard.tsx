@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/C
 import { Button } from '../components/ui/Button';
 import { Badge, Alert, Tabs, Modal, ProgressBar } from '../components/ui/SharedComponents';
 import { api } from '../utils/api';
-import { Vehicle, Driver, TripManifest, FuelVoucher, Dictionary, Language, FinancialRecord } from '../types';
+import { Vehicle, Driver, DailyRemittance, FuelVoucher, Dictionary, Language, FinancialRecord } from '../types';
 import { 
   Truck, 
   Users, 
@@ -56,7 +56,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   // Storage states
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [trips, setTrips] = useState<TripManifest[]>([]);
+  const [trips, setTrips] = useState<DailyRemittance[]>([]);
   const [vouchers, setVouchers] = useState<FuelVoucher[]>([]);
   const [finance, setFinance] = useState<FinancialRecord[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
@@ -92,7 +92,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [selectedDriver, setSelectedDriver] = useState('');
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
-  const [cargoType, setCargoType] = useState('');
+  const [tricycleType, setTricycleType] = useState('');
   const [weight, setWeight] = useState(30);
   const [charges, setCharges] = useState(1500000);
   const [tripError, setTripError] = useState('');
@@ -231,7 +231,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     e.preventDefault();
     setTripError('');
 
-    if (!selectedVehicle || !selectedDriver || !origin || !destination || !cargoType) {
+    if (!selectedVehicle || !selectedDriver || !origin || !destination || !tricycleType) {
       setTripError(lang === 'en' ? "Please compile all dispatch dispatch parameters." : "Da fatan za a cika duka filayen da ake buƙata.");
       return;
     }
@@ -242,19 +242,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         driverId: selectedDriver,
         origin,
         destination,
-        cargoType,
+        tricycleType,
         weight,
-        freightCharges: charges
+        remittanceAmount: charges
       });
       setSelectedVehicle('');
       setSelectedDriver('');
       setOrigin('');
       setDestination('');
-      setCargoType('');
+      setTricycleType('');
       setIsDispatchTripOpen(false);
       syncAllData();
     } catch (err: any) {
-      setTripError(err.message || "Failed to dispatch cargo carrier.");
+      setTripError(err.message || "Failed to dispatch tricycle fleet.");
     }
   };
 
@@ -272,7 +272,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       await api.completeTrip(tripId);
       syncAllData();
     } catch (err) {
-      console.error("Trip manifest delivery update failed:", err);
+      console.error("Daily remittance update failed:", err);
     }
   };
 
@@ -356,7 +356,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             {lang === 'en' ? "Admin Operations Control" : "Gudanarwar Masu Kula (Admin)"}
           </h2>
           <p className="text-xs text-text-muted mt-0.5 leading-normal">
-            {lang === 'en' ? "Manage heavy haulage carrier assets, certify driver registrations, and monitor cargo logs." : "Gudanar da rukunin manyan motoci, tabbatar da direbobi, da duba tafiye-tafiye."}
+            {lang === 'en' ? "Manage tricycle lease assets, certify driver registrations, and monitor remittance logs." : "Gudanar da rukunin keken napep, tabbatar da direbobi, da duba kudaden remittance."}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -367,7 +367,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             className="font-bold flex items-center gap-1 cursor-pointer"
           >
             <CirclePlus className="h-4 w-4" />
-            {lang === 'en' ? "Register Heavy Asset" : "Rijistar Sabuwar Mota"}
+            {lang === 'en' ? "Register Tricycle Asset" : "Rijistar Sabon Keke"}
           </Button>
           <Button
             variant="secondary"
@@ -376,14 +376,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             className="font-bold flex items-center gap-1 cursor-pointer"
           >
             <ClipboardCheck className="h-4 w-4" />
-            {lang === 'en' ? "Dispatch Cargo Trip" : "Sanya Takardar Tafiya"}
+            {lang === 'en' ? "Log Daily Remittance" : "Sanya Remittance"}
           </Button>
         </div>
       </div>
 
       {loading ? (
         <div className="py-12 text-center text-text-muted font-bold font-mono text-xs">
-          {lang === 'en' ? "Syncing real-time fleet assets..." : "Ana duba rukunin manyan motoci..."}
+          {lang === 'en' ? "Syncing real-time tricycle assets..." : "Ana duba rukunin kekuna..."}
         </div>
       ) : (
         <>
@@ -402,9 +402,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             activeTab={activeTab}
             onChange={(id) => { setActiveTab(id as any); setFleetPage(1); }}
             tabs={[
-              { id: 'fleet', label: lang === 'en' ? "Fleet Assets" : "Manyan Motoci", icon: <Truck className="h-3.5 w-3.5" /> },
+              { id: 'fleet', label: lang === 'en' ? "Tricycle Fleet" : "Rukunin Kekuna", icon: <Truck className="h-3.5 w-3.5" /> },
               { id: 'drivers', label: `${lang === 'en' ? "Driver Registry" : "Direbobi"} (${drivers.filter(d => d.status === 'pending').length} pending)`, icon: <Users className="h-3.5 w-3.5" /> },
-              { id: 'trips', label: lang === 'en' ? "Manifest Dispatches" : "Takardun Tafiya", icon: <MapPin className="h-3.5 w-3.5" /> },
+              { id: 'trips', label: lang === 'en' ? "Daily Remittances" : "Kudaden Remittance", icon: <MapPin className="h-3.5 w-3.5" /> },
               { id: 'vouchers', label: `${lang === 'en' ? "Fuel Vouchers" : "Rasit na Mai"} (${pendingVouchers.length})`, icon: <Fuel className="h-3.5 w-3.5" /> },
               { id: 'finance', label: lang === 'en' ? "Financial Center" : "Kudaden Shiga", icon: <span className="font-extrabold text-xs">₦</span> },
               { id: 'payments', label: lang === 'en' ? "Installments Approval" : "Biyan Kudi", icon: <span className="font-extrabold text-xs">₦</span> },
@@ -460,12 +460,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                             <td className="p-3 font-bold font-mono text-[11px] text-brand-gold">{v.plateNumber}</td>
                             <td className="p-3 font-extrabold text-text-main">{v.model}</td>
                             <td className="p-3 font-bold text-text-muted">{v.capacity}</td>
-                            <td className="p-3 font-semibold text-text-muted font-mono">{v.fuelType.toUpperCase()}</td>
+                            <td className="p-3 font-semibold text-text-muted font-mono">{(v.fuelType || '').toUpperCase()}</td>
                             <td className="p-3 text-text-muted text-[11px]">{v.lastServiceDate}</td>
-                            <td className="p-3 font-mono font-bold">{v.mileage.toLocaleString()} KM</td>
+                            <td className="p-3 font-mono font-bold">{(v.mileage || 0).toLocaleString()} KM</td>
                             <td className="p-3 text-center">
                               <Badge variant={v.status === 'assigned' ? 'warning' : v.status === 'maintenance' ? 'danger' : v.status === 'idle' ? 'info' : 'success'}>
-                                {v.status.toUpperCase()}
+                                {(v.status || '').toUpperCase()}
                               </Badge>
                             </td>
                           </tr>
@@ -612,7 +612,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                                 d.status === 'correction_requested' ? 'default' :
                                 d.status === 'rejected' ? 'danger' : 'success'
                               }>
-                                {d.status.toUpperCase()}
+                                {(d.status || '').toUpperCase()}
                               </Badge>
                             </td>
                             <td className="p-3 text-center">
@@ -654,18 +654,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               </div>
             )}
 
-            {/* TAB 3: TRIP MANIFESTS */}
+            {/* TAB 3: DAILY REMITTANCES */}
             {activeTab === 'trips' && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-bg-base border-b border-border-main text-[10px] uppercase font-bold text-text-muted">
-                      <th className="p-3">Manifest ID</th>
-                      <th className="p-3">Assigned Rig & Driver</th>
+                      <th className="p-3">Remittance ID</th>
+                      <th className="p-3">Assigned Tricycle & Driver</th>
                       <th className="p-3">Route Journey</th>
-                      <th className="p-3">Cargo Spec</th>
-                      <th className="p-3">Logistics Charges</th>
-                      <th className="p-3">Dispatch Status</th>
+                      <th className="p-3">Tricycle Spec</th>
+                      <th className="p-3">Remittance Amount</th>
+                      <th className="p-3">Remittance Status</th>
                       <th className="p-3 text-center">Operation</th>
                     </tr>
                   </thead>
@@ -673,16 +673,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                     {trips.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="p-4 text-center text-text-muted">
-                          {lang === 'en' ? "No dispatch manifests logged yet." : "Babu takardun tafiya tukuna."}
+                          {lang === 'en' ? "No daily remittances logged yet." : "Babu kudaden remittance tukuna."}
                         </td>
                       </tr>
                     ) : (
                       trips.map(t => {
                         const driverName = drivers.find(d => d.id === t.driverId)?.fullName || "Driver";
-                        const vehiclePlate = vehicles.find(v => v.id === t.vehicleId)?.plateNumber || "Rig";
+                        const vehiclePlate = vehicles.find(v => v.id === t.vehicleId)?.plateNumber || "Tricycle";
                         return (
                           <tr key={t.id} className="hover:bg-bg-base/20">
-                            <td className="p-3 font-bold font-mono text-[11px] text-brand-gold">{t.manifestNumber}</td>
+                            <td className="p-3 font-bold font-mono text-[11px] text-brand-gold">{t.remittanceNumber}</td>
                             <td className="p-3">
                               <div className="flex flex-col">
                                 <span className="font-bold text-text-main">{driverName}</span>
@@ -698,14 +698,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                             </td>
                             <td className="p-3 text-text-muted font-medium">
                               <div className="flex flex-col">
-                                <span>{t.cargoType}</span>
-                                <span className="text-[10px] font-bold font-mono">{t.weight} Tons</span>
+                                <span>{t.tricycleType}</span>
+                                <span className="text-[10px] font-bold font-mono">{t.remittanceCount} Cycles</span>
                               </div>
                             </td>
-                            <td className="p-3 font-extrabold text-emerald-600">₦{t.freightCharges.toLocaleString()}</td>
+                            <td className="p-3 font-extrabold text-emerald-600">₦{(t.remittanceAmount || 0).toLocaleString()}</td>
                             <td className="p-3">
                               <Badge variant={t.status === 'delivered' ? 'success' : t.status === 'cancelled' ? 'danger' : 'warning'}>
-                                {t.status.toUpperCase()}
+                                {(t.status || '').toUpperCase()}
                               </Badge>
                             </td>
                             <td className="p-3 text-center">
@@ -716,7 +716,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                                   onClick={() => handleCompleteTrip(t.id)}
                                   className="px-2 py-1 font-bold text-[10px] text-emerald-600 border-emerald-500 hover:bg-emerald-50 bg-transparent cursor-pointer"
                                 >
-                                  Confirm Safe Arrival
+                                  Confirm Safe Collection
                                 </Button>
                               ) : (
                                 <span className="text-text-muted text-[10px] font-semibold">{lang === 'en' ? "Arrived Safely" : "An isa lafiya"}</span>
@@ -777,7 +777,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                                 </Button>
                               ) : (
                                 <Badge variant={v.status === 'approved' ? 'success' : 'danger'}>
-                                  {v.status.toUpperCase()}
+                                  {(v.status || '').toUpperCase()}
                                 </Badge>
                               )}
                             </td>
@@ -892,13 +892,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       </Modal>
 
       {/* MODAL: DISPATCH TRIP */}
-      <Modal isOpen={isDispatchTripOpen} onClose={() => setIsDispatchTripOpen(false)} title={lang === 'en' ? "Dispatch Cargo Trip Manifest" : "Fitar Da Takardar Tafiya (Dispatch)"}>
+      <Modal isOpen={isDispatchTripOpen} onClose={() => setIsDispatchTripOpen(false)} title={lang === 'en' ? "Log Daily Remittance Collection" : "Sanya Kudin Remittance"}>
         <form onSubmit={handleDispatchSubmit} className="flex flex-col gap-4">
           {tripError && <Alert type="danger">{tripError}</Alert>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-text-main">Select Available Rig</label>
+              <label className="text-xs font-bold text-text-main">Select Assigned Tricycle</label>
               <select
                 value={selectedVehicle}
                 onChange={(e) => setSelectedVehicle(e.target.value)}
@@ -909,7 +909,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                   <option key={v.id} value={v.id}>{v.plateNumber} ({v.model})</option>
                 ))}
               </select>
-              <span className="text-[9px] text-text-muted">Showing idle fleet rigs</span>
+              <span className="text-[9px] text-text-muted">Showing idle fleet tricycles</span>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -935,36 +935,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 type="text"
                 value={origin}
                 onChange={(e) => setOrigin(e.target.value)}
-                placeholder="e.g. Kano Dry Port"
+                placeholder="e.g. Kano Central Terminal"
                 className="w-full px-3 py-2 text-xs bg-bg-surface border border-border-main rounded-lg focus:outline-none"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-text-main">Cargo Destination</label>
+              <label className="text-xs font-bold text-text-main">Remittance Station</label>
               <input
                 type="text"
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
-                placeholder="e.g. Apapa Port, Lagos"
+                placeholder="e.g. Zaria Road Depot"
                 className="w-full px-3 py-2 text-xs bg-bg-surface border border-border-main rounded-lg focus:outline-none"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-text-main">Cargo Description Type</label>
+            <label className="text-xs font-bold text-text-main">Tricycle Description Type</label>
             <input
               type="text"
-              value={cargoType}
-              onChange={(e) => setCargoType(e.target.value)}
-              placeholder="e.g. Agricultural Bulk (Sesame Seeds)"
+              value={tricycleType}
+              onChange={(e) => setTricycleType(e.target.value)}
+              placeholder="e.g. Passenger Tricycle or Delivery Tricycle"
               className="w-full px-3 py-2 text-xs bg-bg-surface border border-border-main rounded-lg focus:outline-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-text-main">Cargo Weight (Tons)</label>
+              <label className="text-xs font-bold text-text-main">Collection Cycles</label>
               <input
                 type="number"
                 value={weight}
@@ -973,7 +973,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold text-text-main">Freight Charges (₦)</label>
+              <label className="text-xs font-bold text-text-main">Remittance Amount (₦)</label>
               <input
                 type="number"
                 value={charges}

@@ -600,7 +600,7 @@ export default function App() {
                             className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
                           >
                             <Truck className="h-3.5 w-3.5 text-brand-gold shrink-0" />
-                            {lang === 'en' ? "Register Heavy Asset" : "Rijistar Sabuwar Mota"}
+                            {lang === 'en' ? "Register Tricycle" : "Rijistar Sabon Keke"}
                           </button>
                           <button
                             onClick={() => {
@@ -610,7 +610,7 @@ export default function App() {
                             className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
                           >
                             <MapPin className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                            {lang === 'en' ? "Dispatch Cargo Trip" : "Tura Tafiyar Kaya"}
+                            {lang === 'en' ? "Log Daily Remittance" : "Sanya Remittance"}
                           </button>
                           <button
                             onClick={() => {

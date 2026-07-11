@@ -471,7 +471,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <path d="M0,25 Q10,15 25,5 T50,15 T75,8 T100,2" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
               </svg>
             </div>
-            <p className="text-[10px] text-slate-400 font-medium mt-2">100% audited freight invoices</p>
+            <p className="text-[10px] text-slate-400 font-medium mt-2">100% audited daily collection invoices</p>
           </div>
         </div>
 
@@ -731,7 +731,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   <Clock className="h-4.5 w-4.5 text-brand-gold" />
                   {lang === 'en' ? "Active operating Cycle Timeline" : "Zagayen Aiki Na Kwanaki 30"}
                 </h3>
-                <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Continuous haulage audit mapping and boardroom settlement cycle.</p>
+                <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Continuous tricycle fleet audit mapping and boardroom settlement cycle.</p>
               </div>
               {activeCycle ? (
                 <span className="px-2.5 py-1 rounded-full text-[9px] font-extrabold bg-emerald-50 border border-emerald-200 text-emerald-600 animate-pulse uppercase tracking-wider font-mono">

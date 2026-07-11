@@ -443,7 +443,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             className="w-full bg-bg-surface border border-border-main rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
           >
             <option value="">{dict.allCategory}</option>
-            <option value="freight">{lang === 'en' ? "Freight Contract Revenue" : "Kudin Jigila"}</option>
+            <option value="freight">{lang === 'en' ? "Remittance Contract Revenue" : "Kudaden Remittance"}</option>
             <option value="maintenance">{lang === 'en' ? "Maintenance & Repairs" : "Gyaran Motoci"}</option>
             <option value="fuel">{lang === 'en' ? "Fuel Voucher Disbursals" : "Kudin Mai"}</option>
             <option value="salary">{lang === 'en' ? "Admin Salaries" : "Albashin Ma'aikata"}</option>

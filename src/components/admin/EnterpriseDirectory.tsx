@@ -1246,7 +1246,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                           onChange={(e) => setFormData({ ...formData, classification: e.target.value })}
                           className="w-full bg-bg-base text-text-main border border-border-main px-3 py-2 rounded-lg focus:outline-none cursor-pointer"
                         >
-                          <option value="Assisted">Assisted (Freight Sharing)</option>
+                          <option value="Assisted">Assisted (Remittance Sharing)</option>
                           <option value="Smart">Smart (Fixed Leasing)</option>
                         </select>
                       </div>
