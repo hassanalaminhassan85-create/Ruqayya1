@@ -474,7 +474,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
                   {/* Title and Uploader info */}
                   <div>
                     <h4 className="text-xs font-bold text-text-main line-clamp-1 group-hover:text-brand-navy dark:group-hover:text-brand-gold transition-colors">
-                      {doc.title || doc.document_type.replace(/_/g, ' ').toUpperCase()}
+                      {doc.title || (doc.document_type || '').replace(/_/g, ' ').toUpperCase()}
                     </h4>
                     <span className="text-[10px] text-text-muted font-medium block truncate mt-0.5">
                       Entity: {doc.entityName}
@@ -487,7 +487,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
                   {/* Document Type Badge */}
                   <div className="flex items-center gap-2 mt-1">
                     <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-tight py-0.5 px-2 bg-bg-base/40 text-text-main border-border-main/75">
-                      {doc.document_type.replace(/_/g, ' ')}
+                      {(doc.document_type || '').replace(/_/g, ' ')}
                     </Badge>
                   </div>
                 </div>

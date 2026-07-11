@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
   User, 
+  Camera,
   Shield, 
   Briefcase, 
   Search, 
@@ -489,7 +490,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
       case 'on rest':
         return <Badge variant="info">{lang === 'en' ? 'On Rest' : 'Hutu'}</Badge>;
       default:
-        return <Badge variant="outline">{status.toUpperCase()}</Badge>;
+        return <Badge variant="outline">{(status || '').toUpperCase()}</Badge>;
     }
   };
 
@@ -854,6 +855,25 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
 
               {/* BENTO GRID DETAILS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Official Passport Photograph */}
+                <div className="bg-bg-base border border-border-main/50 rounded-xl p-4 flex flex-col items-center justify-center text-center">
+                  <h3 className="text-xs font-bold uppercase text-brand-gold tracking-wider mb-3 self-start flex items-center gap-1.5 w-full border-b border-border-main/20 pb-2">
+                    <Camera className="h-3.5 w-3.5 text-brand-gold" />
+                    <span>{lang === 'en' ? "Verified Passport Photo" : "Hoton Fasfo Tabbatacce"}</span>
+                  </h3>
+                  <div className="relative group overflow-hidden rounded-xl border border-border-main/50 h-32 w-32 bg-bg-surface flex items-center justify-center shadow-md">
+                    <img 
+                      src={selectedPerson.passport_photo_url || (activeTab === 'drivers' ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300' : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300')} 
+                      alt="Official Passport" 
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <span className="text-[10px] text-text-muted mt-2 font-mono uppercase tracking-widest bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    {lang === 'en' ? "SECURE CHIP ACTIVE" : "AMINTACCE KAN TSARI"}
+                  </span>
+                </div>
                 
                 {/* Standard Account Details */}
                 <div className="bg-bg-base border border-border-main/50 rounded-xl p-4">

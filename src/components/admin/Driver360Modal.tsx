@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, 
   Users, 
+  Camera,
   Truck, 
   FileText, 
   Wallet, 
@@ -235,8 +236,13 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         {/* Drawer Header Area */}
         <div className="flex items-center justify-between p-4 border-b border-border-main/50 bg-bg-base/40">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-brand-navy border border-border-main flex items-center justify-center shrink-0">
-              <User className="h-5 w-5 text-brand-gold animate-pulse" />
+            <div className="h-10 w-10 rounded-full border border-border-main overflow-hidden shrink-0">
+              <img 
+                src={(driver as any).passport_photo_url || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
+                alt={driver.fullName} 
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             </div>
             <div>
               <h3 className="text-sm font-extrabold text-text-main uppercase tracking-tight flex items-center gap-1.5">
@@ -318,30 +324,54 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
               {/* Personal details */}
               <div className="md:col-span-6 flex flex-col gap-4">
                 <div className="bg-bg-base/30 p-4 border border-border-main rounded-xl flex flex-col gap-3">
-                  <h4 className="text-[10px] font-extrabold uppercase text-text-main tracking-wider flex items-center gap-1 border-b border-border-main/50 pb-1.5">
-                    <User className="h-3.5 w-3.5 text-brand-gold" />
-                    {labels.personal}
+                  <h4 className="text-[10px] font-extrabold uppercase text-text-main tracking-wider flex items-center gap-1 border-b border-border-main/50 pb-1.5 justify-between">
+                    <span className="flex items-center gap-1">
+                      <User className="h-3.5 w-3.5 text-brand-gold" />
+                      {labels.personal}
+                    </span>
+                    <span className="text-[8px] text-emerald-500 font-mono font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded-full">CERTIFIED RECORD</span>
                   </h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <span className="block text-[10px] font-bold text-text-main">Full Name:</span>
-                      <span className="text-text-main font-semibold">{driver.fullName}</span>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4 items-start">
+                    {/* Official Passport Photograph */}
+                    <div className="flex flex-col items-center shrink-0 mx-auto sm:mx-0">
+                      <div className="relative group overflow-hidden rounded-lg border border-border-main h-28 w-24 bg-slate-900 flex items-center justify-center shadow-md">
+                        <img 
+                          src={(driver as any).passport_photo_url || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
+                          alt={driver.fullName} 
+                          className="h-full w-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[8px] font-mono font-extrabold text-brand-gold text-center py-0.5 uppercase tracking-tighter">
+                          RTL PASSPORT
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-text-main">Phone:</span>
-                      <span className="font-mono">{driver.phone}</span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-text-main">NIN:</span>
-                      <span className="font-mono">{driver.nin || 'N/A'}</span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-text-main">License:</span>
-                      <span className="font-mono">{driver.licenseNumber} (Exp: {driver.licenseExpiry})</span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="block text-[10px] font-bold text-text-main">Address:</span>
-                      <span>{driver.address || 'N/A'}</span>
+                    
+                    {/* Contact & Identity Fields */}
+                    <div className="grid grid-cols-2 gap-3 flex-1 w-full">
+                      <div>
+                        <span className="block text-[10px] font-bold text-text-main">Full Name:</span>
+                        <span className="text-text-main font-semibold block truncate" title={driver.fullName}>{driver.fullName}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold text-text-main">Phone:</span>
+                        <span className="font-mono block truncate">{driver.phone}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold text-text-main">NIN:</span>
+                        <span className="font-mono block truncate">{driver.nin || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold text-text-main">License:</span>
+                        <span className="font-mono block truncate" title={`${driver.licenseNumber} (Exp: ${driver.licenseExpiry})`}>
+                          {driver.licenseNumber}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="block text-[10px] font-bold text-text-main">Address:</span>
+                        <span className="block text-text-muted text-[11px] leading-relaxed">{driver.address || 'N/A'}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -492,7 +522,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                           <td className="p-3 text-text-muted text-[10px]">{p.date}</td>
                           <td className="p-3 font-sans">
                             <Badge variant={p.status === 'approved' ? 'success' : p.status === 'rejected' ? 'danger' : 'warning'}>
-                              {p.status.toUpperCase()}
+                              {(p.status || '').toUpperCase()}
                             </Badge>
                           </td>
                           <td className="p-3 font-sans text-text-muted">{p.recorded_by || 'Operator Ibrahim'}</td>

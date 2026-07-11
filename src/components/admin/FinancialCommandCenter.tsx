@@ -500,7 +500,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                         <td className="p-3 text-text-muted text-[11px] font-mono">{p.date}</td>
                         <td className="p-3">
                           <Badge variant={p.status === 'approved' ? 'success' : p.status === 'rejected' ? 'danger' : 'warning'}>
-                            {p.status.toUpperCase()}
+                            {(p.status || '').toUpperCase()}
                           </Badge>
                         </td>
                         <td className="p-3">
@@ -659,7 +659,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     <div className="flex flex-col gap-1 max-w-[70%]">
                       <span className="font-bold text-text-main leading-normal">{record.description}</span>
                       <span className="text-[9px] text-text-muted flex items-center gap-1">
-                        <Calendar className="h-3 w-3 shrink-0" /> {record.date} • {record.category.toUpperCase()}
+                        <Calendar className="h-3 w-3 shrink-0" /> {record.date} • {(record.category || '').toUpperCase()}
                       </span>
                     </div>
                     <div className="text-right">

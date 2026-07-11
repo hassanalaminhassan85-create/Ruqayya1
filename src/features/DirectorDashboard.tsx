@@ -1665,11 +1665,22 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                         <div className="flex flex-col gap-6">
                           
                           {/* Profile Header */}
-                          <div className="flex items-start justify-between border-b border-border-main/50 pb-4">
-                            <div>
-                              <span className="text-[9px] text-brand-gold font-bold uppercase tracking-wider">{selectedDriver.classification || 'UNCLASSIFIED CORRIDOR DRIVER'}</span>
-                              <h3 className="text-lg font-extrabold text-text-main font-mono">{selectedDriver.fullName}</h3>
-                              <p className="text-[11px] text-text-muted mt-0.5">Company ID: <span className="font-mono font-bold text-text-main">{selectedDriver.company_driver_id || 'PENDING'}</span></p>
+                          <div className="flex items-start justify-between border-b border-border-main/50 pb-4 gap-4">
+                            <div className="flex items-start gap-4">
+                              {/* Official Passport Photograph */}
+                              <div className="relative group overflow-hidden rounded-lg border border-border-main h-20 w-20 shrink-0 bg-slate-900 flex items-center justify-center shadow-md">
+                                <img 
+                                  src={(selectedDriver as any).passport_photo_url || selectedDriver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
+                                  alt={selectedDriver.fullName} 
+                                  className="h-full w-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-brand-gold font-bold uppercase tracking-wider">{selectedDriver.classification || 'UNCLASSIFIED CORRIDOR DRIVER'}</span>
+                                <h3 className="text-lg font-extrabold text-text-main font-mono">{selectedDriver.fullName}</h3>
+                                <p className="text-[11px] text-text-muted mt-0.5">Company ID: <span className="font-mono font-bold text-text-main">{selectedDriver.company_driver_id || 'PENDING'}</span></p>
+                              </div>
                             </div>
                             <Badge variant={selectedDriver.status === 'approved' || selectedDriver.status === 'available' || selectedDriver.status === 'on-trip' ? 'success' : 'danger'}>
                               {selectedDriver.status?.toUpperCase() || 'PENDING'}
@@ -1953,7 +1964,17 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                             const estimatedShareholderEarnings = distributionPool * (pctStake / 100);
                             return (
                               <tr key={sh.id} className="hover:bg-bg-base/30">
-                                <td className="p-3 font-extrabold text-text-main font-sans text-xs">{sh.full_name}</td>
+                                <td className="p-3 font-extrabold text-text-main font-sans text-xs flex items-center gap-2.5">
+                                  <div className="h-8 w-8 rounded-full border border-border-main overflow-hidden shrink-0 bg-slate-900 flex items-center justify-center">
+                                    <img 
+                                      src={sh.passport_photo_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
+                                      alt={sh.full_name} 
+                                      className="h-full w-full object-cover"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                  <span>{sh.full_name}</span>
+                                </td>
                                 <td className="p-3 font-sans text-xs text-text-muted">{sh.email}</td>
                                 <td className="p-3 text-text-muted">{sh.phone}</td>
                                 <td className="p-3 font-extrabold">₦{sh.investment_amount?.toLocaleString() || '0'}</td>
