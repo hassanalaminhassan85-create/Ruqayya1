@@ -14,7 +14,13 @@ import {
   Truck, 
   ListFilter,
   FileText,
-  Calendar
+  Calendar,
+  HelpCircle,
+  Info,
+  Calculator,
+  BookOpen,
+  ArrowRight,
+  Percent
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -49,10 +55,11 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   onSync
 }) => {
   // Navigation / Modal States
-  const [subTab, setSubTab] = useState<'payments' | 'expenses' | 'ledger'>('payments');
+  const [subTab, setSubTab] = useState<'payments' | 'expenses' | 'ledger' | 'explainer'>('payments');
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [isRecordExpenseOpen, setIsRecordExpenseOpen] = useState(false);
   const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);
+  const [explainerDriverId, setExplainerDriverId] = useState<string>('');
   
   // Filtering States
   const [filterDriver, setFilterDriver] = useState('');
@@ -417,6 +424,12 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         >
           {dict.ledger}
         </button>
+        <button
+          onClick={() => setSubTab('explainer')}
+          className={`px-4 py-1.5 text-xs font-extrabold transition-all border-b-2 ${subTab === 'explainer' ? 'border-brand-gold text-text-main' : 'border-transparent text-text-muted hover:text-text-main cursor-pointer'}`}
+        >
+          {lang === 'en' ? "Calculations Explainer" : "Bayanin Lissafin Kudi"}
+        </button>
       </div>
 
       {/* Filtering Selector Panel */}
@@ -673,6 +686,368 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. EXPLAINER TAB */}
+      {subTab === 'explainer' && (
+        <div className="flex flex-col gap-6">
+          <div className="bg-bg-surface border border-border-main rounded-2xl p-5 shadow-xs">
+            <h4 className="text-sm font-extrabold text-text-main flex items-center gap-2 mb-2">
+              <Calculator className="h-5 w-5 text-brand-gold animate-pulse" />
+              {lang === 'en' ? "Live Financial Equation Auditing" : "Kwamitin Tantance Lissafin Kudi na Take"}
+            </h4>
+            <p className="text-xs text-text-muted">
+              {lang === 'en' 
+                ? "This panel provides an absolute transparent view of the enterprise's accounting engine. It plugs live database metrics directly into auditing formulas so you can trace every transaction."
+                : "Wannan rukunin yana samar da cikakken bayani game da tsarin lissafin kudin kamfani. Yana shigar da alkaluman rumbun bayanai kai tsaye cikin dabarun binciken kudi."}
+            </p>
+          </div>
+
+          {/* Interactive Formula Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Formula 1: Corporate Revenue */}
+            <div className="bg-bg-surface border border-border-main rounded-2xl p-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-border-main/40 pb-3">
+                <span className="text-xs font-extrabold text-text-main flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 text-xs font-mono">F1</span>
+                  {lang === 'en' ? "Total Corporate Revenue" : "Jimillar Kudin Shiga"}
+                </span>
+                <span className="text-[10px] font-mono bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded-full font-bold">R_total</span>
+              </div>
+              <div className="bg-bg-base/40 p-3 rounded-xl border border-border-main/50 font-mono text-center">
+                <p className="text-[10px] text-text-muted mb-1">{lang === 'en' ? "MATHEMATICAL FORMULA" : "DABARAR LISSAPI"}</p>
+                <p className="text-xs text-brand-gold font-bold">R_total = Σ(Approved Driver Installments) + Σ(Other Inflows)</p>
+              </div>
+              <div className="flex flex-col gap-2.5 text-xs">
+                <p className="text-text-muted text-[11px] leading-relaxed">
+                  {lang === 'en' 
+                    ? "Calculated exclusively from approved driver installment receipts and validated manual general ledger revenue logs."
+                    : "Ana lissafawa ne kawai daga rasit na biyan installments na direbobi da aka amince da su da kuma sauran kudaden shiga da aka tantance."}
+                </p>
+                <div className="divide-y divide-border-main/30 pt-1 text-[11px]">
+                  <div className="py-2 flex justify-between">
+                    <span className="text-text-muted">Approved Installments:</span>
+                    <span className="font-bold text-text-main">
+                      {payments.filter(p => p.status === 'approved').length} payments ({lang === 'en' ? "Sum" : "Jimilla"}: ₦{payments.filter(p => p.status === 'approved').reduce((sum, p) => sum + p.amount, 0).toLocaleString()})
+                    </span>
+                  </div>
+                  <div className="py-2 flex justify-between">
+                    <span className="text-text-muted">Other Ledger Credits:</span>
+                    <span className="font-bold text-text-main">
+                      ₦{finance.filter(f => f.type === 'revenue' && f.category !== 'freight').reduce((sum, f) => sum + f.amount, 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="py-2.5 flex justify-between font-bold border-t border-border-main">
+                    <span className="text-brand-gold">{lang === 'en' ? "Formula Result" : "Sakamakon Lissafi"}:</span>
+                    <span className="text-emerald-500 font-extrabold font-mono text-[13px]">₦{activeCycleRevenue.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Formula 2: Total Operational Expenses */}
+            <div className="bg-bg-surface border border-border-main rounded-2xl p-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-border-main/40 pb-3">
+                <span className="text-xs font-extrabold text-text-main flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 text-xs font-mono">F2</span>
+                  {lang === 'en' ? "Total Corporate Expenses" : "Jimillar Kudin da Aka Kashe"}
+                </span>
+                <span className="text-[10px] font-mono bg-rose-500/15 text-rose-500 px-2 py-0.5 rounded-full font-bold">E_total</span>
+              </div>
+              <div className="bg-bg-base/40 p-3 rounded-xl border border-border-main/50 font-mono text-center">
+                <p className="text-[10px] text-text-muted mb-1">{lang === 'en' ? "MATHEMATICAL FORMULA" : "DABARAR LISSAPI"}</p>
+                <p className="text-xs text-brand-gold font-bold">E_total = Maintenance + Fuel + Salaries + Miscellaneous</p>
+              </div>
+              <div className="flex flex-col gap-2.5 text-xs">
+                <p className="text-text-muted text-[11px] leading-relaxed">
+                  {lang === 'en' 
+                    ? "Captures all cash outflows registered in the general ledger including vehicle repairs, fuel subsidies, and admin payroll."
+                    : "Yana tattara duk kudaden da aka kashe a babban littafi, gami da gyaran motoci, tallafin mai, da albashin ma'aikata."}
+                </p>
+                <div className="divide-y divide-border-main/30 pt-1 text-[11px]">
+                  <div className="py-1.5 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Maintenance & Spare Parts" : "Gyaran Motoci"}:</span>
+                    <span className="font-bold text-text-main">₦{finance.filter(f => f.type === 'expense' && f.category === 'maintenance').reduce((sum, f) => sum + f.amount, 0).toLocaleString()}</span>
+                  </div>
+                  <div className="py-1.5 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Fuel Subsidy Vouchers" : "Tallafin Kudin Mai"}:</span>
+                    <span className="font-bold text-text-main">₦{finance.filter(f => f.type === 'expense' && f.category === 'fuel').reduce((sum, f) => sum + f.amount, 0).toLocaleString()}</span>
+                  </div>
+                  <div className="py-1.5 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Admin Salaries & Wages" : "Albashin Ma'aikata"}:</span>
+                    <span className="font-bold text-text-main">₦{finance.filter(f => f.type === 'expense' && f.category === 'salary').reduce((sum, f) => sum + f.amount, 0).toLocaleString()}</span>
+                  </div>
+                  <div className="py-1.5 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Miscellaneous Spend Logs" : "Sauran Kudaden da Aka Kashe"}:</span>
+                    <span className="font-bold text-text-main">₦{finance.filter(f => f.type === 'expense' && f.category === 'other').reduce((sum, f) => sum + f.amount, 0).toLocaleString()}</span>
+                  </div>
+                  <div className="py-2 flex justify-between font-bold border-t border-border-main">
+                    <span className="text-brand-gold">{lang === 'en' ? "Formula Result" : "Sakamakon Lissafi"}:</span>
+                    <span className="text-rose-500 font-extrabold font-mono text-[13px]">₦{activeCycleExpenses.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Formula 3: Net Cash Surplus */}
+            <div className="bg-bg-surface border border-border-main rounded-2xl p-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-border-main/40 pb-3">
+                <span className="text-xs font-extrabold text-text-main flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 text-xs font-mono">F3</span>
+                  {lang === 'en' ? "Net Cash Surplus (Profits)" : "Riba ko Asarar Kamfani"}
+                </span>
+                <span className="text-[10px] font-mono bg-indigo-500/15 text-indigo-500 px-2 py-0.5 rounded-full font-bold">Surplus</span>
+              </div>
+              <div className="bg-bg-base/40 p-3 rounded-xl border border-border-main/50 font-mono text-center">
+                <p className="text-[10px] text-text-muted mb-1">{lang === 'en' ? "MATHEMATICAL FORMULA" : "DABARAR LISSAPI"}</p>
+                <p className="text-xs text-brand-gold font-bold">Surplus = R_total - E_total</p>
+              </div>
+              <div className="flex flex-col gap-2.5 text-xs">
+                <p className="text-text-muted text-[11px] leading-relaxed">
+                  {lang === 'en' 
+                    ? "The primary net profit/loss margin remaining in the treasury after servicing all operational debits from total earned revenues."
+                    : "Adadin ribar da ta rage a asusun kamfani bayan an rage duk kudaden da aka kashe na gudanarwa daga jimillar kudin shiga."}
+                </p>
+                <div className="divide-y divide-border-main/30 pt-1 text-[11px]">
+                  <div className="py-2 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Gross Revenue (R_total)" : "Jimillar Kudin Shiga"}:</span>
+                    <span className="font-bold text-emerald-500">₦{activeCycleRevenue.toLocaleString()}</span>
+                  </div>
+                  <div className="py-2 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Operational Expenses (E_total)" : "Jimillar Kashe Kudi"}:</span>
+                    <span className="font-bold text-rose-500">- ₦{activeCycleExpenses.toLocaleString()}</span>
+                  </div>
+                  <div className="py-2 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Margin Percentage" : "Kashi na Riba"}:</span>
+                    <span className="font-bold text-text-main">
+                      {activeCycleRevenue > 0 ? ((netSurplus / activeCycleRevenue) * 100).toFixed(1) : 0}%
+                    </span>
+                  </div>
+                  <div className="py-2.5 flex justify-between font-bold border-t border-border-main">
+                    <span className="text-brand-gold">{lang === 'en' ? "Net Treasury Status" : "Matsayin Asusun Kudi"}:</span>
+                    <span className={`font-extrabold font-mono text-[13px] ${netSurplus >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      ₦{netSurplus.toLocaleString()} ({netSurplus >= 0 ? (lang === 'en' ? "Surplus" : "Riba") : (lang === 'en' ? "Deficit" : "Asara")})
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Formula 4: Dividend Pool Allocation */}
+            <div className="bg-bg-surface border border-border-main rounded-2xl p-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-border-main/40 pb-3">
+                <span className="text-xs font-extrabold text-text-main flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 text-xs font-mono">F4</span>
+                  {lang === 'en' ? "Shareholder Dividend Pool (2%)" : "Rabon Kudaden Masu Hannun Jari (2%)"}
+                </span>
+                <span className="text-[10px] font-mono bg-amber-500/15 text-amber-500 px-2 py-0.5 rounded-full font-bold">Dividend</span>
+              </div>
+              <div className="bg-bg-base/40 p-3 rounded-xl border border-border-main/50 font-mono text-center">
+                <p className="text-[10px] text-text-muted mb-1">{lang === 'en' ? "MATHEMATICAL FORMULA" : "DABARAR LISSAPI"}</p>
+                <p className="text-xs text-brand-gold font-bold">Dividend = Max(0, Surplus * 0.02)</p>
+              </div>
+              <div className="flex flex-col gap-2.5 text-xs">
+                <p className="text-text-muted text-[11px] leading-relaxed">
+                  {lang === 'en' 
+                    ? "A continuous 2% yield set aside exclusively from the Net Cash Surplus for corporate shareholders. If there is a deficit, dividend allocation is ₦0."
+                    : "Wani kaso na 2% da ake kebewa masu hannun jari na kamfani daga cikin ragowar riba. Idan an tafka asara, rabon zai zama ₦0."}
+                </p>
+                <div className="divide-y divide-border-main/30 pt-1 text-[11px]">
+                  <div className="py-2 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Treasury Net Surplus" : "Ragowar Ribar Asusu"}:</span>
+                    <span className={`font-bold ${netSurplus >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>₦{netSurplus.toLocaleString()}</span>
+                  </div>
+                  <div className="py-2 flex justify-between">
+                    <span className="text-text-muted">{lang === 'en' ? "Statutory Allocation Rate" : "Kashi na Shari'a"}:</span>
+                    <span className="font-bold text-text-main">2.00%</span>
+                  </div>
+                  <div className="py-2.5 flex justify-between font-bold border-t border-border-main">
+                    <span className="text-brand-gold">{lang === 'en' ? "Dividend Pool Balance" : "Jimillar Kudin Masu Hannun Jari"}:</span>
+                    <span className="text-amber-500 font-extrabold font-mono text-[13px]">₦{shareholderShare.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Interactive Driver Lease & Installment Audit Simulator */}
+          <div className="bg-bg-surface border border-border-main rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border-main/40 pb-4">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 bg-brand-gold/10 border border-brand-gold/30 rounded-lg flex items-center justify-center text-brand-gold">
+                  <Calculator className="h-4 w-4" />
+                </div>
+                <div>
+                  <h5 className="text-xs font-extrabold text-text-main uppercase">
+                    {lang === 'en' ? "Driver Lease Contract & Milestone Simulator" : "Injin Gwada Kudaden Yarjejeniyar Direba"}
+                  </h5>
+                  <p className="text-[10px] text-text-muted mt-0.5">
+                    {lang === 'en' ? "Select any active driver profile to audit their specific lease amortization and installment cycle milestone details." : "Zabi wani direba domin tantance kudaden hayar motarsa da kuma installments da ya biya."}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <select
+                  value={explainerDriverId}
+                  onChange={(e) => setExplainerDriverId(e.target.value)}
+                  className="bg-bg-base border border-border-main rounded-lg px-3 py-1.5 text-xs text-text-main font-bold focus:outline-none"
+                >
+                  <option value="">{lang === 'en' ? "-- Select Driver Profile --" : "-- Zabi Direba --"}</option>
+                  {drivers.map(d => (
+                    <option key={d.id} value={d.id}>{d.fullName} ({d.company_driver_id || 'PENDING'})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {explainerDriverId ? (
+              (() => {
+                const driverObj = drivers.find(d => d.id === explainerDriverId);
+                if (!driverObj) return null;
+                const totalContract = driverObj.agreed_amount || 300000;
+                const standardCycleRate = totalContract / 6;
+                const approvedPaymentsList = payments.filter(p => p.driver_id === driverObj.id && p.status === 'approved');
+                const totalAmountPaid = approvedPaymentsList.reduce((sum, p) => sum + p.amount, 0);
+                const currentBalance = Math.max(0, totalContract - totalAmountPaid);
+                const approvedCount = approvedPaymentsList.length;
+                const progressPct = Math.min(100, Math.round((totalAmountPaid / totalContract) * 100));
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 text-xs">
+                    {/* Simulator Math Calculations */}
+                    <div className="md:col-span-7 flex flex-col gap-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-bg-base/40 border border-border-main/50 rounded-xl">
+                          <span className="text-[9px] text-text-muted uppercase font-bold tracking-wider">{lang === 'en' ? "Contract Lifetime Value" : "Darajar Kwangila"}</span>
+                          <p className="text-sm font-extrabold text-text-main mt-0.5">₦{totalContract.toLocaleString()}</p>
+                          <span className="text-[8px] text-text-muted">{lang === 'en' ? "30-Day Lease Term" : "Hayar Kwanaki 30"}</span>
+                        </div>
+                        <div className="p-3 bg-bg-base/40 border border-border-main/50 rounded-xl">
+                          <span className="text-[9px] text-text-muted uppercase font-bold tracking-wider">{lang === 'en' ? "Installment Rate (5-Day)" : "Kudin Installment (Kwana 5)"}</span>
+                          <p className="text-sm font-extrabold text-brand-gold mt-0.5">₦{standardCycleRate.toLocaleString()}</p>
+                          <span className="text-[8px] text-text-muted">{lang === 'en' ? "6 Equal Cycles" : "Zango 6 daidai gwargwado"}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 p-3 bg-bg-base/20 border border-border-main/50 rounded-xl">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-text-muted">
+                          <span>{lang === 'en' ? "LEASE OWNERSHIP PROGRESS" : "CI GABA DA MALLAKAR MOTA"}</span>
+                          <span>{progressPct}% {lang === 'en' ? "Paid" : "An Biya"}</span>
+                        </div>
+                        <div className="h-2 w-full bg-bg-base rounded-full overflow-hidden border border-border-main/50">
+                          <div 
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[8px] text-text-muted font-mono mt-0.5">
+                          <span>₦0</span>
+                          <span>{lang === 'en' ? `Target: ₦${totalContract.toLocaleString()}` : `Burin Biya: ₦${totalContract.toLocaleString()}`}</span>
+                        </div>
+                      </div>
+
+                      {/* Formulas plugged in */}
+                      <div className="flex flex-col gap-2">
+                        <span className="text-[10px] font-bold text-brand-gold uppercase tracking-wider">{lang === 'en' ? "Amortization Auditing Steps" : "Matakan Binciken Ragowar Kudi"}</span>
+                        <div className="flex flex-col gap-1.5 font-mono text-[11px] bg-bg-base/30 p-3 rounded-xl border border-border-main/50">
+                          <div className="flex justify-between text-text-muted">
+                            <span>1. Base Contract:</span>
+                            <span className="text-text-main">₦{totalContract.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between text-text-muted">
+                            <span>2. Payments Subtracted:</span>
+                            <span className="text-emerald-500 font-bold">- ₦{totalAmountPaid.toLocaleString()} ({approvedCount} of 6 installments)</span>
+                          </div>
+                          <div className="border-t border-border-main/50 my-1"></div>
+                          <div className="flex justify-between font-bold">
+                            <span className="text-text-main">3. Outstanding Debt:</span>
+                            <span className="text-rose-500">₦{currentBalance.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Milestone Cycle Timeline */}
+                    <div className="md:col-span-5 bg-bg-base/30 border border-border-main/60 rounded-xl p-4 flex flex-col gap-3">
+                      <span className="text-[10px] font-extrabold text-text-main uppercase tracking-wider block border-b border-border-main/40 pb-1.5">
+                        {lang === 'en' ? "6-Cycle Milestone Audit" : "Tantancewar Kudade na Kwanaki 30"}
+                      </span>
+                      <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1">
+                        {[1, 2, 3, 4, 5, 6].map(cycleNum => {
+                          const cyclePayment = approvedPaymentsList.find(p => p.installment_number === cycleNum);
+                          const isPaid = !!cyclePayment;
+                          return (
+                            <div key={cycleNum} className={`flex items-center justify-between p-2 rounded-lg border ${isPaid ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-bg-surface/50 border-border-main/40 text-text-muted'}`}>
+                              <span className="font-bold text-[10px]">
+                                {lang === 'en' ? `Milestone #${cycleNum}` : `Zango #${cycleNum}`}
+                              </span>
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                {isPaid ? (
+                                  <>
+                                    <span className="font-mono font-bold">₦{cyclePayment.amount.toLocaleString()}</span>
+                                    <CheckCircle className="h-3.5 w-3.5" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="font-mono">₦{standardCycleRate.toLocaleString()}</span>
+                                    <span className="h-1.5 w-1.5 rounded-full bg-border-main"></span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="text-center py-10 bg-bg-base/10 border border-dashed border-border-main/60 rounded-xl">
+                <HelpCircle className="h-8 w-8 text-text-muted mx-auto mb-2" />
+                <p className="text-xs text-text-muted">
+                  {lang === 'en' ? "Please choose a driver profile above to start the simulator." : "Da fatan za a zaɓi direba don fara duba alkaluma."}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* ERP Accounting Rules Accordion */}
+          <div className="bg-bg-surface border border-border-main rounded-2xl p-5 flex flex-col gap-4">
+            <h5 className="text-xs font-extrabold text-text-main uppercase border-b border-border-main/40 pb-2">
+              {lang === 'en' ? "Corporate Accounting Rules & Regulations" : "Dokokin Akanta na Kamfani"}
+            </h5>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="p-4 bg-bg-base/20 border border-border-main/50 rounded-xl flex flex-col gap-2">
+                <span className="font-bold text-brand-gold flex items-center gap-1">
+                  <Info className="h-4 w-4 shrink-0" />
+                  {lang === 'en' ? "Installment Approval Validation Rule" : "Dokar Yarda da Biyan Installment"}
+                </span>
+                <p className="text-text-muted leading-relaxed text-[11px]">
+                  {lang === 'en'
+                    ? "Installment payments submitted by drivers do not enter the official treasury revenue totals automatically. They are marked as 'PENDING'. Only upon explicit admin review and approval does the transaction register, subtracting from the driver's outstanding debt and expanding the corporate balance."
+                    : "Installments da direbobi suka shigar basa shiga jimillar kudin shiga na kamfani kai tsaye. Suna kasancewa ne a matsayin 'PENDING'. Sai kawai bayan amincewar admin tukunna sannan kudin zai ragu daga sauran kudin direba ya kuma shiga asusun kamfani."}
+                </p>
+              </div>
+
+              <div className="p-4 bg-bg-base/20 border border-border-main/50 rounded-xl flex flex-col gap-2">
+                <span className="font-bold text-brand-gold flex items-center gap-1">
+                  <Percent className="h-4 w-4 shrink-0" />
+                  {lang === 'en' ? "Dividend Pool Contribution Formula" : "Dabarar Lissafin Kudin Masu Hannun Jari"}
+                </span>
+                <p className="text-text-muted leading-relaxed text-[11px]">
+                  {lang === 'en'
+                    ? "The Dividend Pool is continuously computed at exactly 2.0% of the Net Cash Surplus (Profit). All expenses registered reduce the Net Cash Surplus, thereby decreasing the pool size. Deficits (Negative Surplus) result in a 2% pool contribution of ₦0; shareholders do not absorb debt from operational losses."
+                    : "Ana lissafa kudaden masu hannun jari ne a daidai kashi 2.0% na ragowar riba (surplus). Duk kudaden da aka kashe na rage ragowar riba, don haka suna rage kudin masu hannun jari. Idan kamfani ya tafka asara, rabon masu hannun jari zai zama ₦0."}
+                </p>
+              </div>
             </div>
           </div>
         </div>

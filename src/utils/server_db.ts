@@ -59,6 +59,7 @@ export interface DBState {
   announcements?: any[];
   company_settings: any;
   shareholder_settings: any;
+  company_operations_state?: any;
 }
 
 const INITIAL_DB_STATE: DBState = {
@@ -98,6 +99,15 @@ const INITIAL_DB_STATE: DBState = {
   },
   shareholder_settings: {
     distributionPercentage: 2
+  },
+  company_operations_state: {
+    status: 'Setup Mode',
+    currentCycle: '',
+    currentDay: 1,
+    startedBy: null,
+    startedAt: null,
+    pauseHistory: [],
+    auditLog: []
   }
 };
 
@@ -113,6 +123,7 @@ export function loadDB(): DBState {
       if (!parsed.cycles) { parsed.cycles = []; changed = true; }
       if (!parsed.company_settings) { parsed.company_settings = { ...INITIAL_DB_STATE.company_settings }; changed = true; }
       if (!parsed.shareholder_settings) { parsed.shareholder_settings = { ...INITIAL_DB_STATE.shareholder_settings }; changed = true; }
+      if (!parsed.company_operations_state) { parsed.company_operations_state = { ...INITIAL_DB_STATE.company_operations_state }; changed = true; }
       if (!parsed.trip_manifests) { parsed.trip_manifests = []; changed = true; }
       if (!parsed.users) { parsed.users = []; changed = true; }
       if (!parsed.directors) { parsed.directors = []; changed = true; }

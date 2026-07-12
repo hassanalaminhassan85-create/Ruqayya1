@@ -39,6 +39,7 @@ import { RegisterAssistedDriverModal } from '../components/admin/RegisterAssiste
 import { DocumentHub } from '../components/admin/DocumentHub';
 import { CommunicationCenter } from '../components/admin/CommunicationCenter';
 import { PaymentWorkflow } from '../components/admin/PaymentWorkflow';
+import { CompanyOperationsCard } from '../components/admin/CompanyOperationsCard';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -387,6 +388,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         </div>
       ) : (
         <>
+          {/* Company Operations State Banner */}
+          <CompanyOperationsCard
+            lang={lang}
+            onStateChange={syncAllData}
+            driversCount={drivers.length}
+            vehiclesCount={vehicles.length}
+          />
+
           {/* Dashboard Summary Widgets */}
           <AdminKPIs
             lang={lang}

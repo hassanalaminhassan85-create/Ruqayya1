@@ -1,0 +1,743 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { api } from '../../utils/api';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { 
+  Play, 
+  Pause, 
+  History, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Clock, 
+  Wallet, 
+  Activity, 
+  ChevronDown, 
+  ChevronUp, 
+  ShieldCheck, 
+  UserCheck, 
+  Info,
+  Server,
+  Briefcase,
+  Coins
+} from 'lucide-react';
+
+interface CompanyOperationsCardProps {
+  lang: 'en' | 'ha';
+  onStateChange?: () => void;
+  driversCount: number;
+  vehiclesCount: number;
+}
+
+export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({ 
+  lang, 
+  onStateChange,
+  driversCount,
+  vehiclesCount
+}) => {
+  const [opsState, setOpsState] = useState<any>({
+    status: 'Setup Mode',
+    currentCycle: '',
+    currentDay: 1,
+    startedBy: null,
+    startedAt: null,
+    pauseHistory: [],
+    auditLog: []
+  });
+  const [metrics, setMetrics] = useState<any>({
+    totalDrivers: 0,
+    totalTricycles: 0,
+    todayCollections: 0,
+    companyWalletBalance: 0,
+    systemHealth: 'Healthy'
+  });
+  const [loading, setLoading] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showChecklistModal, setShowChecklistModal] = useState(false);
+  const [showPauseModal, setShowPauseModal] = useState(false);
+  const [pauseReason, setPauseReason] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [checklist, setChecklist] = useState<any>([]);
+
+  // Inline forms state
+  const [showSalaryForm, setShowSalaryForm] = useState(false);
+  const [salaryRole, setSalaryRole] = useState('Admin');
+  const [salaryAmount, setSalaryAmount] = useState('150000');
+  
+  const [showWalletForm, setShowWalletForm] = useState(false);
+  const [walletBalance, setWalletBalance] = useState('5000000');
+
+  const fetchOperationsState = async () => {
+    try {
+      const res = await api.getOperationsState();
+      if (res && res.success) {
+        setOpsState(res.state);
+        setMetrics(res.metrics);
+      }
+    } catch (err) {
+      console.error("Failed to fetch company operations state:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOperationsState();
+    
+    // Register event listener for real-time state changes via custom SSE DB dispatch
+    const handleDbChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.company_operations_state) {
+        setOpsState(detail.company_operations_state);
+        if (detail.financials) {
+          // Recalculate metrics based on detail
+          const todayStr = new Date().toISOString().split('T')[0];
+          const todayCol = (detail.driver_payments || [])
+            .filter((p: any) => p.status === 'approved' && p.date && p.date.startsWith(todayStr))
+            .reduce((sum: number, p: any) => sum + p.amount, 0);
+
+          setMetrics({
+            totalDrivers: detail.drivers?.length || 0,
+            totalTricycles: detail.vehicles?.length || 0,
+            todayCollections: todayCol,
+            companyWalletBalance: detail.company_settings?.wallet_balance || 0,
+            systemHealth: 'Healthy'
+          });
+        }
+      }
+    };
+    
+    window.addEventListener('db-change', handleDbChange);
+    return () => {
+      window.removeEventListener('db-change', handleDbChange);
+    };
+  }, []);
+
+  const evaluateChecklist = async () => {
+    setActionError('');
+    try {
+      const stateRes = await api.getOperationsState();
+      const currentDB = (window as any).lastSSEState || {};
+      const companySettings = currentDB.company_settings || {};
+      const drivers = currentDB.drivers || [];
+      const vehicles = currentDB.vehicles || [];
+      const shareholders = currentDB.shareholders || [];
+      const users = currentDB.users || [];
+
+      const adminCount = users.filter((u: any) => u.role_id === 'role-admin' || u.role_id === 'role-director' || u.role === 'admin' || u.role === 'director').length;
+
+      const profileComplete = companySettings.companyName && companySettings.companyAddress && companySettings.phone && companySettings.email;
+      const driverComplete = drivers.length >= 1;
+      const tricycleComplete = vehicles.length >= 1 && vehicles.some((v: any) => v.driverId || v.driver_id);
+      const shareholderComplete = shareholders.length >= 1;
+      const salaryComplete = companySettings.salary_configured || (companySettings.salaries && companySettings.salaries.length >= 1);
+      const walletComplete = companySettings.wallet_initialized || companySettings.wallet_balance !== undefined;
+      const rulesComplete = companySettings.rules_shareholder_configured && companySettings.rules_cycle_configured;
+
+      const items = [
+        {
+          id: 'profile',
+          titleEn: 'Corporate Profile Configured',
+          titleHa: 'Siffar Kamfani a Tsare',
+          descEn: 'Requires company name, address, phone, and email.',
+          descHa: 'Ana buƙatar sunan kamfani, adireshi, tarho, da imel.',
+          isDone: !!profileComplete,
+        },
+        {
+          id: 'admin',
+          titleEn: 'Administrator Registered',
+          titleHa: 'Akalla Akwai Mai Kula Guda Guda',
+          descEn: 'Requires at least one Administrator or Executive Director account.',
+          descHa: 'Ana buƙatar aƙalla asusun mai kula guda ɗaya.',
+          isDone: adminCount >= 1,
+        },
+        {
+          id: 'driver',
+          titleEn: 'Drivers Registered',
+          titleHa: 'Rijistar Direbobi',
+          descEn: 'Requires at least one active driver registered in the system.',
+          descHa: 'Ana buƙatar aƙalla direba guda ɗaya a cikin tsarin.',
+          isDone: driverComplete,
+        },
+        {
+          id: 'tricycle',
+          titleEn: 'Tricycles Assigned',
+          titleHa: 'Kekuna da aka raba wa Direbobi',
+          descEn: 'Requires at least one registered tricycle assigned to an active driver.',
+          descHa: 'Ana buƙatar aƙalla keke guda ɗaya da aka raba wa direba.',
+          isDone: tricycleComplete,
+        },
+        {
+          id: 'shareholder',
+          titleEn: 'Shareholders Registered',
+          titleHa: 'Rijistar Masu Sanya Jari',
+          descEn: 'Requires at least one shareholder profile registered.',
+          descHa: 'Ana buƙatar aƙalla mai sanya jari guda ɗaya.',
+          isDone: shareholderComplete,
+        },
+        {
+          id: 'salary',
+          titleEn: 'Salary Configurations Complete',
+          titleHa: 'Sari da Tsarin Albashi',
+          descEn: 'Requires setting operational salaries for administrative roles.',
+          descHa: 'Ana buƙatar saita albashin masu gudanarwa.',
+          isDone: !!salaryComplete,
+          action: () => setShowSalaryForm(true)
+        },
+        {
+          id: 'wallet',
+          titleEn: 'Company Wallet Initialized',
+          titleHa: 'Asusun Kamfani (Wallet)',
+          descEn: 'Requires initializing company financial balance sheet.',
+          descHa: 'Ana buƙatar buɗe asusun kuɗi na kamfani.',
+          isDone: !!walletComplete,
+          action: () => setShowWalletForm(true)
+        },
+        {
+          id: 'rules',
+          titleEn: 'Operational Rules Configured',
+          titleHa: 'Dokokin Gudanarwa da Zagaye',
+          descEn: 'Requires 30-Day operating cycle rules and shareholder investment ratio setup.',
+          descHa: 'Ana buƙatar tsarin zagaye na kwanaki 30 da dokokin raba riba.',
+          isDone: !!rulesComplete,
+          action: async () => {
+            try {
+              await api.configRules({ rules_shareholder_configured: true, rules_cycle_configured: true, roles_configured: true });
+              evaluateChecklist();
+            } catch (err: any) {
+              setActionError(err.message);
+            }
+          }
+        }
+      ];
+
+      setChecklist(items);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleStartCompanyOperations = async () => {
+    setActionError('');
+    try {
+      const res = await api.startOperations();
+      if (res && res.success) {
+        setOpsState(res.state);
+        setShowChecklistModal(false);
+        if (onStateChange) onStateChange();
+        fetchOperationsState();
+      }
+    } catch (err: any) {
+      setActionError(err.message || 'Validation failed. Ensure checklist is 100% complete.');
+    }
+  };
+
+  const handlePauseCompanyOperations = async () => {
+    if (!pauseReason) {
+      setActionError(lang === 'en' ? 'Reason is required to suspend operations.' : 'Ana buƙatar bayanin dalili.');
+      return;
+    }
+    setActionError('');
+    try {
+      const res = await api.pauseOperations(pauseReason);
+      if (res && res.success) {
+        setOpsState(res.state);
+        setShowPauseModal(false);
+        setPauseReason('');
+        if (onStateChange) onStateChange();
+        fetchOperationsState();
+      }
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleResumeCompanyOperations = async () => {
+    setActionError('');
+    try {
+      const res = await api.resumeOperations('Resumed by administrator');
+      if (res && res.success) {
+        setOpsState(res.state);
+        if (onStateChange) onStateChange();
+        fetchOperationsState();
+      }
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleSaveSalary = async () => {
+    try {
+      await api.configSalaries([{ role: salaryRole, amount: parseFloat(salaryAmount) }]);
+      setShowSalaryForm(false);
+      evaluateChecklist();
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleSaveWallet = async () => {
+    try {
+      await api.configWallet(parseFloat(walletBalance));
+      setShowWalletForm(false);
+      evaluateChecklist();
+    } catch (err: any) {
+      setActionError(err.message);
+    }
+  };
+
+  const handleOpenChecklist = () => {
+    evaluateChecklist();
+    setShowChecklistModal(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="animate-pulse bg-slate-900 border border-slate-800 rounded-xl p-6 h-28 w-full flex items-center justify-center">
+        <span className="text-xs text-slate-500 font-mono">Syncing enterprise state engine...</span>
+      </div>
+    );
+  }
+
+  // Determine styling based on status
+  const isSetup = opsState.status === 'Setup Mode';
+  const isPaused = opsState.status === 'Paused';
+  const isOperational = opsState.status === 'Operational Mode';
+
+  let borderStyle = 'border-amber-500/30 bg-amber-950/10';
+  let badgeStyle = 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+  if (isOperational) {
+    borderStyle = 'border-emerald-500/30 bg-emerald-950/10';
+    badgeStyle = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+  } else if (isPaused) {
+    borderStyle = 'border-rose-500/30 bg-rose-950/10';
+    badgeStyle = 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+  }
+
+  return (
+    <div id="company-operations-container" className="w-full flex flex-col gap-3">
+      {/* Primary operations banner card */}
+      <Card className={`relative overflow-hidden border p-5 transition-all duration-300 rounded-xl shadow-lg backdrop-blur-md ${borderStyle}`}>
+        {/* Glow effect at background */}
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full blur-3xl opacity-15 bg-primary-gold" />
+        
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 z-10 relative">
+          
+          {/* Status block */}
+          <div className="flex items-start gap-4">
+            <div className={`p-3 rounded-xl border flex items-center justify-center ${
+              isSetup ? 'bg-amber-500/15 border-amber-500/20 text-amber-500' :
+              isPaused ? 'bg-rose-500/15 border-rose-500/20 text-rose-500' :
+              'bg-emerald-500/15 border-emerald-500/20 text-emerald-500'
+            }`}>
+              <Activity className={`h-6 w-6 ${isOperational ? 'animate-pulse' : ''}`} />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-xs uppercase tracking-widest text-text-muted font-bold">
+                  {lang === 'en' ? 'ENTERPRISE SYSTEM STATE' : 'TSARIN GUDANAR DA SASHIN AIKI'}
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${badgeStyle}`}>
+                  {opsState.status}
+                </span>
+              </div>
+              <h3 className="text-xl font-black text-text-main tracking-tight mt-1">
+                {isSetup && (lang === 'en' ? 'Setup & Staging Phase' : 'Matakin Shirya Kayan Aiki')}
+                {isOperational && (lang === 'en' ? 'Live Fleet Operations Active' : 'Rukunin Keken Napep Na Kan Hanyar Aiki')}
+                {isPaused && (lang === 'en' ? 'Corporate Suspension Active' : 'An Dakatar da Ayyuka Na Dan Lokaci')}
+              </h3>
+              <p className="text-xs text-text-muted max-w-xl leading-normal mt-0.5">
+                {isSetup && (lang === 'en' ? 'ERP is currently frozen in Setup Mode. Register drivers, assign tricycles, and configure company requirements safely before starting live leasing. Calculations and earnings are paused.' : 'Ana cikin shirin gudanarwa. Sanya direbobi, kekuna, saita albashi da wallet kafin a fara gudanar da lissafi da aiki na gaske.')}
+                {isOperational && (lang === 'en' ? 'Automatic calculations, 30-day operating cycle updates, fuel vouchers, and shareholder remittance splits are fully active in production.' : 'Ana lissafin kudaden remittance, rabon riba na kwanaki 30, kudaden gas, da duk sauran kudaden shiga na kamfani a raye.')}
+                {isPaused && (lang === 'en' ? 'System locked by administrator. Operations are halted, installments are frozen, and drivers cannot initiate transactions until resumed.' : 'An dakatar da lissafi, sanya kudi, da duk wani aiki na asusu har sai admin ya dawo da shi.')}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Metrics & Action Area */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
+            
+            {/* Operating Cycle stats */}
+            {!isSetup && (
+              <div className="grid grid-cols-2 gap-3 bg-card-bg/60 border border-border-main/55 rounded-xl px-4 py-2 text-center min-w-[200px]">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-text-muted block font-bold">{lang === 'en' ? 'Cycle' : 'Zagaye'}</span>
+                  <div className="text-sm font-extrabold text-text-main flex items-center justify-center gap-1 mt-0.5">
+                    <Clock className="h-3.5 w-3.5 text-primary-gold" />
+                    {opsState.currentCycle || 'N/A'}
+                  </div>
+                </div>
+                <div className="border-l border-border-main/50 pl-3">
+                  <span className="text-[9px] uppercase tracking-wider text-text-muted block font-bold">{lang === 'en' ? 'Cycle Day' : 'Rana'}</span>
+                  <span className="text-sm font-extrabold text-text-main mt-0.5 block">
+                    Day {opsState.currentDay || 1}/30
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* State Controls */}
+            <div className="flex items-center gap-2 flex-1 sm:flex-none">
+              {isSetup && (
+                <Button 
+                  id="btn-start-ops"
+                  onClick={handleOpenChecklist}
+                  className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg border-b-2 border-amber-700 shadow-md transition-all duration-200 cursor-pointer text-xs"
+                >
+                  <Play className="h-4 w-4 fill-slate-950" />
+                  {lang === 'en' ? 'Start Company Operations' : 'Fara Gudanar da Kamfani'}
+                </Button>
+              )}
+
+              {isOperational && (
+                <Button 
+                  id="btn-pause-ops"
+                  onClick={() => { setActionError(''); setShowPauseModal(true); }}
+                  className="w-full sm:w-auto bg-rose-600/10 hover:bg-rose-600/20 text-rose-500 border border-rose-600/30 font-bold flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg shadow-sm cursor-pointer text-xs"
+                >
+                  <Pause className="h-4 w-4" />
+                  {lang === 'en' ? 'Pause Operations' : 'Dakatar da Aiki'}
+                </Button>
+              )}
+
+              {isPaused && (
+                <Button 
+                  id="btn-resume-ops"
+                  onClick={handleResumeCompanyOperations}
+                  className="w-full sm:w-auto bg-emerald-500 text-slate-950 hover:bg-emerald-600 font-extrabold flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg shadow-md border-b-2 border-emerald-700 cursor-pointer text-xs"
+                >
+                  <Play className="h-4 w-4 fill-slate-950" />
+                  {lang === 'en' ? 'Resume Operations' : 'Ci Gaba da Aiki'}
+                </Button>
+              )}
+
+              <Button 
+                variant="outline"
+                onClick={() => setShowHistory(!showHistory)}
+                className="p-2.5 rounded-lg border border-border-main hover:bg-card-bg/80 text-text-muted font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <History className="h-4 w-4" />
+                {showHistory ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Small live metrics grid underneath for immediate visibility */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-border-main/40 mt-5 pt-4">
+          <div className="flex items-center gap-2.5">
+            <UserCheck className="h-4 w-4 text-primary-gold" />
+            <div>
+              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Drivers Live' : 'Direbobi'}</span>
+              <span className="text-xs font-black text-text-main">{metrics.totalDrivers || driversCount}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <Server className="h-4 w-4 text-indigo-400" />
+            <div>
+              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Tricycles Assigned' : 'Tricycles'}</span>
+              <span className="text-xs font-black text-text-main">{metrics.totalTricycles || vehiclesCount}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <Coins className="h-4 w-4 text-emerald-400" />
+            <div>
+              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? "Today's Collections" : 'Remittance Yau'}</span>
+              <span className="text-xs font-black text-text-main">₦{(metrics.todayCollections || 0).toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <Wallet className="h-4 w-4 text-amber-400" />
+            <div>
+              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Corporate Wallet' : 'Asusun Kamfani'}</span>
+              <span className="text-xs font-black text-text-main">₦{(metrics.companyWalletBalance || 0).toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 col-span-2 md:col-span-1">
+            <ShieldCheck className="h-4 w-4 text-cyan-400" />
+            <div>
+              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'System Integrity' : 'Lafiyar Tsarin'}</span>
+              <span className="text-xs font-black text-cyan-400">{metrics.systemHealth}</span>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Expandable operations history log */}
+      {showHistory && (
+        <Card className="border border-border-main bg-card-bg/65 backdrop-blur-md rounded-xl p-5 shadow-inner animate-fadeIn">
+          <div className="flex justify-between items-center pb-3 border-b border-border-main/50 mb-3">
+            <h4 className="text-xs font-black text-text-main uppercase tracking-wider flex items-center gap-1.5">
+              <History className="h-4 w-4 text-primary-gold" />
+              {lang === 'en' ? 'Operations Audit Trail (Immutable)' : 'Tarihin Sauye-sauyen Aiki (Baya Goguwa)'}
+            </h4>
+            <span className="text-[10px] font-mono text-text-muted">ROOT_NODE_SECURE</span>
+          </div>
+
+          {(!opsState.auditLog || opsState.auditLog.length === 0) ? (
+            <div className="text-center py-6 text-text-muted text-xs font-mono">
+              {lang === 'en' ? 'No operational phase shifts recorded yet.' : 'Babu tarihin sauya matakin aiki tukunna.'}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 max-h-64 overflow-y-auto pr-1">
+              {opsState.auditLog.map((log: any, idx: number) => (
+                <div key={log.id || idx} className="p-3 rounded-lg bg-bg-base/80 border border-border-main/50 flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                        log.action.includes('Start') ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/25' :
+                        log.action.includes('Pause') ? 'bg-rose-500/10 text-rose-500 border border-rose-500/25' :
+                        'bg-blue-500/10 text-blue-500 border border-blue-500/25'
+                      }`}>
+                        {log.action}
+                      </span>
+                      <span className="font-extrabold text-text-main">{log.user}</span>
+                    </div>
+                    <p className="text-text-muted mt-1 leading-normal italic">
+                      "{log.reason}"
+                    </p>
+                  </div>
+                  <div className="text-right flex flex-col items-start sm:items-end gap-0.5 font-mono text-[10px] text-text-muted">
+                    <span>{new Date(log.timestamp).toLocaleString()}</span>
+                    <span>IP: {log.ip || '127.0.0.1'} | {log.browser}</span>
+                    <span className="text-[8px] truncate max-w-[150px]">{log.device}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Staging/Setup Checklist Modal */}
+      {showChecklistModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+            
+            <div className="flex justify-between items-start pb-4 border-b border-slate-800">
+              <div>
+                <h3 className="text-lg font-black text-slate-100 flex items-center gap-2">
+                  <Play className="h-5 w-5 fill-amber-500 text-amber-500" />
+                  {lang === 'en' ? 'Launch Production Activation Checklist' : 'Matakan Fara Aikin Kamfani (Checklist)'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  {lang === 'en' ? 'The following enterprise parameters must be fully met before live production operations can commence.' : 'Dole ne a cika wadannan sharudda kafin a fara ayyuka da lissafin asusu.'}
+                </p>
+              </div>
+              <button 
+                onClick={() => { setShowChecklistModal(false); setActionError(''); setShowSalaryForm(false); setShowWalletForm(false); }}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            {actionError && (
+              <div className="my-3 p-3 bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs rounded-lg flex items-start gap-2 animate-shake">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
+            {/* Checklist body */}
+            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-4">
+              
+              {/* Dynamic checklist elements */}
+              <div className="flex flex-col gap-3">
+                {checklist.map((item: any) => (
+                  <div key={item.id} className={`p-4 rounded-xl border transition-all duration-200 ${
+                    item.isDone ? 'bg-emerald-950/15 border-emerald-500/25' : 'bg-slate-800/40 border-slate-800'
+                  }`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          {item.isDone ? (
+                            <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                          ) : (
+                            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-extrabold text-slate-200">
+                            {lang === 'en' ? item.titleEn : item.titleHa}
+                          </h4>
+                          <p className="text-[10.5px] text-slate-400 leading-normal mt-0.5">
+                            {lang === 'en' ? item.descEn : item.descHa}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action trigger button */}
+                      {!item.isDone && item.action && (
+                        <Button 
+                          size="sm" 
+                          variant="secondary"
+                          onClick={item.action}
+                          className="px-2.5 py-1 text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 rounded cursor-pointer shrink-0"
+                        >
+                          {lang === 'en' ? 'Setup Now' : 'Gyara Yanzu'}
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Salary Inline Form */}
+                    {item.id === 'salary' && showSalaryForm && (
+                      <div className="mt-4 p-4 border border-slate-700 bg-slate-950/50 rounded-lg flex flex-col gap-3 animate-slideDown">
+                        <span className="text-[10px] font-mono text-slate-400 block uppercase font-bold">Configure Executive/Admin Salary</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] uppercase tracking-wider text-slate-400 block font-bold mb-1">Administrative Role</label>
+                            <select 
+                              value={salaryRole} 
+                              onChange={(e) => setSalaryRole(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            >
+                              <option value="Admin">Administrator</option>
+                              <option value="Director">Executive Director</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] uppercase tracking-wider text-slate-400 block font-bold mb-1">Salary (₦ / Month)</label>
+                            <input 
+                              type="number" 
+                              value={salaryAmount} 
+                              onChange={(e) => setSalaryAmount(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => setShowSalaryForm(false)}
+                            className="px-3 py-1.5 text-[10px] text-slate-300 border-slate-700 hover:bg-slate-800"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            onClick={handleSaveSalary}
+                            className="px-3 py-1.5 text-[10px] bg-emerald-500 text-slate-950 font-extrabold"
+                          >
+                            Save Salary Rule
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Wallet Inline Form */}
+                    {item.id === 'wallet' && showWalletForm && (
+                      <div className="mt-4 p-4 border border-slate-700 bg-slate-950/50 rounded-lg flex flex-col gap-3 animate-slideDown">
+                        <span className="text-[10px] font-mono text-slate-400 block uppercase font-bold">Initialize Corporate Treasury Wallet Balance</span>
+                        <div>
+                          <label className="text-[9px] uppercase tracking-wider text-slate-400 block font-bold mb-1">Initial Deposited Reserve Balance (₦)</label>
+                          <input 
+                            type="number" 
+                            value={walletBalance} 
+                            onChange={(e) => setWalletBalance(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2 mt-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => setShowWalletForm(false)}
+                            className="px-3 py-1.5 text-[10px] text-slate-300 border-slate-700 hover:bg-slate-800"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            onClick={handleSaveWallet}
+                            className="px-3 py-1.5 text-[10px] bg-emerald-500 text-slate-950 font-extrabold"
+                          >
+                            Initialize Wallet
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-800 flex justify-end gap-3 mt-auto">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowChecklistModal(false)}
+                className="px-4 py-2 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer text-xs"
+              >
+                {lang === 'en' ? 'Close' : 'Fita'}
+              </Button>
+              <Button 
+                onClick={handleStartCompanyOperations}
+                disabled={checklist.some((item: any) => !item.isDone)}
+                className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-slate-950 font-black flex items-center gap-1.5 rounded shadow-lg border-b-2 border-emerald-700 disabled:opacity-50 disabled:pointer-events-none cursor-pointer text-xs"
+              >
+                <Play className="h-3.5 w-3.5 fill-slate-950 text-slate-950" />
+                {lang === 'en' ? 'Launch Official Operations' : 'Fara Gudanar da Kamfani'}
+              </Button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Pause Operations Modal */}
+      {showPauseModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative">
+            <h3 className="text-lg font-black text-slate-100 flex items-center gap-2">
+              <Pause className="h-5 w-5 text-rose-500" />
+              {lang === 'en' ? 'Confirm Operations Suspension' : 'Dakatar da Gudanar da Kamfani'}
+            </h3>
+            <p className="text-xs text-slate-400 mt-2">
+              {lang === 'en' ? 'Suspension freezes installments, restricts new payouts, halts interest, and places a safety freeze across the system. Fully auditing-logged.' : 'Dakatarwa zai tsayar da duk wani lissafi da remittan kudi da sauran ayyuka na asusu.'}
+            </p>
+
+            {actionError && (
+              <div className="my-3 p-3 bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs rounded-lg">
+                {actionError}
+              </div>
+            )}
+
+            <div className="mt-4">
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold mb-1">
+                {lang === 'en' ? 'Reason for Suspension (Immutable Audited Comment)' : 'Dalilin Dakatarwa'}
+              </label>
+              <textarea 
+                value={pauseReason}
+                onChange={(e) => setPauseReason(e.target.value)}
+                placeholder={lang === 'en' ? "E.g., Mid-year financial alignment checks" : "Sanya takaitaccen dalili a nan"}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 focus:outline-none focus:border-rose-500 h-24"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 mt-5">
+              <Button 
+                variant="outline" 
+                onClick={() => { setShowPauseModal(false); setPauseReason(''); setActionError(''); }}
+                className="px-4 py-2 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer text-xs"
+              >
+                {lang === 'en' ? 'Cancel' : 'Soke'}
+              </Button>
+              <Button 
+                onClick={handlePauseCompanyOperations}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-slate-100 font-extrabold rounded shadow-md cursor-pointer text-xs"
+              >
+                {lang === 'en' ? 'Suspend Operations' : 'Dakatar da Aiki'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

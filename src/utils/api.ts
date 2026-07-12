@@ -407,5 +407,44 @@ export const api = {
 
   getSelfShareholderData: async () => {
     return api.request('/api/shareholders/me');
+  },
+
+  getOperationsState: async () => {
+    return api.request('/api/operations/state');
+  },
+  startOperations: async () => {
+    return api.request('/api/operations/start', {
+      method: 'POST'
+    });
+  },
+  pauseOperations: async (reason: string) => {
+    return api.request('/api/operations/pause', {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  },
+  resumeOperations: async (reason?: string) => {
+    return api.request('/api/operations/resume', {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  },
+  configSalaries: async (salaries: any[]) => {
+    return api.request('/api/operations/config-salaries', {
+      method: 'POST',
+      body: JSON.stringify({ salaries })
+    });
+  },
+  configWallet: async (balance: number) => {
+    return api.request('/api/operations/config-wallet', {
+      method: 'POST',
+      body: JSON.stringify({ balance })
+    });
+  },
+  configRules: async (payload: { rules_shareholder_configured?: boolean; rules_cycle_configured?: boolean; roles_configured?: boolean }) => {
+    return api.request('/api/operations/config-rules', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
   }
 };

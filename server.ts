@@ -110,6 +110,15 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
     type: 'db_update',
     role: role,
     company_settings: db.company_settings || {},
+    company_operations_state: db.company_operations_state || {
+      status: 'Setup Mode',
+      currentCycle: '',
+      currentDay: 1,
+      startedBy: null,
+      startedAt: null,
+      pauseHistory: [],
+      auditLog: []
+    },
     announcements: db.announcements || [],
     timestamp: Date.now()
   };
@@ -287,6 +296,10 @@ setInterval(() => {
 setInterval(() => {
   try {
     const db = loadDB();
+    const opsState = db.company_operations_state || { status: 'Setup Mode' };
+    if (opsState.status === 'Setup Mode') {
+      return; // Skip automation checks in Setup Mode
+    }
     let dbChanged = false;
     const now = new Date();
 
@@ -2175,13 +2188,17 @@ app.get('/api/vouchers', authenticateSession, (req, res) => {
 app.post('/api/vouchers', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
+    const db = loadDB();
+    const opsState = db.company_operations_state || { status: 'Setup Mode' };
+    if (opsState.status === 'Setup Mode') {
+      return res.status(400).json({ error: 'Company is currently in Setup Mode. Financial operations are disabled until operations officially start.' });
+    }
     const { vehicleId, litersRequested, estimatedCost } = req.body;
 
     if (!vehicleId || !litersRequested || !estimatedCost) {
       return res.status(400).json({ error: 'Missing voucher payload parameters.' });
     }
 
-    const db = loadDB();
     const newVoucher = {
       id: generateUUID(),
       voucher_number: `FL-2026-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -2690,6 +2707,10 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
 app.get('/api/drivers/:id/installments', authenticateSession, (req, res) => {
   try {
     const db = loadDB();
+    const opsState = db.company_operations_state || { status: 'Setup Mode' };
+    if (opsState.status === 'Setup Mode') {
+      return res.json({ success: true, installments: [] });
+    }
     const driver = db.drivers.find(d => d.id === req.params.id);
     if (!driver) return res.status(404).json({ error: 'Driver profile not found.' });
     const activeCycle = db.cycles.find(c => c.status === 'active') || db.cycles[0];
@@ -3108,6 +3129,407 @@ app.put('/api/director/company-settings', authenticateSession, (req, res) => {
     );
 
     res.json({ success: true, settings: db.company_settings });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================================================
+// COMPANY OPERATIONS STATE MANAGEMENT (SETUP vs OPERATIONAL vs PAUSED)
+// ==================================================
+
+// GET current company operations state
+app.get('/api/operations/state', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const state = db.company_operations_state || {
+      status: 'Setup Mode',
+      currentCycle: '',
+      currentDay: 1,
+      startedBy: null,
+      startedAt: null,
+      pauseHistory: [],
+      auditLog: []
+    };
+
+    // Calculate metrics
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayCollections = (db.driver_payments || [])
+      .filter((p: any) => p.status === 'approved' && p.date && p.date.startsWith(todayStr))
+      .reduce((sum: number, p: any) => sum + p.amount, 0);
+
+    const totalDrivers = db.drivers?.length || 0;
+    const totalTricycles = db.vehicles?.length || 0;
+    const companyWalletBalance = db.company_settings?.wallet_balance || 0;
+    const systemHealth = 'Healthy';
+
+    res.json({
+      success: true,
+      state,
+      metrics: {
+        totalDrivers,
+        totalTricycles,
+        todayCollections,
+        companyWalletBalance,
+        systemHealth
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper to extract browser name from user agent
+function getBrowserName(userAgent: string): string {
+  if (!userAgent) return 'Unknown';
+  if (userAgent.includes('Chrome')) return 'Chrome';
+  if (userAgent.includes('Firefox')) return 'Firefox';
+  if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'Safari';
+  if (userAgent.includes('Edge')) return 'Edge';
+  return 'Browser/Client';
+}
+
+// POST start company operations
+app.post('/api/operations/start', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Only Administrators can start operations.' });
+    }
+
+    const db = loadDB();
+    const company_settings = db.company_settings || {};
+    const missing: string[] = [];
+
+    // Validations
+    if (!company_settings.companyName || !company_settings.companyAddress || !company_settings.phone || !company_settings.email) {
+      missing.push('Corporate Profile details complete in Settings');
+    }
+
+    const adminCount = db.users.filter((u: any) => u.role_id === 'role-admin' || u.role_id === 'role-director' || u.role === 'admin' || u.role === 'director').length;
+    if (adminCount < 1) {
+      missing.push('At least one Administrator profile');
+    }
+
+    if (!db.drivers || db.drivers.length < 1) {
+      missing.push('At least one registered driver profile');
+    }
+
+    if (!db.vehicles || db.vehicles.length < 1) {
+      missing.push('At least one registered vehicle asset');
+    } else {
+      const assigned = db.vehicles.some((v: any) => v.driver_id);
+      if (!assigned) {
+        missing.push('At least one vehicle assigned to a driver');
+      }
+    }
+
+    if (!db.shareholders || db.shareholders.length < 1) {
+      missing.push('At least one registered shareholder');
+    }
+
+    if (!company_settings.salary_configured && (!company_settings.salaries || company_settings.salaries.length < 1)) {
+      missing.push('Salary Configuration');
+    }
+
+    if (!company_settings.wallet_initialized && company_settings.wallet_balance === undefined) {
+      missing.push('Company Wallet Initialized');
+    }
+
+    if (missing.length > 0) {
+      return res.status(400).json({
+        error: 'Operations starting blocked: Company setup requirements are incomplete.',
+        missing
+      });
+    }
+
+    const state = db.company_operations_state || {
+      status: 'Setup Mode',
+      currentCycle: '',
+      currentDay: 1,
+      startedBy: null,
+      startedAt: null,
+      pauseHistory: [],
+      auditLog: []
+    };
+
+    if (state.status !== 'Setup Mode') {
+      return res.status(400).json({ error: 'Company operations have already been initialized.' });
+    }
+
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const device = req.headers['user-agent'] || 'Unknown Device';
+    const browser = getBrowserName(device);
+
+    const updatedState = {
+      status: 'Operational Mode',
+      currentCycle: 'Cycle 001',
+      currentDay: 1,
+      startedBy: actor.fullName,
+      startedAt: new Date().toISOString(),
+      pauseHistory: state.pauseHistory || [],
+      auditLog: [
+        {
+          id: generateUUID(),
+          action: 'Start Operations',
+          user: actor.fullName,
+          timestamp: new Date().toISOString(),
+          reason: 'Company ready for live transit & leasing business',
+          ip,
+          device,
+          browser
+        },
+        ...(state.auditLog || [])
+      ]
+    };
+
+    db.company_operations_state = updatedState;
+
+    // Create Cycle 001 if it doesn't exist
+    if (!db.cycles) db.cycles = [];
+    const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+    if (!activeCycle) {
+      const cycleId = `CYC-${Math.floor(100 + Math.random() * 900)}`;
+      db.cycles.unshift({
+        id: cycleId,
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: null,
+        endGoalTons: 200,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        created_by: actor.fullName,
+        locked: false,
+        financials: []
+      });
+      updatedState.currentCycle = cycleId;
+    } else {
+      updatedState.currentCycle = activeCycle.id;
+    }
+
+    // Set all approved drivers to 'active' status if they are 'approved' but not 'active'
+    if (db.drivers) {
+      db.drivers.forEach((drv: any) => {
+        if (drv.status === 'approved') {
+          drv.status = 'active';
+        }
+      });
+    }
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'COMPANY_OPERATIONS_START',
+      'Setup Mode',
+      `Activated live enterprise operations. First 30-day operating cycle commenced by ${actor.fullName}`,
+      req
+    );
+
+    res.json({ success: true, message: 'Company operations successfully started!', state: updatedState });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST pause company operations
+app.post('/api/operations/pause', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Only Administrators can pause operations.' });
+    }
+
+    const { reason } = req.body;
+    if (!reason) {
+      return res.status(400).json({ error: 'Reason for suspension is mandatory.' });
+    }
+
+    const db = loadDB();
+    const state = db.company_operations_state || { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+
+    if (state.status !== 'Operational Mode') {
+      return res.status(400).json({ error: 'Operations can only be paused from Operational Mode.' });
+    }
+
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const device = req.headers['user-agent'] || 'Unknown Device';
+    const browser = getBrowserName(device);
+
+    const pauseId = generateUUID();
+    const pauseEntry = {
+      id: pauseId,
+      pausedBy: actor.fullName,
+      pausedAt: new Date().toISOString(),
+      reason
+    };
+
+    state.status = 'Paused';
+    state.pauseHistory = [pauseEntry, ...(state.pauseHistory || [])];
+    state.auditLog = [
+      {
+        id: generateUUID(),
+        action: 'Pause Operations',
+        user: actor.fullName,
+        timestamp: new Date().toISOString(),
+        reason,
+        ip,
+        device,
+        browser
+      },
+      ...(state.auditLog || [])
+    ];
+
+    db.company_operations_state = state;
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'COMPANY_OPERATIONS_PAUSE',
+      'Operational Mode',
+      `Suspended company operations: ${reason}`,
+      req
+    );
+
+    res.json({ success: true, message: 'Company operations paused.', state });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST resume company operations
+app.post('/api/operations/resume', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Only Administrators can resume operations.' });
+    }
+
+    const { reason } = req.body;
+
+    const db = loadDB();
+    const state = db.company_operations_state || { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+
+    if (state.status !== 'Paused') {
+      return res.status(400).json({ error: 'Operations can only be resumed when Paused.' });
+    }
+
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const device = req.headers['user-agent'] || 'Unknown Device';
+    const browser = getBrowserName(device);
+
+    if (state.pauseHistory && state.pauseHistory.length > 0) {
+      const lastPause = state.pauseHistory[0];
+      lastPause.resumedBy = actor.fullName;
+      lastPause.resumedAt = new Date().toISOString();
+      if (reason) lastPause.resumeReason = reason;
+    }
+
+    state.status = 'Operational Mode';
+    state.auditLog = [
+      {
+        id: generateUUID(),
+        action: 'Resume Operations',
+        user: actor.fullName,
+        timestamp: new Date().toISOString(),
+        reason: reason || 'Operations resumed by administrator',
+        ip,
+        device,
+        browser
+      },
+      ...(state.auditLog || [])
+    ];
+
+    db.company_operations_state = state;
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'COMPANY_OPERATIONS_RESUME',
+      'Paused',
+      `Resumed company operations: ${reason || 'Manual resumption'}`,
+      req
+    );
+
+    res.json({ success: true, message: 'Company operations resumed.', state });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Configure Salaries setup
+app.post('/api/operations/config-salaries', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { salaries } = req.body;
+    if (!salaries || !Array.isArray(salaries)) {
+      return res.status(400).json({ error: 'Invalid salary configurations payload.' });
+    }
+
+    const db = loadDB();
+    db.company_settings = db.company_settings || {};
+    db.company_settings.salaries = salaries;
+    db.company_settings.salary_configured = true;
+
+    saveDB(db);
+    res.json({ success: true, message: 'Salary rules configured successfully!', settings: db.company_settings });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Configure Company Wallet
+app.post('/api/operations/config-wallet', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { balance } = req.body;
+    if (balance === undefined || isNaN(parseFloat(balance))) {
+      return res.status(400).json({ error: 'Balance value is mandatory.' });
+    }
+
+    const db = loadDB();
+    db.company_settings = db.company_settings || {};
+    db.company_settings.wallet_balance = parseFloat(balance);
+    db.company_settings.wallet_initialized = true;
+
+    saveDB(db);
+    res.json({ success: true, message: 'Company wallet initialized successfully!', settings: db.company_settings });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Configure other rules
+app.post('/api/operations/config-rules', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+
+    const { rules_shareholder_configured, rules_cycle_configured, roles_configured } = req.body;
+    const db = loadDB();
+    db.company_settings = db.company_settings || {};
+
+    if (rules_shareholder_configured !== undefined) db.company_settings.rules_shareholder_configured = rules_shareholder_configured;
+    if (rules_cycle_configured !== undefined) db.company_settings.rules_cycle_configured = rules_cycle_configured;
+    if (roles_configured !== undefined) db.company_settings.roles_configured = roles_configured;
+
+    saveDB(db);
+    res.json({ success: true, message: 'Operational rules configured successfully!', settings: db.company_settings });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -3636,6 +4058,10 @@ app.post('/api/payments', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
     const db = loadDB();
+    const opsState = db.company_operations_state || { status: 'Setup Mode' };
+    if (opsState.status === 'Setup Mode') {
+      return res.status(400).json({ error: 'Company is currently in Setup Mode. Financial operations are disabled until operations officially start.' });
+    }
     if (!db.driver_payments) db.driver_payments = [];
 
     let driverId = req.body.driverId;
