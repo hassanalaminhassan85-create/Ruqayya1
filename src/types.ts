@@ -126,6 +126,24 @@ export interface AppNotification {
   type: 'info' | 'warning' | 'success' | 'danger';
 }
 
+// Shareholder
+export interface Shareholder {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string;
+  address: string;
+  passport_photo_url?: string;
+  investment_amount: number;
+  investment_date: string;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  status?: string;
+  total_withdrawn?: number;
+  total_reinvested?: number;
+}
+
 // I18n translations type structure
 export interface Dictionary {
   landing: {

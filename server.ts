@@ -1051,6 +1051,7 @@ app.post('/api/auth/login', (req, res) => {
       success: true,
       token,
       expiresAt,
+      mustChangePassword: !!user.must_change_password,
       user: {
         id: user.id,
         email: user.email,
@@ -1059,6 +1060,44 @@ app.post('/api/auth/login', (req, res) => {
         role: roleName
       }
     });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5b. AUTHENTICATED: First Login Change Password Reset
+app.post('/api/auth/change-password-first-login', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Please submit a secure password (minimum 6 characters).' });
+    }
+
+    const db = loadDB();
+    const user = db.users.find(u => u.id === actor.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User account not found.' });
+    }
+
+    user.password_hash = hashPassword(newPassword);
+    user.must_change_password = false;
+    user.updated_at = new Date().toISOString();
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      user.id,
+      user.email,
+      actor.role,
+      'FIRST_LOGIN_PASSWORD_CHANGE',
+      null,
+      `User successfully performed mandatory first-login password change.`,
+      req
+    );
+
+    res.json({ success: true, message: 'Password updated successfully. Access unlocked.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1110,6 +1149,7 @@ app.get('/api/auth/me', authenticateSession, (req, res) => {
       fullName: user.full_name,
       phone: user.phone,
       role: actor.role,
+      mustChangePassword: !!user.must_change_password,
       permissions,
       profile: profileDetails
     }
@@ -1974,7 +2014,25 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       description: `Corporate equity capital investment - Shareholder ${fullName}`
     });
 
-    const targetUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    // Create user account if not exists for the shareholder
+    let targetUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!targetUser) {
+      const { password, mustChangePassword } = req.body;
+      const hashed = hashPassword(password || 'shareholder123');
+      targetUser = {
+        id: generateUUID(),
+        email: email.toLowerCase(),
+        phone: phone,
+        password_hash: hashed,
+        full_name: fullName,
+        role_id: 'role-shareholder',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active',
+        must_change_password: mustChangePassword !== undefined ? mustChangePassword : true
+      };
+      db.users.push(targetUser);
+    }
 
     // Notify shareholder of capital contribution
     db.notifications.unshift({
@@ -4600,6 +4658,252 @@ app.put('/api/vehicles/:id', authenticateSession, (req, res) => {
     );
 
     res.json({ success: true, vehicle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+// SHAREHOLDER WITHDRAWAL
+app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
+    }
+    const { shareholderId, amount, remarks } = req.body;
+    if (!shareholderId || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid withdrawal amount or shareholder ID.' });
+    }
+
+    const db = loadDB();
+    const sh = db.shareholders.find((s: any) => s.id === shareholderId);
+    if (!sh) return res.status(404).json({ error: 'Shareholder not found.' });
+
+    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const netGeneratedAmount = totalRev - totalExp;
+    const shareholderPercentage = db.shareholder_settings?.distributionPercentage || 2;
+    const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
+    
+    const totalInvestmentsSum = db.shareholders.reduce((s: number, r: any) => s + (r.investment_amount || 0), 0);
+    const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+    const currentEarnings = distributionPool * (pctStake / 100);
+    const totalWithdrawn = sh.total_withdrawn || 0;
+    const availableWithdrawal = currentEarnings - totalWithdrawn;
+
+    const withdrawAmt = parseFloat(amount);
+    if (withdrawAmt > availableWithdrawal) {
+      return res.status(400).json({ error: `Over-withdrawal prevented. Maximum available: ₦${availableWithdrawal.toLocaleString()}` });
+    }
+
+    const walletBalance = totalRev - totalExp;
+    if (walletBalance < withdrawAmt) {
+      return res.status(400).json({ error: `Insufficient company cash balance to fulfill withdrawal. Wallet balance: ₦${walletBalance.toLocaleString()}` });
+    }
+
+    sh.total_withdrawn = totalWithdrawn + withdrawAmt;
+    sh.updated_at = new Date().toISOString();
+
+    db.financial_records.unshift({
+      id: `FIN-WD-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+      type: 'expense',
+      category: 'other',
+      amount: withdrawAmt,
+      date: new Date().toISOString().split('T')[0],
+      description: `Shareholder Dividend Withdrawal - ${sh.full_name} (${remarks || 'Approved Disbursal'})`,
+      approvedBy: actor.fullName,
+      created_at: new Date().toISOString()
+    });
+
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Shareholder Withdrawal Approved',
+      title_ha: 'An Amince da Fitowar Kudin Shareholder',
+      message_en: `Withdrew ₦${withdrawAmt.toLocaleString()} from available dividends of ${sh.full_name}.`,
+      message_ha: `An cire ₦${withdrawAmt.toLocaleString()} daga ribar Alhaji/Hajiya ${sh.full_name}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_WITHDRAWAL',
+      null,
+      `Shareholder ${sh.full_name} withdrew ₦${withdrawAmt.toLocaleString()}`,
+      req
+    );
+
+    res.json({ success: true, shareholder: sh });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// SHAREHOLDER REINVESTMENT
+app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
+    }
+    const { shareholderId, amount } = req.body;
+    if (!shareholderId || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid reinvestment amount or shareholder ID.' });
+    }
+
+    const db = loadDB();
+    const sh = db.shareholders.find((s: any) => s.id === shareholderId);
+    if (!sh) return res.status(404).json({ error: 'Shareholder not found.' });
+
+    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const netGeneratedAmount = totalRev - totalExp;
+    const shareholderPercentage = db.shareholder_settings?.distributionPercentage || 2;
+    const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
+    
+    const totalInvestmentsSum = db.shareholders.reduce((s: number, r: any) => s + (r.investment_amount || 0), 0);
+    const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+    const currentEarnings = distributionPool * (pctStake / 100);
+    const totalWithdrawn = sh.total_withdrawn || 0;
+    const availableWithdrawal = currentEarnings - totalWithdrawn;
+
+    const reinvestAmt = parseFloat(amount);
+    if (reinvestAmt > availableWithdrawal) {
+      return res.status(400).json({ error: `Over-reinvestment prevented. Maximum available: ₦${availableWithdrawal.toLocaleString()}` });
+    }
+
+    sh.investment_amount += reinvestAmt;
+    sh.total_reinvested = (sh.total_reinvested || 0) + reinvestAmt;
+    sh.total_withdrawn = totalWithdrawn + reinvestAmt;
+    sh.updated_at = new Date().toISOString();
+
+    db.financial_records.unshift({
+      id: `FIN-REINV-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+      type: 'revenue',
+      category: 'other',
+      amount: reinvestAmt,
+      date: new Date().toISOString().split('T')[0],
+      description: `Capital Reinvestment - ${sh.full_name} (Rollover of ₦${reinvestAmt.toLocaleString()} dividends into Capital)`,
+      approvedBy: actor.fullName,
+      created_at: new Date().toISOString()
+    });
+    
+    db.financial_records.unshift({
+      id: `FIN-REINV-EXP-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+      type: 'expense',
+      category: 'other',
+      amount: reinvestAmt,
+      date: new Date().toISOString().split('T')[0],
+      description: `Shareholder Reinvestment Debit - ${sh.full_name} (Transfer to capital stock)`,
+      approvedBy: actor.fullName,
+      created_at: new Date().toISOString()
+    });
+
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Shareholder Reinvestment Processed',
+      title_ha: 'Sake Zuba Jari na Shareholder',
+      message_en: `Successfully reinvested ₦${reinvestAmt.toLocaleString()} dividends into capital stock for ${sh.full_name}.`,
+      message_ha: `An sake zuba jarin ribar ₦${reinvestAmt.toLocaleString()} a matsayin jari na ${sh.full_name}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_REINVESTMENT',
+      null,
+      `Shareholder ${sh.full_name} reinvested ₦${reinvestAmt.toLocaleString()}`,
+      req
+    );
+
+    res.json({ success: true, shareholder: sh });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// AUTOMATED PAYROLL MANAGEMENT
+app.post('/api/finance/payroll', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
+    }
+    const db = loadDB();
+    const activeVehiclesCount = db.vehicles.filter((v: any) => v.status === 'active' || v.status === 'assigned' || v.status === 'idle').length || db.vehicles.length || 5;
+    
+    const barristerSal = activeVehiclesCount * 1000;
+    const managerSal = activeVehiclesCount * 1000;
+    const hegelSal = activeVehiclesCount * 500;
+    const adamSal = activeVehiclesCount * 1000;
+    const abakakaSal = activeVehiclesCount * 1000;
+    const totalPayroll = barristerSal + managerSal + hegelSal + adamSal + abakakaSal;
+
+    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const walletBalance = totalRev - totalExp;
+
+    if (walletBalance < totalPayroll) {
+      return res.status(400).json({ error: `Insufficient funds in company wallet to process payroll. Required: ₦${totalPayroll.toLocaleString()}, Available: ₦${walletBalance.toLocaleString()}` });
+    }
+
+    const entries = [
+      { name: 'Barrister', amount: barristerSal },
+      { name: 'Manager', amount: managerSal },
+      { name: 'Hegel', amount: hegelSal },
+      { name: 'Admin Adam', amount: adamSal },
+      { name: 'Admin Abakaka', amount: abakakaSal }
+    ];
+
+    entries.forEach(entry => {
+      db.financial_records.unshift({
+        id: `FIN-PAY-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+        type: 'expense',
+        category: 'salary',
+        amount: entry.amount,
+        date: new Date().toISOString().split('T')[0],
+        description: `Payroll Disbursal for ${entry.name} based on ${activeVehiclesCount} active tricycles`,
+        approvedBy: actor.fullName,
+        created_at: new Date().toISOString()
+      });
+    });
+
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Payroll Successfully Processed',
+      title_ha: 'An Shigar da Albashin Ma’aikata',
+      message_en: `Disbursed ₦${totalPayroll.toLocaleString()} in salaries for ${activeVehiclesCount} active tricycles in the cycle.`,
+      message_ha: `An fitar da albashi na ₦${totalPayroll.toLocaleString()} na babura ${activeVehiclesCount} masu aiki a wannan zagaye.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'PAYROLL_GENERATED',
+      null,
+      `Processed payroll of ₦${totalPayroll.toLocaleString()} for ${activeVehiclesCount} active tricycles.`,
+      req
+    );
+
+    res.json({ success: true, totalPayroll, activeVehiclesCount });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

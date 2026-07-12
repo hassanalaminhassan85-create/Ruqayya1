@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/C
 import { Button } from '../components/ui/Button';
 import { Badge, Alert, Tabs, Modal, ProgressBar } from '../components/ui/SharedComponents';
 import { api } from '../utils/api';
-import { Vehicle, Driver, DailyRemittance, FuelVoucher, Dictionary, Language, FinancialRecord } from '../types';
+import { Vehicle, Driver, DailyRemittance, FuelVoucher, Dictionary, Language, FinancialRecord, Shareholder } from '../types';
 import { 
   Truck, 
   Users, 
@@ -40,17 +40,18 @@ import { DocumentHub } from '../components/admin/DocumentHub';
 import { CommunicationCenter } from '../components/admin/CommunicationCenter';
 import { PaymentWorkflow } from '../components/admin/PaymentWorkflow';
 import { CompanyOperationsCard } from '../components/admin/CompanyOperationsCard';
+import { PeopleManagement } from '../components/admin/PeopleManagement';
 
 interface AdminDashboardProps {
   lang: Language;
   dictionary: Dictionary;
-  activeTab?: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory';
-  setActiveTab?: (tab: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory') => void;
+  activeTab?: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people';
+  setActiveTab?: (tab: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people') => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
   // Tabs & Views
-  const [localActiveTab, setLocalActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory'>('fleet');
+  const [localActiveTab, setLocalActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people'>('fleet');
   const activeTab = propActiveTab || localActiveTab;
   const setActiveTab = propSetActiveTab || setLocalActiveTab;
   
@@ -61,6 +62,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [vouchers, setVouchers] = useState<FuelVoucher[]>([]);
   const [finance, setFinance] = useState<FinancialRecord[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [shareholders, setShareholders] = useState<Shareholder[]>([]);
   const [activeCycle, setActiveCycle] = useState<any>(null);
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -106,13 +108,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
 
   const syncAllData = async () => {
     try {
-      const [vList, dList, tList, fvList, fin, payList] = await Promise.all([
+      const [vList, dList, tList, fvList, fin, payList, shList] = await Promise.all([
         api.getVehicles(),
         api.getDrivers(),
         api.getTrips(),
         api.getVouchers(),
         api.getFinance(),
-        api.getPayments()
+        api.getPayments(),
+        api.getShareholders()
       ]);
       setVehicles(vList || []);
       setDrivers(dList || []);
@@ -120,6 +123,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       setVouchers(fvList || []);
       setFinance(fin || []);
       setPayments(payList || []);
+      setShareholders(shList || []);
       
       const revTotal = (fin || [])
         .filter((f: any) => f.type === 'revenue')
@@ -418,6 +422,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               { id: 'finance', label: lang === 'en' ? "Financial Center" : "Kudaden Shiga", icon: <span className="font-extrabold text-xs">₦</span> },
               { id: 'payments', label: lang === 'en' ? "Installments Approval" : "Biyan Kudi", icon: <span className="font-extrabold text-xs">₦</span> },
               { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
+              { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
               { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> },
               { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-3.5 w-3.5" /> }
             ]}
@@ -807,6 +812,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 vehicles={vehicles}
                 finance={finance}
                 payments={payments}
+                shareholders={shareholders}
                 onSync={syncAllData}
               />
             )}
@@ -819,6 +825,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             {/* TAB 7: DOCUMENT MANAGEMENT SYSTEM */}
             {activeTab === 'documents' && (
               <DocumentHub lang={lang} />
+            )}
+
+            {/* TAB: PEOPLE ONBOARDING & MANAGEMENT */}
+            {activeTab === 'people' && (
+              <PeopleManagement
+                lang={lang}
+                drivers={drivers}
+                vehicles={vehicles}
+                shareholders={shareholders}
+                onSync={syncAllData}
+                currentUserRole="admin"
+              />
             )}
 
             {/* TAB 8: COMMUNICATIONS CONTROL */}

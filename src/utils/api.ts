@@ -98,6 +98,13 @@ export const api = {
     return api.request('/api/auth/me');
   },
 
+  changePasswordFirstLogin: async (newPassword: string) => {
+    return api.request('/api/auth/change-password-first-login', {
+      method: 'POST',
+      body: JSON.stringify({ newPassword })
+    });
+  },
+
   registerDriver: async (payload: { personal: any; guarantor: any; vehicle: any }) => {
     return api.request('/api/auth/register-driver', {
       method: 'POST',
@@ -368,6 +375,26 @@ export const api = {
     return api.request(`/api/payments/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload)
+    });
+  },
+
+  postShareholderWithdrawal: async (payload: { shareholderId: string; amount: number; remarks?: string }) => {
+    return api.request('/api/finance/withdraw', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  postShareholderReinvestment: async (payload: { shareholderId: string; amount: number }) => {
+    return api.request('/api/finance/reinvest', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  postPayroll: async () => {
+    return api.request('/api/finance/payroll', {
+      method: 'POST'
     });
   },
 

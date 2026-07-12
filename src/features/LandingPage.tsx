@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Truck, 
   ShieldCheck, 
+  ShieldAlert,
   Phone, 
   Mail, 
   Lock, 
@@ -147,6 +148,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // First login password reset state
+  const [showFirstLoginReset, setShowFirstLoginReset] = useState(false);
+  const [newFirstLoginPassword, setNewFirstLoginPassword] = useState('');
+  const [firstLoginResetError, setFirstLoginResetError] = useState('');
+  const [firstLoginResetLoading, setFirstLoginResetLoading] = useState(false);
+  const [pendingLoginUser, setPendingLoginUser] = useState<any>(null);
+
   // Multi-step Registration Wizard State
   const [regStep, setRegStep] = useState<1 | 2 | 3 | 4>(1); // 1: Personal, 2: Guarantor, 3: Vehicle, 4: Complete
   const [regError, setRegError] = useState('');
@@ -251,6 +259,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         rememberMe
       });
 
+      if (res.mustChangePassword) {
+        setPendingLoginUser(res.user);
+        setShowFirstLoginReset(true);
+        setIsLoggingIn(false);
+        return;
+      }
+
       setLoginSuccess(true);
       setTimeout(() => {
         setIsLoggingIn(false);
@@ -263,6 +278,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     } catch (err: any) {
       setIsLoggingIn(false);
       setLoginError(err.message || "Failed to authenticate.");
+    }
+  };
+
+  const handleFirstLoginPasswordChangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFirstLoginResetError('');
+    setFirstLoginResetLoading(true);
+
+    if (!newFirstLoginPassword || newFirstLoginPassword.length < 6) {
+      setFirstLoginResetError(lang === 'en' ? "Please submit a secure password (minimum 6 characters)." : "Kalmar sirri dole ta kasance da kalla haruffa shida.");
+      setFirstLoginResetLoading(false);
+      return;
+    }
+
+    try {
+      await api.changePasswordFirstLogin(newFirstLoginPassword);
+      setFirstLoginResetLoading(false);
+      
+      setLoginSuccess(true);
+      setTimeout(() => {
+        if (pendingLoginUser.role === 'driver') {
+          onLoginAsDriver(pendingLoginUser.fullName);
+        } else {
+          onNavigateToRole(pendingLoginUser.role);
+        }
+      }, 1000);
+    } catch (err: any) {
+      setFirstLoginResetLoading(false);
+      setFirstLoginResetError(err.message || "Failed to finalize security policy.");
     }
   };
 
@@ -731,27 +775,64 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               
               {/* PORTAL LOGIN PANEL */}
               {activePortal === 'login' && (
-                <form onSubmit={handleLoginSubmit} className="flex flex-col gap-5">
-                  <div className="text-center mb-2">
-                    <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                      {lang === 'en' ? 'Authenticate Secure Credentials' : 'Tabbatar Da Bayanai Masu Aminci'}
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {dictionary.landing.portalNotice}
-                    </p>
-                  </div>
+                showFirstLoginReset ? (
+                  <form onSubmit={handleFirstLoginPasswordChangeSubmit} className="flex flex-col gap-5">
+                    <div className="text-center mb-2">
+                      <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center justify-center gap-2">
+                        <ShieldAlert className="h-6 w-6 text-brand-gold animate-bounce" />
+                        {lang === 'en' ? 'Mandatory Password Update' : 'Sake Sabunta Kalmar Sirri'}
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {lang === 'en' ? 'An administrative policy requires you to change your temporary credentials on first login.' : 'Karantattun tsare-tsare na buƙatar ka canza kalmar sirri ta wucin gadi a shigarka na farko.'}
+                      </p>
+                    </div>
 
-                  {loginError && (
-                    <Alert type="danger" title={lang === 'en' ? "Access Denied" : "An ki amincewa"}>
-                      {loginError}
-                    </Alert>
-                  )}
+                    {firstLoginResetError && (
+                      <Alert type="danger" title={lang === 'en' ? "Error" : "Kuskure"}>
+                        {firstLoginResetError}
+                      </Alert>
+                    )}
 
-                  {loginSuccess && (
-                    <Alert type="success" title={lang === 'en' ? "Access Approved" : "An amince"}>
-                      {lang === 'en' ? "Session initiated. Synchronizing database entries..." : "An kaddamar da shiga. Ana hada bayanai..."}
-                    </Alert>
-                  )}
+                    <FloatingInput 
+                      type="password"
+                      label={lang === 'en' ? "New Hashed Password" : "Sabuwar Kalmar Sirri"}
+                      value={newFirstLoginPassword}
+                      onChange={(e) => setNewFirstLoginPassword(e.target.value)}
+                      icon={<Lock className="h-5 w-5" />}
+                      required
+                    />
+
+                    <Button
+                      variant="secondary"
+                      type="submit"
+                      isLoading={firstLoginResetLoading}
+                      className="w-full font-bold text-sm text-slate-950 py-3"
+                    >
+                      {lang === 'en' ? 'Activate & Secure Account' : 'Kunna da Tabbatar da Asusunka'}
+                    </Button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleLoginSubmit} className="flex flex-col gap-5">
+                    <div className="text-center mb-2">
+                      <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                        {lang === 'en' ? 'Authenticate Secure Credentials' : 'Tabbatar Da Bayanai Masu Aminci'}
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {dictionary.landing.portalNotice}
+                      </p>
+                    </div>
+
+                    {loginError && (
+                      <Alert type="danger" title={lang === 'en' ? "Access Denied" : "An ki amincewa"}>
+                        {loginError}
+                      </Alert>
+                    )}
+
+                    {loginSuccess && (
+                      <Alert type="success" title={lang === 'en' ? "Access Approved" : "An amince"}>
+                        {lang === 'en' ? "Session initiated. Synchronizing database entries..." : "An kaddamar da shiga. Ana hada bayanai..."}
+                      </Alert>
+                    )}
 
                   {/* Input email */}
                   <FloatingInput 
@@ -831,7 +912,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     {lang === 'en' ? 'Acknowledge & Access Portal' : 'Tabbatar Da Shiga Sashe'}
                   </Button>
                 </form>
-              )}
+              ))}
 
               {/* PORTAL MULTI-STEP REGISTRATION WIZARD */}
               {activePortal === 'register' && (

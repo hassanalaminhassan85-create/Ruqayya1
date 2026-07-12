@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import EnterpriseDirectory from '../components/admin/EnterpriseDirectory';
 import { OverviewTab } from '../components/director/OverviewTab';
+import { FinancialCommandCenter } from '../components/admin/FinancialCommandCenter';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   TrendingUp, 
@@ -76,14 +77,16 @@ import {
   FinancialRecord, 
   Vehicle, 
   Driver, 
-  AppNotification 
+  AppNotification,
+  Shareholder
 } from '../types';
+import { PeopleManagement } from '../components/admin/PeopleManagement';
 
 interface DirectorDashboardProps {
   lang: Language;
   dictionary: Dictionary;
-  activeTab?: 'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory';
-  setActiveTab?: (tab: 'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory') => void;
+  activeTab?: 'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory' | 'people';
+  setActiveTab?: (tab: 'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory' | 'people') => void;
 }
 
 export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
@@ -104,7 +107,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
   
   const [loading, setLoading] = useState(true);
   const [sseConnected, setSseConnected] = useState(false);
-  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory'>('overview');
+  const [localActiveTab, setLocalActiveTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory' | 'people'>('overview');
   const activeTab = propActiveTab || localActiveTab;
   const setActiveTab = propSetActiveTab || setLocalActiveTab;
   const [monitoringData, setMonitoringData] = useState<any>(null);
@@ -242,6 +245,29 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
   // Print/Report Selection states
   const [selectedReportType, setSelectedReportType] = useState<'financial' | 'driver' | 'shareholder' | 'revenue' | 'expense' | 'current_cycle' | 'history'>('financial');
 
+  const fetchFallbackData = async () => {
+    try {
+      const [lgList, finList, vhList, drList, shList, cyList, ntList] = await Promise.all([
+        api.getAuditLogs(),
+        api.getFinance(),
+        api.getVehicles(),
+        api.getDrivers(),
+        api.getShareholders(),
+        api.request('/api/director/cycles/history').catch(() => []), // safety fallback
+        api.getNotifications()
+      ]);
+      setLogs(lgList || []);
+      setFinancials(finList || []);
+      setVehicles(vhList || []);
+      setDrivers(drList || []);
+      setShareholders(shList || []);
+      setNotifications(ntList || []);
+      setLoading(false);
+    } catch (err) {
+      console.error("HTTP Fallback also failed:", err);
+    }
+  };
+
   // Establish SSE stream connection on mount
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -297,29 +323,6 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
         console.warn("EventSource creation blocked or unsupported in this sandboxed context:", e);
         setSseConnected(false);
         fetchFallbackData();
-      }
-    };
-
-    const fetchFallbackData = async () => {
-      try {
-        const [lgList, finList, vhList, drList, shList, cyList, ntList] = await Promise.all([
-          api.getAuditLogs(),
-          api.getFinance(),
-          api.getVehicles(),
-          api.getDrivers(),
-          api.getShareholders(),
-          api.request('/api/director/cycles/history').catch(() => []), // safety fallback
-          api.getNotifications()
-        ]);
-        setLogs(lgList || []);
-        setFinancials(finList || []);
-        setVehicles(vhList || []);
-        setDrivers(drList || []);
-        setShareholders(shList || []);
-        setNotifications(ntList || []);
-        setLoading(false);
-      } catch (err) {
-        console.error("HTTP Fallback also failed:", err);
       }
     };
 
@@ -748,6 +751,13 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
           {lang === 'en' ? "Shareholders Pool" : "Masu Hannun Jari"}
         </button>
         <button
+          onClick={() => setActiveTab('people')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'people' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
+        >
+          <Users className="h-3.5 w-3.5 shrink-0 text-brand-gold" />
+          {lang === 'en' ? "People Onboarding" : "Rijistar Mutane"}
+        </button>
+        <button
           onClick={() => setActiveTab('admins')}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'admins' ? 'bg-brand-gold text-slate-950 shadow-xs' : 'text-text-muted hover:text-text-main hover:bg-bg-base/40'}`}
         >
@@ -1143,161 +1153,15 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                   TAB: financial command center / analytics
                   ================================================== */}
               {activeTab === 'analytics' && (
-                <div className="flex flex-col gap-6">
-                  
-                  {/* Ledger Metrics */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="p-4 bg-bg-surface border border-border-main flex items-center gap-4">
-                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl">
-                        <TrendingUp className="h-6 w-6 text-emerald-500" />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Total Invoiced Revenue" : "Kudaden Shiga"}</span>
-                        <p className="text-xl font-extrabold text-emerald-600 font-mono mt-0.5">₦{totalRevenueSum.toLocaleString()}</p>
-                      </div>
-                    </Card>
-                    <Card className="p-4 bg-bg-surface border border-border-main flex items-center gap-4">
-                      <div className="p-3 bg-rose-50 dark:bg-rose-950/30 rounded-xl">
-                        <TrendingDown className="h-6 w-6 text-rose-500" />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Total Operating Expenses" : "Kuɗaɗen Kashewa"}</span>
-                        <p className="text-xl font-extrabold text-rose-600 font-mono mt-0.5">₦{totalExpensesSum.toLocaleString()}</p>
-                      </div>
-                    </Card>
-                    <Card className="p-4 bg-bg-surface border border-border-main flex items-center gap-4">
-                      <div className="p-3 bg-brand-gold/10 rounded-xl">
-                        <Percent className="h-6 w-6 text-brand-gold" />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{lang === 'en' ? "Shareholder Dividends Pool" : "Kudin Raba Jari"}</span>
-                        <p className="text-xl font-extrabold text-text-main font-mono mt-0.5">₦{distributionPool.toLocaleString()}</p>
-                      </div>
-                    </Card>
-                  </div>
-
-                  {/* Interactive charts row */}
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    
-                    {/* Revenue Category breakdown */}
-                    <Card className="lg:col-span-8">
-                      <CardHeader>
-                        <CardTitle>{lang === 'en' ? "Live Remittance Cashflows" : "Hanyoyin Kudi na Gaskiya"}</CardTitle>
-                        <CardDescription>Daily financial record entries tracked instantly.</CardDescription>
-                      </CardHeader>
-                      <div className="h-80 mt-4">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={financials.slice(0, 15).reverse()} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                            <XAxis dataKey="date" stroke="#64748B" fontSize={10} tickLine={false} />
-                            <YAxis stroke="#64748B" fontSize={10} tickLine={false} />
-                            <Tooltip formatter={(value: any) => [`₦${value.toLocaleString()}`]} />
-                            <Legend wrapperStyle={{ fontSize: 10 }} />
-                            <Bar dataKey="amount" name="Transaction Amount" radius={[4, 4, 0, 0]}>
-                              {financials.slice(0, 15).reverse().map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.type === 'revenue' ? '#10B981' : '#EF4444'} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </Card>
-
-                    {/* Expense category share pie */}
-                    <Card className="lg:col-span-4">
-                      <CardHeader>
-                        <CardTitle>{lang === 'en' ? "Operational Expenditures Share" : "Rabon Kudaden Gyara & Mai"}</CardTitle>
-                        <CardDescription>Percentage distribution by operational division.</CardDescription>
-                      </CardHeader>
-                      <div className="h-64 mt-4 relative flex items-center justify-center">
-                        {expenseCategories.length === 0 ? (
-                          <div className="text-xs text-text-muted py-10">{lang === 'en' ? "No expense records loaded." : "Babu kudaden kashewa."}</div>
-                        ) : (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={expenseCategories}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                paddingAngle={5}
-                                dataKey="value"
-                              >
-                                {expenseCategories.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <Tooltip formatter={(value: any) => [`₦${value.toLocaleString()}`]} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        )}
-                        <div className="absolute flex flex-col items-center">
-                          <span className="text-[10px] text-text-muted font-bold uppercase">Expenses</span>
-                          <span className="text-sm font-extrabold text-rose-600 font-mono">₦{totalExpensesSum.toLocaleString()}</span>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex flex-wrap justify-center gap-3 text-[10px] font-bold text-text-muted">
-                        {expenseCategories.map((cat, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                            <span className="uppercase">{cat.name}: {((cat.value / totalExpensesSum) * 100).toFixed(0)}%</span>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-
-                  </div>
-
-                  {/* General Ledger list table */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>{lang === 'en' ? "Audited Corporate General Ledger" : "Rumbun Kudi Da Aka Duba"}</CardTitle>
-                      <CardDescription>Comprehensive records of company financial entries.</CardDescription>
-                    </CardHeader>
-                    <div className="overflow-x-auto mt-4">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-bg-base border-b border-border-main text-[10px] uppercase font-bold text-text-muted">
-                            <th className="p-3">Reference ID</th>
-                            <th className="p-3">Date</th>
-                            <th className="p-3">Cashflow Node</th>
-                            <th className="p-3">Allocation Division</th>
-                            <th className="p-3">Operational Details</th>
-                            <th className="p-3">Audit Inspector</th>
-                            <th className="p-3 text-right">Corporate Weight</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
-                          {financials.length === 0 ? (
-                            <tr>
-                              <td colSpan={7} className="p-4 text-center text-xs font-sans text-text-muted">{lang === 'en' ? "No operational logs found in database." : "Babu bayanan kudi a ajiye."}</td>
-                            </tr>
-                          ) : (
-                            financials.map(fin => (
-                              <tr key={fin.id} className="hover:bg-bg-base/30">
-                                <td className="p-3 text-brand-gold font-bold">{fin.id.substring(0, 8).toUpperCase()}</td>
-                                <td className="p-3 text-text-muted">{fin.date}</td>
-                                <td className="p-3">
-                                  <Badge variant={fin.type === 'revenue' ? 'success' : 'danger'}>
-                                    {fin.type?.toUpperCase()}
-                                  </Badge>
-                                </td>
-                                <td className="p-3 text-text-main uppercase font-bold">{fin.category}</td>
-                                <td className="p-3 text-text-muted font-sans text-xs">{fin.description}</td>
-                                <td className="p-3 text-text-muted font-sans text-xs">{fin.approvedBy || "Corporate Automation Node"}</td>
-                                <td className={`p-3 text-right font-extrabold ${fin.type === 'revenue' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {fin.type === 'revenue' ? '+' : '-'} ₦{fin.amount.toLocaleString()}
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-
-                </div>
+                <FinancialCommandCenter
+                  lang={lang}
+                  drivers={drivers}
+                  vehicles={vehicles}
+                  finance={financials}
+                  payments={[]}
+                  shareholders={shareholders}
+                  onSync={fetchFallbackData}
+                />
               )}
 
               {/* ==================================================
@@ -2023,6 +1887,20 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                   </Card>
 
                 </div>
+              )}
+
+              {/* ==================================================
+                  TAB: People Onboarding & Management
+                  ================================================== */}
+              {activeTab === 'people' && (
+                <PeopleManagement
+                  lang={lang}
+                  drivers={drivers}
+                  vehicles={vehicles}
+                  shareholders={shareholders}
+                  onSync={fetchFallbackData}
+                  currentUserRole="director"
+                />
               )}
 
               {/* ==================================================
