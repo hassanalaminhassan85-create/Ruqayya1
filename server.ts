@@ -2512,12 +2512,17 @@ app.put('/api/shareholders/:id', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 
-    const { phone, address, status, investmentAmount } = req.body;
+    const { phone, address, status, investmentAmount, passportPhoto } = req.body;
     const db = loadDB();
     const sh = db.shareholders.find(s => s.id === req.params.id);
     if (!sh) return res.status(404).json({ error: 'Investor not found.' });
 
     const prevValue = JSON.stringify(sh);
+    
+    if (passportPhoto) {
+      const passportUrl = saveR2File(`shareholder_${sh.full_name.replace(/\s+/g, '_')}`, passportPhoto);
+      sh.passport_photo_url = passportUrl;
+    }
     
     if (phone) sh.phone = phone;
     if (address) sh.address = address;
@@ -4020,7 +4025,7 @@ app.post('/api/director/admins', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
     }
 
-    const { email, password, fullName, phone, privilegeLevel, assignedTasks } = req.body;
+    const { email, password, fullName, phone, privilegeLevel, assignedTasks, passportPhoto } = req.body;
     if (!email || !password || !fullName) {
       return res.status(400).json({ error: 'Email, password, and full name parameters are mandatory.' });
     }
@@ -4029,6 +4034,11 @@ app.post('/api/director/admins', authenticateSession, (req, res) => {
     const emailExists = db.users.some(u => u.email.toLowerCase() === email.toLowerCase());
     if (emailExists) {
       return res.status(400).json({ error: 'This email address is already registered in the system.' });
+    }
+
+    let passportUrl = '';
+    if (passportPhoto) {
+      passportUrl = saveR2File(`admin_${fullName.replace(/\s+/g, '_')}_passport`, passportPhoto);
     }
 
     const userId = generateUUID();
@@ -4048,7 +4058,7 @@ app.post('/api/director/admins', authenticateSession, (req, res) => {
       id: generateUUID(),
       user_id: userId,
       company_id: `ADM-2026-${Math.floor(100 + Math.random() * 900)}`,
-      passport_photo_url: '',
+      passport_photo_url: passportUrl,
       privilege_level: privilegeLevel || 'Level 1: Fleet Operations',
       assigned_tasks: assignedTasks || ['Fleet Dispatch', 'Voucher Issuance', 'Real-time Tracking'],
       created_at: new Date().toISOString(),
@@ -4090,7 +4100,7 @@ app.put('/api/director/admins/:id', authenticateSession, (req, res) => {
       return res.status(404).json({ error: 'Admin record not found.' });
     }
 
-    const { fullName, phone, status, password, privilegeLevel, assignedTasks } = req.body;
+    const { fullName, phone, status, password, privilegeLevel, assignedTasks, passportPhoto } = req.body;
     const prevVal = JSON.stringify(user);
 
     if (fullName) user.full_name = fullName;
@@ -4108,6 +4118,10 @@ app.put('/api/director/admins/:id', authenticateSession, (req, res) => {
       if (status) profile.status = status;
       if (privilegeLevel) profile.privilege_level = privilegeLevel;
       if (assignedTasks) profile.assigned_tasks = assignedTasks;
+      if (passportPhoto) {
+        const passportUrl = saveR2File(`admin_${user.full_name.replace(/\s+/g, '_')}_passport`, passportPhoto);
+        profile.passport_photo_url = passportUrl;
+      }
     }
     
     user.updated_at = new Date().toISOString();
@@ -4178,7 +4192,7 @@ app.post('/api/director/directors', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 
-    const { email, password, fullName, phone, portfolio, shareholdingEquity } = req.body;
+    const { email, password, fullName, phone, portfolio, shareholdingEquity, passportPhoto } = req.body;
     if (!email || !password || !fullName) {
       return res.status(400).json({ error: 'Email, password, and full name parameters are mandatory.' });
     }
@@ -4187,6 +4201,11 @@ app.post('/api/director/directors', authenticateSession, (req, res) => {
     const emailExists = db.users.some(u => u.email.toLowerCase() === email.toLowerCase());
     if (emailExists) {
       return res.status(400).json({ error: 'This email address is already registered in the system.' });
+    }
+
+    let passportUrl = '';
+    if (passportPhoto) {
+      passportUrl = saveR2File(`director_${fullName.replace(/\s+/g, '_')}_passport`, passportPhoto);
     }
 
     const userId = generateUUID();
@@ -4208,7 +4227,7 @@ app.post('/api/director/directors', authenticateSession, (req, res) => {
       id: generateUUID(),
       user_id: userId,
       company_id: `DIR-2026-${Math.floor(100 + Math.random() * 900)}`,
-      passport_photo_url: '',
+      passport_photo_url: passportUrl,
       portfolio: portfolio || 'Executive Director',
       shareholding_equity: shareholdingEquity || '5.0%',
       created_at: new Date().toISOString(),
@@ -4250,7 +4269,7 @@ app.put('/api/director/directors/:id', authenticateSession, (req, res) => {
       return res.status(404).json({ error: 'Director record not found.' });
     }
 
-    const { fullName, phone, status, password, portfolio, shareholdingEquity } = req.body;
+    const { fullName, phone, status, password, portfolio, shareholdingEquity, passportPhoto } = req.body;
     const prevVal = JSON.stringify(user);
 
     if (fullName) user.full_name = fullName;
@@ -4268,6 +4287,10 @@ app.put('/api/director/directors/:id', authenticateSession, (req, res) => {
       if (status) profile.status = status;
       if (portfolio) profile.portfolio = portfolio;
       if (shareholdingEquity) profile.shareholding_equity = shareholdingEquity;
+      if (passportPhoto) {
+        const passportUrl = saveR2File(`director_${user.full_name.replace(/\s+/g, '_')}_passport`, passportPhoto);
+        profile.passport_photo_url = passportUrl;
+      }
     }
     
     user.updated_at = new Date().toISOString();
@@ -4769,10 +4792,34 @@ app.put('/api/drivers/:id', authenticateSession, (req, res) => {
     const drv = db.drivers.find(d => d.id === req.params.id);
     if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
 
-    const { fullName, phone, address, nin, licenseNumber, licenseExpiry, agreedAmount, remainingVehicleBalance, status } = req.body;
+    const { fullName, phone, address, nin, licenseNumber, licenseExpiry, agreedAmount, remainingVehicleBalance, status, passportPhoto } = req.body;
     
     const user = db.users.find(u => u.id === drv.user_id);
     const prevDrvVal = JSON.stringify(drv);
+
+    if (passportPhoto) {
+      const fileUrl = saveR2File(`driver_${drv.id}_passport`, passportPhoto);
+      (drv as any).passport_photo_url = fileUrl;
+      
+      // Update or insert in driver_documents
+      if (!db.driver_documents) db.driver_documents = [];
+      const existingDoc = db.driver_documents.find(d => d.driver_id === drv.id && d.document_type === 'passport_photo');
+      if (existingDoc) {
+        existingDoc.file_url = fileUrl;
+        existingDoc.created_at = new Date().toISOString();
+        existingDoc.created_by = actor.fullName;
+      } else {
+        db.driver_documents.push({
+          id: generateUUID(),
+          driver_id: drv.id,
+          document_type: 'passport_photo',
+          file_url: fileUrl,
+          created_at: new Date().toISOString(),
+          created_by: actor.fullName,
+          status: 'active'
+        });
+      }
+    }
 
     if (user) {
       if (fullName) user.full_name = fullName;

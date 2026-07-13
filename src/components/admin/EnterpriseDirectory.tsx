@@ -27,7 +27,8 @@ import {
   CheckCircle,
   Truck,
   Eye,
-  Key
+  Key,
+  UploadCloud
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { Badge } from '../ui/SharedComponents';
@@ -78,6 +79,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
     password: '',
     address: '',
     status: 'active',
+    passportPhoto: '',
     // Drivers fields
     nin: '',
     licenseNumber: '',
@@ -97,6 +99,21 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
     portfolio: 'Executive Director',
     shareholdingEquity: '5.0%'
   });
+
+  const handleFileRead = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert(lang === 'en' ? "File limit is 10MB." : "Iyakar girman fayil shine 10MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        callback(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Fetch all directories
   const fetchAllData = async () => {
@@ -249,6 +266,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
       password: '',
       address: '',
       status: 'active',
+      passportPhoto: '',
       nin: '',
       licenseNumber: '',
       licenseExpiry: '',
@@ -276,6 +294,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
       password: '', // blank during edits
       address: person.address || '',
       status: person.status || 'active',
+      passportPhoto: person.passport_photo_url || '',
       nin: person.nin || '',
       licenseNumber: person.license_number || '',
       licenseExpiry: person.license_expiry || '',
@@ -314,7 +333,8 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                 address: formData.address,
                 nin: formData.nin,
                 licenseNumber: formData.licenseNumber,
-                licenseExpiry: formData.licenseExpiry
+                licenseExpiry: formData.licenseExpiry,
+                passportPhoto: formData.passportPhoto
               },
               guarantor: {
                 fullName: 'Alhaji Haruna Musa',
@@ -347,7 +367,8 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
               investmentAmount: parseFloat(formData.investmentAmount),
               investmentDate: formData.investmentDate,
               bankName: formData.bankName,
-              accountNumber: formData.accountNumber
+              accountNumber: formData.accountNumber,
+              passportPhoto: formData.passportPhoto
             })
           });
         } else if (activeTab === 'admins') {
@@ -359,7 +380,8 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
               phone: formData.phone,
               password: formData.password || 'admin123',
               privilegeLevel: formData.privilegeLevel,
-              assignedTasks: formData.assignedTasks.split(',').map(s => s.trim())
+              assignedTasks: formData.assignedTasks.split(',').map(s => s.trim()),
+              passportPhoto: formData.passportPhoto
             })
           });
         } else if (activeTab === 'directors') {
@@ -371,7 +393,8 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
               phone: formData.phone,
               password: formData.password || 'director123',
               portfolio: formData.portfolio,
-              shareholdingEquity: formData.shareholdingEquity
+              shareholdingEquity: formData.shareholdingEquity,
+              passportPhoto: formData.passportPhoto
             })
           });
         }
@@ -390,7 +413,8 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
               licenseExpiry: formData.licenseExpiry,
               agreedAmount: parseFloat(formData.agreedAmount),
               remainingVehicleBalance: parseFloat(formData.remainingVehicleBalance),
-              status: formData.status
+              status: formData.status,
+              passportPhoto: formData.passportPhoto
             })
           });
         } else if (activeTab === 'shareholders') {
@@ -405,7 +429,8 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
               investmentDate: formData.investmentDate,
               bankName: formData.bankName,
               accountNumber: formData.accountNumber,
-              status: formData.status
+              status: formData.status,
+              passportPhoto: formData.passportPhoto
             })
           });
         } else if (activeTab === 'admins') {
@@ -417,6 +442,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
               status: formData.status,
               privilegeLevel: formData.privilegeLevel,
               assignedTasks: formData.assignedTasks.split(',').map(s => s.trim()),
+              passportPhoto: formData.passportPhoto,
               ...(formData.password ? { password: formData.password } : {})
             })
           });
@@ -429,6 +455,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
               status: formData.status,
               portfolio: formData.portfolio,
               shareholdingEquity: formData.shareholdingEquity,
+              passportPhoto: formData.passportPhoto,
               ...(formData.password ? { password: formData.password } : {})
             })
           });
@@ -863,12 +890,18 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                     <span>{lang === 'en' ? "Verified Passport Photo" : "Hoton Fasfo Tabbatacce"}</span>
                   </h3>
                   <div className="relative group overflow-hidden rounded-xl border border-border-main/50 h-32 w-32 bg-bg-surface flex items-center justify-center shadow-md">
-                    <img 
-                      src={selectedPerson.passport_photo_url || (activeTab === 'drivers' ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300' : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300')} 
-                      alt="Official Passport" 
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                      referrerPolicy="no-referrer"
-                    />
+                    {selectedPerson.passport_photo_url ? (
+                      <img 
+                        src={selectedPerson.passport_photo_url} 
+                        alt="Official Passport" 
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className={`h-full w-full flex items-center justify-center font-bold text-3xl border-0 ${getAvatarBg(selectedPerson.fullName || selectedPerson.full_name || '')}`}>
+                        {getInitials(selectedPerson.fullName || selectedPerson.full_name || '')}
+                      </div>
+                    )}
                   </div>
                   <span className="text-[10px] text-text-muted mt-2 font-mono uppercase tracking-widest bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/20">
                     {lang === 'en' ? "SECURE CHIP ACTIVE" : "AMINTACCE KAN TSARI"}
@@ -1188,6 +1221,38 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                       className="w-full bg-bg-base text-text-main border border-border-main px-3 py-2 rounded-lg focus:outline-none"
                       placeholder="e.g. +234 803 000 0000"
                     />
+                  </div>
+                </div>
+
+                {/* Passport Photograph Upload Component */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-text-muted">
+                    {lang === 'en' ? "Official Passport Photograph" : "Hoton Fasfo Tabbatacce"}
+                  </label>
+                  <div className="flex items-center gap-3 p-3 border border-dashed border-border-main rounded-xl bg-bg-base/50">
+                    {formData.passportPhoto ? (
+                      <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-border-main bg-bg-base flex-shrink-0">
+                        <img 
+                          src={formData.passportPhoto} 
+                          alt="Passport Preview" 
+                          className="w-full h-full object-cover" 
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl border border-dashed border-border-main bg-bg-base flex items-center justify-center text-text-muted flex-shrink-0">
+                        <UploadCloud className="w-6 h-6" />
+                      </div>
+                    )}
+                    <div className="flex-1 flex flex-col">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileRead(e, (base64) => setFormData({ ...formData, passportPhoto: base64 }))}
+                        className="text-xs text-text-muted file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-gold/10 file:text-brand-gold hover:file:bg-brand-gold/20"
+                      />
+                      <span className="text-[10px] text-text-muted mt-0.5">Max 10MB (JPEG, PNG)</span>
+                    </div>
                   </div>
                 </div>
 

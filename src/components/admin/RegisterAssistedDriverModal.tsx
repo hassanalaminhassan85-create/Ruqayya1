@@ -56,9 +56,9 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
   // Form States: Fleet Rig Allocation
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   
-  // Simulated File Upload states (Using generic mock URLs for testing R2 upload logic)
-  const [passportPhoto, setPassportPhoto] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200');
-  const [guarantorPhoto, setGuarantorPhoto] = useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200');
+  // Real R2-backed upload states for driver and guarantor
+  const [passportPhoto, setPassportPhoto] = useState('');
+  const [guarantorPhoto, setGuarantorPhoto] = useState('');
 
   // --- PAPER RECORD MIGRATION (IMPORT) SPECIFIC STATES ---
   const [importCompanyDriverId, setImportCompanyDriverId] = useState('');
@@ -78,6 +78,21 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
   const [importVehicleChassis, setImportVehicleChassis] = useState('');
   const [importVehicleEngine, setImportVehicleEngine] = useState('');
   const [importVehicleCapacity, setImportVehicleCapacity] = useState('30 Tons');
+
+  const handleFileRead = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert(lang === 'en' ? "File limit is 10MB." : "Iyakar girman fayil shine 10MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        callback(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Localized Labels
   const dict = {
@@ -394,6 +409,31 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
                     <label className="font-bold text-text-main">{dict.nin}</label>
                     <input type="text" value={nin} onChange={(e) => setNin(e.target.value)} placeholder="e.g. NIN-99321-3321" className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none font-mono text-text-main" />
                   </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="font-bold text-text-main">
+                      {lang === 'en' ? "Driver Passport Photo" : "Hoto Passport na Direba"} *
+                    </label>
+                    <div className="flex items-center gap-3 p-2.5 border border-dashed border-border-main rounded-lg bg-bg-base/50">
+                      {passportPhoto ? (
+                        <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-border-main bg-bg-base flex-shrink-0">
+                          <img src={passportPhoto} alt="Passport Preview" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg border border-dashed border-border-main bg-bg-base flex items-center justify-center text-text-muted flex-shrink-0">
+                          <UploadCloud className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div className="flex-1 flex flex-col">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileRead(e, setPassportPhoto)}
+                          className="text-[11px] text-text-muted file:mr-2 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[11px] file:font-semibold file:bg-primary-gold/10 file:text-primary-gold hover:file:bg-primary-gold/20"
+                        />
+                        <span className="text-[9px] text-text-muted mt-0.5">Max 10MB (JPEG, PNG)</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-4 border-t border-border-main/50 mt-2">
@@ -432,6 +472,32 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
                 <div className="flex flex-col gap-1">
                   <label className="font-bold text-text-main">{dict.gAddress}</label>
                   <input type="text" value={gAddress} onChange={(e) => setGAddress(e.target.value)} placeholder="e.g. Hotoro G.R.A, Kano" className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none text-text-main" />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="font-bold text-text-main">
+                    {lang === 'en' ? "Guarantor Passport / ID Scan" : "Hoto Passport ko Shaidar Guarantor"} *
+                  </label>
+                  <div className="flex items-center gap-3 p-2.5 border border-dashed border-border-main rounded-lg bg-bg-base/50">
+                    {guarantorPhoto ? (
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-border-main bg-bg-base flex-shrink-0">
+                        <img src={guarantorPhoto} alt="Guarantor Preview" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg border border-dashed border-border-main bg-bg-base flex items-center justify-center text-text-muted flex-shrink-0">
+                        <UploadCloud className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className="flex-1 flex flex-col">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileRead(e, setGuarantorPhoto)}
+                        className="text-[11px] text-text-muted file:mr-2 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[11px] file:font-semibold file:bg-primary-gold/10 file:text-primary-gold hover:file:bg-primary-gold/20"
+                      />
+                      <span className="text-[9px] text-text-muted mt-0.5">Max 10MB (JPEG, PNG)</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex justify-between pt-4 border-t border-border-main/50 mt-2">
