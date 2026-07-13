@@ -124,6 +124,15 @@ export interface AppNotification {
   timestamp: string;
   read: boolean;
   type: 'info' | 'warning' | 'success' | 'danger';
+  category?: 'payments' | 'finance' | 'drivers' | 'shareholders' | 'security' | 'reports' | 'announcements' | 'documents' | 'system';
+  priority?: 'critical' | 'high' | 'medium' | 'low';
+  status?: 'unread' | 'read' | 'pinned' | 'archived' | 'deleted';
+  actions?: Array<{
+    labelEn: string;
+    labelHa: string;
+    action: string;
+    path: string;
+  }>;
 }
 
 // Shareholder

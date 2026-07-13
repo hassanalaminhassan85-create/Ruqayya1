@@ -9,6 +9,7 @@ import { X, Check, Bell, AlertTriangle, Info, CheckCircle2, Eye } from 'lucide-r
 import { AppNotification } from '../types';
 import { CircularLogo } from './CircularLogo';
 import { api } from '../utils/api';
+import { playNotificationSound, triggerVibration, showLocalBrowserNotification } from '../utils/notificationHelper';
 
 interface NotificationToastProps {
   notification: AppNotification & {
@@ -321,6 +322,58 @@ export const NotificationToastContainer: React.FC<{ lang: 'en' | 'ha'; currentRo
 
         if (newToastsToAdd.length > 0) {
           setToasts((prev) => [...prev, ...newToastsToAdd]);
+          
+          // Trigger alarms with Quiet Hours and user settings constraints
+          try {
+            api.request('/api/notifications/settings').then((settings) => {
+              if (settings) {
+                // Evaluate Quiet Hours
+                const now = new Date();
+                const currentStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                let isQuiet = false;
+                
+                if (settings.quietHoursStart && settings.quietHoursEnd) {
+                  const start = settings.quietHoursStart;
+                  const end = settings.quietHoursEnd;
+                  if (start <= end) {
+                    isQuiet = currentStr >= start && currentStr <= end;
+                  } else {
+                    isQuiet = currentStr >= start || currentStr <= end;
+                  }
+                }
+
+                if (!isQuiet) {
+                  if (settings.enableSound) playNotificationSound();
+                  if (settings.enableVibration) {
+                    const primaryToast = newToastsToAdd[0];
+                    triggerVibration(primaryToast.type);
+                  }
+                }
+
+                // Deliver background lock screen notification if browser tab is hidden
+                if (document.hidden && settings.enablePush) {
+                  newToastsToAdd.forEach(toast => {
+                    const title = lang === 'en' ? toast.titleEn : toast.titleHa;
+                    const message = lang === 'en' ? toast.messageEn : toast.messageHa;
+                    showLocalBrowserNotification(`RUQAYYA: ${title}`, message);
+                  });
+                }
+              }
+            }).catch(() => {
+              // Safety Fallback (Always alert)
+              playNotificationSound();
+              triggerVibration(newToastsToAdd[0].type);
+              if (document.hidden) {
+                newToastsToAdd.forEach(toast => {
+                  const title = lang === 'en' ? toast.titleEn : toast.titleHa;
+                  const message = lang === 'en' ? toast.messageEn : toast.messageHa;
+                  showLocalBrowserNotification(`RUQAYYA: ${title}`, message);
+                });
+              }
+            });
+          } catch (e) {
+            console.warn("Sound vibration engine failure:", e);
+          }
         }
       }
     };

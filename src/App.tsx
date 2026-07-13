@@ -22,6 +22,8 @@ import { NotificationInbox } from './components/NotificationInbox';
 import { HelpCenter } from './components/HelpCenter';
 import { api } from './utils/api';
 import { CircularLogo } from './components/CircularLogo';
+import { PWAPanel } from './components/PWAPanel';
+import { offlineSync } from './utils/offlineSync';
 import { 
   Truck, 
   Users, 
@@ -46,9 +48,20 @@ import {
   HelpCircle,
   ChevronDown,
   Zap,
-  Bell
+  Bell,
+  CreditCard,
+  Upload,
+  Building,
+  TrendingDown,
+  Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  ImportDriverModal, 
+  AddExpenseModal, 
+  PayrollModal, 
+  RecordPaymentModal 
+} from './components/QuickActionModals';
 
 // Consistent default values defined at module-level to ensure consistent
 // initial rendering on both server and client, completely avoiding hydration mismatches.
@@ -86,11 +99,43 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<string>('dashboard');
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
+  // Progressive Web App (PWA) state variables
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [syncQueueCount, setSyncQueueCount] = useState(0);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+
   // Tab states for active roles to link hamburger sidebar & dashboards
   const [driverTab, setDriverTab] = useState<'overview' | 'payments' | 'history' | 'vehicle' | 'documents' | 'profile'>('overview');
   const [adminTab, setAdminTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory'>('fleet');
   const [directorTab, setDirectorTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory'>('overview');
   const [shareholderTab, setShareholderTab] = useState<'overview' | 'cycles' | 'ledger' | 'settings'>('overview');
+
+  // Quick actions and command states
+  const [showImportDriverModal, setShowImportDriverModal] = useState(false);
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  const [showPayrollModal, setShowPayrollModal] = useState(false);
+  const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+  const [timeStr, setTimeStr] = useState<string>('');
+
+  // Ticking WAT clock effect
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      const watDate = new Date(utc + 3600000); // UTC + 1 for West African Time
+      
+      const hours = watDate.getHours().toString().padStart(2, '0');
+      const mins = watDate.getMinutes().toString().padStart(2, '0');
+      const secs = watDate.getSeconds().toString().padStart(2, '0');
+      
+      setTimeStr(`${hours}:${mins}:${secs} WAT`);
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Reset tabs on role transitions
   useEffect(() => {
@@ -99,6 +144,24 @@ export default function App() {
     setDirectorTab('overview');
     setShareholderTab('overview');
     setActiveSection('dashboard');
+  }, [currentRole]);
+
+  // Support seamless navigation events from custom notification action buttons
+  useEffect(() => {
+    const handleNavigation = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.section) {
+        setActiveSection(detail.section);
+        if (detail.tab) {
+          if (currentRole === 'admin') setAdminTab(detail.tab);
+          else if (currentRole === 'director') setDirectorTab(detail.tab);
+          else if (currentRole === 'driver') setDriverTab(detail.tab);
+          else if (currentRole === 'shareholder') setShareholderTab(detail.tab);
+        }
+      }
+    };
+    window.addEventListener('navigate-to-section', handleNavigation);
+    return () => window.removeEventListener('navigate-to-section', handleNavigation);
   }, [currentRole]);
 
   // Load state from localStorage & Hydrate full-stack session on init
@@ -115,11 +178,60 @@ export default function App() {
 
     // Track online/offline status
     setIsOnline(navigator.onLine);
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    
+    const runBackgroundSync = async () => {
+      try {
+        await offlineSync.sync(api.request);
+      } catch (err) {
+        console.error("Auto background sync failure:", err);
+      }
+    };
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      runBackgroundSync();
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Initial sync check if starting online
+    if (navigator.onLine) {
+      runBackgroundSync();
+    }
+
+    // Capture deferred install prompt
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      
+      const dismissed = localStorage.getItem('ruqayya_pwa_install_dismissed') === 'true';
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+      if (!dismissed && !isStandalone) {
+        setShowInstallBanner(true);
+      }
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Track sw update-available event
+    const handleSWUpdate = () => {
+      setUpdateAvailable(true);
+    };
+    window.addEventListener('pwa-update-available', handleSWUpdate);
+
+    // Track sync queue metrics
+    const updateSyncCount = () => {
+      setSyncQueueCount(offlineSync.getQueue().length);
+    };
+    updateSyncCount();
+
+    window.addEventListener('pwa-sync-status', updateSyncCount);
+    window.addEventListener('pwa-action-queued', updateSyncCount);
+    window.addEventListener('pwa-sync-completed', updateSyncCount);
 
     const hydrateSession = async () => {
       const cleanPath = normalizePath(window.location.pathname);
@@ -183,6 +295,11 @@ export default function App() {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('pwa-update-available', handleSWUpdate);
+      window.removeEventListener('pwa-sync-status', updateSyncCount);
+      window.removeEventListener('pwa-action-queued', updateSyncCount);
+      window.removeEventListener('pwa-sync-completed', updateSyncCount);
     };
   }, []);
 
@@ -300,23 +417,24 @@ export default function App() {
       { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-4 w-4 shrink-0" />, active: activeSection === 'communications' },
       { id: 'documents', label: lang === 'en' ? "Documents" : "Taskar Takardu", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'documents' },
       { id: 'notifications', label: lang === 'en' ? "Notifications" : "Sanarwa", icon: <Bell className="h-4 w-4 shrink-0" />, active: activeSection === 'notifications' },
+      { id: 'pwa', label: lang === 'en' ? "PWA Hub" : "Kula da PWA", icon: <Zap className="h-4 w-4 shrink-0" />, active: activeSection === 'pwa' },
       { id: 'settings', label: lang === 'en' ? "Settings" : "Kula da Akun", icon: <Settings className="h-4 w-4 shrink-0" />, active: activeSection === 'settings' },
       { id: 'help', label: lang === 'en' ? "Help & Support" : "Taimako da Support", icon: <HelpCircle className="h-4 w-4 shrink-0" />, active: activeSection === 'help' },
     ];
 
     if (currentRole === 'driver') {
       return items.filter(item => 
-        ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'documents', 'notifications', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
       );
     }
     if (currentRole === 'admin') {
       return items.filter(item => 
-        ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'reports', 'communications', 'documents', 'notifications', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'reports', 'communications', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
       );
     }
     if (currentRole === 'shareholder') {
       return items.filter(item => 
-        ['dashboard', 'shareholders', 'notifications', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'shareholders', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
       );
     }
     return items; // Director can view all
@@ -333,6 +451,13 @@ export default function App() {
     }
     if (activeSection === 'help') {
       return <HelpCenter lang={lang} />;
+    }
+    if (activeSection === 'pwa') {
+      return (
+        <div className="bg-bg-surface border border-border-main rounded-[20px] p-6 shadow-xs">
+          <PWAPanel lang={lang} />
+        </div>
+      );
     }
 
     // Role-specific routing
@@ -575,6 +700,13 @@ export default function App() {
                   <span className="text-[9px] font-bold text-brand-gold tracking-widest block uppercase -mt-1">{lang === 'en' ? "TRANSPORT" : "SUFURI"}</span>
                 </div>
               </div>
+
+              <div className="hidden lg:flex items-center gap-2 pl-3 ml-1 border-l border-border-main/50 text-[10px] font-semibold text-text-muted">
+                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-text-main font-bold tracking-wider">OPERATIONAL</span>
+                <span className="text-border-main/80">•</span>
+                <span className="font-mono text-text-muted">{timeStr}</span>
+              </div>
             </div>
 
             {/* Omni Search & System Quick Switches */}
@@ -670,6 +802,122 @@ export default function App() {
         </header>
       )}
 
+      {/* QUICK ACTIONS HORIZONTAL BAR */}
+      {currentRole !== 'public' && (
+        <div className="bg-bg-surface border-b border-border-main/50 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shadow-xs">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 min-w-0 pr-4">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-text-muted font-mono whitespace-nowrap mr-2 flex items-center gap-1 shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-gold animate-pulse shrink-0" />
+                {lang === 'en' ? "QUICK ACTIONS" : "AYYUKAN SAURI"}:
+              </span>
+              
+              <button
+                onClick={() => setShowRecordPaymentModal(true)}
+                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
+              >
+                <CreditCard className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span>{lang === 'en' ? "Record Payment" : "Sanya Biyan Kudi"}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCurrentRole('admin');
+                  setActiveSection('dashboard');
+                  setAdminTab('drivers');
+                  // Trigger standard driver registration open
+                  setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('open-assisted-driver'));
+                  }, 100);
+                }}
+                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
+              >
+                <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                <span>{lang === 'en' ? "Register Driver" : "Yi Rajistar Direba"}</span>
+              </button>
+
+              <button
+                onClick={() => setShowImportDriverModal(true)}
+                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
+              >
+                <Upload className="h-3.5 w-3.5 text-brand-gold shrink-0" />
+                <span>{lang === 'en' ? "Import Driver" : "Shigar da CSV"}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (currentRole === 'director') {
+                    setDirectorTab('shareholders');
+                  } else {
+                    setCurrentRole('director');
+                    setActiveSection('dashboard');
+                    setDirectorTab('shareholders');
+                  }
+                }}
+                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
+              >
+                <Building className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                <span>{lang === 'en' ? "Add Shareholder" : "Saka Mai Hanni"}</span>
+              </button>
+
+              <button
+                onClick={() => setShowAddExpenseModal(true)}
+                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
+              >
+                <TrendingDown className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                <span>{lang === 'en' ? "Add Expense" : "Shigar da Asara"}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  window.print();
+                }}
+                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
+              >
+                <FileText className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                <span>{lang === 'en' ? "Generate Report" : "Fitar da Rahoto"}</span>
+              </button>
+
+              <button
+                onClick={() => setShowPayrollModal(true)}
+                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
+              >
+                <Briefcase className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span>{lang === 'en' ? "Payroll" : "Albashin Ma'aikata"}</span>
+              </button>
+            </div>
+            
+            <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold text-text-muted font-mono shrink-0">
+              <span className="px-1.5 py-0.5 rounded bg-bg-base border border-border-main/50">SECURE NODE</span>
+              <span className="text-brand-gold">•</span>
+              <span>AES-256</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK ACTIONS MODALS MOUNT */}
+      <ImportDriverModal
+        isOpen={showImportDriverModal}
+        onClose={() => setShowImportDriverModal(false)}
+        lang={lang}
+      />
+      <AddExpenseModal
+        isOpen={showAddExpenseModal}
+        onClose={() => setShowAddExpenseModal(false)}
+        lang={lang}
+      />
+      <PayrollModal
+        isOpen={showPayrollModal}
+        onClose={() => setShowPayrollModal(false)}
+        lang={lang}
+      />
+      <RecordPaymentModal
+        isOpen={showRecordPaymentModal}
+        onClose={() => setShowRecordPaymentModal(false)}
+        lang={lang}
+      />
+
       {/* MAIN CONTAINER LAYOUT */}
       <div className={`flex-1 flex w-full ${currentRole === 'public' ? 'max-w-none' : 'max-w-7xl mx-auto'}`}>
         {/* SIDEBAR BACKDROP FOR MOBILE */}
@@ -734,7 +982,12 @@ export default function App() {
                   title={sidebarCollapsed ? item.label : ""}
                 >
                   {item.icon}
-                  {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                  {!sidebarCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                  {!sidebarCollapsed && item.id === 'pwa' && syncQueueCount > 0 && (
+                    <span className="bg-amber-500 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
+                      {syncQueueCount}
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
@@ -786,6 +1039,133 @@ export default function App() {
           </AnimatePresence>
         </main>
       </div>
+
+      {/* PWA UPDATE AVAILABLE BANNER */}
+      <AnimatePresence>
+        {updateAvailable && (
+          <motion.div
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -50, opacity: 0 }}
+            className="fixed top-4 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-full md:max-w-md bg-slate-900 border border-brand-gold/30 p-4 rounded-2xl shadow-2xl z-50 flex flex-col gap-3 text-white"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-brand-gold/10 rounded-xl border border-brand-gold/20 shrink-0 text-brand-gold">
+                  <Zap className="h-4 w-4 animate-bounce" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black tracking-tight uppercase text-brand-gold">
+                    {lang === 'en' ? "New Version Available" : "Akwai Sabon Sabuntawa"}
+                  </h4>
+                  <p className="text-[11px] text-slate-300 leading-normal mt-0.5">
+                    {lang === 'en' 
+                      ? "A new enterprise build of RUQAYYA ERP is ready with performance upgrades."
+                      : "An shirya sabon tsarin RUQAYYA ERP don inganta saurin aiki da amintaka."}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setUpdateAvailable(false)}
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  window.location.reload();
+                }}
+                className="flex-1 py-1.5 px-3 bg-brand-gold text-slate-950 font-black rounded-xl text-2xs uppercase tracking-wider hover:bg-yellow-500 transition-colors cursor-pointer text-center"
+              >
+                {lang === 'en' ? "Update Now" : "Sabunta Yanzu"}
+              </button>
+              <button
+                onClick={() => setUpdateAvailable(false)}
+                className="py-1.5 px-3 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white font-bold rounded-xl text-2xs uppercase tracking-wider transition-colors cursor-pointer text-center"
+              >
+                {lang === 'en' ? "Later" : "Gaba kadan"}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* PWA INSTALL PROMPT SLIDING BANNER */}
+      <AnimatePresence>
+        {showInstallBanner && deferredPrompt && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-4 right-4 left-4 md:left-auto md:max-w-md bg-slate-900 border border-slate-750 p-4 rounded-2xl shadow-2xl z-50 flex flex-col gap-3 text-white"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-brand-gold/10 rounded-xl border border-brand-gold/20 shrink-0">
+                  <CircularLogo size="sm" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black tracking-tight uppercase text-brand-gold">
+                    {lang === 'en' ? "Install Ruqayya ERP" : "Girkawa Ruqayya ERP"}
+                  </h4>
+                  <p className="text-[11px] text-slate-300 leading-normal mt-0.5">
+                    {lang === 'en' 
+                      ? "Add Ruqayya ERP to your home screen for quick, offline-capable native mobile experience."
+                      : "Sanya Ruqayya ERP a fuskar wayarka don gudanar da aiki offline cikin sauki."}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowInstallBanner(false);
+                  localStorage.setItem('ruqayya_pwa_install_dismissed', 'true');
+                }}
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                      localStorage.setItem('ruqayya_pwa_installed', 'true');
+                    }
+                    setDeferredPrompt(null);
+                    setShowInstallBanner(false);
+                  }
+                }}
+                className="flex-1 py-1.5 px-3 bg-brand-gold text-slate-950 font-black rounded-xl text-2xs uppercase tracking-wider hover:bg-yellow-500 transition-colors cursor-pointer text-center"
+              >
+                {lang === 'en' ? "Install App" : "Girkawa Yanzu"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowInstallBanner(false);
+                  localStorage.setItem('ruqayya_pwa_install_dismissed', 'true');
+                }}
+                className="py-1.5 px-3 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white font-bold rounded-xl text-2xs uppercase tracking-wider transition-colors cursor-pointer text-center"
+              >
+                {lang === 'en' ? "Not Now" : "Gaba kadan"}
+              </button>
+              <button
+                onClick={() => {
+                  setActiveSection('pwa');
+                  setShowInstallBanner(false);
+                }}
+                className="py-1.5 px-3 bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white font-medium rounded-xl text-2xs uppercase tracking-wider transition-colors cursor-pointer text-center"
+              >
+                {lang === 'en' ? "Learn More" : "Karin Bayani"}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

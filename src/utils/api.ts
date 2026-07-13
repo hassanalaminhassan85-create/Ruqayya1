@@ -4,6 +4,7 @@
  */
 
 import { Role } from '../types';
+import { offlineSync } from './offlineSync';
 
 const TOKEN_KEY = 'ruqayya_token';
 
@@ -20,8 +21,75 @@ export const api = {
     localStorage.removeItem(TOKEN_KEY);
   },
 
-  // Base fetch handler with auth headers
+  // Base fetch handler with auth headers and offline sync interception
   request: async (endpoint: string, options: RequestInit = {}) => {
+    const method = options.method || 'GET';
+    const isWrite = method !== 'GET';
+
+    // Localized descriptions for the background synchronization log
+    const getSyncDescriptions = (path: string, bodyObj: any): { en: string; ha: string } => {
+      if (path.includes('/api/payments')) {
+        return { 
+          en: `Recording Driver Remittance Payment: ₦${Number(bodyObj.amount || 0).toLocaleString()}`, 
+          ha: `Rikodin Biyan Kudin Direba na ₦${Number(bodyObj.amount || 0).toLocaleString()}` 
+        };
+      }
+      if (path.includes('/api/vouchers')) {
+        return { 
+          en: `Requesting Fuel Wallet Voucher: ₦${Number(bodyObj.estimatedCost || 0).toLocaleString()}`, 
+          ha: `Neman Takardar Kudin Man Fetur na ₦${Number(bodyObj.estimatedCost || 0).toLocaleString()}` 
+        };
+      }
+      if (path.includes('/api/trips') && path.includes('/complete')) {
+        return { 
+          en: 'Completing Active Trip Remittance & Ledger Closing', 
+          ha: 'Kammala Hanyar Remittance Da Shigar da Bilan' 
+        };
+      }
+      if (path.includes('/api/trips')) {
+        return { 
+          en: `Registering New Fleet Trip Manifest to ${bodyObj.destination || 'Destination'}`, 
+          ha: `Rikodin Sabuwar Takardar Tafiya zuwa ${bodyObj.destination || 'Inda za a je'}` 
+        };
+      }
+      if (path.includes('/api/drivers/self')) {
+        return { 
+          en: 'Updating Personal Driver Profile Credentials', 
+          ha: 'Sabunta Bayanan Akun Kanka' 
+        };
+      }
+      if (path.includes('/api/documents/upload-company')) {
+        return { 
+          en: `Uploading Secure Digital Document: ${bodyObj.title || 'Document'}`, 
+          ha: `Tura Amintattar Takardar Aiki: ${bodyObj.title || 'Takarda'}` 
+        };
+      }
+      if (path.includes('/api/notifications/read')) {
+        return { 
+          en: 'Marking All Received Notifications as Read', 
+          ha: 'Karanta Dukkan Sanarwar Tsarin Ruqayya' 
+        };
+      }
+      if (path.includes('/api/finance')) {
+        return { 
+          en: `Posting Ledger Entry: ₦${Number(bodyObj.amount || 0).toLocaleString()} (${bodyObj.category || 'General'})`, 
+          ha: `Shigar da Bayanin Kudi na ₦${Number(bodyObj.amount || 0).toLocaleString()} (${bodyObj.category || 'Aiki'})` 
+        };
+      }
+      return { 
+        en: `Submitting request to ${path}`, 
+        ha: `Aika buƙata zuwa ga tsarin ${path}` 
+      };
+    };
+
+    // If client is explicitly offline and it's a write request, intercept and queue!
+    if (typeof navigator !== 'undefined' && !navigator.onLine && isWrite) {
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      const desc = getSyncDescriptions(endpoint, body);
+      offlineSync.enqueue(endpoint, method, body, desc.en, desc.ha);
+      return { success: true, queued: true, message: 'Queued for offline synchronization.' };
+    }
+
     const token = api.getToken();
     const headers = {
       'Content-Type': 'application/json',
@@ -29,33 +97,45 @@ export const api = {
       ...(options.headers || {})
     };
 
-    const res = await fetch(endpoint, {
-      ...options,
-      headers
-    });
-
-    if (res.status === 412) {
-      // Missing token
-      api.clearToken();
-    }
-
-    if (!res.ok) {
-      let errMsg = 'API Communication Error';
-      try {
-        const errData = await res.json();
-        errMsg = errData.error || errMsg;
-      } catch (e) {
-        try {
-          errMsg = await res.text();
-        } catch (textErr) {}
-      }
-      throw new Error(errMsg);
-    }
-
     try {
-      return await res.json();
-    } catch (e) {
-      return null;
+      const res = await fetch(endpoint, {
+        ...options,
+        headers
+      });
+
+      if (res.status === 412) {
+        // Missing token
+        api.clearToken();
+      }
+
+      if (!res.ok) {
+        let errMsg = 'API Communication Error';
+        try {
+          const errData = await res.json();
+          errMsg = errData.error || errMsg;
+        } catch (e) {
+          try {
+            errMsg = await res.text();
+          } catch (textErr) {}
+        }
+        throw new Error(errMsg);
+      }
+
+      try {
+        return await res.json();
+      } catch (e) {
+        return null;
+      }
+    } catch (networkError) {
+      // In case a network failure happened while online (or transitioning) and it's a write request, queue as fallback!
+      if (isWrite) {
+        console.warn('API connection failed mid-flight, queuing request for background sync.', networkError);
+        const body = options.body ? JSON.parse(options.body as string) : {};
+        const desc = getSyncDescriptions(endpoint, body);
+        offlineSync.enqueue(endpoint, method, body, desc.en, desc.ha);
+        return { success: true, queued: true, message: 'Queued for offline synchronization after network failure.' };
+      }
+      throw networkError;
     }
   },
 

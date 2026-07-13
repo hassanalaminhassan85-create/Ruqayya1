@@ -150,6 +150,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   };
 
   useEffect(() => {
+    const handleOpenAssisted = () => {
+      setIsRegisterAssistedOpen(true);
+    };
+    
+    const handleLocalDbChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        if (detail.drivers) setDrivers(detail.drivers);
+        if (detail.finance) setFinance(detail.finance);
+        if (detail.driver_payments) setPayments(detail.driver_payments);
+        if (detail.vehicles) setVehicles(detail.vehicles);
+      }
+    };
+
+    window.addEventListener('open-assisted-driver', handleOpenAssisted);
+    window.addEventListener('db-change', handleLocalDbChange);
+    return () => {
+      window.removeEventListener('open-assisted-driver', handleOpenAssisted);
+      window.removeEventListener('db-change', handleLocalDbChange);
+    };
+  }, []);
+
+  useEffect(() => {
     syncAllData();
     
     // Establish real-time SSE stream sync
@@ -352,37 +375,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const pendingVouchers = vouchers.filter(v => v.status === 'pending');
 
   return (
-    <div className="flex flex-col gap-6 w-full flex-1 max-w-7xl mx-auto p-4 md:p-6 bg-bg-base">
+    <div className="flex flex-col gap-4 w-full flex-1 max-w-7xl mx-auto p-2 md:p-4 bg-bg-base">
       
-      {/* Header and Quick Action Drawer Buttons */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-main/50 pb-4">
+      {/* Header with quick indicators */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border-main/50 pb-2 mb-1">
         <div>
-          <h2 className="text-xl font-extrabold tracking-tight text-text-main uppercase">
+          <h2 className="text-base font-black tracking-tight text-text-main uppercase flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-brand-gold animate-ping" />
             {lang === 'en' ? "Admin Operations Control" : "Gudanarwar Masu Kula (Admin)"}
           </h2>
-          <p className="text-xs text-text-muted mt-0.5 leading-normal">
-            {lang === 'en' ? "Manage tricycle lease assets, certify driver registrations, and monitor remittance logs." : "Gudanar da rukunin keken napep, tabbatar da direbobi, da duba kudaden remittance."}
+          <p className="text-[10px] text-text-muted mt-0.5 leading-none">
+            {lang === 'en' ? "Tricycle lease assets, certified driver registry nodes, and remittance ledger control." : "Kekunan napep, tantance direbobi, da duba kudaden remittance."}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsAddVehicleOpen(true)}
-            className="font-bold flex items-center gap-1 cursor-pointer"
-          >
-            <CirclePlus className="h-4 w-4" />
-            {lang === 'en' ? "Register Tricycle Asset" : "Rijistar Sabon Keke"}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setIsDispatchTripOpen(true)}
-            className="font-bold flex items-center gap-1 cursor-pointer"
-          >
-            <ClipboardCheck className="h-4 w-4" />
-            {lang === 'en' ? "Log Daily Remittance" : "Sanya Remittance"}
-          </Button>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="px-2 py-0.5 rounded-md bg-brand-gold/10 border border-brand-gold/20 text-brand-gold font-mono text-[9px] font-bold">
+            FLEET: {vehicles.length} RIGS
+          </span>
+          <span className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-500 font-mono text-[9px] font-bold">
+            DRIVERS: {drivers.length} ACTIVE
+          </span>
         </div>
       </div>
 

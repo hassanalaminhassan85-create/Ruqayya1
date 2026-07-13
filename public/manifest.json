@@ -1,0 +1,87 @@
+{
+  "name": "RUQAYYA TRANSPORT LIMITED",
+  "short_name": "RUQAYYA",
+  "description": "Enterprise Fleet & Transport Management ERP for Ruqayya Transport Limited",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B192C",
+  "theme_color": "#0F172A",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Fleet Overview",
+      "short_name": "Fleet",
+      "url": "/admin",
+      "description": "View company vehicles and driver status"
+    },
+    {
+      "name": "Submit Payment",
+      "short_name": "Payments",
+      "url": "/admin",
+      "description": "Submit and verify operational payments"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import { GoogleGenAI } from '@google/genai';
 import { 
   loadDB, 
   saveDB, 
@@ -18,6 +19,7 @@ import {
   getR2FilePath,
   setDBChangeListener
 } from './src/utils/server_db';
+import { PushService } from './src/utils/PushService';
 
 const app = express();
 const PORT = 3000;
@@ -1768,14 +1770,119 @@ app.post('/api/announcements', authenticateSession, (req, res) => {
   }
 });
 
-// GET Notifications (Filtered based on user context)
+// Helper to enrich notifications dynamically for advanced metadata, priorities, categories, and actions
+function enrichNotification(n: any) {
+  const titleEn = n.title_en || n.titleEn || '';
+  const titleHa = n.title_ha || n.titleHa || '';
+  const messageEn = n.message_en || n.messageEn || '';
+  const messageHa = n.message_ha || n.messageHa || '';
+  
+  // Categorize based on keywords
+  let category = n.category || 'system';
+  const textEnLower = (titleEn + ' ' + messageEn).toLowerCase();
+  const textHaLower = (titleHa + ' ' + messageHa).toLowerCase();
+  
+  if (textEnLower.includes('payment') || textEnLower.includes('remittance') || textHaLower.includes('biya') || textHaLower.includes('kudi')) {
+    category = 'payments';
+  } else if (textEnLower.includes('voucher') || textEnLower.includes('fuel') || textHaLower.includes('man fetur')) {
+    category = 'finance';
+  } else if (textEnLower.includes('driver') || textHaLower.includes('direba')) {
+    category = 'drivers';
+  } else if (textEnLower.includes('shareholder') || textHaLower.includes('hannun jari')) {
+    category = 'shareholders';
+  } else if (textEnLower.includes('expense') || textEnLower.includes('ledger') || textEnLower.includes('payroll')) {
+    category = 'finance';
+  } else if (textEnLower.includes('accident') || textEnLower.includes('security') || textEnLower.includes('breach') || textHaLower.includes('lafiya')) {
+    category = 'security';
+  } else if (textEnLower.includes('report') || textEnLower.includes('audit')) {
+    category = 'reports';
+  } else if (textEnLower.includes('announcement') || textEnLower.includes('broadcast')) {
+    category = 'announcements';
+  } else if (textEnLower.includes('document')) {
+    category = 'documents';
+  }
+
+  // Determine priority based on type or urgency
+  let priority = n.priority || 'medium';
+  if (n.type === 'danger' || textEnLower.includes('accident') || textEnLower.includes('unauthorized') || textEnLower.includes('breach')) {
+    priority = 'critical';
+  } else if (n.type === 'warning' || textEnLower.includes('pending') || textEnLower.includes('reject') || textEnLower.includes('required')) {
+    priority = 'high';
+  } else if (n.type === 'success' || textEnLower.includes('complete') || textEnLower.includes('approve')) {
+    priority = 'medium';
+  } else {
+    priority = 'low';
+  }
+
+  // Add smart action buttons on the fly
+  let actions: any[] = [];
+  if (category === 'drivers' && (textEnLower.includes('approve') || textEnLower.includes('credentials') || textEnLower.includes('registration'))) {
+    actions = [
+      { labelEn: 'Verify Credentials', labelHa: 'Duba Takardu', action: 'view_drivers', path: '/drivers' }
+    ];
+  } else if (category === 'finance' && (textEnLower.includes('voucher') || textEnLower.includes('request'))) {
+    actions = [
+      { labelEn: 'Approve Allocation', labelHa: 'Amince da Bukatar', action: 'view_vouchers', path: '/vouchers' }
+    ];
+  } else if (category === 'payments' && textEnLower.includes('remittance')) {
+    actions = [
+      { labelEn: 'View Financials', labelHa: 'Duba Kudade', action: 'view_finance', path: '/finance' }
+    ];
+  } else {
+    actions = [
+      { labelEn: 'Dismiss', labelHa: 'Kau da shi', action: 'dismiss', path: '' }
+    ];
+  }
+
+  return {
+    ...n,
+    category,
+    priority,
+    actions,
+    status: n.status || (n.read_status === 1 ? 'read' : 'unread'),
+    read: n.read_status === 1 || n.status === 'read' || n.status === 'archived',
+    titleEn,
+    titleHa,
+    messageEn,
+    messageHa,
+    timestamp: n.created_at || n.timestamp || new Date().toISOString()
+  };
+}
+
+// Write specialized audit logs for notifications
+function writeNotificationAuditLog(action: string, notificationId: string, details: string, req: any) {
+  try {
+    const actor = req ? (req as any).user : null;
+    const db = loadDB();
+    const userAgent = req ? req.headers['user-agent'] || 'Browser' : 'system';
+    const ipAddress = req ? req.ip || req.connection.remoteAddress || '127.0.0.1' : '127.0.0.1';
+    
+    db.audit_logs.unshift({
+      id: `AUD-${Date.now()}-${generateUUID().substring(0, 8)}`,
+      user_id: actor ? actor.id : 'system',
+      user_email: actor ? actor.email : 'system',
+      user_role: actor ? actor.role : 'system',
+      action: `NOTIFICATION_${action.toUpperCase()}`,
+      previous_value: null,
+      new_value: `Notification ID: ${notificationId} - ${details}`,
+      ip_address: ipAddress,
+      device: userAgent,
+      created_at: new Date().toISOString()
+    });
+    saveDB(db);
+  } catch (err) {
+    console.error("Audit log registration failed", err);
+  }
+}
+
+// GET Notifications (Filtered and enriched based on query params & role context)
 app.get('/api/notifications', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
     const db = loadDB();
     
-    // Filter notifications: return if user_id matches, or if it has target_role matching actor.role, or if it is global
-    const userNotifications = db.notifications.filter((n: any) => {
+    // Filter base list based on role-based routing or user ID
+    let list = db.notifications.filter((n: any) => {
       if (n.user_id) {
         return n.user_id === actor.id;
       }
@@ -1785,7 +1892,140 @@ app.get('/api/notifications', authenticateSession, (req, res) => {
       return true; // global
     });
 
-    res.json(userNotifications);
+    // Enrich notifications
+    let enriched = list.map(enrichNotification);
+
+    // Apply Filters from Query params
+    const { category, priority, status, search } = req.query;
+    
+    if (category) {
+      enriched = enriched.filter(n => n.category === category);
+    }
+    if (priority) {
+      enriched = enriched.filter(n => n.priority === priority);
+    }
+    if (status) {
+      if (status === 'unread') {
+        enriched = enriched.filter(n => n.status === 'unread' || n.read_status === 0);
+      } else if (status === 'read') {
+        enriched = enriched.filter(n => n.status === 'read' || n.read_status === 1);
+      } else if (status === 'pinned') {
+        enriched = enriched.filter(n => n.status === 'pinned');
+      } else if (status === 'archived') {
+        enriched = enriched.filter(n => n.status === 'archived');
+      } else if (status === 'deleted') {
+        enriched = enriched.filter(n => n.status === 'deleted');
+      }
+    } else {
+      // By default exclude deleted ones from active client feeds
+      enriched = enriched.filter(n => n.status !== 'deleted');
+    }
+
+    if (search && typeof search === 'string') {
+      const q = search.toLowerCase();
+      enriched = enriched.filter(n => 
+        n.titleEn.toLowerCase().includes(q) || 
+        n.titleHa.toLowerCase().includes(q) || 
+        n.messageEn.toLowerCase().includes(q) || 
+        n.messageHa.toLowerCase().includes(q)
+      );
+    }
+
+    res.json(enriched);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET Notification Settings
+app.get('/api/notifications/settings', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    if (!db.user_preferences) db.user_preferences = [];
+
+    let prefs = db.user_preferences.find(p => p.user_id === actor.id);
+    if (!prefs) {
+      prefs = {
+        id: generateUUID(),
+        user_id: actor.id,
+        enablePush: true,
+        enableSound: true,
+        enableVibration: true,
+        enableAnnouncement: true,
+        enableFinanceAlerts: true,
+        enableSecurityAlerts: true,
+        quietHoursStart: '22:00',
+        quietHoursEnd: '06:00',
+        preferredLanguage: actor.language || 'en'
+      };
+      db.user_preferences.push(prefs);
+      saveDB(db);
+    }
+    res.json(prefs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST Notification Settings
+app.post('/api/notifications/settings', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    if (!db.user_preferences) db.user_preferences = [];
+
+    let prefsIdx = db.user_preferences.findIndex(p => p.user_id === actor.id);
+    const updatedPrefs = {
+      id: prefsIdx >= 0 ? db.user_preferences[prefsIdx].id : generateUUID(),
+      user_id: actor.id,
+      enablePush: req.body.enablePush !== undefined ? !!req.body.enablePush : true,
+      enableSound: req.body.enableSound !== undefined ? !!req.body.enableSound : true,
+      enableVibration: req.body.enableVibration !== undefined ? !!req.body.enableVibration : true,
+      enableAnnouncement: req.body.enableAnnouncement !== undefined ? !!req.body.enableAnnouncement : true,
+      enableFinanceAlerts: req.body.enableFinanceAlerts !== undefined ? !!req.body.enableFinanceAlerts : true,
+      enableSecurityAlerts: req.body.enableSecurityAlerts !== undefined ? !!req.body.enableSecurityAlerts : true,
+      quietHoursStart: req.body.quietHoursStart || '22:00',
+      quietHoursEnd: req.body.quietHoursEnd || '06:00',
+      preferredLanguage: req.body.preferredLanguage || 'en'
+    };
+
+    if (prefsIdx >= 0) {
+      db.user_preferences[prefsIdx] = updatedPrefs;
+    } else {
+      db.user_preferences.push(updatedPrefs);
+    }
+
+    saveDB(db);
+    writeNotificationAuditLog('SETTINGS_UPDATE', actor.id, 'User updated notification preferences.', req);
+    res.json({ success: true, settings: updatedPrefs });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET Web Push VAPID Public Key
+app.get('/api/notifications/vapid-public-key', authenticateSession, (req, res) => {
+  try {
+    const publicKey = PushService.getPublicKey();
+    res.json({ publicKey });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST Web Push Subscription Endpoint
+app.post('/api/notifications/subscribe', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { subscription } = req.body;
+    if (!subscription) {
+      return res.status(400).json({ error: 'Subscription details missing.' });
+    }
+
+    PushService.subscribeUser(actor.id, subscription);
+    writeNotificationAuditLog('SUBSCRIBE', actor.id, 'User registered browser push subscription.', req);
+    res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1801,9 +2041,53 @@ app.put('/api/notifications/:id/read', authenticateSession, (req, res) => {
     }
 
     notification.read_status = 1;
+    notification.status = 'read';
+    notification.opened_at = new Date().toISOString();
     saveDB(db);
 
+    writeNotificationAuditLog('READ', notification.id, 'Notification marked read.', req);
     res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle Pinned status
+app.post('/api/notifications/:id/pin', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const notification = db.notifications.find(n => n.id === req.params.id);
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found.' });
+    }
+
+    const currentStatus = notification.status || 'unread';
+    notification.status = currentStatus === 'pinned' ? 'read' : 'pinned';
+    saveDB(db);
+
+    writeNotificationAuditLog('PIN_TOGGLE', notification.id, `Notification pinned status changed to ${notification.status}.`, req);
+    res.json({ success: true, status: notification.status });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle Archived status
+app.post('/api/notifications/:id/archive', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const notification = db.notifications.find(n => n.id === req.params.id);
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found.' });
+    }
+
+    const currentStatus = notification.status || 'unread';
+    notification.status = currentStatus === 'archived' ? 'read' : 'archived';
+    notification.read_status = 1; // Archiving automatically marks read
+    saveDB(db);
+
+    writeNotificationAuditLog('ARCHIVE_TOGGLE', notification.id, `Notification archived status changed to ${notification.status}.`, req);
+    res.json({ success: true, status: notification.status });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1815,17 +2099,20 @@ app.put('/api/notifications/read-all', authenticateSession, (req, res) => {
     const actor = (req as any).user;
     const db = loadDB();
 
-    let updated = false;
+    let updatedCount = 0;
     db.notifications.forEach((n: any) => {
       const isForUser = (n.user_id === actor.id) || (n.target_role === actor.role) || (!n.user_id && !n.target_role);
       if (isForUser && n.read_status === 0) {
         n.read_status = 1;
-        updated = true;
+        n.status = 'read';
+        n.opened_at = new Date().toISOString();
+        updatedCount++;
       }
     });
 
-    if (updated) {
+    if (updatedCount > 0) {
       saveDB(db);
+      writeNotificationAuditLog('READ_ALL', actor.id, `Marked all notifications as read (${updatedCount} updated).`, req);
     }
 
     res.json({ success: true });
@@ -1834,21 +2121,173 @@ app.put('/api/notifications/read-all', authenticateSession, (req, res) => {
   }
 });
 
-// Delete personal notification
-app.delete('/api/notifications/:id', authenticateSession, (req, res) => {
+// Alias for POST /api/notifications/read
+app.post('/api/notifications/read', authenticateSession, (req, res) => {
   try {
+    const actor = (req as any).user;
     const db = loadDB();
-    const originalLength = db.notifications.length;
-    db.notifications = db.notifications.filter(n => n.id !== req.params.id);
 
-    if (db.notifications.length === originalLength) {
-      return res.status(404).json({ error: 'Notification not found.' });
+    let updatedCount = 0;
+    db.notifications.forEach((n: any) => {
+      const isForUser = (n.user_id === actor.id) || (n.target_role === actor.role) || (!n.user_id && !n.target_role);
+      if (isForUser && n.read_status === 0) {
+        n.read_status = 1;
+        n.status = 'read';
+        n.opened_at = new Date().toISOString();
+        updatedCount++;
+      }
+    });
+
+    if (updatedCount > 0) {
+      saveDB(db);
+      writeNotificationAuditLog('READ_ALL_POST', actor.id, `POST Marked all notifications as read (${updatedCount} updated).`, req);
     }
 
-    saveDB(db);
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk action (Pin, Archive, Mark Read, Delete)
+app.post('/api/notifications/bulk', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    const { ids, action } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0 || !action) {
+      return res.status(400).json({ error: 'IDs array and action type are required.' });
+    }
+
+    let updatedCount = 0;
+    if (action === 'read') {
+      db.notifications.forEach((n: any) => {
+        if (ids.includes(n.id)) {
+          n.read_status = 1;
+          n.status = 'read';
+          n.opened_at = new Date().toISOString();
+          updatedCount++;
+        }
+      });
+    } else if (action === 'archive') {
+      db.notifications.forEach((n: any) => {
+        if (ids.includes(n.id)) {
+          n.read_status = 1;
+          n.status = 'archived';
+          updatedCount++;
+        }
+      });
+    } else if (action === 'pin') {
+      db.notifications.forEach((n: any) => {
+        if (ids.includes(n.id)) {
+          n.status = 'pinned';
+          updatedCount++;
+        }
+      });
+    } else if (action === 'delete') {
+      db.notifications.forEach((n: any) => {
+        if (ids.includes(n.id)) {
+          n.status = 'deleted';
+          n.dismissed_at = new Date().toISOString();
+          updatedCount++;
+        }
+      });
+    }
+
+    if (updatedCount > 0) {
+      saveDB(db);
+      writeNotificationAuditLog(`BULK_${action.toUpperCase()}`, actor.id, `Executed bulk action ${action} on ${updatedCount} items.`, req);
+    }
+
+    res.json({ success: true, count: updatedCount });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE single notification
+app.delete('/api/notifications/:id', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const notification = db.notifications.find(n => n.id === req.params.id);
+    
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found.' });
+    }
+
+    // Instead of completely deleting, we tag status as deleted to preserve Audit History!
+    notification.status = 'deleted';
+    notification.dismissed_at = new Date().toISOString();
+    saveDB(db);
+
+    writeNotificationAuditLog('DELETE', req.params.id, 'Notification archived/deleted soft.', req);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET Notification Transmission & Audit History
+app.get('/api/notifications/history', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Administrative or Boardroom privileges required.' });
+    }
+    
+    const db = loadDB();
+    // Return all audit logs that relate to notifications
+    const logs = db.audit_logs.filter((log: any) => log.action.startsWith('NOTIFICATION_'));
+    res.json(logs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST AI Smart Translator Endpoint using `@google/genai`
+app.post('/api/notifications/translate', authenticateSession, async (req, res) => {
+  try {
+    const { text, to } = req.body;
+    if (!text || !to) {
+      return res.status(400).json({ error: 'Text and target language (to) are required.' });
+    }
+
+    if (to !== 'en' && to !== 'ha') {
+      return res.status(400).json({ error: 'Target language must be English (en) or Hausa (ha).' });
+    }
+
+    // Check key
+    if (!process.env.GEMINI_API_KEY) {
+      // Offline backup dictionary fallback
+      const dict: Record<string, string> = {
+        'New Driver Self-Registration': 'Rijistar Sabon Direba',
+        'Candidate Alhaji Musa Garba completed driver self-registration. Action required: Approve credentials.': 'Alhaji Musa Garba ya kammala rajistar kansa. Ana bukatar amincewa daga Admin.',
+        'Rest Period Concluded': 'Lokacin Hutu Ya Cika',
+        'Vehicle Contract Completed!': 'Kwangilar Mota Ta Cika!',
+        'Fuel Voucher Request': 'Bukatar Takardar Man Fetur',
+        'Approved Allocation': 'Amince da Bukatar',
+        'Verify Credentials': 'Duba Takardu',
+        'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!': 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!'
+      };
+      const translated = dict[text] || text;
+      return res.json({ success: true, translation: translated, fallback: true });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: `You are a professional Hausa/English translation engine for an enterprise logistics software. Translate the following text into ${to === 'ha' ? 'Hausa' : 'English'}. Match the exact context of driver fleet remittances and financial reports. Return ONLY the translated string without quotes, explanations or conversational fillers:\n\n${text}`,
+    });
+
+    const resultText = response.text?.trim() || text;
+    res.json({ success: true, translation: resultText, fallback: false });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -2363,27 +2802,7 @@ app.put('/api/vouchers/:id/approve', authenticateSession, (req, res) => {
   }
 });
 
-// 19. AUTHENTICATED: Get Notifications List & Mark read
-app.get('/api/notifications', authenticateSession, (req, res) => {
-  const actor = (req as any).user;
-  const db = loadDB();
-  // Filter notifications for this specific user or general system ones
-  const list = db.notifications.filter(n => !n.user_id || n.user_id === actor.id);
-  res.json(list);
-});
-
-app.post('/api/notifications/read', authenticateSession, (req, res) => {
-  const actor = (req as any).user;
-  const db = loadDB();
-  db.notifications = db.notifications.map(n => {
-    if (!n.user_id || n.user_id === actor.id) {
-      return { ...n, read_status: 1 };
-    }
-    return n;
-  });
-  saveDB(db);
-  res.json({ success: true });
-});
+// Note: The /api/notifications and /api/notifications/read routes are handled centrally by the Notification Engine above.
 
 // 20. AUTHENTICATED: Fleet Vehicles Management
 app.get('/api/vehicles', authenticateSession, (req, res) => {
@@ -4912,6 +5331,102 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
 
 // Boot and seed database parameters on start
 seedDBIfEmpty();
+
+// Web Push Monitor and Trigger Engine
+const knownNotificationIds = new Set<string>();
+
+function initNotificationMonitor() {
+  const db = loadDB();
+  if (db.notifications) {
+    db.notifications.forEach((n: any) => {
+      if (n.id) {
+        knownNotificationIds.add(n.id);
+      }
+    });
+  }
+}
+
+async function sendPushForNotification(n: any) {
+  try {
+    const enriched = enrichNotification(n);
+    const db = loadDB();
+    
+    const payload = {
+      id: n.id,
+      title: enriched.titleEn || enriched.title_en || n.title_en || '',
+      body: enriched.messageEn || enriched.message_en || n.message_en || '',
+      titleEn: enriched.titleEn || enriched.title_en || n.title_en || '',
+      titleHa: enriched.titleHa || enriched.title_ha || n.title_ha || '',
+      messageEn: enriched.messageEn || enriched.message_en || n.message_en || '',
+      messageHa: enriched.messageHa || enriched.message_ha || n.message_ha || '',
+      type: n.type || 'info',
+      category: enriched.category || 'system',
+      priority: enriched.priority || 'medium',
+      actions: enriched.actions || [],
+      timestamp: n.created_at || new Date().toISOString()
+    };
+
+    if (n.user_id) {
+      // Check user preference
+      const prefs = db.user_preferences?.find((p: any) => p.user_id === n.user_id);
+      if (prefs && prefs.enablePush === false) {
+        console.log(`PushService: Skipping push for user ${n.user_id} due to opt-out preference.`);
+        return;
+      }
+      
+      // Evaluate Quiet Hours
+      if (prefs && prefs.quietHoursStart && prefs.quietHoursEnd) {
+        const now = new Date();
+        const currentStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        let isQuiet = false;
+        if (prefs.quietHoursStart <= prefs.quietHoursEnd) {
+          isQuiet = currentStr >= prefs.quietHoursStart && currentStr <= prefs.quietHoursEnd;
+        } else {
+          isQuiet = currentStr >= prefs.quietHoursStart || currentStr <= prefs.quietHoursEnd;
+        }
+        if (isQuiet) {
+          console.log(`PushService: Skipping push for user ${n.user_id} due to active Quiet Hours.`);
+          return;
+        }
+      }
+
+      const results = await PushService.sendNotification(n.user_id, payload);
+      console.log(`PushService: Dispatched to user ${n.user_id}:`, results);
+    } else {
+      // Broadcast to all devices
+      const results = await PushService.broadcastNotification(payload);
+      console.log(`PushService: Broadcasted notification to all devices:`, results);
+    }
+  } catch (err) {
+    console.warn("sendPushForNotification failure:", err);
+  }
+}
+
+function scanAndProcessNewNotifications() {
+  const db = loadDB();
+  if (!db.notifications) return;
+
+  const newNotifications: any[] = [];
+  
+  db.notifications.forEach((n: any) => {
+    if (n.id && !knownNotificationIds.has(n.id)) {
+      knownNotificationIds.add(n.id);
+      newNotifications.push(n);
+    }
+  });
+
+  newNotifications.forEach((n) => {
+    sendPushForNotification(n);
+  });
+}
+
+// Run initial seeding of the monitor cache
+initNotificationMonitor();
+
+// Set up reactive listener on database saves
+setDBChangeListener(() => {
+  scanAndProcessNewNotifications();
+});
 
 // VITE MIDDLEWARE SETUP
 async function startServer() {

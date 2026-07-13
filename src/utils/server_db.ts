@@ -57,6 +57,8 @@ export interface DBState {
   driver_payments: any[];
   messages?: any[];
   announcements?: any[];
+  push_subscriptions?: any[];
+  vapid_keys?: { publicKey: string; privateKey: string } | null;
   company_settings: any;
   shareholder_settings: any;
   company_operations_state?: any;
@@ -86,6 +88,8 @@ const INITIAL_DB_STATE: DBState = {
   driver_payments: [],
   messages: [],
   announcements: [],
+  push_subscriptions: [],
+  vapid_keys: null,
   company_settings: {
     companyName: "Ruqayya Transport Limited",
     companyLogo: "",
@@ -141,6 +145,8 @@ export function loadDB(): DBState {
       if (!parsed.vehicle_documents) { parsed.vehicle_documents = []; changed = true; }
       if (!parsed.driver_documents) { parsed.driver_documents = []; changed = true; }
       if (!parsed.company_documents) { parsed.company_documents = []; changed = true; }
+      if (!parsed.push_subscriptions) { parsed.push_subscriptions = []; changed = true; }
+      if (parsed.vapid_keys === undefined) { parsed.vapid_keys = null; changed = true; }
 
       if (changed) {
         saveDB(parsed);
