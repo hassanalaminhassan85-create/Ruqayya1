@@ -7,8 +7,8 @@ const CACHE_NAME = 'ruqayya-transport-erp-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/src/main.tsx',
-  '/metadata.json'
+  '/manifest.json',
+  '/logo.png'
 ];
 
 // Install Event: cache core assets

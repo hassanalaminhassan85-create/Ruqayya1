@@ -5,7 +5,6 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import ruqayyaLogo from '../assets/images/ruqayya_logo_1783430629037.jpg';
 
 interface CircularLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
@@ -89,7 +88,7 @@ export const CircularLogo: React.FC<CircularLogoProps> = ({
         }}
       >
         <img
-          src={ruqayyaLogo}
+          src="/logo.png"
           alt="Ruqayya Transport Official Logo"
           className="h-full w-full object-cover rounded-full"
           referrerPolicy="no-referrer"
