@@ -4,11 +4,12 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, Info, AlertTriangle, ShieldCheck, CheckCircle2, Trash2 } from 'lucide-react';
+import { Bell, Check, Info, AlertTriangle, ShieldCheck, CheckCircle2, Trash2, Smartphone, BellOff, Loader2 } from 'lucide-react';
 import { AppNotification } from '../types';
 import { dbStore } from '../utils/dbStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { api } from '../utils/api';
+import { registerPushSubscription, unregisterPushSubscription } from '../utils/notificationHelper';
 
 interface NotificationCenterProps {
   lang: 'en' | 'ha';
@@ -31,6 +32,75 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Enterprise Web Push States
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [pushDevicesCount, setPushDevicesCount] = useState(0);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  const checkPushStatus = async () => {
+    const isSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    setPushSupported(isSupported);
+    if (!isSupported) return;
+
+    setPushPermission(Notification.permission);
+
+    try {
+      const statusRes = await api.request('/api/notifications/status');
+      if (statusRes && statusRes.success) {
+        setIsPushSubscribed(statusRes.subscribed);
+        setPushDevicesCount(statusRes.devicesCount || 0);
+      }
+    } catch (err) {
+      console.warn('Failed to retrieve push subscription status from backend:', err);
+    }
+  };
+
+  const handleTogglePush = async () => {
+    setPushLoading(true);
+    setPushError(null);
+    try {
+      if (isPushSubscribed) {
+        const success = await unregisterPushSubscription();
+        if (success) {
+          setIsPushSubscribed(false);
+          setPushDevicesCount(prev => Math.max(0, prev - 1));
+          console.log('RUQAYYA PWA: Unsubscribed current device.');
+        } else {
+          setPushError(lang === 'en' ? 'Failed to unsubscribe.' : 'Gaza cire rajista.');
+        }
+      } else {
+        if (Notification.permission === 'denied') {
+          setPushError(lang === 'en' ? 'Permission blocked in browser settings.' : 'An toshe izni a cikin binciken.');
+          setPushLoading(false);
+          return;
+        }
+        
+        const granted = await Notification.requestPermission();
+        setPushPermission(granted);
+        
+        if (granted === 'granted') {
+          const success = await registerPushSubscription();
+          if (success) {
+            setIsPushSubscribed(true);
+            setPushDevicesCount(prev => prev + 1);
+            console.log('RUQAYYA PWA: Subscribed current device successfully.');
+          } else {
+            setPushError(lang === 'en' ? 'Failed to register subscription.' : 'Gaza yin rajista.');
+          }
+        } else {
+          setPushError(lang === 'en' ? 'Permission denied.' : 'An ki yarda da izni.');
+        }
+      }
+    } catch (err: any) {
+      setPushError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   const fetchNotifications = async () => {
     try {
@@ -73,6 +143,12 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      checkPushStatus();
+    }
+  }, [isOpen]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -205,6 +281,77 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
                     )}
                   </div>
                 ))
+              )}
+            </div>
+
+            {/* Enterprise Push Notification Center Integration */}
+            <div className="px-4 py-3 bg-slate-900 border-t border-border-main/50 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                  <Smartphone className="h-3.5 w-3.5 text-blue-400" />
+                  {lang === 'en' ? "Enterprise Web Push" : "Gargadin Web Push"}
+                </span>
+                {pushSupported && (
+                  <span className={`text-[8px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-full ${
+                    isPushSubscribed 
+                      ? 'bg-emerald-500/10 text-emerald-400' 
+                      : pushPermission === 'denied' 
+                        ? 'bg-red-500/10 text-red-400' 
+                        : 'bg-amber-500/10 text-amber-400'
+                  }`}>
+                    {isPushSubscribed 
+                      ? (lang === 'en' ? 'Active' : 'Aiki') 
+                      : pushPermission === 'denied' 
+                        ? (lang === 'en' ? 'Blocked' : 'An Toshe') 
+                        : (lang === 'en' ? 'Offline' : 'Ba ya Aiki')}
+                  </span>
+                )}
+              </div>
+
+              {!pushSupported ? (
+                <p className="text-[10px] text-slate-500 leading-normal">
+                  {lang === 'en' ? "Web Push is not supported on this browser context." : "Wannan bincike ba ya tallafawa Web Push."}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-[10px] text-slate-400 leading-normal">
+                    {isPushSubscribed 
+                      ? (lang === 'en' 
+                          ? `Registered. Currently active on ${pushDevicesCount} of your devices.` 
+                          : `An yi rajista. Yana aiki akan na'urorinka ${pushDevicesCount}.`)
+                      : (lang === 'en'
+                          ? "Authorize secure lock screen transmissions to receive instant payments & operational updates."
+                          : "Tabbatar da amintaccen gargadi don samun kudaden shiga nan take.")}
+                  </p>
+
+                  {pushError && (
+                    <span className="text-[9px] text-rose-400 font-medium">{pushError}</span>
+                  )}
+
+                  <button
+                    onClick={handleTogglePush}
+                    disabled={pushLoading}
+                    className={`w-full py-1.5 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                      isPushSubscribed
+                        ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20'
+                        : 'bg-brand-gold text-slate-950 hover:bg-brand-gold/90 border border-transparent shadow-sm'
+                    }`}
+                  >
+                    {pushLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : isPushSubscribed ? (
+                      <>
+                        <BellOff className="h-3 w-3" />
+                        {lang === 'en' ? 'Deregister Current Device' : "Cire Wannan Na'urar"}
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-3 w-3" />
+                        {lang === 'en' ? 'Enable Lock Screen Push' : 'Kunna Gargadi a Allon Kulle'}
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
             </div>
 

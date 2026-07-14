@@ -21,6 +21,7 @@ import { ShareholderDashboard } from './features/ShareholderDashboard';
 import { NotificationInbox } from './components/NotificationInbox';
 import { HelpCenter } from './components/HelpCenter';
 import { api } from './utils/api';
+import { registerPushSubscription } from './utils/notificationHelper';
 import { CircularLogo } from './components/CircularLogo';
 import { PWAPanel } from './components/PWAPanel';
 import { offlineSync } from './utils/offlineSync';
@@ -305,6 +306,41 @@ export default function App() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, []);
+
+  // Enterprise Push Notification automatic registration
+  useEffect(() => {
+    if (authToken && currentRole !== 'public') {
+      const initPush = async () => {
+        try {
+          console.log('RUQAYYA PWA: Automatically registering push notifications for logged in user...');
+          // Request notification permission and register subscription if granted
+          if ('Notification' in window) {
+            if (Notification.permission === 'default') {
+              // Ask gracefully after a short delay so the user is already settled in their dashboard!
+              setTimeout(async () => {
+                const granted = await Notification.requestPermission();
+                if (granted === 'granted') {
+                  const success = await registerPushSubscription();
+                  if (success) {
+                    console.log('RUQAYYA PWA: Web Push subscription successfully configured.');
+                  }
+                }
+              }, 2500);
+            } else if (Notification.permission === 'granted') {
+              // Already granted, register subscription
+              const success = await registerPushSubscription();
+              if (success) {
+                console.log('RUQAYYA PWA: Web Push subscription successfully refreshed.');
+              }
+            }
+          }
+        } catch (pushErr) {
+          console.warn('RUQAYYA PWA: Automatic Web Push initialization skipped or failed:', pushErr);
+        }
+      };
+      initPush();
+    }
+  }, [authToken, currentRole]);
 
   // Role-based routing enforcement and redirection logic
   useEffect(() => {

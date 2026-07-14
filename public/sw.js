@@ -83,8 +83,8 @@ self.addEventListener('push', (event) => {
   const title = payload.title || 'RUQAYYA TRANSPORT LIMITED';
   const options = {
     body: payload.body || 'New secure ERP transmission received.',
-    icon: payload.icon || '/assets/logo.png', // Fallback to logo
-    badge: payload.badge || '/assets/logo.png',
+    icon: payload.icon || '/logo.png', // Fallback to logo
+    badge: payload.badge || '/logo.png',
     vibrate: payload.vibrate || [200, 100, 200],
     tag: payload.tag || 'ruqayya-notification',
     renotify: true,

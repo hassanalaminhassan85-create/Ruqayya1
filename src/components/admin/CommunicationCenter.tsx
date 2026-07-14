@@ -330,6 +330,26 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Broadcast failed');
 
+      // Automatically dispatch Web Push notification to target audience
+      try {
+        await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: `📢 New Broadcast: ${annTitle}`,
+            body: annMessage,
+            role: annAudience === 'all' ? undefined : annAudience,
+            url: '/communications'
+          })
+        });
+        console.log('RUQAYYA PWA: Automatic broadcast push dispatched successfully.');
+      } catch (pushErr) {
+        console.warn('RUQAYYA PWA: Could not automatically dispatch broadcast push:', pushErr);
+      }
+
       setAnnSuccess("Broadcast published successfully to target audience!");
       setAnnTitle('');
       setAnnMessage('');

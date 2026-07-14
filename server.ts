@@ -2125,6 +2125,138 @@ app.post('/api/notifications/subscribe', authenticateSession, (req, res) => {
   }
 });
 
+// POST Web Push Unsubscribe Endpoint
+app.post('/api/notifications/unsubscribe', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const { endpoint } = req.body;
+    if (!endpoint) {
+      return res.status(400).json({ error: 'Endpoint URL missing for unsubscription.' });
+    }
+
+    PushService.unsubscribeUser(actor.id, endpoint);
+    writeNotificationAuditLog('UNSUBSCRIBE', actor.id, `User unregistered browser push subscription for endpoint: ${endpoint.substring(0, 50)}...`, req);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET Notification Status & Registered Devices Endpoint
+app.get('/api/notifications/status', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    const userSubscriptions = db.push_subscriptions?.filter((sub: any) => sub.user_id === actor.id) || [];
+    const publicKey = PushService.getPublicKey();
+    
+    res.json({
+      success: true,
+      publicKey,
+      subscribed: userSubscriptions.length > 0,
+      devicesCount: userSubscriptions.length,
+      devices: userSubscriptions.map((sub: any) => ({
+        id: sub.id,
+        created_at: sub.created_at,
+        endpoint: sub.subscription?.endpoint
+      }))
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST Manual Notification Dispatch & Push Send Endpoint
+app.post('/api/notifications/send', authenticateSession, async (req, res) => {
+  try {
+    const actor = (req as any).user;
+    
+    // Only Directors, Admins or System-level actions should trigger bulk or arbitrary notifications
+    if (actor.role !== 'Director' && actor.role !== 'Admin') {
+      return res.status(403).json({ error: 'Unauthorized. Only Directors and Admins can dispatch custom notifications.' });
+    }
+
+    const { user_id, role, title, body, url } = req.body;
+    if (!title || !body) {
+      return res.status(400).json({ error: 'Notification title and body are required.' });
+    }
+
+    const payload = {
+      title,
+      body,
+      icon: '/logo.png',
+      badge: '/logo.png',
+      url: url || '/notifications',
+      id: `NOT-${Date.now()}`
+    };
+
+    const db = loadDB();
+    let targetUserIds: string[] = [];
+
+    if (user_id) {
+      // Direct recipient
+      targetUserIds = [user_id];
+    } else if (role) {
+      // Get all users with this role name
+      const targetRoleObj = db.roles.find(r => r.name.toLowerCase() === role.toLowerCase());
+      if (targetRoleObj) {
+        targetUserIds = db.users
+          .filter(u => u.role_id === targetRoleObj.id)
+          .map(u => u.id);
+      }
+    } else {
+      // Broadcast to everyone
+      targetUserIds = db.users.map(u => u.id);
+    }
+
+    if (targetUserIds.length === 0) {
+      return res.status(404).json({ error: 'No recipients matched the specified criteria.' });
+    }
+
+    // Insert notification record in the db.notifications so that it also shows up in their web-based notifications center!
+    const newNotifications: any[] = [];
+    targetUserIds.forEach((uid) => {
+      const nId = `NOT-${Date.now()}-${generateUUID().substring(0, 6).toUpperCase()}`;
+      const notification = {
+        id: nId,
+        user_id: uid,
+        title,
+        body,
+        type: 'SYSTEM_ALERT',
+        status: 'unread',
+        read_status: 0,
+        url: url || '/notifications',
+        created_at: new Date().toISOString()
+      };
+      db.notifications.unshift(notification);
+      newNotifications.push(notification);
+    });
+    saveDB(db);
+
+    // Dispatch Web Push notifications via service
+    let results;
+    if (user_id) {
+      results = await PushService.sendNotification(user_id, payload);
+    } else if (role) {
+      results = await PushService.sendNotificationToUsers(targetUserIds, payload);
+    } else {
+      results = await PushService.broadcastNotification(payload);
+    }
+
+    writeNotificationAuditLog('MANUAL_SEND', actor.id, `Manual notification dispatched by ${actor.fullName}. Recipients matched: ${targetUserIds.length}. Status: Sent: ${results.sentCount}, Failed: ${results.failedCount}`, req);
+
+    res.json({
+      success: true,
+      message: 'Notification processed and dispatched.',
+      sentCount: results.sentCount,
+      failedCount: results.failedCount,
+      recipientsCount: targetUserIds.length
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Mark single notification as read
 app.put('/api/notifications/:id/read', authenticateSession, (req, res) => {
   try {

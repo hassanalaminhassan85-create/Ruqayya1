@@ -103,8 +103,8 @@ export function showLocalBrowserNotification(title: string, body: string, action
   try {
     const options: any = {
       body,
-      icon: '/assets/logo.png', // Fallback
-      badge: '/assets/logo.png',
+      icon: '/logo.png', // Fallback
+      badge: '/logo.png',
       tag: 'ruqayya-system-alert',
       renotify: true,
       data: { url: actionUrl }
@@ -175,6 +175,36 @@ export async function registerPushSubscription(): Promise<boolean> {
     return true;
   } catch (err) {
     console.error('Failed to register browser push subscription:', err);
+    return false;
+  }
+}
+
+// Helper to unregister Web Push subscription
+export async function unregisterPushSubscription(): Promise<boolean> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.warn('Service worker or push management is not supported.');
+    return false;
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    
+    if (sub) {
+      const endpoint = sub.endpoint;
+      try {
+        await api.request('/api/notifications/unsubscribe', {
+          method: 'POST',
+          body: JSON.stringify({ endpoint })
+        });
+      } catch (serverErr) {
+        console.warn('Could not deregister push subscription on the server:', serverErr);
+      }
+      await sub.unsubscribe();
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to unregister browser push subscription:', err);
     return false;
   }
 }
