@@ -238,7 +238,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full border border-border-main overflow-hidden shrink-0">
               <img 
-                src={(driver as any).passport_photo_url || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
+                src={(driver as any).passport_photo_url || (driver as any).passportPhoto || (driver as any).passport_photo || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
                 alt={driver.fullName} 
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
@@ -337,7 +337,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                     <div className="flex flex-col items-center shrink-0 mx-auto sm:mx-0">
                       <div className="relative group overflow-hidden rounded-lg border border-border-main h-28 w-24 bg-slate-900 flex items-center justify-center shadow-md">
                         <img 
-                          src={(driver as any).passport_photo_url || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
+                          src={(driver as any).passport_photo_url || (driver as any).passportPhoto || (driver as any).passport_photo || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
                           alt={driver.fullName} 
                           className="h-full w-full object-cover"
                           referrerPolicy="no-referrer"
@@ -379,30 +379,54 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                 {/* Guarantor Profile */}
                 {driver.guarantor && (
                   <div className="bg-bg-base/30 p-4 border border-border-main rounded-xl flex flex-col gap-3">
-                    <h4 className="text-[10px] font-extrabold uppercase text-text-main tracking-wider flex items-center gap-1 border-b border-border-main/50 pb-1.5">
-                      <Users className="h-3.5 w-3.5 text-blue-500" />
-                      {labels.guarantor}
+                    <h4 className="text-[10px] font-extrabold uppercase text-text-main tracking-wider flex items-center gap-1 border-b border-border-main/50 pb-1.5 justify-between">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5 text-blue-500" />
+                        {labels.guarantor}
+                      </span>
+                      {((driver.guarantor as any).passport_photo_url || (driver.guarantor as any).passportPhotoUrl || (driver.guarantor as any).passport) && (
+                        <span className="text-[8px] text-blue-500 font-mono font-bold bg-blue-500/10 px-1.5 py-0.5 rounded-full">PASSPORT SECURED</span>
+                      )}
                     </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <span className="block text-[10px] font-bold text-text-main">Guarantor Suna:</span>
-                        <span className="text-text-main font-semibold">{driver.guarantor.fullName}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-bold text-text-main">Telephone:</span>
-                        <span className="font-mono">{driver.guarantor.phone}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-bold text-text-main">Guarantor NIN:</span>
-                        <span className="font-mono">{driver.guarantor.nin}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-bold text-text-main">Abota (Relationship):</span>
-                        <span>{driver.guarantor.relationship}</span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="block text-[10px] font-bold text-text-main">Guarantor Address:</span>
-                        <span>{driver.guarantor.address}</span>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 items-start">
+                      {((driver.guarantor as any).passport_photo_url || (driver.guarantor as any).passportPhotoUrl || (driver.guarantor as any).passport) && (
+                        <div className="flex flex-col items-center shrink-0 mx-auto sm:mx-0">
+                          <div className="relative group overflow-hidden rounded-lg border border-border-main h-24 w-20 bg-slate-900 flex items-center justify-center shadow-md">
+                            <img 
+                              src={(driver.guarantor as any).passport_photo_url || (driver.guarantor as any).passportPhotoUrl || (driver.guarantor as any).passport} 
+                              alt="Guarantor Passport" 
+                              className="h-full w-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[7px] font-mono font-extrabold text-blue-400 text-center py-0.5 uppercase tracking-tighter">
+                              GUARANTOR
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="grid grid-cols-2 gap-3 flex-1 w-full text-xs">
+                        <div>
+                          <span className="block text-[10px] font-bold text-text-main">Guarantor Suna:</span>
+                          <span className="text-text-main font-semibold block">{driver.guarantor.fullName}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] font-bold text-text-main">Telephone:</span>
+                          <span className="font-mono block">{driver.guarantor.phone}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] font-bold text-text-main">Guarantor NIN:</span>
+                          <span className="font-mono block">{driver.guarantor.nin || 'N/A'}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] font-bold text-text-main">Relationship:</span>
+                          <span className="block">{driver.guarantor.relationship || 'N/A'}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="block text-[10px] font-bold text-text-main">Guarantor Address:</span>
+                          <span className="block text-text-muted leading-relaxed">{driver.guarantor.address || 'N/A'}</span>
+                        </div>
                       </div>
                     </div>
                   </div>

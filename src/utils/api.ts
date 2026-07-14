@@ -103,9 +103,14 @@ export const api = {
         headers
       });
 
-      if (res.status === 412) {
-        // Missing token
+      if (res.status === 412 || res.status === 401) {
+        // Missing or expired token
         api.clearToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('session-expired', {
+            detail: { message: "Session expired. Please enter your username again." }
+          }));
+        }
       }
 
       if (!res.ok) {
@@ -140,7 +145,7 @@ export const api = {
   },
 
   // Authentication & Registrations
-  login: async (payload: { email: string; password; rememberMe?: boolean }) => {
+  login: async (payload: { username?: string; portal?: string; email?: string; password?: string; rememberMe?: boolean }) => {
     const data = await api.request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload)

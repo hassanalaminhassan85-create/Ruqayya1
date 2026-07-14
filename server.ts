@@ -996,18 +996,120 @@ app.post('/api/auth/register-admin', authenticateSession, (req, res) => {
 // 5. PUBLIC: Secure Unified Login Endpoint
 app.post('/api/auth/login', (req, res) => {
   try {
-    const { email, password, rememberMe } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Please submit both validation credentials.' });
-    }
+    const { username, portal, email, password, rememberMe } = req.body;
 
     const db = loadDB();
-    const user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    let user: any = null;
+    let authType = '';
 
-    if (!user) {
-      writeServerAuditLog(null, email, 'public', 'AUTH_FAILURE', `Attempt with unregistered email`, null, req);
-      return res.status(401).json({ error: 'Access Denied: Unregistered email or invalid passwords.' });
+    if (username) {
+      const trimmedUsername = username.trim().toUpperCase();
+
+      // Route-specific username enforcement
+      if (portal) {
+        if (portal.startsWith('/director') && trimmedUsername !== 'MMR') {
+          return res.status(401).json({ error: 'Access Denied: Only authorized Director credentials can access this secure node.' });
+        }
+        if (portal.startsWith('/admin') && trimmedUsername !== 'ADAM' && trimmedUsername !== 'ABAKAKA') {
+          return res.status(401).json({ error: 'Access Denied: Only authorized Admin credentials can access this secure node.' });
+        }
+      } else {
+        // General portal switcher validation
+        if (trimmedUsername !== 'MMR' && trimmedUsername !== 'ADAM' && trimmedUsername !== 'ABAKAKA') {
+          return res.status(401).json({ error: 'Access Denied: Unregistered enterprise username.' });
+        }
+      }
+
+      // Dynamically retrieve or seed standard users with their associated usernames
+      user = db.users.find(u => u.username === trimmedUsername);
+      if (!user) {
+        if (trimmedUsername === 'MMR') {
+          user = db.users.find(u => u.role_id === 'role-director');
+          if (user) {
+            user.username = 'MMR';
+            user.full_name = 'Director MMR Kabir';
+          } else {
+            const directorId = generateUUID();
+            user = {
+              id: directorId,
+              username: 'MMR',
+              email: 'director@ruqayyatransport.com',
+              phone: '+234 803 111 0001',
+              password_hash: hashPassword('director123'),
+              full_name: 'Director MMR Kabir',
+              role_id: 'role-director',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              status: 'active'
+            };
+            db.users.push(user);
+            db.directors.push({
+              id: generateUUID(),
+              user_id: directorId,
+              company_id: 'DIR-2026-MMR',
+              passport_photo_url: '',
+              created_at: new Date().toISOString(),
+              status: 'active'
+            });
+          }
+        } else if (trimmedUsername === 'ADAM' || trimmedUsername === 'ABAKAKA') {
+          const existingAdmins = db.users.filter(u => u.role_id === 'role-admin');
+          if (trimmedUsername === 'ADAM' && existingAdmins[0]) {
+            user = existingAdmins[0];
+            user.username = 'ADAM';
+            user.full_name = 'Operator ADAM Ibrahim';
+          } else if (trimmedUsername === 'ABAKAKA' && existingAdmins[1]) {
+            user = existingAdmins[1];
+            user.username = 'ABAKAKA';
+            user.full_name = 'Operator ABAKAKA Bello';
+          } else {
+            const adminId = generateUUID();
+            user = {
+              id: adminId,
+              username: trimmedUsername,
+              email: `${trimmedUsername.toLowerCase()}@ruqayyatransport.com`,
+              phone: '+234 803 222 0002',
+              password_hash: hashPassword('admin123'),
+              full_name: trimmedUsername === 'ADAM' ? 'Operator ADAM Ibrahim' : 'Operator ABAKAKA Bello',
+              role_id: 'role-admin',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              status: 'active'
+            };
+            db.users.push(user);
+            db.admins.push({
+              id: generateUUID(),
+              user_id: adminId,
+              company_id: `ADM-2026-${trimmedUsername}`,
+              passport_photo_url: '',
+              created_at: new Date().toISOString(),
+              status: 'active'
+            });
+          }
+        }
+      }
+
+      if (!user) {
+        return res.status(401).json({ error: 'Access Denied: Unregistered enterprise username.' });
+      }
+      authType = 'username-only';
+    } else {
+      // Standard email & password login for public users (drivers, shareholders)
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Please submit both email and password validation credentials.' });
+      }
+
+      user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (!user) {
+        writeServerAuditLog(null, email, 'public', 'AUTH_FAILURE', `Attempt with unregistered email`, null, req);
+        return res.status(401).json({ error: 'Access Denied: Unregistered email or invalid passwords.' });
+      }
+
+      if (!verifyPassword(password, user.password_hash)) {
+        writeServerAuditLog(user.id, email, 'public', 'AUTH_FAILURE', 'Invalid password submission', null, req);
+        return res.status(401).json({ error: 'Access Denied: Invalid credentials.' });
+      }
+      authType = 'email-password';
     }
 
     if (user.status === 'suspended') {
@@ -1018,19 +1120,11 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(403).json({ error: 'Roster approval pending. Please wait for an administrator to authorize your profile.' });
     }
 
-    // Verify hashed password sync
-    if (!verifyPassword(password, user.password_hash)) {
-      writeServerAuditLog(user.id, email, 'public', 'AUTH_FAILURE', 'Invalid password submission', null, req);
-      return res.status(401).json({ error: 'Access Denied: Invalid credentials.' });
-    }
-
-    // Determine Session Duration based on "Remember Me"
+    // Allocate session duration (30 days for username-only, or custom for email-password)
     const sessionDurationHours = rememberMe ? 24 * 30 : 2; // 30 days or 2 hours
-    const expiresAt = new Date(Date.now() + sessionDurationHours * 60 * 60 * 1000).toISOString();
-
+    const expiresAt = new Date(Date.now() + (authType === 'username-only' ? 30 * 24 : sessionDurationHours) * 60 * 60 * 1000).toISOString();
     const token = `tok_${generateUUID().replace(/-/g, '')}${generateUUID().substring(0, 10)}`;
     
-    // Track sessions in SQLite D1 mock
     const session = {
       id: generateUUID(),
       user_id: user.id,
@@ -1047,7 +1141,7 @@ app.post('/api/auth/login', (req, res) => {
 
     const roleName = db.roles.find(r => r.id === user.role_id)?.name || 'public';
 
-    writeServerAuditLog(user.id, user.email, roleName, 'SESSION_CREATED', null, `Authorized login session valid until ${expiresAt}`, req);
+    writeServerAuditLog(user.id, user.email, roleName, 'SESSION_CREATED', null, `Authorized ${authType} login session valid until ${expiresAt}`, req);
 
     res.json({
       success: true,
