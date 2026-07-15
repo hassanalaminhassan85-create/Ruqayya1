@@ -360,8 +360,22 @@ export const api = {
   },
 
   // Executive Director Controls
-  startCycle: async (payload: { startDate: string; endGoalTons?: number }) => {
+  startCycle: async (payload: { startDate: string; endDate?: string; endGoalTons?: number }) => {
     return api.request('/api/director/cycles/start', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  pauseCycle: async (payload: { reason: string }) => {
+    return api.request('/api/director/cycles/pause', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  resumeCycle: async (payload: { reason?: string }) => {
+    return api.request('/api/director/cycles/resume', {
       method: 'POST',
       body: JSON.stringify(payload)
     });

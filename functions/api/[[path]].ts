@@ -1,6 +1,11 @@
+import webpush from 'web-push';
+
 interface Env {
   DB?: any;
   R2_BUCKET?: any;
+  PUSH_SUBSCRIPTIONS?: any;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
 }
 
 // Global PBKDF2 password hashing helper (matches server_db.ts SHA-512)
@@ -626,6 +631,94 @@ const buildResponse = (data: any, status = 200, headers = {}) => {
   });
 };
 
+// Helper to send a single push notification
+async function sendPushNotification(
+  env: Env,
+  subscription: any,
+  payload: string
+): Promise<{ success: boolean; expired?: boolean }> {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
+    console.warn("VAPID keys are missing from environment secrets.");
+    return { success: false };
+  }
+
+  webpush.setVapidDetails(
+    'mailto:hassanalaminhassan85@gmail.com',
+    env.VAPID_PUBLIC_KEY,
+    env.VAPID_PRIVATE_KEY
+  );
+
+  try {
+    await webpush.sendNotification(subscription, payload);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error sending push notification via web-push:", error);
+    if (error.statusCode === 410 || error.statusCode === 404) {
+      return { success: false, expired: true };
+    }
+    return { success: false };
+  }
+}
+
+// Helper to broadcast push notifications to users or roles based on subscriptions in KV
+async function sendPushNotificationToUserOrRole(
+  env: Env,
+  target: { userId?: string; role?: string; all?: boolean },
+  notification: { title: string; message: string; type?: string }
+) {
+  if (!env.PUSH_SUBSCRIPTIONS) {
+    console.log("No PUSH_SUBSCRIPTIONS KV namespace bound. Skipping push notification.");
+    return;
+  }
+
+  let keys: any[] = [];
+  try {
+    const listResult = await env.PUSH_SUBSCRIPTIONS.list();
+    keys = listResult.keys || [];
+  } catch (err) {
+    console.error("Failed to list push subscriptions from KV:", err);
+    return;
+  }
+
+  const payload = JSON.stringify({
+    title: notification.title,
+    body: notification.message,
+    type: notification.type || 'info',
+    timestamp: Date.now()
+  });
+
+  for (const keyInfo of keys) {
+    // Key format: sub:<userId>:<escaped_endpoint>
+    const parts = keyInfo.name.split(':');
+    if (parts[0] !== 'sub') continue;
+    const subUserId = parts[1];
+
+    let shouldSend = false;
+    if (target.all) {
+      shouldSend = true;
+    } else if (target.userId && subUserId === target.userId) {
+      shouldSend = true;
+    }
+
+    if (shouldSend) {
+      try {
+        const subscriptionJson = await env.PUSH_SUBSCRIPTIONS.get(keyInfo.name);
+        if (subscriptionJson) {
+          const subscription = JSON.parse(subscriptionJson);
+          const pushRes = await sendPushNotification(env, subscription, payload);
+          if (pushRes && !pushRes.success && pushRes.expired) {
+            // Subscription has expired, delete it from KV
+            await env.PUSH_SUBSCRIPTIONS.delete(keyInfo.name);
+            console.log(`Deleted expired subscription key: ${keyInfo.name}`);
+          }
+        }
+      } catch (err) {
+        console.error(`Error processing subscription for key ${keyInfo.name}:`, err);
+      }
+    }
+  }
+}
+
 // Main Request Handler
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
@@ -695,6 +788,46 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       database: env.DB ? 'connected' : 'memory_fallback',
       environment: 'production'
     });
+  }
+
+  // PUBLIC: VAPID Public Key Retrieval
+  if (path === '/api/notifications/vapid-public-key' && method === 'GET') {
+    const publicKey = env.VAPID_PUBLIC_KEY || 'BEl62v96YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962';
+    return buildResponse({ publicKey });
+  }
+
+  // PUBLIC/AUTHENTICATED: Push Subscription Enrollment
+  if (path === '/api/notifications/subscribe' && method === 'POST') {
+    try {
+      const { subscription } = await request.json() as any;
+      if (!subscription || !subscription.endpoint) {
+        return buildResponse({ error: 'Invalid push subscription payload.' }, 400);
+      }
+
+      // Optional user association if a session exists
+      let userId = 'anonymous';
+      const authHeader = request.headers.get('authorization');
+      if (authHeader) {
+        const authCheck = authenticate();
+        if (authCheck.authenticated) {
+          userId = authCheck.user.id;
+        }
+      }
+
+      if (env.PUSH_SUBSCRIPTIONS) {
+        const kvKey = `sub:${userId}:${encodeURIComponent(subscription.endpoint)}`;
+        await env.PUSH_SUBSCRIPTIONS.put(kvKey, JSON.stringify(subscription));
+        return buildResponse({ success: true, message: 'Push subscription stored successfully.' });
+      } else {
+        console.warn("PUSH_SUBSCRIPTIONS KV binding is missing.");
+        return buildResponse({ 
+          success: true, 
+          message: 'KV binding not configured, but payload parsed successfully (sandbox-mode).' 
+        });
+      }
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
   }
 
   // 2. PUBLIC: Driver Self-Registration Form

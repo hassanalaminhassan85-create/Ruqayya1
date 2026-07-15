@@ -328,6 +328,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
   const t = localDict[lang];
 
   const syncDriverData = async (dataPayload?: any) => {
+    const token = api.getToken();
+    if (!token || token === 'null' || token === 'undefined') {
+      setLoading(false);
+      return;
+    }
     try {
       let me;
       let tripsList;

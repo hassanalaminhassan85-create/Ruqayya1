@@ -47,6 +47,76 @@
   --text-main: #F8FAFC; /* Warm off-white */
   --text-muted: #94A3B8; /* Slate 400 */
   --border-main: #1E293B; /* Slate 800 border */
+
+  /* Override hardcoded light backgrounds */
+  .bg-white,
+  .bg-slate-50,
+  .bg-gray-50,
+  .bg-slate-100,
+  .bg-gray-100 {
+    background-color: var(--bg-surface) !important;
+  }
+
+  /* Override hardcoded dark text styles */
+  .text-slate-950,
+  .text-slate-900,
+  .text-slate-800,
+  .text-slate-700,
+  .text-gray-950,
+  .text-gray-900,
+  .text-gray-800,
+  .text-gray-700 {
+    color: var(--text-main) !important;
+  }
+
+  /* Override hardcoded dark muted text styles */
+  .text-slate-600,
+  .text-slate-500,
+  .text-gray-600,
+  .text-gray-500 {
+    color: var(--text-muted) !important;
+  }
+
+  /* Keep borders and dividers readable but subtle */
+  .border-slate-100,
+  .border-slate-200,
+  .border-slate-300,
+  .border-gray-100,
+  .border-gray-200,
+  .border-gray-300 {
+    border-color: var(--border-main) !important;
+  }
+
+  /* Robust dark mode styling for all tables */
+  table {
+    background-color: var(--bg-surface) !important;
+  }
+
+  tr:hover {
+    background-color: rgba(255, 255, 255, 0.02) !important;
+  }
+
+  th {
+    color: var(--text-muted) !important;
+    background-color: var(--bg-base) !important;
+  }
+
+  td {
+    color: var(--text-main) !important;
+  }
+
+  /* Ensure input fields and form elements are perfectly visible */
+  input,
+  select,
+  textarea {
+    background-color: var(--bg-base) !important;
+    color: var(--text-main) !important;
+    border-color: var(--border-main) !important;
+  }
+
+  label {
+    color: var(--text-main) !important;
+  }
 }
 
 body {

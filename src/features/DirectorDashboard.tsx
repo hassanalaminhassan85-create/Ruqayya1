@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import EnterpriseDirectory from '../components/admin/EnterpriseDirectory';
 import { OverviewTab } from '../components/director/OverviewTab';
+import { CycleTimer } from '../components/director/CycleTimer';
 import { FinancialCommandCenter } from '../components/admin/FinancialCommandCenter';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -233,7 +234,15 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
   // Forms states
   const [adminForm, setAdminForm] = useState({ fullName: '', email: '', password: '', phone: '' });
   const [shareholderForm, setShareholderForm] = useState({ fullName: '', email: '', phone: '', address: '', investmentAmount: '' });
-  const [cycleGoalForm, setCycleGoalForm] = useState({ startDate: new Date().toISOString().split('T')[0], endGoalTons: '200' });
+  const [cycleGoalForm, setCycleGoalForm] = useState({ 
+    startDate: new Date().toISOString().split('T')[0], 
+    endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0], 
+    endGoalTons: '200' 
+  });
+  const [showCyclePauseModal, setShowCyclePauseModal] = useState(false);
+  const [showCycleResumeModal, setShowCycleResumeModal] = useState(false);
+  const [cyclePauseReason, setCyclePauseReason] = useState('');
+  const [cycleResumeReason, setCycleResumeReason] = useState('');
   const [restForm, setRestForm] = useState({ startDate: '', endDate: '', reason: '' });
   const [accidentForm, setAccidentForm] = useState({ date: '', description: '', damageEstimate: '', severity: 'minor' });
   const [selectedDriverIdForAction, setSelectedDriverIdForAction] = useState<string | null>(null);
@@ -246,6 +255,11 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
   const [selectedReportType, setSelectedReportType] = useState<'financial' | 'driver' | 'shareholder' | 'revenue' | 'expense' | 'current_cycle' | 'history'>('financial');
 
   const fetchFallbackData = async () => {
+    const token = api.getToken();
+    if (!token || token === 'null' || token === 'undefined') {
+      setLoading(false);
+      return;
+    }
     try {
       const [lgList, finList, vhList, drList, shList, cyList, ntList] = await Promise.all([
         api.getAuditLogs(),
@@ -261,10 +275,12 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
       setVehicles(vhList || []);
       setDrivers(drList || []);
       setShareholders(shList || []);
+      setCycles(cyList || []);
       setNotifications(ntList || []);
-      setLoading(false);
     } catch (err) {
       console.error("HTTP Fallback also failed:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -406,9 +422,42 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     try {
       await api.startCycle({
         startDate: cycleGoalForm.startDate,
+        endDate: cycleGoalForm.endDate,
         endGoalTons: parseFloat(cycleGoalForm.endGoalTons)
       });
       setActionSuccess(lang === 'en' ? "New company cycle started successfully." : "An fara sabon zagayen aiki lafiya.");
+    } catch (err: any) {
+      setActionError(err.message || "An error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePauseCycle = async (reason: string) => {
+    setActionError(null);
+    setActionSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.pauseCycle({ reason });
+      setActionSuccess(lang === 'en' ? "Operating cycle paused successfully." : "An dakatar da zagayen aiki lafiya.");
+      setShowCyclePauseModal(false);
+      setCyclePauseReason('');
+    } catch (err: any) {
+      setActionError(err.message || "An error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResumeCycle = async (reason: string) => {
+    setActionError(null);
+    setActionSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.resumeCycle({ reason });
+      setActionSuccess(lang === 'en' ? "Operating cycle resumed successfully." : "An dawo da zagayen aiki lafiya.");
+      setShowCycleResumeModal(false);
+      setCycleResumeReason('');
     } catch (err: any) {
       setActionError(err.message || "An error occurred.");
     } finally {
@@ -843,6 +892,8 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                   sseConnected={sseConnected}
                   onStartCycle={handleStartCycle}
                   onEndCycle={handleEndCycle}
+                  onPauseCycleClick={() => setShowCyclePauseModal(true)}
+                  onResumeCycleClick={() => setShowCycleResumeModal(true)}
                   cycleGoalForm={cycleGoalForm}
                   setCycleGoalForm={setCycleGoalForm}
                   onAddAdmin={() => setShowAddAdminModal(true)}
@@ -855,6 +906,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                   onUploadRestore={handleUploadRestore}
                   restoreSuccess={restoreSuccess}
                   restoreError={restoreError}
+                  onStateChange={fetchFallbackData}
                 />
               )}
               {false && activeTab === 'overview' && (
@@ -1170,6 +1222,13 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
               {activeTab === 'cycles' && (
                 <div className="flex flex-col gap-6">
                   
+                  {/* Real-time Cycle Duration & Status Tracker */}
+                  <CycleTimer 
+                    lang={lang}
+                    activeCycle={activeCycle}
+                    onStateChange={fetchFallbackData}
+                  />
+                  
                   {/* Cycles management panel */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     
@@ -1185,34 +1244,68 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                           <input
                             type="date"
                             required
-                            className="bg-bg-surface border border-border-main p-2.5 rounded-xl text-xs font-semibold"
+                            disabled={!!activeCycle}
+                            className="bg-bg-surface border border-border-main p-2.5 rounded-xl text-xs font-semibold disabled:opacity-50"
                             value={cycleGoalForm.startDate}
                             onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, startDate: e.target.value })}
                           />
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Operating Remittance Cycle Goal (Cycles)" : "Burin Remittance na Zagaye"}</label>
+                          <label className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Cycle Scheduled End Date" : "Ranar Kammala Zagaye"}</label>
                           <input
-                            type="number"
+                            type="date"
                             required
-                            min="1"
-                            className="bg-bg-surface border border-border-main p-2.5 rounded-xl text-xs font-semibold"
-                            value={cycleGoalForm.endGoalTons}
-                            onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, endGoalTons: e.target.value })}
+                            disabled={!!activeCycle}
+                            className="bg-bg-surface border border-border-main p-2.5 rounded-xl text-xs font-semibold disabled:opacity-50"
+                            value={cycleGoalForm.endDate}
+                            onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, endDate: e.target.value })}
                           />
                         </div>
-                        <button
-                          type="submit"
-                          disabled={isSubmitting || !!activeCycle}
-                          className="w-full py-2.5 bg-brand-gold hover:bg-brand-gold/80 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
-                        >
-                          <Plus className="h-4 w-4" />
-                          {lang === 'en' ? "Authorize Cycle Start" : "Fara Sabon Zagaye"}
-                        </button>
-                        {activeCycle && (
-                          <span className="text-[9px] text-amber-500 font-bold text-center">
-                            Close current active cycle ({activeCycle.id}) before starting another.
-                          </span>
+
+                        {!activeCycle ? (
+                          <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="w-full py-2.5 bg-brand-gold hover:bg-brand-gold/80 text-slate-950 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                          >
+                            <Plus className="h-4 w-4" />
+                            {lang === 'en' ? "Authorize Cycle Start" : "Fara Sabon Zagaye"}
+                          </button>
+                        ) : (
+                          <div className="flex flex-col gap-2 mt-2">
+                            <span className="text-[10px] font-bold text-center text-text-muted uppercase">
+                              {lang === 'en' ? "Active Cycle Controls" : "Sarrafa Zagayen Sufuri"}
+                            </span>
+                            <div className="flex gap-2">
+                              {activeCycle.status === 'paused' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowCycleResumeModal(true)}
+                                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-colors"
+                                >
+                                  {lang === 'en' ? "Resume Cycle" : "Dawo da Zagaye"}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowCyclePauseModal(true)}
+                                  className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-colors"
+                                >
+                                  {lang === 'en' ? "Pause Cycle" : "Dakatar da Zagaye"}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={handleEndCycle}
+                                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-colors"
+                              >
+                                {lang === 'en' ? "End Cycle" : "Kammala Zagaye"}
+                              </button>
+                            </div>
+                            <span className="text-[9px] text-amber-500 font-bold text-center mt-1">
+                              {lang === 'en' ? `Status: ${activeCycle.status.toUpperCase()} (${activeCycle.id})` : `Hali: ${activeCycle.status.toUpperCase()} (${activeCycle.id})`}
+                            </span>
+                          </div>
                         )}
                       </form>
                     </Card>
@@ -2648,6 +2741,105 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
           </AnimatePresence>
         )}
       </div>
+
+      {/* PAUSE CYCLE DIALOG MODAL */}
+      {showCyclePauseModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-bg-surface border border-border-main p-6 rounded-2xl max-w-md w-full shadow-2xl"
+          >
+            <h3 className="text-sm font-bold text-text-main uppercase mb-2">
+              {lang === 'en' ? "Pause Operations Cycle" : "Dakatar da Zagayen Sufuri"}
+            </h3>
+            <p className="text-xs text-text-muted mb-4">
+              {lang === 'en' 
+                ? "This will pause the current operating cycle. All driver remittance installment submissions will be temporarily blocked." 
+                : "Wannan zai dakatar da zagayen aiki na yanzu. Duk hanyoyin biyan kudin direbobi za su kasance a rufe."}
+            </p>
+            <form onSubmit={(e) => { e.preventDefault(); handlePauseCycle(cyclePauseReason); }}>
+              <div className="flex flex-col gap-1.5 mb-4">
+                <label className="text-[10px] font-bold text-text-muted uppercase">
+                  {lang === 'en' ? "Reason for Pausing" : "Dalilin Dakatarwa"}
+                </label>
+                <textarea
+                  required
+                  value={cyclePauseReason}
+                  onChange={(e) => setCyclePauseReason(e.target.value)}
+                  placeholder={lang === 'en' ? "Enter reason (e.g., fuel shortage, public holidays, maintenance)..." : "Shigar da dalili..."}
+                  className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs font-semibold w-full h-24 resize-none focus:outline-brand-gold"
+                />
+              </div>
+              <div className="flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => { setShowCyclePauseModal(false); setCyclePauseReason(''); }}
+                  className="px-4 py-2 text-xs font-bold text-text-muted hover:text-text-main hover:bg-bg-base rounded-xl transition-colors"
+                >
+                  {lang === 'en' ? "Cancel" : "Soke"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !cyclePauseReason.trim()}
+                  className="px-4 py-2 text-xs font-extrabold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-xl transition-colors shadow-xs"
+                >
+                  {lang === 'en' ? "Confirm Pause" : "Tabbatar da Dakatarwa"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* RESUME CYCLE DIALOG MODAL */}
+      {showCycleResumeModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-bg-surface border border-border-main p-6 rounded-2xl max-w-md w-full shadow-2xl"
+          >
+            <h3 className="text-sm font-bold text-text-main uppercase mb-2">
+              {lang === 'en' ? "Resume Operations Cycle" : "Dawo da Zagayen Sufuri"}
+            </h3>
+            <p className="text-xs text-text-muted mb-4">
+              {lang === 'en' 
+                ? "This will restore the operating cycle to active status. Installment submissions and operations will be unfrozen." 
+                : "Wannan zai sake dawo da zagayen aiki na yanzu zuwa aiki gaba daya."}
+            </p>
+            <form onSubmit={(e) => { e.preventDefault(); handleResumeCycle(cycleResumeReason); }}>
+              <div className="flex flex-col gap-1.5 mb-4">
+                <label className="text-[10px] font-bold text-text-muted uppercase">
+                  {lang === 'en' ? "Reason for Resuming (Optional)" : "Dalilin Dawo da Aiki (Na Zabi)"}
+                </label>
+                <textarea
+                  value={cycleResumeReason}
+                  onChange={(e) => setCycleResumeReason(e.target.value)}
+                  placeholder={lang === 'en' ? "Enter reason or comments..." : "Shigar da dalili..."}
+                  className="bg-bg-base border border-border-main p-2.5 rounded-xl text-xs font-semibold w-full h-24 resize-none focus:outline-brand-gold"
+                />
+              </div>
+              <div className="flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => { setShowCycleResumeModal(false); setCycleResumeReason(''); }}
+                  className="px-4 py-2 text-xs font-bold text-text-muted hover:text-text-main hover:bg-bg-base rounded-xl transition-colors"
+                >
+                  {lang === 'en' ? "Cancel" : "Soke"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition-colors shadow-xs"
+                >
+                  {lang === 'en' ? "Confirm Resume" : "Tabbatar da Dawo da Aiki"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
 
     </div>
   );

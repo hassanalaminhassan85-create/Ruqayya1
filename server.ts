@@ -3421,7 +3421,7 @@ app.get('/api/drivers/:id/installments', authenticateSession, (req, res) => {
     }
     const driver = db.drivers.find(d => d.id === req.params.id);
     if (!driver) return res.status(404).json({ error: 'Driver profile not found.' });
-    const activeCycle = db.cycles.find(c => c.status === 'active') || db.cycles[0];
+    const activeCycle = db.cycles.find(c => c.status === 'active' || c.status === 'paused') || db.cycles[0];
     const installments = calculateInstallmentsForDriver(driver, db, activeCycle);
     res.json({ success: true, installments });
   } catch (error: any) {
@@ -3505,28 +3505,29 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
     }
 
-    const { startDate, endGoalTons } = req.body;
+    const { startDate, endDate, endGoalTons } = req.body;
     if (!startDate) {
       return res.status(400).json({ error: 'Start date parameter is mandatory.' });
     }
 
     const db = loadDB();
-    const activeCycle = db.cycles.find(c => c.status === 'active');
+    const activeCycle = db.cycles.find(c => c.status === 'active' || c.status === 'paused');
     if (activeCycle) {
-      return res.status(400).json({ error: 'An active operating cycle is already running. Complete and lock it first.' });
+      return res.status(400).json({ error: 'An active or paused operating cycle is already running. Complete and lock it first.' });
     }
 
     const cycleId = `CYC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     const newCycle = {
       id: cycleId,
       startDate,
-      endDate: null,
+      endDate: endDate || null,
       endGoalTons: parseFloat(endGoalTons) || 200,
       status: 'active',
       created_at: new Date().toISOString(),
       created_by: actor.fullName,
       locked: false,
-      financials: []
+      financials: [],
+      pauseHistory: []
     };
 
     db.cycles.push(newCycle);
@@ -3536,8 +3537,8 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
       id: generateUUID(),
       title_en: 'New Company Cycle Commenced',
       title_ha: 'An Fara Sabon Zagayen Sufuri',
-      message_en: `30-Day Operation Cycle ${cycleId} started on ${startDate}. Goal set to ${newCycle.endGoalTons} Tons.`,
-      message_ha: `An fara zagayen aiki na kwanaki 30 ${cycleId} a ranar ${startDate}. Burin nauyi: lita/Tons ${newCycle.endGoalTons}.`,
+      message_en: `30-Day Operation Cycle ${cycleId} started on ${startDate}. Scheduled end date: ${endDate || 'N/A'}.`,
+      message_ha: `An fara zagayen aiki na kwanaki 30 ${cycleId} a ranar ${startDate}. Ranar kammalawa: ${endDate || 'N/A'}.`,
       type: 'success',
       read_status: 0,
       created_at: new Date().toISOString()
@@ -3551,11 +3552,129 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
       actor.role,
       'CYCLE_START',
       null,
-      `Started new 30-day operating cycle: ${cycleId}`,
+      `Started new operating cycle: ${cycleId}`,
       req
     );
 
     res.json({ success: true, cycle: newCycle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Pause Active Operating Cycle
+app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    }
+
+    const { reason } = req.body;
+    if (!reason) {
+      return res.status(400).json({ error: 'Reason for pause is required.' });
+    }
+
+    const db = loadDB();
+    const activeCycle = db.cycles.find(c => c.status === 'active');
+    if (!activeCycle) {
+      return res.status(400).json({ error: 'No active operating cycle found to pause.' });
+    }
+
+    activeCycle.status = 'paused';
+    activeCycle.pauseReason = reason;
+    activeCycle.pausedAt = new Date().toISOString();
+    activeCycle.pausedBy = actor.fullName;
+
+    // Add to cycle pause history
+    if (!activeCycle.pauseHistory) {
+      activeCycle.pauseHistory = [];
+    }
+    activeCycle.pauseHistory.unshift({
+      id: generateUUID(),
+      pausedBy: actor.fullName,
+      pausedAt: new Date().toISOString(),
+      reason
+    });
+
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Operating Cycle Paused',
+      title_ha: 'An Dakatar da Zagayen Sufuri',
+      message_en: `Operating Cycle ${activeCycle.id} was paused by ${actor.fullName}. Reason: ${reason}`,
+      message_ha: `An dakatar da Zagayen Gudanarwa ${activeCycle.id} ta hanyar ${actor.fullName}. Dalili: ${reason}`,
+      type: 'warning',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'CYCLE_PAUSE',
+      null,
+      `Paused operating cycle ${activeCycle.id}. Reason: ${reason}`,
+      req
+    );
+
+    res.json({ success: true, cycle: activeCycle });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Resume Paused Operating Cycle
+app.post('/api/director/cycles/resume', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    }
+
+    const { reason } = req.body;
+    const db = loadDB();
+    const pausedCycle = db.cycles.find(c => c.status === 'paused');
+    if (!pausedCycle) {
+      return res.status(400).json({ error: 'No paused operating cycle found to resume.' });
+    }
+
+    pausedCycle.status = 'active';
+    pausedCycle.resumedAt = new Date().toISOString();
+    pausedCycle.resumedBy = actor.fullName;
+
+    if (pausedCycle.pauseHistory && pausedCycle.pauseHistory.length > 0) {
+      pausedCycle.pauseHistory[0].resumedBy = actor.fullName;
+      pausedCycle.pauseHistory[0].resumedAt = new Date().toISOString();
+      if (reason) pausedCycle.pauseHistory[0].resumeReason = reason;
+    }
+
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Operating Cycle Resumed',
+      title_ha: 'An Dawo da Zagayen Sufuri',
+      message_en: `Operating Cycle ${pausedCycle.id} was resumed by ${actor.fullName}.`,
+      message_ha: `An dawo da Zagayen Gudanarwa ${pausedCycle.id} ta hanyar ${actor.fullName}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'CYCLE_RESUME',
+      null,
+      `Resumed operating cycle ${pausedCycle.id}`,
+      req
+    );
+
+    res.json({ success: true, cycle: pausedCycle });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -3575,7 +3694,7 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
     }
 
     const db = loadDB();
-    const activeCycleIndex = db.cycles.findIndex(c => c.status === 'active');
+    const activeCycleIndex = db.cycles.findIndex(c => c.status === 'active' || c.status === 'paused');
     if (activeCycleIndex === -1) {
       return res.status(400).json({ error: 'No active operating cycle found.' });
     }
@@ -4788,6 +4907,13 @@ app.post('/api/payments', authenticateSession, (req, res) => {
     if (opsState.status === 'Setup Mode') {
       return res.status(400).json({ error: 'Company is currently in Setup Mode. Financial operations are disabled until operations officially start.' });
     }
+    
+    // Check if current operating cycle is paused
+    const pausedCycle = db.cycles && db.cycles.find((c: any) => c.status === 'paused');
+    if (pausedCycle) {
+      return res.status(400).json({ error: 'Corporate operating cycle is currently paused. Remittance installment submissions are temporarily frozen.' });
+    }
+
     if (!db.driver_payments) db.driver_payments = [];
 
     let driverId = req.body.driverId;
@@ -5186,7 +5312,7 @@ app.get('/api/shareholders/me', authenticateSession, (req, res) => {
     const totalInvestments = db.shareholders.reduce((sum, s) => sum + s.investment_amount, 0);
     const investmentPercentage = totalInvestments > 0 ? (shareholder.investment_amount / totalInvestments) * 100 : 0;
 
-    const activeCycle = db.cycles.find(c => c.status === 'active');
+    const activeCycle = db.cycles.find(c => c.status === 'active' || c.status === 'paused');
     const completedCycles = db.cycles.filter(c => c.status === 'completed');
 
     const totalRevenues = db.financial_records

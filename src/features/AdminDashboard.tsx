@@ -41,6 +41,7 @@ import { CommunicationCenter } from '../components/admin/CommunicationCenter';
 import { PaymentWorkflow } from '../components/admin/PaymentWorkflow';
 import { CompanyOperationsCard } from '../components/admin/CompanyOperationsCard';
 import { PeopleManagement } from '../components/admin/PeopleManagement';
+import { CycleTimer } from '../components/director/CycleTimer';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -107,6 +108,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [reviewSuccess, setReviewSuccess] = useState('');
 
   const syncAllData = async () => {
+    const token = api.getToken();
+    if (!token || token === 'null' || token === 'undefined') {
+      setLoading(false);
+      return;
+    }
     try {
       const [vList, dList, tList, fvList, fin, payList, shList] = await Promise.all([
         api.getVehicles(),
@@ -404,13 +410,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         </div>
       ) : (
         <>
-          {/* Company Operations State Banner */}
-          <CompanyOperationsCard
-            lang={lang}
-            onStateChange={syncAllData}
-            driversCount={drivers.length}
-            vehiclesCount={vehicles.length}
-          />
+          {/* Company Operations State & Cycle Timer Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="lg:col-span-2">
+              <CompanyOperationsCard
+                lang={lang}
+                onStateChange={syncAllData}
+                driversCount={drivers.length}
+                vehiclesCount={vehicles.length}
+              />
+            </div>
+            <div>
+              <CycleTimer
+                lang={lang}
+                activeCycle={activeCycle}
+                onStateChange={syncAllData}
+              />
+            </div>
+          </div>
 
           {/* Dashboard Summary Widgets */}
           <AdminKPIs

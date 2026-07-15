@@ -101,6 +101,7 @@ export default function App() {
   const [syncQueueCount, setSyncQueueCount] = useState(0);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string>('');
+  const [authLoading, setAuthLoading] = useState(true);
 
   // Tab states for active roles to link hamburger sidebar & dashboards
   const [driverTab, setDriverTab] = useState<'overview' | 'payments' | 'history' | 'vehicle' | 'documents' | 'profile'>('overview');
@@ -231,33 +232,75 @@ export default function App() {
     window.addEventListener('pwa-sync-completed', updateSyncCount);
 
     const hydrateSession = async () => {
-      const token = api.getToken();
-      if (!token) {
-        setAuthToken(null);
-        setCurrentRole('public');
-        return;
-      }
-
+      setAuthLoading(true);
       try {
-        const payload = await api.getMe();
-        if (payload && payload.user) {
-          const userRole = payload.user.role;
+        const token = api.getToken();
+        if (!token) {
+          setAuthToken(null);
+          setCurrentRole('public');
+          return;
+        }
+
+        // Bypass backend if it is a local fallback session token for offline/static compatibility
+        if (token.startsWith('tok_fallback_')) {
+          const parts = token.split('_');
+          const userKey = parts[2] || '';
+          let fallbackRole: Role = 'driver';
+          let fullName = 'Alhaji Musa Garba';
+
+          if (userKey === 'MMR') {
+            fallbackRole = 'director';
+            fullName = 'Director Kabir Mohammed';
+          } else if (userKey === 'ADAM') {
+            fallbackRole = 'admin';
+            fullName = 'Operator Ibrahim Bello';
+          } else if (userKey === 'ABAKAKA') {
+            fallbackRole = 'admin';
+            fullName = 'Operator ABAKAKA Bello';
+          } else if (userKey === 'KABIR') {
+            fallbackRole = 'shareholder';
+            fullName = 'Alhaji Kabir Mohammed';
+          } else if (userKey === 'AMINA') {
+            fallbackRole = 'shareholder';
+            fullName = 'Hajiya Amina Garba';
+          } else {
+            fallbackRole = 'driver';
+            fullName = 'Alhaji Musa Garba';
+          }
+
           setAuthToken(token);
-          setCurrentRole(userRole);
-          if (userRole === 'driver') {
-            setDriverName(payload.user.fullName);
+          setCurrentRole(fallbackRole);
+          if (fallbackRole === 'driver') {
+            setDriverName(fullName);
           } else {
             setDriverName('');
           }
-        } else {
+          return;
+        }
+
+        try {
+          const payload = await api.getMe();
+          if (payload && payload.user) {
+            const userRole = payload.user.role;
+            setAuthToken(token);
+            setCurrentRole(userRole);
+            if (userRole === 'driver') {
+              setDriverName(payload.user.fullName);
+            } else {
+              setDriverName('');
+            }
+          } else {
+            api.clearToken();
+            setAuthToken(null);
+            setCurrentRole('public');
+          }
+        } catch (e) {
           api.clearToken();
           setAuthToken(null);
           setCurrentRole('public');
         }
-      } catch (e) {
-        api.clearToken();
-        setAuthToken(null);
-        setCurrentRole('public');
+      } finally {
+        setAuthLoading(false);
       }
     };
     hydrateSession();
@@ -433,7 +476,7 @@ export default function App() {
 
     if (currentRole === 'driver') {
       return items.filter(item => 
-        ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'notifications', 'settings', 'help'].includes(item.id)
       );
     }
     if (currentRole === 'admin') {
@@ -657,6 +700,42 @@ export default function App() {
     return null;
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen w-full bg-slate-950 text-white flex flex-col items-center justify-center font-sans p-6 relative overflow-hidden">
+        {/* Subtle ambient animated backdrop */}
+        <div className="absolute inset-0 bg-radial-gradient from-brand-gold/10 via-transparent to-transparent opacity-50 animate-pulse pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand-gold/5 blur-[120px] rounded-full pointer-events-none" />
+        
+        <div className="flex flex-col items-center gap-6 max-w-sm text-center relative z-10">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full border-4 border-brand-gold/20 animate-ping opacity-30" />
+            <div className="absolute inset-0 rounded-full border-2 border-t-brand-gold border-r-transparent border-b-transparent border-l-transparent animate-spin duration-1000" />
+            <div className="p-5 bg-slate-900 rounded-full border border-slate-800 shadow-2xl relative">
+              <Truck className="h-10 w-10 text-brand-gold animate-pulse" />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <h2 className="text-xl font-black uppercase tracking-widest text-brand-gold">
+              RUQAYYA ERP
+            </h2>
+            <div className="h-1 w-12 bg-gradient-to-r from-transparent via-brand-gold to-transparent mx-auto rounded-full" />
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider animate-pulse">
+              {lang === 'en' ? "Validating Enterprise Session..." : "Tabbatar da Zama na Kamfani..."}
+            </p>
+          </div>
+
+          <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+            {lang === 'en' 
+              ? "Connecting securely to West African operations servers. Please hold."
+              : "Haɗawa cikin aminci zuwa sabar ayyukan Afirka ta Yamma. Da fatan za a jira."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30">
       
@@ -683,8 +762,8 @@ export default function App() {
 
       {/* TOP NAVIGATION HEADER */}
       {currentRole !== 'public' && (
-        <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-4 py-3 shadow-xs">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-2 sm:px-4 py-3 shadow-xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-4">
             <div className="flex items-center gap-3">
               {currentRole !== 'public' && (
                 <button
@@ -723,9 +802,9 @@ export default function App() {
               <GlobalSearch lang={lang} />
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {/* Quick Actions Dropdown */}
-              {currentRole !== 'public' && (
+              {currentRole !== 'public' && currentRole !== 'driver' && (
                 <div className="relative">
                   <button
                     onClick={() => setQuickActionsOpen(!quickActionsOpen)}
@@ -812,7 +891,7 @@ export default function App() {
       )}
 
       {/* QUICK ACTIONS HORIZONTAL BAR */}
-      {currentRole !== 'public' && (
+      {currentRole !== 'public' && currentRole !== 'driver' && (
         <div className="bg-bg-surface border-b border-border-main/50 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shadow-xs">
           <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 min-w-0 pr-4">
@@ -1002,6 +1081,12 @@ export default function App() {
             </nav>
 
             <div className="border-t border-slate-800/60 pt-4 flex flex-col gap-2">
+              {/* Mobile-only switcher panel in sidebar */}
+              <div className="flex items-center justify-between gap-2 mb-2 lg:hidden px-1">
+                <LanguageSwitcher currentLanguage={lang} onLanguageChange={handleLanguageChange} />
+                <ThemeSwitcher currentTheme={theme} onThemeChange={handleThemeChange} />
+              </div>
+
               <button
                 onClick={handleLogout}
                 className="w-full py-2.5 px-3 rounded-lg flex items-center gap-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 font-bold transition-all cursor-pointer text-xs"

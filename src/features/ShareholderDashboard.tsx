@@ -220,6 +220,11 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
   const t = localDict[lang];
 
   const fetchShareholderData = async (dataPayload?: any) => {
+    const token = api.getToken();
+    if (!token || token === 'null' || token === 'undefined') {
+      setLoading(false);
+      return;
+    }
     try {
       let calcData;
       let finList;

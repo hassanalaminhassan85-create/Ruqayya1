@@ -45,6 +45,7 @@ import {
   Cell
 } from 'recharts';
 import { Card } from '../ui/Card';
+import { CycleTimer } from './CycleTimer';
 
 interface OverviewTabProps {
   lang: 'en' | 'ha';
@@ -65,8 +66,10 @@ interface OverviewTabProps {
   sseConnected: boolean;
   onStartCycle: (e: React.FormEvent) => void;
   onEndCycle: () => void;
-  cycleGoalForm: { startDate: string; endGoalTons: string };
-  setCycleGoalForm: React.Dispatch<React.SetStateAction<{ startDate: string; endGoalTons: string }>>;
+  onPauseCycleClick?: () => void;
+  onResumeCycleClick?: () => void;
+  cycleGoalForm: { startDate: string; endDate?: string; endGoalTons: string };
+  setCycleGoalForm: React.Dispatch<React.SetStateAction<{ startDate: string; endDate?: string; endGoalTons: string }>>;
   onAddAdmin: () => void;
   onAddShareholder: () => void;
   setActiveTab: (tab: string) => void;
@@ -77,6 +80,7 @@ interface OverviewTabProps {
   onUploadRestore: (e: React.ChangeEvent<HTMLInputElement>) => void;
   restoreSuccess: string | null;
   restoreError: string | null;
+  onStateChange?: () => void;
 }
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({
@@ -98,6 +102,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   sseConnected,
   onStartCycle,
   onEndCycle,
+  onPauseCycleClick,
+  onResumeCycleClick,
   cycleGoalForm,
   setCycleGoalForm,
   onAddAdmin,
@@ -109,7 +115,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   onDownloadBackup,
   onUploadRestore,
   restoreSuccess,
-  restoreError
+  restoreError,
+  onStateChange
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
@@ -134,7 +141,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const sharePct = shareholderSettings?.distributionPercentage ?? 2;
   const shareholderPool = netProfit > 0 ? (netProfit * (sharePct / 100)) : 0;
 
-  const activeCycle = cycles.find(c => c.status === 'active');
+  const activeCycle = cycles.find(c => c.status === 'active' || c.status === 'paused');
   const targetTons = activeCycle ? activeCycle.endGoalTons : 200;
   const currentTons = 94.6; // In a real production DB, this aggregates trip manifests weights
   const completionPercentage = Math.round((currentTons / targetTons) * 100);
@@ -213,7 +220,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className="text-[9px] text-slate-500 font-extrabold tracking-wider uppercase">{lang === 'en' ? "Operating Cycle" : "Zagayen Aiki"}</span>
             <span className="text-xs font-bold text-slate-200 mt-0.5 flex items-center gap-1">
               <Clock className="h-3.5 w-3.5 text-brand-gold shrink-0" />
-              {activeCycle ? `Active (ID: ${activeCycle.id.substring(0, 5)})` : "Inactive"}
+              {activeCycle ? (
+                <span className={activeCycle.status === 'paused' ? 'text-amber-500 font-extrabold' : 'text-emerald-500 font-extrabold'}>
+                  {activeCycle.status === 'paused' ? (lang === 'en' ? 'PAUSED' : 'AN DAKATAR') : (lang === 'en' ? 'ACTIVE' : 'A-AIKI')} ({activeCycle.id.substring(0, 5)})
+                </span>
+              ) : (
+                <span className="text-slate-400">Inactive</span>
+              )}
             </span>
           </div>
 
@@ -723,6 +736,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             </div>
           </div>
 
+          {/* Real-time Cycle Duration & Status Tracker */}
+          <CycleTimer 
+            lang={lang}
+            activeCycle={activeCycle}
+            onStateChange={onStateChange || (() => {})}
+          />
+
           {/* Operating Cycle Timeline Section */}
           <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
@@ -796,12 +816,21 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <div className="flex items-center justify-end gap-2.5 mt-2">
                   {activeCycle ? (
                     <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => alert("Operating cycle paused successfully.")}
-                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl cursor-pointer transition-colors border border-slate-200/50"
-                      >
-                        Pause
-                      </button>
+                      {activeCycle.status === 'paused' ? (
+                        <button 
+                          onClick={onResumeCycleClick}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-colors shadow-xs"
+                        >
+                          {lang === 'en' ? "Resume Cycle" : "Dawo da Zagaye"}
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={onPauseCycleClick}
+                          className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-colors shadow-xs"
+                        >
+                          {lang === 'en' ? "Pause Cycle" : "Dakatar da Zagaye"}
+                        </button>
+                      )}
                       <button 
                         onClick={onEndCycle}
                         className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
@@ -811,22 +840,27 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <form onSubmit={onStartCycle} className="flex flex-wrap items-center gap-2">
-                      <input
-                        type="date"
-                        required
-                        className="bg-white border border-slate-200/80 p-2 rounded-lg text-xs font-semibold focus:outline-slate-900 focus:border-slate-900"
-                        value={cycleGoalForm.startDate}
-                        onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, startDate: e.target.value })}
-                      />
-                      <input
-                        type="number"
-                        required
-                        placeholder="Goal (Tons)"
-                        className="bg-white border border-slate-200/80 p-2 rounded-lg text-xs w-28 font-semibold focus:outline-slate-900 focus:border-slate-900"
-                        value={cycleGoalForm.endGoalTons}
-                        onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, endGoalTons: e.target.value })}
-                      />
+                    <form onSubmit={onStartCycle} className="flex flex-wrap items-end gap-2.5">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">{lang === 'en' ? "Start Date" : "Ranar Fara"}</label>
+                        <input
+                          type="date"
+                          required
+                          className="bg-white border border-slate-200/80 p-2 rounded-lg text-xs font-semibold focus:outline-slate-900 focus:border-slate-900"
+                          value={cycleGoalForm.startDate}
+                          onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, startDate: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">{lang === 'en' ? "End Date" : "Ranar Kammalawa"}</label>
+                        <input
+                          type="date"
+                          required
+                          className="bg-white border border-slate-200/80 p-2 rounded-lg text-xs font-semibold focus:outline-slate-900 focus:border-slate-900"
+                          value={cycleGoalForm.endDate || ''}
+                          onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, endDate: e.target.value })}
+                        />
+                      </div>
                       <button
                         type="submit"
                         className="px-3.5 py-2 bg-brand-gold hover:bg-brand-gold/80 text-slate-950 font-extrabold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
