@@ -494,7 +494,9 @@ export default function App() {
 
   const handleSidebarClick = (id: string) => {
     setActiveSection(id);
-    setSidebarOpen(false); // Auto close mobile drawer on click
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false); // Auto close mobile drawer on click
+    }
   };
 
   const renderMainContent = () => {
@@ -767,8 +769,11 @@ export default function App() {
             <div className="flex items-center gap-3">
               {currentRole !== 'public' && (
                 <button
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="lg:hidden p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-base transition-colors cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSidebarOpen(!sidebarOpen);
+                  }}
+                  className="md:hidden p-1 rounded-lg text-text-muted hover:text-text-main hover:bg-bg-base transition-colors cursor-pointer"
                   aria-label="Toggle Sidebar Menu"
                 >
                   <Menu className="h-5 w-5" />
@@ -789,7 +794,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="hidden lg:flex items-center gap-2 pl-3 ml-1 border-l border-border-main/50 text-[10px] font-semibold text-text-muted">
+              <div className="hidden md:flex items-center gap-2 pl-3 ml-1 border-l border-border-main/50 text-[10px] font-semibold text-text-muted">
                 <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-text-main font-bold tracking-wider">OPERATIONAL</span>
                 <span className="text-border-main/80">•</span>
@@ -975,7 +980,7 @@ export default function App() {
               </button>
             </div>
             
-            <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold text-text-muted font-mono shrink-0">
+            <div className="hidden md:flex items-center gap-2 text-[10px] font-bold text-text-muted font-mono shrink-0">
               <span className="px-1.5 py-0.5 rounded bg-bg-base border border-border-main/50">SECURE NODE</span>
               <span className="text-brand-gold">•</span>
               <span>AES-256</span>
@@ -1011,19 +1016,31 @@ export default function App() {
         {/* SIDEBAR BACKDROP FOR MOBILE */}
         {sidebarOpen && currentRole !== 'public' && (
           <div 
-            className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-30 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-30 md:hidden"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSidebarOpen(false);
+            }}
           />
         )}
 
         {/* SIDEBAR FOR AUTHENTICATED ROLES */}
         {currentRole !== 'public' && (
-          <aside className={`fixed inset-y-0 left-0 z-40 ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-64'} w-64 bg-brand-navy text-white transform lg:translate-x-0 lg:static lg:h-auto transition-all duration-300 ease-in-out border-r border-slate-800/80 p-4 flex flex-col gap-5 flex-shrink-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}>
-            <div className="flex items-center justify-between lg:hidden border-b border-slate-800 pb-3">
+          <aside 
+            onClick={(e) => e.stopPropagation()}
+            className={`fixed inset-y-0 left-0 z-40 ${sidebarCollapsed ? 'md:w-20' : 'md:w-64'} w-64 bg-brand-navy text-white transform md:translate-x-0 md:static md:h-auto transition-all duration-300 ease-in-out border-r border-slate-800/80 p-4 flex flex-col gap-5 flex-shrink-0 ${
+              sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            <div className="flex items-center justify-between md:hidden border-b border-slate-800 pb-3">
               <span className="text-xs font-bold text-slate-300">{lang === 'en' ? "System Menu" : "Tsarin Menu"}</span>
-              <button onClick={() => setSidebarOpen(false)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSidebarOpen(false);
+                }} 
+                className="text-slate-400 hover:text-white p-1 cursor-pointer"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1049,7 +1066,7 @@ export default function App() {
               {/* Desktop collapse button */}
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="hidden lg:flex absolute -right-6 top-1/2 -translate-y-1/2 bg-slate-850 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-750 p-1 rounded-full shadow-md cursor-pointer z-50 scale-90 transition-transform"
+                className="hidden md:flex absolute -right-6 top-1/2 -translate-y-1/2 bg-slate-850 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-750 p-1 rounded-full shadow-md cursor-pointer z-50 scale-90 transition-transform"
                 title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
               >
                 {sidebarCollapsed ? "→" : "←"}
@@ -1057,7 +1074,7 @@ export default function App() {
             </div>
 
             {/* Navigation links */}
-            <nav className="flex-1 flex flex-col gap-1 text-xs font-semibold text-slate-300 overflow-y-auto max-h-[50vh] lg:max-h-[none] pr-1 scrollbar-none">
+            <nav className="flex-1 flex flex-col gap-1 text-xs font-semibold text-slate-300 overflow-y-auto max-h-[50vh] md:max-h-[none] pr-1 scrollbar-none">
               {getSidebarItems().map((item, idx) => (
                 <button
                   key={idx}
@@ -1082,7 +1099,7 @@ export default function App() {
 
             <div className="border-t border-slate-800/60 pt-4 flex flex-col gap-2">
               {/* Mobile-only switcher panel in sidebar */}
-              <div className="flex items-center justify-between gap-2 mb-2 lg:hidden px-1">
+              <div className="flex items-center justify-between gap-2 mb-2 md:hidden px-1">
                 <LanguageSwitcher currentLanguage={lang} onLanguageChange={handleLanguageChange} />
                 <ThemeSwitcher currentTheme={theme} onThemeChange={handleThemeChange} />
               </div>
