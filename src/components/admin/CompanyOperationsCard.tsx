@@ -319,62 +319,62 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   }
 
   return (
-    <div id="company-operations-container" className="w-full flex flex-col gap-3">
+    <div id="company-operations-container" className="w-full flex flex-col gap-2">
       {/* Primary operations banner card */}
-      <Card className={`relative overflow-hidden border p-5 transition-all duration-300 rounded-xl shadow-lg backdrop-blur-md ${borderStyle}`}>
+      <Card className={`relative overflow-hidden border p-4 transition-all duration-300 rounded-xl shadow-md backdrop-blur-md ${borderStyle}`}>
         {/* Glow effect at background */}
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full blur-3xl opacity-15 bg-primary-gold" />
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 rounded-full blur-2xl opacity-10 bg-primary-gold" />
         
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 z-10 relative">
+        <div className="flex flex-col gap-3 z-10 relative">
           
           {/* Status block */}
-          <div className="flex items-start gap-4">
-            <div className={`p-3 rounded-xl border flex items-center justify-center ${
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-lg border flex items-center justify-center shrink-0 ${
               isSetup ? 'bg-amber-500/15 border-amber-500/20 text-amber-500' :
               isPaused ? 'bg-rose-500/15 border-rose-500/20 text-rose-500' :
               'bg-emerald-500/15 border-emerald-500/20 text-emerald-500'
             }`}>
-              <Activity className={`h-6 w-6 ${isOperational ? 'animate-pulse' : ''}`} />
+              <Activity className={`h-5 w-5 ${isOperational ? 'animate-pulse' : ''}`} />
             </div>
             
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-xs uppercase tracking-widest text-text-muted font-bold">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted font-bold">
                   {lang === 'en' ? 'ENTERPRISE SYSTEM STATE' : 'TSARIN GUDANAR DA SASHIN AIKI'}
                 </span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${badgeStyle}`}>
+                <span className={`px-2 py-0.2 rounded-full text-[8px] font-extrabold uppercase tracking-wider border ${badgeStyle}`}>
                   {opsState.status}
                 </span>
               </div>
-              <h3 className="text-xl font-black text-text-main tracking-tight mt-1">
+              <h3 className="text-sm font-black text-text-main tracking-tight mt-0.5">
                 {isSetup && (lang === 'en' ? 'Setup & Staging Phase' : 'Matakin Shirya Kayan Aiki')}
                 {isOperational && (lang === 'en' ? 'Live Fleet Operations Active' : 'Rukunin Keken Napep Na Kan Hanyar Aiki')}
                 {isPaused && (lang === 'en' ? 'Corporate Suspension Active' : 'An Dakatar da Ayyuka Na Dan Lokaci')}
               </h3>
-              <p className="text-xs text-text-muted max-w-xl leading-normal mt-0.5">
-                {isSetup && (lang === 'en' ? 'ERP is currently frozen in Setup Mode. Register drivers, assign tricycles, and configure company requirements safely before starting live leasing. Calculations and earnings are paused.' : 'Ana cikin shirin gudanarwa. Sanya direbobi, kekuna, saita albashi da wallet kafin a fara gudanar da lissafi da aiki na gaske.')}
-                {isOperational && (lang === 'en' ? 'Automatic calculations, 30-day operating cycle updates, fuel vouchers, and shareholder remittance splits are fully active in production.' : 'Ana lissafin kudaden remittance, rabon riba na kwanaki 30, kudaden gas, da duk sauran kudaden shiga na kamfani a raye.')}
-                {isPaused && (lang === 'en' ? 'System locked by administrator. Operations are halted, installments are frozen, and drivers cannot initiate transactions until resumed.' : 'An dakatar da lissafi, sanya kudi, da duk wani aiki na asusu har sai admin ya dawo da shi.')}
+              <p className="text-[10px] text-text-muted max-w-sm leading-relaxed mt-0.5">
+                {isSetup && (lang === 'en' ? 'Configure drivers, assign tricycles, and finalize wallet setups safely before live operations.' : 'Sanya direbobi, kekuna, da asusun wallet kafin a fara aiki.')}
+                {isOperational && (lang === 'en' ? 'Auto remittance logs, fuel vouchers, and profit allocation models are fully live.' : 'Ana lissafin kudaden remittance da rabon riba na kwanaki 30 a raye.')}
+                {isPaused && (lang === 'en' ? 'System locked. Installments are frozen and drivers cannot submit transactions.' : 'An dakatar da lissafi, sanya kudi, da duk wani aiki na asusu har sai an dawo da shi.')}
               </p>
             </div>
           </div>
 
           {/* Quick Metrics & Action Area */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
+          <div className="flex flex-col gap-2.5 w-full mt-1 border-t border-border-main/20 pt-2.5">
             
             {/* Operating Cycle stats */}
             {!isSetup && (
-              <div className="grid grid-cols-2 gap-3 bg-card-bg/60 border border-border-main/55 rounded-xl px-4 py-2 text-center min-w-[200px]">
+              <div className="grid grid-cols-2 gap-2 bg-card-bg/40 border border-border-main/30 rounded-lg py-1 px-3 text-center">
                 <div>
-                  <span className="text-[9px] uppercase tracking-wider text-text-muted block font-bold">{lang === 'en' ? 'Cycle' : 'Zagaye'}</span>
-                  <div className="text-sm font-extrabold text-text-main flex items-center justify-center gap-1 mt-0.5">
-                    <Clock className="h-3.5 w-3.5 text-primary-gold" />
+                  <span className="text-[8px] uppercase tracking-wider text-text-muted block font-semibold">{lang === 'en' ? 'Cycle' : 'Zagaye'}</span>
+                  <div className="text-xs font-black text-text-main flex items-center justify-center gap-1 mt-0.5">
+                    <Clock className="h-3 w-3 text-primary-gold" />
                     {opsState.currentCycle || 'N/A'}
                   </div>
                 </div>
-                <div className="border-l border-border-main/50 pl-3">
-                  <span className="text-[9px] uppercase tracking-wider text-text-muted block font-bold">{lang === 'en' ? 'Cycle Day' : 'Rana'}</span>
-                  <span className="text-sm font-extrabold text-text-main mt-0.5 block">
+                <div className="border-l border-border-main/30 pl-2">
+                  <span className="text-[8px] uppercase tracking-wider text-text-muted block font-semibold">{lang === 'en' ? 'Cycle Day' : 'Rana'}</span>
+                  <span className="text-xs font-black text-text-main mt-0.5 block">
                     Day {opsState.currentDay || 1}/30
                   </span>
                 </div>
@@ -382,15 +382,15 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
             )}
 
             {/* State Controls */}
-            <div className="flex items-center gap-2 flex-1 sm:flex-none">
+            <div className="flex items-center justify-between gap-1.5 w-full">
               {isSetup && (
                 <Button 
                   id="btn-start-ops"
                   onClick={handleOpenChecklist}
-                  className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg border-b-2 border-amber-700 shadow-md transition-all duration-200 cursor-pointer text-xs"
+                  className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black flex items-center justify-center gap-1 py-2 rounded-lg shadow-sm transition-all duration-200 cursor-pointer text-[10px]"
                 >
-                  <Play className="h-4 w-4 fill-slate-950" />
-                  {lang === 'en' ? 'Start Company Operations' : 'Fara Gudanar da Kamfani'}
+                  <Play className="h-3.5 w-3.5 fill-slate-950" />
+                  {lang === 'en' ? 'Start Operations' : 'Fara Gudanarwa'}
                 </Button>
               )}
 
@@ -398,10 +398,10 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                 <Button 
                   id="btn-pause-ops"
                   onClick={() => { setActionError(''); setShowPauseModal(true); }}
-                  className="w-full sm:w-auto bg-rose-600/10 hover:bg-rose-600/20 text-rose-500 border border-rose-600/30 font-bold flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg shadow-sm cursor-pointer text-xs"
+                  className="flex-1 bg-rose-600/10 hover:bg-rose-600/20 text-rose-500 border border-rose-600/30 font-bold flex items-center justify-center gap-1 py-2 rounded-lg cursor-pointer text-[10px]"
                 >
-                  <Pause className="h-4 w-4" />
-                  {lang === 'en' ? 'Pause Operations' : 'Dakatar da Aiki'}
+                  <Pause className="h-3.5 w-3.5" />
+                  {lang === 'en' ? 'Pause' : 'Dakatar'}
                 </Button>
               )}
 
@@ -409,59 +409,52 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                 <Button 
                   id="btn-resume-ops"
                   onClick={handleResumeCompanyOperations}
-                  className="w-full sm:w-auto bg-emerald-500 text-slate-950 hover:bg-emerald-600 font-extrabold flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg shadow-md border-b-2 border-emerald-700 cursor-pointer text-xs"
+                  className="flex-1 bg-emerald-500 text-slate-950 hover:bg-emerald-600 font-extrabold flex items-center justify-center gap-1 py-2 rounded-lg border-b border-emerald-700 cursor-pointer text-[10px]"
                 >
-                  <Play className="h-4 w-4 fill-slate-950" />
-                  {lang === 'en' ? 'Resume Operations' : 'Ci Gaba da Aiki'}
+                  <Play className="h-3.5 w-3.5 fill-slate-950" />
+                  {lang === 'en' ? 'Resume' : 'Ci Gaba'}
                 </Button>
               )}
 
               <Button 
                 variant="outline"
                 onClick={() => setShowHistory(!showHistory)}
-                className="p-2.5 rounded-lg border border-border-main hover:bg-card-bg/80 text-text-muted font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                className="px-2 py-2 rounded-lg border border-border-main hover:bg-card-bg/80 text-text-muted font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
               >
-                <History className="h-4 w-4" />
-                {showHistory ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                <History className="h-3.5 w-3.5" />
+                {showHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </Button>
             </div>
           </div>
         </div>
 
         {/* Small live metrics grid underneath for immediate visibility */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-t border-border-main/40 mt-5 pt-4">
-          <div className="flex items-center gap-2.5">
-            <UserCheck className="h-4 w-4 text-primary-gold" />
+        <div className="grid grid-cols-2 gap-2.5 border-t border-border-main/30 mt-3 pt-2.5">
+          <div className="flex items-center gap-2">
+            <UserCheck className="h-3.5 w-3.5 text-primary-gold shrink-0" />
             <div>
-              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Drivers Live' : 'Direbobi'}</span>
+              <span className="text-[8px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Drivers' : 'Direbobi'}</span>
               <span className="text-xs font-black text-text-main">{metrics.totalDrivers || driversCount}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2.5">
-            <Server className="h-4 w-4 text-indigo-400" />
+          <div className="flex items-center gap-2">
+            <Server className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
             <div>
-              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Tricycles Assigned' : 'Tricycles'}</span>
+              <span className="text-[8px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Fleet' : 'Kekuna'}</span>
               <span className="text-xs font-black text-text-main">{metrics.totalTricycles || vehiclesCount}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2.5">
-            <Coins className="h-4 w-4 text-emerald-400" />
+          <div className="flex items-center gap-2">
+            <Coins className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
             <div>
-              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? "Today's Collections" : 'Remittance Yau'}</span>
+              <span className="text-[8px] uppercase text-text-muted block font-semibold">{lang === 'en' ? "Collections" : 'Remittance'}</span>
               <span className="text-xs font-black text-text-main">₦{(metrics.todayCollections || 0).toLocaleString()}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2.5">
-            <Wallet className="h-4 w-4 text-amber-400" />
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
             <div>
-              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Corporate Wallet' : 'Asusun Kamfani'}</span>
-              <span className="text-xs font-black text-text-main">₦{(metrics.companyWalletBalance || 0).toLocaleString()}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5 col-span-2 md:col-span-1">
-            <ShieldCheck className="h-4 w-4 text-cyan-400" />
-            <div>
-              <span className="text-[10px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'System Integrity' : 'Lafiyar Tsarin'}</span>
+              <span className="text-[8px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Integrity' : 'Lafiya'}</span>
               <span className="text-xs font-black text-cyan-400">{metrics.systemHealth}</span>
             </div>
           </div>

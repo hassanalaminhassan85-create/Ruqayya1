@@ -54,7 +54,8 @@ import {
   Upload,
   Building,
   TrendingDown,
-  Briefcase
+  Briefcase,
+  Coins
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -246,26 +247,26 @@ export default function App() {
           const parts = token.split('_');
           const userKey = parts[2] || '';
           let fallbackRole: Role = 'driver';
-          let fullName = 'Alhaji Musa Garba';
+          let fullName = 'Driver MUSA';
 
           if (userKey === 'MMR') {
             fallbackRole = 'director';
-            fullName = 'Director Kabir Mohammed';
+            fullName = 'Executive Director MMR';
           } else if (userKey === 'ADAM') {
             fallbackRole = 'admin';
-            fullName = 'Operator Ibrahim Bello';
+            fullName = 'Operations Admin ADAM';
           } else if (userKey === 'ABAKAKA') {
             fallbackRole = 'admin';
-            fullName = 'Operator ABAKAKA Bello';
+            fullName = 'Operations Admin ABAKAKA';
           } else if (userKey === 'KABIR') {
             fallbackRole = 'shareholder';
-            fullName = 'Alhaji Kabir Mohammed';
+            fullName = 'Shareholder KABIR';
           } else if (userKey === 'AMINA') {
             fallbackRole = 'shareholder';
-            fullName = 'Hajiya Amina Garba';
+            fullName = 'Shareholder AMINA';
           } else {
             fallbackRole = 'driver';
-            fullName = 'Alhaji Musa Garba';
+            fullName = 'Driver MUSA';
           }
 
           setAuthToken(token);
@@ -462,7 +463,7 @@ export default function App() {
       { id: 'dashboard', label: lang === 'en' ? "Dashboard" : "Gudunmawar Aiki", icon: <Layers className="h-4 w-4 shrink-0" />, active: activeSection === 'dashboard' },
       { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
       { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
-      { id: 'payments', label: lang === 'en' ? "Payments" : "Biyan Kudade", icon: <ShieldCheck className="h-4 w-4 shrink-0" />, active: activeSection === 'payments' },
+      { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Coins className="h-4 w-4 shrink-0" />, active: activeSection === 'finance' },
       { id: 'shareholders', label: lang === 'en' ? "Shareholders" : "Masu Hannun Jari", icon: <TrendingUp className="h-4 w-4 shrink-0" />, active: activeSection === 'shareholders' },
       { id: 'trips', label: lang === 'en' ? "Trips" : "Takardun Tafiya", icon: <MapPin className="h-4 w-4 shrink-0" />, active: activeSection === 'trips' },
       { id: 'reports', label: lang === 'en' ? "Reports" : "Rahoton Aiki", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'reports' },
@@ -481,7 +482,7 @@ export default function App() {
     }
     if (currentRole === 'admin') {
       return items.filter(item => 
-        ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'reports', 'communications', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'drivers', 'fleet', 'finance', 'trips', 'reports', 'communications', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
       );
     }
     if (currentRole === 'shareholder') {

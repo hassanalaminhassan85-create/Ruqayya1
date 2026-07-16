@@ -189,8 +189,9 @@ export function seedDBIfEmpty() {
     u.email === 'musa.garba@ruqayyatransport.com' || 
     u.email === 'kabir.m@ruqayyatransport.com' ||
     u.email === 'amina.g@ruqayyatransport.com' ||
-    u.full_name?.includes('Kabir') ||
-    u.full_name?.includes('Musa') ||
+    u.full_name === 'Alhaji Musa Garba' ||
+    u.full_name === 'Alhaji Kabir Mohammed' ||
+    u.full_name === 'Hajiya Amina Garba' ||
     u.full_name?.includes('Ibrahim Bello')
   );
 

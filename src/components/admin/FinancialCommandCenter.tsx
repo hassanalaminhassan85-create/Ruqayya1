@@ -609,82 +609,131 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           {/* TOP METRICS GRID */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* COMPANY WALLET */}
-            <Card className="p-4 border-l-4 border-slate-900 bg-bg-surface flex flex-col justify-between h-32 shadow-sm">
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.companyWallet}</span>
-                <p className="text-2xl font-black text-slate-900 font-mono mt-1">₦{companyWalletBalance.toLocaleString()}</p>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-text-muted border-t border-slate-100 pt-2">
-                <span>Inflows - Outflows</span>
-                <Badge variant="success">Auto Calculations</Badge>
-              </div>
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.05, ease: "easeOut" }}
+              className="flex"
+            >
+              <Card className="p-4 border-l-4 border-slate-900 bg-bg-surface flex flex-col justify-between h-32 shadow-sm w-full">
+                <div>
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.companyWallet}</span>
+                  <p className="text-2xl font-black text-slate-900 font-mono mt-1">₦{companyWalletBalance.toLocaleString()}</p>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-text-muted border-t border-slate-100 pt-2">
+                  <span>Inflows - Outflows</span>
+                  <Badge variant="success">Auto Calculations</Badge>
+                </div>
+              </Card>
+            </motion.div>
 
             {/* TODAY'S COLLECTIONS */}
-            <Card className="p-4 border-l-4 border-emerald-500 bg-bg-surface flex flex-col justify-between h-32 shadow-sm">
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.todayCollections}</span>
-                <p className="text-2xl font-black text-emerald-600 font-mono mt-1">₦{todayCollections.toLocaleString()}</p>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-text-muted border-t border-slate-100 pt-2">
-                <span>Today's Remittances</span>
-                <span className="text-emerald-600 font-bold font-mono">Live</span>
-              </div>
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
+              className="flex"
+            >
+              <Card className="p-4 border-l-4 border-emerald-500 bg-bg-surface flex flex-col justify-between h-32 shadow-sm w-full">
+                <div>
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.todayCollections}</span>
+                  <p className="text-2xl font-black text-emerald-600 font-mono mt-1">₦{todayCollections.toLocaleString()}</p>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-text-muted border-t border-slate-100 pt-2">
+                  <span>Today's Remittances</span>
+                  <span className="text-emerald-600 font-bold font-mono">Live</span>
+                </div>
+              </Card>
+            </motion.div>
 
             {/* NET SURPLUS PROFIT */}
-            <Card className="p-4 border-l-4 border-brand-gold bg-bg-surface flex flex-col justify-between h-32 shadow-sm">
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.netProfit}</span>
-                <p className="text-2xl font-black text-slate-900 font-mono mt-1">₦{companyWalletBalance.toLocaleString()}</p>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-text-muted border-t border-slate-100 pt-2">
-                <span>Net Profit margin</span>
-                <div className="flex items-center text-emerald-600 font-bold gap-0.5">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>100%</span>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
+              className="flex"
+            >
+              <Card className="p-4 border-l-4 border-brand-gold bg-bg-surface flex flex-col justify-between h-32 shadow-sm w-full">
+                <div>
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.netProfit}</span>
+                  <p className="text-2xl font-black text-slate-900 font-mono mt-1">₦{companyWalletBalance.toLocaleString()}</p>
                 </div>
-              </div>
-            </Card>
+                <div className="flex items-center justify-between text-[10px] text-text-muted border-t border-slate-100 pt-2">
+                  <span>Net Profit margin</span>
+                  <div className="flex items-center text-emerald-600 font-bold gap-0.5">
+                    <TrendingUp className="h-3 w-3" />
+                    <span>100%</span>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
 
             {/* DRIVER LEASE OUTSTANDING */}
-            <Card className="p-4 border-l-4 border-rose-500 bg-bg-surface flex flex-col justify-between h-32 shadow-sm">
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.driverReceivables}</span>
-                <p className="text-2xl font-black text-rose-600 font-mono mt-1">₦{outstandingDriverReceivables.toLocaleString()}</p>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-text-muted border-t border-slate-100 pt-2">
-                <span>Asset fleet value backlogs</span>
-                <Badge variant="danger">Receivable</Badge>
-              </div>
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
+              className="flex"
+            >
+              <Card className="p-4 border-l-4 border-rose-500 bg-bg-surface flex flex-col justify-between h-32 shadow-sm w-full">
+                <div>
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.driverReceivables}</span>
+                  <p className="text-2xl font-black text-rose-600 font-mono mt-1">₦{outstandingDriverReceivables.toLocaleString()}</p>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-text-muted border-t border-slate-100 pt-2">
+                  <span>Asset fleet value backlogs</span>
+                  <Badge variant="danger">Receivable</Badge>
+                </div>
+              </Card>
+            </motion.div>
           </div>
 
           {/* SECOND METRICS ROW */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.dividendsPool}</span>
-                <p className="text-lg font-bold text-slate-900 font-mono mt-1">₦{continuousDividendPool.toLocaleString()}</p>
-              </div>
-              <Percent className="h-8 w-8 text-slate-400 shrink-0" />
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
+              className="flex"
+            >
+              <Card className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between w-full">
+                <div>
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.dividendsPool}</span>
+                  <p className="text-lg font-bold text-slate-900 font-mono mt-1">₦{continuousDividendPool.toLocaleString()}</p>
+                </div>
+                <Percent className="h-8 w-8 text-slate-400 shrink-0" />
+              </Card>
+            </motion.div>
 
-            <Card className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Month operating spends</span>
-                <p className="text-lg font-bold text-rose-600 font-mono mt-1">₦{monthlyExpenses.toLocaleString()}</p>
-              </div>
-              <TrendingDown className="h-8 w-8 text-rose-400 shrink-0" />
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
+              className="flex"
+            >
+              <Card className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between w-full">
+                <div>
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Month operating spends</span>
+                  <p className="text-lg font-bold text-rose-600 font-mono mt-1">₦{monthlyExpenses.toLocaleString()}</p>
+                </div>
+                <TrendingDown className="h-8 w-8 text-rose-400 shrink-0" />
+              </Card>
+            </motion.div>
 
-            <Card className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.payrollLiability}</span>
-                <p className="text-lg font-bold text-blue-600 font-mono mt-1">₦{totalPayroll_liability.toLocaleString()}</p>
-              </div>
-              <Briefcase className="h-8 w-8 text-blue-400 shrink-0" />
-            </Card>
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.35, ease: "easeOut" }}
+              className="flex"
+            >
+              <Card className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between w-full">
+                <div>
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">{t.payrollLiability}</span>
+                  <p className="text-lg font-bold text-blue-600 font-mono mt-1">₦{totalPayroll_liability.toLocaleString()}</p>
+                </div>
+                <Briefcase className="h-8 w-8 text-blue-400 shrink-0" />
+              </Card>
+            </motion.div>
           </div>
 
           {/* DUAL SECTION CHART AND RECENT TIMELINE */}

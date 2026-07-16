@@ -271,35 +271,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       // Local fallback for high reliability when server is unreachable or offline
       const lowerEmail = email.toLowerCase().trim();
       if (
-        (lowerEmail === 'musa.garba@ruqayyatransport.com' && password === 'driver123') ||
-        (lowerEmail === 'kabir.m@ruqayyatransport.com' && password === 'shareholder123') ||
-        (lowerEmail === 'amina.g@ruqayyatransport.com' && password === 'shareholder123') ||
+        (lowerEmail === 'musa.driver@ruqayyatransport.com' && password === 'driver123') ||
+        (lowerEmail === 'kabir.shareholder@ruqayyatransport.com' && password === 'shareholder123') ||
+        (lowerEmail === 'amina.shareholder@ruqayyatransport.com' && password === 'shareholder123') ||
         (lowerEmail === 'director@ruqayyatransport.com' && password === 'director123') ||
         (lowerEmail === 'admin@ruqayyatransport.com' && password === 'admin123')
       ) {
         let fallbackRole: 'driver' | 'shareholder' | 'director' | 'admin' = 'driver';
-        let fullName = 'Alhaji Musa Garba';
+        let fullName = 'Driver MUSA';
         let userKey = 'MUSA';
 
-        if (lowerEmail === 'musa.garba@ruqayyatransport.com') {
+        if (lowerEmail === 'musa.driver@ruqayyatransport.com') {
           fallbackRole = 'driver';
-          fullName = 'Alhaji Musa Garba';
+          fullName = 'Driver MUSA';
           userKey = 'MUSA';
-        } else if (lowerEmail === 'kabir.m@ruqayyatransport.com') {
+        } else if (lowerEmail === 'kabir.shareholder@ruqayyatransport.com') {
           fallbackRole = 'shareholder';
-          fullName = 'Alhaji Kabir Mohammed';
+          fullName = 'Shareholder KABIR';
           userKey = 'KABIR';
-        } else if (lowerEmail === 'amina.g@ruqayyatransport.com') {
+        } else if (lowerEmail === 'amina.shareholder@ruqayyatransport.com') {
           fallbackRole = 'shareholder';
-          fullName = 'Hajiya Amina Garba';
+          fullName = 'Shareholder AMINA';
           userKey = 'AMINA';
         } else if (lowerEmail === 'director@ruqayyatransport.com') {
           fallbackRole = 'director';
-          fullName = 'Director Kabir Mohammed';
+          fullName = 'Executive Director MMR';
           userKey = 'MMR';
         } else if (lowerEmail === 'admin@ruqayyatransport.com') {
           fallbackRole = 'admin';
-          fullName = 'Operator Ibrahim Bello';
+          fullName = 'Operations Admin ADAM';
           userKey = 'ADAM';
         }
 

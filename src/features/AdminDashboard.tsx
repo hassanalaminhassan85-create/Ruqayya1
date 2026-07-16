@@ -29,7 +29,8 @@ import {
   UserCheck,
   UserX,
   RotateCcw,
-  MessageSquare
+  MessageSquare,
+  Wallet
 } from 'lucide-react';
 
 import { AdminKPIs } from '../components/admin/AdminKPIs';
@@ -40,6 +41,7 @@ import { DocumentHub } from '../components/admin/DocumentHub';
 import { CommunicationCenter } from '../components/admin/CommunicationCenter';
 import { PaymentWorkflow } from '../components/admin/PaymentWorkflow';
 import { CompanyOperationsCard } from '../components/admin/CompanyOperationsCard';
+import { CompanyWalletCard } from '../components/admin/CompanyWalletCard';
 import { PeopleManagement } from '../components/admin/PeopleManagement';
 import { CycleTimer } from '../components/director/CycleTimer';
 
@@ -410,22 +412,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         </div>
       ) : (
         <>
-          {/* Company Operations State & Cycle Timer Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div className="lg:col-span-2">
-              <CompanyOperationsCard
-                lang={lang}
-                onStateChange={syncAllData}
-                driversCount={drivers.length}
-                vehiclesCount={vehicles.length}
-              />
+          {/* Compressed Control Panel Card Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+            <div className="flex flex-col bg-bg-surface border border-border-main/50 rounded-2xl p-4 shadow-sm h-full justify-between">
+              <div className="flex items-center justify-between pb-2 border-b border-border-main/40 mb-2 shrink-0">
+                <h3 className="text-xs font-black text-text-main uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity className="h-4 w-4 text-brand-gold animate-pulse" />
+                  {lang === 'en' ? "Operations State" : "Matakin Ayyuka"}
+                </h3>
+                <span className="text-[10px] font-mono text-text-muted">ERP_NODE_SYS</span>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                <CompanyOperationsCard
+                  lang={lang}
+                  onStateChange={syncAllData}
+                  driversCount={drivers.length}
+                  vehiclesCount={vehicles.length}
+                />
+              </div>
             </div>
-            <div>
-              <CycleTimer
-                lang={lang}
-                activeCycle={activeCycle}
-                onStateChange={syncAllData}
-              />
+
+            <div className="flex flex-col bg-bg-surface border border-border-main/50 rounded-2xl p-4 shadow-sm h-full justify-between">
+              <div className="flex items-center justify-between pb-2 border-b border-border-main/40 mb-2 shrink-0">
+                <h3 className="text-xs font-black text-text-main uppercase tracking-wider flex items-center gap-1.5">
+                  <Wallet className="h-4 w-4 text-brand-gold" />
+                  {lang === 'en' ? "Enterprise Treasury" : "Asusun Kamfani"}
+                </h3>
+                <span className="text-[10px] font-mono text-text-muted">NODE_FIN_ACTIVE</span>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                <CompanyWalletCard
+                  lang={lang}
+                  finance={finance}
+                  payments={payments}
+                  onStateChange={syncAllData}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col bg-bg-surface border border-border-main/50 rounded-2xl p-4 shadow-sm h-full justify-between">
+              <div className="flex-1 flex flex-col justify-center">
+                <CycleTimer
+                  lang={lang}
+                  activeCycle={activeCycle}
+                  onStateChange={syncAllData}
+                />
+              </div>
             </div>
           </div>
 
@@ -441,15 +473,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
 
           {/* Module Tab Switchers */}
           <Tabs
-            activeTab={activeTab}
+            activeTab={activeTab === 'payments' ? 'finance' : activeTab}
             onChange={(id) => { setActiveTab(id as any); setFleetPage(1); }}
             tabs={[
               { id: 'fleet', label: lang === 'en' ? "Tricycle Fleet" : "Rukunin Kekuna", icon: <Truck className="h-3.5 w-3.5" /> },
               { id: 'drivers', label: `${lang === 'en' ? "Driver Registry" : "Direbobi"} (${drivers.filter(d => d.status === 'pending').length} pending)`, icon: <Users className="h-3.5 w-3.5" /> },
               { id: 'trips', label: lang === 'en' ? "Daily Remittances" : "Kudaden Remittance", icon: <MapPin className="h-3.5 w-3.5" /> },
               { id: 'vouchers', label: `${lang === 'en' ? "Fuel Vouchers" : "Rasit na Mai"} (${pendingVouchers.length})`, icon: <Fuel className="h-3.5 w-3.5" /> },
-              { id: 'finance', label: lang === 'en' ? "Financial Center" : "Kudaden Shiga", icon: <span className="font-extrabold text-xs">₦</span> },
-              { id: 'payments', label: lang === 'en' ? "Installments Approval" : "Biyan Kudi", icon: <span className="font-extrabold text-xs">₦</span> },
+              { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Wallet className="h-3.5 w-3.5" /> },
               { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
               { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
               { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> },

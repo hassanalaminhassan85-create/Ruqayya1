@@ -105,7 +105,7 @@ function authenticateSession(req: express.Request, res: express.Response, next: 
               email: 'director@ruqayyatransport.com',
               phone: '+234 803 111 0001',
               password_hash: hashPassword('director123'),
-              full_name: 'Director MMR Kabir',
+              full_name: 'Executive Director MMR',
               role_id: roleId,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -127,7 +127,7 @@ function authenticateSession(req: express.Request, res: express.Response, next: 
               email: `${userKey.toLowerCase()}@ruqayyatransport.com`,
               phone: '+234 803 222 0002',
               password_hash: hashPassword('admin123'),
-              full_name: userKey === 'ADAM' ? 'Operator ADAM Ibrahim' : 'Operator ABAKAKA Bello',
+              full_name: userKey === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
               role_id: roleId,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -146,10 +146,10 @@ function authenticateSession(req: express.Request, res: express.Response, next: 
             user = {
               id: userId,
               username: userKey,
-              email: `${userKey.toLowerCase()}.m@ruqayyatransport.com`,
+              email: `${userKey.toLowerCase()}.shareholder@ruqayyatransport.com`,
               phone: '+234 803 333 0003',
               password_hash: hashPassword('shareholder123'),
-              full_name: userKey === 'KABIR' ? 'Alhaji Kabir Mohammed' : 'Hajiya Amina Garba',
+              full_name: userKey === 'KABIR' ? 'Shareholder KABIR' : 'Shareholder AMINA',
               role_id: roleId,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -169,10 +169,10 @@ function authenticateSession(req: express.Request, res: express.Response, next: 
             user = {
               id: userId,
               username: 'MUSA',
-              email: 'musa.garba@ruqayyatransport.com',
+              email: 'musa.driver@ruqayyatransport.com',
               phone: '+234 803 444 0004',
               password_hash: hashPassword('driver123'),
-              full_name: 'Alhaji Musa Garba',
+              full_name: 'Driver MUSA',
               role_id: roleId,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -1166,7 +1166,7 @@ app.post('/api/auth/login', (req, res) => {
           user = db.users.find(u => u.role_id === 'role-director');
           if (user) {
             user.username = 'MMR';
-            user.full_name = 'Director MMR Kabir';
+            user.full_name = 'Executive Director MMR';
           } else {
             const directorId = generateUUID();
             user = {
@@ -1175,7 +1175,7 @@ app.post('/api/auth/login', (req, res) => {
               email: 'director@ruqayyatransport.com',
               phone: '+234 803 111 0001',
               password_hash: hashPassword('director123'),
-              full_name: 'Director MMR Kabir',
+              full_name: 'Executive Director MMR',
               role_id: 'role-director',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -1196,11 +1196,11 @@ app.post('/api/auth/login', (req, res) => {
           if (trimmedUsername === 'ADAM' && existingAdmins[0]) {
             user = existingAdmins[0];
             user.username = 'ADAM';
-            user.full_name = 'Operator ADAM Ibrahim';
+            user.full_name = 'Operations Admin ADAM';
           } else if (trimmedUsername === 'ABAKAKA' && existingAdmins[1]) {
             user = existingAdmins[1];
             user.username = 'ABAKAKA';
-            user.full_name = 'Operator ABAKAKA Bello';
+            user.full_name = 'Operations Admin ABAKAKA';
           } else {
             const adminId = generateUUID();
             user = {
@@ -1209,7 +1209,7 @@ app.post('/api/auth/login', (req, res) => {
               email: `${trimmedUsername.toLowerCase()}@ruqayyatransport.com`,
               phone: '+234 803 222 0002',
               password_hash: hashPassword('admin123'),
-              full_name: trimmedUsername === 'ADAM' ? 'Operator ADAM Ibrahim' : 'Operator ABAKAKA Bello',
+              full_name: trimmedUsername === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
               role_id: 'role-admin',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -2627,7 +2627,7 @@ app.post('/api/notifications/translate', authenticateSession, async (req, res) =
       // Offline backup dictionary fallback
       const dict: Record<string, string> = {
         'New Driver Self-Registration': 'Rijistar Sabon Direba',
-        'Candidate Alhaji Musa Garba completed driver self-registration. Action required: Approve credentials.': 'Alhaji Musa Garba ya kammala rajistar kansa. Ana bukatar amincewa daga Admin.',
+        'Candidate Driver MUSA completed driver self-registration. Action required: Approve credentials.': 'Driver MUSA ya kammala rajistar kansa. Ana bukatar amincewa daga Admin.',
         'Rest Period Concluded': 'Lokacin Hutu Ya Cika',
         'Vehicle Contract Completed!': 'Kwangilar Mota Ta Cika!',
         'Fuel Voucher Request': 'Bukatar Takardar Man Fetur',

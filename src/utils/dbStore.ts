@@ -23,7 +23,7 @@ const DEFAULT_VEHICLES: Vehicle[] = [
 ];
 
 const DEFAULT_DRIVERS: Driver[] = [
-  { id: 'D-001', fullName: 'Alhaji Musa Garba', licenseNumber: 'NGA-DL-882103', licenseExpiry: '2028-11-12', phone: '+234 803 123 4567', email: 'musa.garba@ruqayyatransport.com', status: 'on-trip', assignedVehicleId: 'V-001', rating: 4.8 },
+  { id: 'D-001', fullName: 'Driver MUSA', licenseNumber: 'NGA-DL-882103', licenseExpiry: '2028-11-12', phone: '+234 803 123 4567', email: 'musa.driver@ruqayyatransport.com', status: 'on-trip', assignedVehicleId: 'V-001', rating: 4.8 },
   { id: 'D-002', fullName: 'Babangida Ibrahim', licenseNumber: 'NGA-DL-119280', licenseExpiry: '2027-04-18', phone: '+234 806 987 6543', email: 'b.ibrahim@ruqayyatransport.com', status: 'on-trip', assignedVehicleId: 'V-002', rating: 4.9 },
   { id: 'D-003', fullName: 'Sani Yusuf Bello', licenseNumber: 'NGA-DL-554612', licenseExpiry: '2029-01-30', phone: '+234 812 345 6789', email: 'sani.yusuf@ruqayyatransport.com', status: 'available', rating: 4.5 },
   { id: 'D-004', fullName: 'Ruqayya Kabir Mohammed', licenseNumber: 'NGA-DL-302194', licenseExpiry: '2028-08-15', phone: '+234 905 555 1234', email: 'ruqayya.k@ruqayyatransport.com', status: 'off-duty', rating: 5.0 }
