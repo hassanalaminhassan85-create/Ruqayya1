@@ -92,6 +92,30 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     return () => clearInterval(interval);
   }, [activeCycle]);
 
+  const formatDateOnly = (dateStr: string | null | undefined) => {
+    if (!dateStr) return 'N/A';
+    if (dateStr.includes('T')) {
+      return dateStr.split('T')[0];
+    }
+    return dateStr;
+  };
+
+  const getScheduledEnd = (cycle: any) => {
+    if (cycle.endDate) {
+      return formatDateOnly(cycle.endDate);
+    }
+    const start = cycle.created_at || cycle.startDate;
+    if (!start) return 'N/A';
+    try {
+      const d = new Date(start);
+      if (isNaN(d.getTime())) return 'N/A';
+      d.setDate(d.getDate() + 30);
+      return d.toISOString().split('T')[0];
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
   const formatDuration = (totalSecs: number) => {
     const days = Math.floor(totalSecs / (3600 * 24));
     const hours = Math.floor((totalSecs % (3600 * 24)) / 3600);
@@ -108,7 +132,10 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     };
   };
 
-  const time = formatDuration(secondsElapsed);
+  // 30 days countdown
+  const totalCycleSeconds = 30 * 24 * 3600;
+  const remainingSeconds = Math.max(0, totalCycleSeconds - secondsElapsed);
+  const time = formatDuration(remainingSeconds);
 
   const handlePause = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,57 +172,62 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
   };
 
   return (
-    <div id="cycle-timer-card" className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5 flex flex-col gap-5">
+    <div id="cycle-timer-card" className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 flex flex-col gap-3.5 h-full justify-between">
       {/* Header Section */}
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-slate-50 border border-slate-200/60 rounded-lg">
-            <Clock className="h-4.5 w-4.5 text-brand-gold animate-pulse" />
+          <div className="p-1.5 bg-slate-50 border border-slate-200/60 rounded-lg">
+            <Clock className="h-4 w-4 text-brand-gold animate-pulse" />
           </div>
           <div>
             <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
               {lang === 'en' ? "Active Cycle Timer" : "Kidayar Zagayen Gudanarwa"}
             </h4>
-            <p className="text-[10px] text-slate-400 font-semibold">
-              {lang === 'en' ? "Continuous real-time active duration tracker with manual freeze control." : "Kula da tsawon lokacin aiki da dakatarwa nan take."}
+            <p className="text-[9px] text-slate-400 font-semibold leading-none mt-0.5">
+              {lang === 'en' ? "30-Day countdown with freeze control" : "Kula da tsawon lokacin aiki"}
             </p>
           </div>
         </div>
 
         {activeCycle ? (
-          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-            activeCycle.status === 'paused'
-              ? 'bg-amber-50 border-amber-200 text-amber-600 animate-pulse'
-              : 'bg-emerald-50 border-emerald-200 text-emerald-600 animate-pulse'
-          }`}>
-            {activeCycle.status === 'paused' 
-              ? (lang === 'en' ? "PAUSED" : "AN DAKATAR") 
-              : (lang === 'en' ? "ACTIVE" : "A-AIKI")
-            }
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-600 text-[8px] font-black font-mono">
+              {activeCycle.id}
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+              activeCycle.status === 'paused'
+                ? 'bg-amber-50 border-amber-200 text-amber-600 animate-pulse'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-600 animate-pulse'
+            }`}>
+              {activeCycle.status === 'paused' 
+                ? (lang === 'en' ? "PAUSED" : "AN DAKATAR") 
+                : (lang === 'en' ? "ACTIVE" : "A-AIKI")
+              }
+            </span>
+          </div>
         ) : (
-          <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border bg-slate-50 border-slate-200 text-slate-400">
+          <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border bg-slate-50 border-slate-200 text-slate-400">
             {lang === 'en' ? "INACTIVE" : "A RUFE"}
           </span>
         )}
       </div>
 
       {activeCycle ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex-1 flex flex-col gap-3.5 justify-center">
           {/* LCD Countdown Timer Dashboard */}
-          <div className="grid grid-cols-4 gap-2 px-1 max-w-md mx-auto w-full py-1">
+          <div className="grid grid-cols-4 gap-1.5 px-0.5 max-w-md mx-auto w-full">
             {[
               { label: lang === 'en' ? "DAYS" : "KWANAKI", val: time.days },
               { label: lang === 'en' ? "HRS" : "AWARI", val: time.hours },
               { label: lang === 'en' ? "MINS" : "MINTOCI", val: time.minutes },
               { label: lang === 'en' ? "SECS" : "DAKIKU", val: time.seconds }
             ].map((unit, idx) => (
-              <div key={idx} className="flex flex-col items-center p-3 bg-slate-950 border border-slate-800 rounded-xl shadow-md relative overflow-hidden">
+              <div key={idx} className="flex flex-col items-center p-2 bg-slate-950 border border-slate-800 rounded-lg shadow-sm relative overflow-hidden">
                 <div className="absolute inset-0 bg-radial-gradient from-slate-900 via-transparent to-transparent opacity-40 pointer-events-none" />
-                <span className="text-3xl font-black font-mono text-brand-gold tracking-tight select-none">
+                <span className="text-xl font-black font-mono text-brand-gold tracking-tight select-none">
                   {unit.val}
                 </span>
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
                   {unit.label}
                 </span>
               </div>
@@ -203,28 +235,28 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
           </div>
 
           {/* Time Trackers Block */}
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 flex flex-col gap-2.5 text-xs">
-            <div className="grid grid-cols-2 gap-3 divide-x divide-slate-200/60">
-              <div className="flex items-center gap-2 pl-1">
-                <Calendar className="h-4 w-4 text-emerald-500 shrink-0" />
+          <div className="bg-slate-50 border border-slate-100 rounded-lg p-2.5 flex flex-col gap-2 text-[10px]">
+            <div className="grid grid-cols-2 gap-2 divide-x divide-slate-200/60">
+              <div className="flex items-center gap-1.5 pl-0.5">
+                <Calendar className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                 <div>
-                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block leading-none">
+                  <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block leading-none">
                     {lang === 'en' ? "Start Time" : "Ranar Fara"}
                   </span>
-                  <span className="font-extrabold text-slate-700 font-mono text-xs">
-                    {activeCycle.startDate}
+                  <span className="font-extrabold text-slate-700 font-mono text-[10px]">
+                    {formatDateOnly(activeCycle.startDate)}
                   </span>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 pl-3">
-                <CheckCircle2 className="h-4 w-4 text-rose-500 shrink-0" />
+              <div className="flex items-center gap-1.5 pl-2">
+                <CheckCircle2 className="h-3.5 w-3.5 text-rose-500 shrink-0" />
                 <div>
-                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block leading-none">
+                  <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block leading-none">
                     {lang === 'en' ? "Scheduled End" : "Ranar Kammalawa"}
                   </span>
-                  <span className="font-extrabold text-slate-700 font-mono text-xs">
-                    {activeCycle.endDate || "N/A"}
+                  <span className="font-extrabold text-slate-700 font-mono text-[10px]">
+                    {getScheduledEnd(activeCycle)}
                   </span>
                 </div>
               </div>
@@ -232,43 +264,36 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
 
             {/* Current Pause Reason Banner */}
             {activeCycle.status === 'paused' && (
-              <div className="mt-1.5 border-t border-slate-200/60 pt-2.5 flex flex-col gap-1">
-                <span className="text-[9px] text-amber-500 font-black uppercase tracking-wider flex items-center gap-1">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                  {lang === 'en' ? "Operating Freeze Notice" : "Sanarwar Dakatarwa"}
+              <div className="mt-1 border-t border-slate-200/40 pt-1.5 flex flex-col gap-0.5">
+                <span className="text-[8px] text-amber-500 font-black uppercase tracking-wider flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {lang === 'en' ? "Operating Freeze" : "An Dakatar"}
                 </span>
-                <div className="bg-amber-50/50 border border-amber-200/40 rounded-lg p-2.5 text-[11px] leading-relaxed">
-                  <p className="text-slate-800 font-extrabold flex items-center gap-1">
-                    <User className="h-3 w-3 text-slate-400 shrink-0" />
-                    <span>{lang === 'en' ? "Authorized By:" : "Ta hannun:"}</span>
-                    <span className="text-slate-900 font-mono ml-0.5">{activeCycle.pausedBy || "Director"}</span>
-                  </p>
-                  <p className="text-slate-700 font-sans mt-1 bg-white border border-amber-100 p-2 rounded-md italic">
-                    "{activeCycle.pauseReason || "No explanation provided."}"
-                  </p>
-                </div>
+                <p className="text-[9px] text-slate-600 bg-amber-50/50 border border-amber-200/20 px-2 py-1 rounded italic truncate">
+                  "{activeCycle.pauseReason || "No explanation provided."}"
+                </p>
               </div>
             )}
           </div>
 
           {/* Manual Control Action Trigger */}
-          <div className="flex items-center justify-end gap-2 pt-1">
+          <div className="flex items-center justify-end gap-2 mt-1">
             {activeCycle.status === 'paused' ? (
               <button
                 type="button"
                 onClick={() => setShowResumeModal(true)}
-                className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+                className="w-full px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-sm transition-colors"
               >
-                <Play className="h-3.5 w-3.5" />
+                <Play className="h-3 w-3" />
                 {lang === 'en' ? "Resume Cycle" : "Dawo da Zagaye"}
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setShowPauseModal(true)}
-                className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+                className="w-full px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-sm transition-colors"
               >
-                <Pause className="h-3.5 w-3.5" />
+                <Pause className="h-3 w-3" />
                 {lang === 'en' ? "Pause Cycle" : "Dakatar da Zagaye"}
               </button>
             )}
@@ -276,18 +301,18 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
         </div>
       ) : (
         /* Cycle Inactive State */
-        <div className="py-8 flex flex-col items-center justify-center text-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-slate-50 border border-slate-200/60 flex items-center justify-center">
-            <Activity className="h-5 w-5 text-slate-300" />
+        <div className="py-6 flex flex-col items-center justify-center text-center gap-2">
+          <div className="h-8 w-8 rounded-full bg-slate-50 border border-slate-200/60 flex items-center justify-center">
+            <Activity className="h-4 w-4 text-slate-300" />
           </div>
           <div>
-            <h5 className="text-xs font-extrabold text-slate-700">
+            <h5 className="text-[11px] font-extrabold text-slate-700">
               {lang === 'en' ? "No Operating Cycle Active" : "Babu Zagayen Aiki Yanzu"}
             </h5>
-            <p className="text-[10px] text-slate-400 font-semibold max-w-xs mt-1 leading-relaxed">
+            <p className="text-[9px] text-slate-400 font-semibold max-w-xs mt-0.5 leading-relaxed">
               {lang === 'en' 
-                ? "Authorizing and launching an operations cycle will boot up high-precision active duty monitors." 
-                : "Da zarar an kaddamar da sabon zagayen sufuri, kidayar tsawon lokacin aiki za ta fara kidaya."}
+                ? "Authorizing operations will boot up high-precision active duty monitors." 
+                : "Kaddamar da sabon zagaye zai fara kidaya."}
             </p>
           </div>
         </div>

@@ -429,34 +429,22 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         </div>
 
         {/* Small live metrics grid underneath for immediate visibility */}
-        <div className="grid grid-cols-2 gap-2.5 border-t border-border-main/30 mt-3 pt-2.5">
-          <div className="flex items-center gap-2">
-            <UserCheck className="h-3.5 w-3.5 text-primary-gold shrink-0" />
-            <div>
-              <span className="text-[8px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Drivers' : 'Direbobi'}</span>
-              <span className="text-xs font-black text-text-main">{metrics.totalDrivers || driversCount}</span>
-            </div>
+        <div className="grid grid-cols-4 gap-1 border-t border-border-main/30 mt-2.5 pt-2 text-[10px] leading-tight">
+          <div className="flex flex-col items-center justify-center p-1 bg-slate-500/5 rounded">
+            <span className="text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Drivers' : 'Direbobi'}</span>
+            <span className="text-xs font-black text-text-main">{metrics.totalDrivers || driversCount}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Server className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-            <div>
-              <span className="text-[8px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Fleet' : 'Kekuna'}</span>
-              <span className="text-xs font-black text-text-main">{metrics.totalTricycles || vehiclesCount}</span>
-            </div>
+          <div className="flex flex-col items-center justify-center p-1 bg-slate-500/5 rounded">
+            <span className="text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Fleet' : 'Kekuna'}</span>
+            <span className="text-xs font-black text-text-main">{metrics.totalTricycles || vehiclesCount}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Coins className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-            <div>
-              <span className="text-[8px] uppercase text-text-muted block font-semibold">{lang === 'en' ? "Collections" : 'Remittance'}</span>
-              <span className="text-xs font-black text-text-main">₦{(metrics.todayCollections || 0).toLocaleString()}</span>
-            </div>
+          <div className="flex flex-col items-center justify-center p-1 bg-slate-500/5 rounded">
+            <span className="text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? "Remits" : 'Remittance'}</span>
+            <span className="text-xs font-black text-text-main">₦{(metrics.todayCollections || 0).toLocaleString()}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
-            <div>
-              <span className="text-[8px] uppercase text-text-muted block font-semibold">{lang === 'en' ? 'Integrity' : 'Lafiya'}</span>
-              <span className="text-xs font-black text-cyan-400">{metrics.systemHealth}</span>
-            </div>
+          <div className="flex flex-col items-center justify-center p-1 bg-slate-500/5 rounded">
+            <span className="text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Health' : 'Lafiya'}</span>
+            <span className="text-[10px] font-black text-cyan-500">{metrics.systemHealth}</span>
           </div>
         </div>
       </Card>
@@ -506,25 +494,24 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
           )}
         </Card>
       )}
-
-      {/* Staging/Setup Checklist Modal */}
+           {/* Streamlined Launch Activation Modal - No More Setup, only Start & End dates */}
       {showChecklistModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative flex flex-col">
             
-            <div className="flex justify-between items-start pb-4 border-b border-slate-800">
+            <div className="flex justify-between items-start pb-3 border-b border-slate-800">
               <div>
-                <h3 className="text-lg font-black text-slate-100 flex items-center gap-2">
-                  <Play className="h-5 w-5 fill-amber-500 text-amber-500" />
-                  {lang === 'en' ? 'Launch Production Activation Checklist' : 'Matakan Fara Aikin Kamfani (Checklist)'}
+                <h3 className="text-base font-black text-slate-100 flex items-center gap-2">
+                  <Play className="h-4.5 w-4.5 fill-amber-500 text-amber-500" />
+                  {lang === 'en' ? 'Start Operating Cycle' : 'Fara Zagayen Aiki'}
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  {lang === 'en' ? 'The following enterprise parameters must be fully met before live production operations can commence.' : 'Dole ne a cika wadannan sharudda kafin a fara ayyuka da lissafin asusu.'}
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {lang === 'en' ? 'Bypassing setup checklist. Ready to deploy live operations immediately.' : 'Tsallake matakan saiti. An shirya tsaf domin fara ayyuka.'}
                 </p>
               </div>
               <button 
-                onClick={() => { setShowChecklistModal(false); setActionError(''); setShowSalaryForm(false); setShowWalletForm(false); }}
-                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+                onClick={() => { setShowChecklistModal(false); setActionError(''); }}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer text-xl"
               >
                 &times;
               </button>
@@ -537,145 +524,49 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
               </div>
             )}
 
-            {/* Checklist body */}
-            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-4">
-              
-              {/* Dynamic checklist elements */}
-              <div className="flex flex-col gap-3">
-                {checklist.map((item: any) => (
-                  <div key={item.id} className={`p-4 rounded-xl border transition-all duration-200 ${
-                    item.isDone ? 'bg-emerald-950/15 border-emerald-500/25' : 'bg-slate-800/40 border-slate-800'
-                  }`}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5">
-                          {item.isDone ? (
-                            <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
-                          ) : (
-                            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-extrabold text-slate-200">
-                            {lang === 'en' ? item.titleEn : item.titleHa}
-                          </h4>
-                          <p className="text-[10.5px] text-slate-400 leading-normal mt-0.5">
-                            {lang === 'en' ? item.descEn : item.descHa}
-                          </p>
-                        </div>
-                      </div>
+            {/* Start and Scheduled End Dates display */}
+            <div className="py-4 flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block">
+                    {lang === 'en' ? 'START DATE' : 'RANAR FARA'}
+                  </span>
+                  <span className="font-extrabold text-amber-400 font-mono text-xs mt-1 block">
+                    {new Date().toISOString().split('T')[0]}
+                  </span>
+                </div>
+                
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block">
+                    {lang === 'en' ? 'SCHEDULED END' : 'RANAR KAMMALAWA'}
+                  </span>
+                  <span className="font-extrabold text-emerald-400 font-mono text-xs mt-1 block">
+                    {new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0]}
+                  </span>
+                </div>
+              </div>
 
-                      {/* Action trigger button */}
-                      {!item.isDone && item.action && (
-                        <Button 
-                          size="sm" 
-                          variant="secondary"
-                          onClick={item.action}
-                          className="px-2.5 py-1 text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 rounded cursor-pointer shrink-0"
-                        >
-                          {lang === 'en' ? 'Setup Now' : 'Gyara Yanzu'}
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* Salary Inline Form */}
-                    {item.id === 'salary' && showSalaryForm && (
-                      <div className="mt-4 p-4 border border-slate-700 bg-slate-950/50 rounded-lg flex flex-col gap-3 animate-slideDown">
-                        <span className="text-[10px] font-mono text-slate-400 block uppercase font-bold">Configure Executive/Admin Salary</span>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[9px] uppercase tracking-wider text-slate-400 block font-bold mb-1">Administrative Role</label>
-                            <select 
-                              value={salaryRole} 
-                              onChange={(e) => setSalaryRole(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                            >
-                              <option value="Admin">Administrator</option>
-                              <option value="Director">Executive Director</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] uppercase tracking-wider text-slate-400 block font-bold mb-1">Salary (₦ / Month)</label>
-                            <input 
-                              type="number" 
-                              value={salaryAmount} 
-                              onChange={(e) => setSalaryAmount(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-2 mt-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => setShowSalaryForm(false)}
-                            className="px-3 py-1.5 text-[10px] text-slate-300 border-slate-700 hover:bg-slate-800"
-                          >
-                            Cancel
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            onClick={handleSaveSalary}
-                            className="px-3 py-1.5 text-[10px] bg-emerald-500 text-slate-950 font-extrabold"
-                          >
-                            Save Salary Rule
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Wallet Inline Form */}
-                    {item.id === 'wallet' && showWalletForm && (
-                      <div className="mt-4 p-4 border border-slate-700 bg-slate-950/50 rounded-lg flex flex-col gap-3 animate-slideDown">
-                        <span className="text-[10px] font-mono text-slate-400 block uppercase font-bold">Initialize Corporate Treasury Wallet Balance</span>
-                        <div>
-                          <label className="text-[9px] uppercase tracking-wider text-slate-400 block font-bold mb-1">Initial Deposited Reserve Balance (₦)</label>
-                          <input 
-                            type="number" 
-                            value={walletBalance} 
-                            onChange={(e) => setWalletBalance(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
-                          />
-                        </div>
-                        <div className="flex justify-end gap-2 mt-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => setShowWalletForm(false)}
-                            className="px-3 py-1.5 text-[10px] text-slate-300 border-slate-700 hover:bg-slate-800"
-                          >
-                            Cancel
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            onClick={handleSaveWallet}
-                            className="px-3 py-1.5 text-[10px] bg-emerald-500 text-slate-950 font-extrabold"
-                          >
-                            Initialize Wallet
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-lg text-[10px] text-slate-400 leading-normal">
+                {lang === 'en' 
+                  ? 'Confirming will activate real-time tracking, open the financial center ledger, and start the high-precision 30-day operating cycle timer instantly.'
+                  : 'Tabbatarwa zai fara kidayar lokaci na kwanaki 30 da lissafin kudaden shiga nan take.'}
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-800 flex justify-end gap-3 mt-auto">
+            <div className="pt-3 border-t border-slate-800 flex justify-end gap-3">
               <Button 
                 variant="outline" 
-                onClick={() => setShowChecklistModal(false)}
-                className="px-4 py-2 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer text-xs"
+                onClick={() => { setShowChecklistModal(false); setActionError(''); }}
+                className="px-3 py-1.5 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer text-[11px]"
               >
-                {lang === 'en' ? 'Close' : 'Fita'}
+                {lang === 'en' ? 'Cancel' : 'Soke'}
               </Button>
               <Button 
                 onClick={handleStartCompanyOperations}
-                disabled={checklist.some((item: any) => !item.isDone)}
-                className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-slate-950 font-black flex items-center gap-1.5 rounded shadow-lg border-b-2 border-emerald-700 disabled:opacity-50 disabled:pointer-events-none cursor-pointer text-xs"
+                className="px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-slate-950 font-black flex items-center gap-1 rounded shadow-lg border-b-2 border-emerald-700 cursor-pointer text-[11px]"
               >
-                <Play className="h-3.5 w-3.5 fill-slate-950 text-slate-950" />
-                {lang === 'en' ? 'Launch Official Operations' : 'Fara Gudanar da Kamfani'}
+                <Play className="h-3 w-3 fill-slate-950 text-slate-950" />
+                {lang === 'en' ? 'Confirm & Start Live' : 'Tabbatar & Fara Aiki'}
               </Button>
             </div>
 

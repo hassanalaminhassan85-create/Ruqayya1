@@ -3736,6 +3736,21 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
       reason
     });
 
+    // Synchronize company operations status
+    if (!db.company_operations_state) {
+      db.company_operations_state = { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+    }
+    db.company_operations_state.status = 'Paused';
+    if (!db.company_operations_state.pauseHistory) {
+      db.company_operations_state.pauseHistory = [];
+    }
+    db.company_operations_state.pauseHistory.unshift({
+      id: generateUUID(),
+      pausedBy: actor.fullName,
+      pausedAt: new Date().toISOString(),
+      reason
+    });
+
     db.notifications.unshift({
       id: generateUUID(),
       title_en: 'Operating Cycle Paused',
@@ -3788,6 +3803,17 @@ app.post('/api/director/cycles/resume', authenticateSession, (req, res) => {
       pausedCycle.pauseHistory[0].resumedBy = actor.fullName;
       pausedCycle.pauseHistory[0].resumedAt = new Date().toISOString();
       if (reason) pausedCycle.pauseHistory[0].resumeReason = reason;
+    }
+
+    // Synchronize company operations status
+    if (!db.company_operations_state) {
+      db.company_operations_state = { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+    }
+    db.company_operations_state.status = 'Operational Mode';
+    if (db.company_operations_state.pauseHistory && db.company_operations_state.pauseHistory.length > 0) {
+      db.company_operations_state.pauseHistory[0].resumedBy = actor.fullName;
+      db.company_operations_state.pauseHistory[0].resumedAt = new Date().toISOString();
+      if (reason) db.company_operations_state.pauseHistory[0].resumeReason = reason;
     }
 
     db.notifications.unshift({
@@ -4347,6 +4373,25 @@ app.post('/api/operations/pause', authenticateSession, (req, res) => {
       ...(state.auditLog || [])
     ];
 
+    // Synchronize active operating cycle status to paused
+    if (!db.cycles) db.cycles = [];
+    const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+    if (activeCycle) {
+      activeCycle.status = 'paused';
+      activeCycle.pauseReason = reason;
+      activeCycle.pausedAt = new Date().toISOString();
+      activeCycle.pausedBy = actor.fullName;
+      if (!activeCycle.pauseHistory) {
+        activeCycle.pauseHistory = [];
+      }
+      activeCycle.pauseHistory.unshift({
+        id: generateUUID(),
+        pausedBy: actor.fullName,
+        pausedAt: new Date().toISOString(),
+        reason
+      });
+    }
+
     db.company_operations_state = state;
     saveDB(db);
 
@@ -4408,6 +4453,20 @@ app.post('/api/operations/resume', authenticateSession, (req, res) => {
       },
       ...(state.auditLog || [])
     ];
+
+    // Synchronize active operating cycle status to active
+    if (!db.cycles) db.cycles = [];
+    const pausedCycle = db.cycles.find((c: any) => c.status === 'paused');
+    if (pausedCycle) {
+      pausedCycle.status = 'active';
+      pausedCycle.resumedAt = new Date().toISOString();
+      pausedCycle.resumedBy = actor.fullName;
+      if (pausedCycle.pauseHistory && pausedCycle.pauseHistory.length > 0) {
+        pausedCycle.pauseHistory[0].resumedBy = actor.fullName;
+        pausedCycle.pauseHistory[0].resumedAt = new Date().toISOString();
+        if (reason) pausedCycle.pauseHistory[0].resumeReason = reason;
+      }
+    }
 
     db.company_operations_state = state;
     saveDB(db);
