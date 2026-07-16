@@ -1074,20 +1074,28 @@ export default function App() {
             </div>
 
             {/* Navigation links */}
-            <nav className="flex-1 flex flex-col gap-1 text-xs font-semibold text-slate-300 overflow-y-auto max-h-[50vh] md:max-h-[none] pr-1 scrollbar-none">
+            <nav className="flex-1 flex flex-col gap-1.5 text-xs font-semibold text-slate-400 overflow-y-auto max-h-[50vh] md:max-h-[none] pr-1 scrollbar-none">
               {getSidebarItems().map((item, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSidebarClick(item.id)}
-                  className={`w-full py-2.5 px-3 rounded-lg flex items-center gap-3 transition-colors cursor-pointer text-left ${
+                  className={`w-full py-2.5 px-3 rounded-lg flex items-center gap-3 transition-all duration-200 ease-in-out cursor-pointer text-left group ${
                     item.active
-                      ? 'bg-brand-gold text-slate-950 font-extrabold shadow-sm'
-                      : 'hover:bg-slate-800 hover:text-white'
+                      ? 'bg-brand-gold text-slate-950 font-extrabold shadow-sm scale-[1.02]'
+                      : 'text-slate-300/80 hover:text-white hover:bg-slate-800/60 hover:translate-x-1'
                   }`}
                   title={sidebarCollapsed ? item.label : ""}
                 >
-                  {item.icon}
-                  {!sidebarCollapsed && <span className="truncate flex-1">{item.label}</span>}
+                  <span className={`transition-all duration-200 shrink-0 ${
+                    item.active ? 'text-slate-950' : 'text-slate-400 group-hover:text-brand-gold group-hover:scale-105'
+                  }`}>
+                    {item.icon}
+                  </span>
+                  {!sidebarCollapsed && (
+                    <span className="truncate flex-1 transition-all duration-200">
+                      {item.label}
+                    </span>
+                  )}
                   {!sidebarCollapsed && item.id === 'pwa' && syncQueueCount > 0 && (
                     <span className="bg-amber-500 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
                       {syncQueueCount}

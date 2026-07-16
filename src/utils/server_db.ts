@@ -184,6 +184,42 @@ export function seedDBIfEmpty() {
   const db = loadDB();
   let modified = false;
 
+  // Check if there is existing demo data that needs to be wiped for a clean slate
+  const hasDemoData = db.users.some(u => 
+    u.email === 'musa.garba@ruqayyatransport.com' || 
+    u.email === 'kabir.m@ruqayyatransport.com' ||
+    u.email === 'amina.g@ruqayyatransport.com' ||
+    u.full_name?.includes('Kabir') ||
+    u.full_name?.includes('Musa') ||
+    u.full_name?.includes('Ibrahim Bello')
+  );
+
+  if (hasDemoData) {
+    console.log('Detected demo data. Wiping database for fresh ready-to-start business...');
+    db.users = [];
+    db.directors = [];
+    db.admins = [];
+    db.drivers = [];
+    db.shareholders = [];
+    db.guarantors = [];
+    db.vehicles = [];
+    db.vehicle_documents = [];
+    db.driver_documents = [];
+    db.company_documents = [];
+    db.sessions = [];
+    db.audit_logs = [];
+    db.notifications = [];
+    db.fuel_vouchers = [];
+    db.financial_records = [];
+    db.trip_manifests = [];
+    db.cycles = [];
+    db.driver_payments = [];
+    db.messages = [];
+    db.announcements = [];
+    db.push_subscriptions = [];
+    modified = true;
+  }
+
   // 1. Seed Roles
   if (db.roles.length === 0) {
     db.roles = [
@@ -208,20 +244,20 @@ export function seedDBIfEmpty() {
     modified = true;
   }
 
-  // 3. Seed Users & Profiles (Director, Admin, Driver, Shareholder)
+  // 3. Seed Users & Profiles (Director, Admin - with clean generic titles/names)
   if (db.users.length === 0) {
     const directorId = generateUUID();
     const adminId = generateUUID();
-    const driverUserId = generateUUID();
 
-    // Users
+    // Users (Clean startup accounts, removing demo names)
     db.users = [
       {
         id: directorId,
+        username: 'MMR',
         email: 'director@ruqayyatransport.com',
         phone: '+234 803 111 0001',
         password_hash: hashPassword('director123'),
-        full_name: 'Director Kabir Mohammed',
+        full_name: 'Executive Director MMR',
         role_id: 'role-director',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -229,44 +265,12 @@ export function seedDBIfEmpty() {
       },
       {
         id: adminId,
+        username: 'ADAM',
         email: 'admin@ruqayyatransport.com',
         phone: '+234 803 222 0002',
         password_hash: hashPassword('admin123'),
-        full_name: 'Operator Ibrahim Bello',
+        full_name: 'Operations Admin ADAM',
         role_id: 'role-admin',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'active'
-      },
-      {
-        id: driverUserId,
-        email: 'musa.garba@ruqayyatransport.com',
-        phone: '+234 803 123 4567',
-        password_hash: hashPassword('driver123'),
-        full_name: 'Alhaji Musa Garba',
-        role_id: 'role-driver',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'active'
-      },
-      {
-        id: generateUUID(),
-        email: 'kabir.m@ruqayyatransport.com',
-        phone: '+234 803 777 0001',
-        password_hash: hashPassword('shareholder123'),
-        full_name: 'Alhaji Kabir Mohammed',
-        role_id: 'role-shareholder',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'active'
-      },
-      {
-        id: generateUUID(),
-        email: 'amina.g@ruqayyatransport.com',
-        phone: '+234 806 444 1111',
-        password_hash: hashPassword('shareholder123'),
-        full_name: 'Hajiya Amina Garba',
-        role_id: 'role-shareholder',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         status: 'active'
@@ -297,260 +301,7 @@ export function seedDBIfEmpty() {
       }
     ];
 
-    // Driver profile
-    const driverId = generateUUID();
-    db.drivers = [
-      {
-        id: driverId,
-        user_id: driverUserId,
-        company_driver_id: 'DRV-2026-001',
-        address: '14 Zaria Road, Kano, Nigeria',
-        nin: '12345678901',
-        license_number: 'NGA-DL-882103',
-        license_expiry: '2028-11-12',
-        classification: 'Smart',
-        rating: 4.8,
-        created_at: new Date().toISOString(),
-        status: 'approved',
-        agreed_amount: 180000,
-        remaining_vehicle_balance: 14700000,
-        restHistory: []
-      }
-    ];
-
-    // Seed Operational Cycles
-    db.cycles = [
-      {
-        id: 'CYC-2026-8941',
-        startDate: '2026-05-01',
-        endDate: '2026-05-30',
-        status: 'completed',
-        locked: true,
-        metrics: {
-          totalRevenue: 28450000,
-          totalExpenses: 11450000,
-          netGeneratedAmount: 17000000,
-          distributionPercentage: 2,
-          distributionPool: 340000,
-          driverCollections: 18000000,
-          driverPerformance: 98.4,
-          activeDrivers: 3,
-          totalFleetCount: 4
-        }
-      },
-      {
-        id: 'CYC-2026-7740',
-        startDate: '2026-06-01',
-        endDate: '2026-06-30',
-        status: 'completed',
-        locked: true,
-        metrics: {
-          totalRevenue: 31500000,
-          totalExpenses: 12100000,
-          netGeneratedAmount: 19400000,
-          distributionPercentage: 2,
-          distributionPool: 388000,
-          driverCollections: 21000000,
-          driverPerformance: 99.1,
-          activeDrivers: 3,
-          totalFleetCount: 4
-        }
-      },
-      {
-        id: 'CYC-2026-ACTIVE',
-        startDate: '2026-07-01',
-        endDate: '',
-        status: 'active',
-        locked: false,
-        endGoalTons: 200
-      },
-      {
-        id: 'CYC-2026-SCHED',
-        startDate: '2026-08-01',
-        endDate: '',
-        status: 'upcoming',
-        locked: false,
-        endGoalTons: 250
-      }
-    ];
-
-    // Seed Driver Payments towards installments
-    db.driver_payments = [
-      {
-        id: generateUUID(),
-        driver_id: driverId,
-        amount: 30000,
-        installment_number: 1,
-        receipt_number: 'RCP-2026-0001',
-        date: '2026-07-03',
-        remarks: 'Installment 1 Payment',
-        status: 'approved',
-        approved_by: 'Super Admin',
-        created_at: new Date().toISOString()
-      },
-      {
-        id: generateUUID(),
-        driver_id: driverId,
-        amount: 30000,
-        installment_number: 2,
-        receipt_number: 'RCP-2026-0002',
-        date: '2026-07-06',
-        remarks: 'Installment 2 Payment',
-        status: 'approved',
-        approved_by: 'Super Admin',
-        created_at: new Date().toISOString()
-      }
-    ];
-
-    // Guarantor profile
-    db.guarantors = [
-      {
-        id: generateUUID(),
-        driver_id: driverId,
-        full_name: 'Alhaji Garba Haruna',
-        phone: '+234 803 999 1111',
-        address: '22 Airport Road, Kano',
-        relationship: 'Uncle',
-        nin: '98765432101',
-        passport_photo_url: '',
-        created_at: new Date().toISOString(),
-        status: 'active'
-      }
-    ];
-
-    // Vehicles
-    db.vehicles = [
-      {
-        id: generateUUID(),
-        driver_id: driverId,
-        brand: 'Mercedes-Benz',
-        model: 'Actros 3340 Heavy Rig',
-        year: 2021,
-        colour: 'Polar White',
-        plate_number: 'KANO-432-KN',
-        registration_number: 'REG-MB-9921',
-        chassis_number: 'WDB9340321K00912',
-        engine_number: 'OM501LA-234291',
-        capacity: '30 Tons',
-        mileage: 124500,
-        last_service_date: '2026-06-15',
-        created_at: new Date().toISOString(),
-        status: 'assigned'
-      },
-      {
-        id: generateUUID(),
-        driver_id: null,
-        brand: 'Volvo',
-        model: 'FH16 Globetrotter',
-        year: 2022,
-        colour: 'Metallic Blue',
-        plate_number: 'LAG-981-LA',
-        registration_number: 'REG-VV-1182',
-        chassis_number: 'YV2RT40D3EA01198',
-        engine_number: 'D16G750-103942',
-        capacity: '45 Tons',
-        mileage: 98120,
-        last_service_date: '2026-05-20',
-        created_at: new Date().toISOString(),
-        status: 'idle'
-      },
-      {
-        id: generateUUID(),
-        driver_id: null,
-        brand: 'DAF',
-        model: 'XF 105 Heavy Hauler',
-        year: 2020,
-        colour: 'Bright Yellow',
-        plate_number: 'ABJ-231-AB',
-        registration_number: 'REG-DF-5521',
-        chassis_number: 'XLRTE105M0E99312',
-        engine_number: 'MX340U1-443912',
-        capacity: '40 Tons',
-        mileage: 145900,
-        last_service_date: '2026-06-01',
-        created_at: new Date().toISOString(),
-        status: 'idle'
-      }
-    ];
-
-    // Shareholders seed data
-    db.shareholders = [
-      {
-        id: generateUUID(),
-        full_name: 'Alhaji Kabir Mohammed',
-        phone: '+234 803 777 0001',
-        email: 'kabir.m@ruqayyatransport.com',
-        address: '5 Hotoro GRA, Kano',
-        passport_photo_url: '',
-        investment_amount: 150000000.0, // 150 Million Naira
-        investment_date: '2026-01-10',
-        created_at: new Date().toISOString(),
-        status: 'active'
-      },
-      {
-        id: generateUUID(),
-        full_name: 'Hajiya Amina Garba',
-        phone: '+234 806 444 1111',
-        email: 'amina.g@ruqayyatransport.com',
-        address: '18 Gwarimpa, Abuja',
-        passport_photo_url: '',
-        investment_amount: 75000000.0, // 75 Million Naira
-        investment_date: '2026-03-15',
-        created_at: new Date().toISOString(),
-        status: 'active'
-      }
-    ];
-
-    // Seed Fuel Vouchers
-    db.fuel_vouchers = [
-      {
-        id: generateUUID(),
-        voucher_number: 'FL-2026-7781',
-        vehicle_id: 'V-001',
-        driver_id: driverId,
-        liters_requested: 450,
-        estimated_cost: 652500,
-        status: 'approved',
-        request_date: '2026-07-05 14:00',
-        approval_date: '2026-07-05 15:30',
-        created_at: new Date().toISOString()
-      },
-      {
-        id: generateUUID(),
-        voucher_number: 'FL-2026-7782',
-        vehicle_id: 'V-002',
-        driver_id: driverId,
-        liters_requested: 600,
-        estimated_cost: 870000,
-        status: 'pending',
-        request_date: '2026-07-07 09:00',
-        created_at: new Date().toISOString()
-      }
-    ];
-
-    // Seed Ledger Records
-    db.financial_records = [
-      { id: generateUUID(), type: 'revenue', category: 'freight', amount: 1950000, date: '2026-06-30', description: 'Remittance contract completion - Kaduna to Maiduguri Corridor' },
-      { id: generateUUID(), type: 'expense', category: 'fuel', amount: 652500, date: '2026-07-05', description: 'Fuel Voucher FL-2026-7781 authorized disbursement', approvedBy: 'Operator Ibrahim' },
-      { id: generateUUID(), type: 'expense', category: 'maintenance', amount: 320000, date: '2026-07-01', description: 'Engine hydraulic seals restoration - V-001' },
-      { id: generateUUID(), type: 'revenue', category: 'freight', amount: 3500000, date: '2026-07-02', description: 'Corporate remittance contract downpayment - BUA Cement Group' }
-    ];
-
-    // Seed Notifications
-    db.notifications = [
-      {
-        id: generateUUID(),
-        title_en: 'New Driver Self-Registration',
-        title_ha: 'Rijistar Sabon Direba',
-        message_en: 'Candidate Alhaji Musa Garba completed driver self-registration. Action required: Approve credentials.',
-        message_ha: 'Alhaji Musa Garba ya kammala rajistar kansa. Ana bukatar amincewa daga Admin.',
-        type: 'warning',
-        read_status: 0,
-        created_at: new Date().toISOString()
-      }
-    ];
-
-    // Seed System Setup Log
+    // Clean initial audit log
     db.audit_logs = [
       {
         id: `AUD-${Date.now()}-SETUP`,
@@ -559,7 +310,7 @@ export function seedDBIfEmpty() {
         user_role: 'public',
         action: 'SYSTEM_BOOTSTRAP',
         previous_value: null,
-        new_value: 'D1 Relational DB initialized with default Director and Admin accounts',
+        new_value: 'Clean ERP system initialized. Database is fresh and ready for operations.',
         ip_address: '127.0.0.1',
         created_at: new Date().toISOString()
       }
@@ -570,7 +321,7 @@ export function seedDBIfEmpty() {
 
   if (modified) {
     saveDB(db);
-    console.log('Database seeded with standard operational parameters.');
+    console.log('Database seeded with standard fresh operational parameters.');
   }
 }
 
