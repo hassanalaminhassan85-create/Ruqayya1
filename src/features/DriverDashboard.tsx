@@ -684,7 +684,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
   }
 
   // INSTALLMENT BILLING MATHS
-  const activeCycle = cycles.find(c => c.status === 'active' || c.status === 'paused') || cycles[0];
+  const activeCycle = (cycles || []).find(c => c && (c.status === 'active' || c.status === 'paused')) || (cycles || [])[0];
   const agreedAmount = driver.agreedAmount || 180000;
   const installmentCost = Math.round(agreedAmount / 6); // Split into 6 intervals
   const approvedPayments = payments.filter(p => p.status === 'approved');

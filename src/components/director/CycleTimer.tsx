@@ -195,11 +195,11 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
               {activeCycle.id}
             </span>
             <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
-              activeCycle.status === 'paused'
+              activeCycle?.status === 'paused'
                 ? 'bg-amber-50 border-amber-200 text-amber-600 animate-pulse'
                 : 'bg-emerald-50 border-emerald-200 text-emerald-600 animate-pulse'
             }`}>
-              {activeCycle.status === 'paused' 
+              {activeCycle?.status === 'paused' 
                 ? (lang === 'en' ? "PAUSED" : "AN DAKATAR") 
                 : (lang === 'en' ? "ACTIVE" : "A-AIKI")
               }
@@ -263,14 +263,14 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
             </div>
 
             {/* Current Pause Reason Banner */}
-            {activeCycle.status === 'paused' && (
+            {activeCycle?.status === 'paused' && (
               <div className="mt-1 border-t border-slate-200/40 pt-1.5 flex flex-col gap-0.5">
                 <span className="text-[8px] text-amber-500 font-black uppercase tracking-wider flex items-center gap-1">
                   <AlertCircle className="h-3 w-3 shrink-0" />
                   {lang === 'en' ? "Operating Freeze" : "An Dakatar"}
                 </span>
                 <p className="text-[9px] text-slate-600 bg-amber-50/50 border border-amber-200/20 px-2 py-1 rounded italic truncate">
-                  "{activeCycle.pauseReason || "No explanation provided."}"
+                  "{activeCycle?.pauseReason || "No explanation provided."}"
                 </p>
               </div>
             )}
@@ -278,7 +278,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
 
           {/* Manual Control Action Trigger */}
           <div className="flex items-center justify-end gap-2 mt-1">
-            {activeCycle.status === 'paused' ? (
+            {activeCycle?.status === 'paused' ? (
               <button
                 type="button"
                 onClick={() => setShowResumeModal(true)}

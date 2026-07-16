@@ -373,7 +373,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
   const totalOutstandingPayments = tripManifests.filter(t => t.status === 'in-transit').reduce((s, r) => s + r.freightCharges, 0);
   const totalVehicleBalanceRemaining = 14250000; // Standard company outstanding leasing balance
 
-  const activeCycle = cycles.find(c => c.status === 'active' || c.status === 'paused');
+  const activeCycle = (cycles || []).find(c => c && (c.status === 'active' || c.status === 'paused'));
   const nextCycleEstimatedDate = activeCycle 
     ? new Date(new Date(activeCycle.startDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     : 'N/A';
@@ -1277,7 +1277,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                               {lang === 'en' ? "Active Cycle Controls" : "Sarrafa Zagayen Sufuri"}
                             </span>
                             <div className="flex gap-2">
-                              {activeCycle.status === 'paused' ? (
+                              {activeCycle?.status === 'paused' ? (
                                 <button
                                   type="button"
                                   onClick={() => setShowCycleResumeModal(true)}
@@ -1303,7 +1303,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                               </button>
                             </div>
                             <span className="text-[9px] text-amber-500 font-bold text-center mt-1">
-                              {lang === 'en' ? `Status: ${activeCycle.status.toUpperCase()} (${activeCycle.id})` : `Hali: ${activeCycle.status.toUpperCase()} (${activeCycle.id})`}
+                              {lang === 'en' ? `Status: ${(activeCycle?.status || '').toUpperCase()} (${activeCycle?.id || ''})` : `Hali: ${(activeCycle?.status || '').toUpperCase()} (${activeCycle?.id || ''})`}
                             </span>
                           </div>
                         )}

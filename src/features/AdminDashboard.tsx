@@ -207,7 +207,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               .reduce((sum: number, r: any) => sum + r.amount, 0);
             setTotalEarnings(revTotal);
 
-            const activeCyc = (data.cycles || []).find((c: any) => c.status === 'active' || c.status === 'paused');
+            const activeCyc = (data.cycles || []).find((c: any) => c && (c.status === 'active' || c.status === 'paused'));
             if (activeCyc) {
               setActiveCycle(activeCyc);
             } else if (data.financials && data.financials.length > 0) {
