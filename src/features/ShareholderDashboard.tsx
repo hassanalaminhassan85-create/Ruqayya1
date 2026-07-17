@@ -246,7 +246,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
         const investmentPercentage = totalInvestments > 0 ? (firstShareholder.investment_amount / totalInvestments) * 100 : 0;
 
         const activeCycle = (dbCycles || []).find((c: any) => c && (c.status === 'active' || c.status === 'paused')) || (dbCycles || [])[0];
-        const completedCycles = dbCycles.filter((c: any) => c.status === 'completed');
+        const completedCycles = (dbCycles || []).filter((c: any) => c && c.status === 'completed');
 
         const cycleStartDate = activeCycle ? new Date(activeCycle.startDate) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
         const todayVal = new Date('2026-07-07');

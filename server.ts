@@ -279,6 +279,9 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
     const guarantor = db.guarantors.find((g: any) => g.driver_id === d.id);
     const vehicle = mappedVehicles.find((v: any) => v.driverId === d.id || v.driver_id === d.id);
     const financials = getDriverFinancials(d, db);
+    const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === d.id);
+    const passportDoc = documents.find((doc: any) => doc.document_type === 'passport_photo');
+    const passport_photo_url = passportDoc ? passportDoc.file_url : '';
     return {
       ...d,
       fullName: user?.full_name || d.fullName || 'Candidate',
@@ -286,6 +289,10 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       phone: user?.phone || d.phone || '',
       guarantor,
       vehicle,
+      documents,
+      passport_photo_url,
+      passportPhoto: passport_photo_url, // For fallback
+      passportPhotoUrl: passport_photo_url, // For fallback
       licenseNumber: d.license_number || d.licenseNumber || 'KND-9828A',
       licenseExpiry: d.license_expiry || d.licenseExpiry || '2028-10-12',
       classification: d.classification || 'Assisted',
@@ -1453,6 +1460,9 @@ app.get('/api/drivers', authenticateSession, (req, res) => {
     const guarantor = db.guarantors.find(g => g.driver_id === drv.id);
     const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
     const financials = getDriverFinancials(drv, db);
+    const documents = (db.driver_documents || []).filter(doc => doc.driver_id === drv.id);
+    const passportDoc = documents.find(doc => doc.document_type === 'passport_photo');
+    const passport_photo_url = passportDoc ? passportDoc.file_url : '';
     return {
       ...drv,
       fullName: user?.full_name || 'Candidate',
@@ -1460,6 +1470,10 @@ app.get('/api/drivers', authenticateSession, (req, res) => {
       phone: user?.phone || '',
       guarantor,
       vehicle,
+      documents,
+      passport_photo_url,
+      passportPhoto: passport_photo_url, // For fallback
+      passportPhotoUrl: passport_photo_url, // For fallback
       remaining_vehicle_balance: financials.remainingVehicleBalance,
       total_amount_paid: financials.totalAmountPaid,
       vehicle_purchase_price: financials.vehiclePurchasePrice,
@@ -1495,7 +1509,9 @@ app.get('/api/drivers/:id', authenticateSession, (req, res) => {
   const user = db.users.find(u => u.id === drv.user_id);
   const guarantor = db.guarantors.find(g => g.driver_id === drv.id);
   const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
-  const documents = db.driver_documents.filter(doc => doc.driver_id === drv.id);
+  const documents = (db.driver_documents || []).filter(doc => doc.driver_id === drv.id);
+  const passportDoc = documents.find(doc => doc.document_type === 'passport_photo');
+  const passport_photo_url = passportDoc ? passportDoc.file_url : '';
   const financials = getDriverFinancials(drv, db);
 
   res.json({
@@ -1506,6 +1522,9 @@ app.get('/api/drivers/:id', authenticateSession, (req, res) => {
     guarantor,
     vehicle,
     documents,
+    passport_photo_url,
+    passportPhoto: passport_photo_url, // For fallback
+    passportPhotoUrl: passport_photo_url, // For fallback
     remaining_vehicle_balance: financials.remainingVehicleBalance,
     total_amount_paid: financials.totalAmountPaid,
     vehicle_purchase_price: financials.vehiclePurchasePrice,
@@ -2672,7 +2691,9 @@ app.get('/api/directory/all', authenticateSession, (req, res) => {
       const guarantor = db.guarantors.find((g: any) => g.driver_id === drv.id);
       const vehicle = db.vehicles.find((v: any) => v.driver_id === drv.id);
       const financials = getDriverFinancials(drv, db);
-      const driverDocs = db.driver_documents.filter((doc: any) => doc.driver_id === drv.id);
+      const driverDocs = (db.driver_documents || []).filter((doc: any) => doc.driver_id === drv.id);
+      const passportDoc = driverDocs.find((doc: any) => doc.document_type === 'passport_photo');
+      const passport_photo_url = passportDoc ? passportDoc.file_url : '';
       return {
         ...drv,
         fullName: user?.full_name || 'Candidate',
@@ -2683,6 +2704,9 @@ app.get('/api/directory/all', authenticateSession, (req, res) => {
         guarantor,
         vehicle,
         documents: driverDocs,
+        passport_photo_url,
+        passportPhoto: passport_photo_url, // For fallback
+        passportPhotoUrl: passport_photo_url, // For fallback
         remaining_vehicle_balance: financials.remainingVehicleBalance,
         total_amount_paid: financials.totalAmountPaid,
         vehicle_purchase_price: financials.vehiclePurchasePrice,
@@ -3640,8 +3664,8 @@ app.post('/api/director/cycles/schedule', authenticateSession, (req, res) => {
 app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
     }
 
     const { startDate, endDate, endGoalTons } = req.body;
@@ -3705,8 +3729,8 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
 app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
     }
 
     const { reason } = req.body;
@@ -3784,8 +3808,8 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
 app.post('/api/director/cycles/resume', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
     }
 
     const { reason } = req.body;
@@ -3849,8 +3873,8 @@ app.post('/api/director/cycles/resume', authenticateSession, (req, res) => {
 app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
     }
 
     const { endDate } = req.body;

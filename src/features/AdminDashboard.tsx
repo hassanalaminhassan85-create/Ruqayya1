@@ -116,14 +116,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       return;
     }
     try {
-      const [vList, dList, tList, fvList, fin, payList, shList] = await Promise.all([
+      const [vList, dList, tList, fvList, fin, payList, shList, cyList] = await Promise.all([
         api.getVehicles(),
         api.getDrivers(),
         api.getTrips(),
         api.getVouchers(),
         api.getFinance(),
         api.getPayments(),
-        api.getShareholders()
+        api.getShareholders(),
+        api.request('/api/director/cycles').catch(() => ({ cycles: [] }))
       ]);
       setVehicles(vList || []);
       setDrivers(dList || []);
@@ -138,18 +139,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         .reduce((sum: number, r: any) => sum + r.amount, 0);
       setTotalEarnings(revTotal);
 
-      // Determine active cycle or set a default
-      if (fin && fin.length > 0) {
-        setActiveCycle({
-          startDate: fin[fin.length - 1].date || new Date().toISOString(),
-          status: 'active'
-        });
-      } else {
-        setActiveCycle({
-          startDate: new Date().toISOString(),
-          status: 'active'
-        });
-      }
+      // Determine active cycle from database
+      const realCycles = cyList?.cycles || [];
+      const currentActive = realCycles.find((c: any) => c && (c.status === 'active' || c.status === 'paused'));
+      setActiveCycle(currentActive || null);
     } catch (e) {
       console.error("Failed to sync backend data in AdminDashboard:", e);
     } finally {

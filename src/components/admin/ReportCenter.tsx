@@ -272,7 +272,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   const parseDate = (dStr: string) => new Date(dStr).getTime();
   
   const filteredFinance = finance.filter(f => {
-    if (!f.date) return false;
+    if (!f || !f.date) return false;
     const fTime = parseDate(f.date.slice(0, 10));
     const start = parseDate(dateFrom);
     const end = parseDate(dateTo);
@@ -288,7 +288,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   });
 
   const filteredPayments = payments.filter(p => {
-    if (!p.date) return false;
+    if (!p || !p.date) return false;
     const pTime = parseDate(p.date.slice(0, 10));
     const start = parseDate(dateFrom);
     const end = parseDate(dateTo);
@@ -301,22 +301,22 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   });
 
   // METRICS COMPILER
-  const totalInflows = filteredFinance.filter(f => f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0) +
-                       filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalInflows = filteredFinance.filter(f => f && f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0) +
+                       filteredPayments.reduce((sum, p) => sum + (p && p.amount ? p.amount : 0), 0);
                        
-  const totalOutflows = filteredFinance.filter(f => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
+  const totalOutflows = filteredFinance.filter(f => f && f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
   const netEarningsProfit = totalInflows - totalOutflows;
 
   // Additional stats
-  const activeDriversCount = drivers.filter(d => d.status === 'approved' || d.status === 'available' || d.status === 'on-trip').length;
-  const activeVehiclesCount = vehicles.filter(v => v.status === 'active' || v.status === 'assigned').length;
-  const totalOutstandingBalance = drivers.reduce((sum, d) => sum + (d.remaining_vehicle_balance || 0), 0);
+  const activeDriversCount = drivers.filter(d => d && (d.status === 'approved' || d.status === 'available' || d.status === 'on-trip')).length;
+  const activeVehiclesCount = vehicles.filter(v => v && (v.status === 'active' || v.status === 'assigned')).length;
+  const totalOutstandingBalance = drivers.reduce((sum, d) => sum + (d && d.remaining_vehicle_balance ? d.remaining_vehicle_balance : 0), 0);
   
   // Continuous 2% shareholder pool math
   const accumulatedShareholderPool = netEarningsProfit > 0 ? (netEarningsProfit * 0.02) : 0;
-  const totalShareholderWithdrawals = shareholders.reduce((sum, s) => sum + (s.total_withdrawn || 0), 0);
-  const totalShareholderReinvestments = shareholders.reduce((sum, s) => sum + (s.total_reinvested || 0), 0);
-  const totalInvestmentStocks = shareholders.reduce((sum, s) => sum + (s.investment_amount || 0), 0);
+  const totalShareholderWithdrawals = shareholders.reduce((sum, s) => sum + (s && s.total_withdrawn ? s.total_withdrawn : 0), 0);
+  const totalShareholderReinvestments = shareholders.reduce((sum, s) => sum + (s && s.total_reinvested ? s.total_reinvested : 0), 0);
+  const totalInvestmentStocks = shareholders.reduce((sum, s) => sum + (s && s.investment_amount ? s.investment_amount : 0), 0);
 
   // Active Team Payroll formula: count * salary
   const barristerSal = activeVehiclesCount * 1000;
@@ -772,7 +772,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       {/* Driver passport image (High fidelity portrait) */}
                       <div className="h-16 w-16 bg-slate-200 rounded-lg overflow-hidden shrink-0 border border-slate-300">
                         <img 
-                          src={driverPortraits[index % driverPortraits.length]} 
+                          src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || driverPortraits[index % driverPortraits.length]} 
                           alt={d.fullName} 
                           className="h-full w-full object-cover"
                           referrerPolicy="no-referrer"
@@ -835,7 +835,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                         <tr key={s.id} className="hover:bg-slate-50">
                           <td className="p-2.5 flex items-center gap-2">
                             <div className="h-6 w-6 rounded-full overflow-hidden shrink-0 border">
-                              <img src={shareholderPortraits[idx % shareholderPortraits.length]} alt="" className="h-full w-full object-cover" />
+                              <img src={s.passport_photo_url || s.passportPhoto || s.passport_photo || s.passport || shareholderPortraits[idx % shareholderPortraits.length]} alt="" className="h-full w-full object-cover" />
                             </div>
                             <span className="font-sans font-bold text-slate-900">{s.full_name}</span>
                           </td>

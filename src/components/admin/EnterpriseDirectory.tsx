@@ -735,9 +735,9 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                         <div className="flex items-center gap-3 mb-3">
                           {/* Avatar Display */}
                           <div className={`h-11 w-11 rounded-full flex items-center justify-center font-bold text-xs border ${getAvatarBg(person.fullName || person.full_name || '')}`}>
-                            {person.passport_photo_url ? (
+                            {person.passport_photo_url || person.passportPhoto || person.passport_photo || person.passport ? (
                               <img 
-                                src={person.passport_photo_url} 
+                                src={person.passport_photo_url || person.passportPhoto || person.passport_photo || person.passport} 
                                 alt={person.fullName} 
                                 className="h-full w-full rounded-full object-cover"
                                 referrerPolicy="no-referrer"
@@ -855,9 +855,9 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
               {/* Profile Overview Header */}
               <div className="flex items-start gap-4 flex-wrap border-b border-border-main/50 pb-5 mb-5">
                 <div className={`h-16 w-16 rounded-full flex items-center justify-center font-bold text-lg border-2 ${getAvatarBg(selectedPerson.fullName || selectedPerson.full_name || '')}`}>
-                  {selectedPerson.passport_photo_url ? (
+                  {selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport ? (
                     <img 
-                      src={selectedPerson.passport_photo_url} 
+                      src={selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport} 
                       alt={selectedPerson.fullName} 
                       className="h-full w-full rounded-full object-cover"
                       referrerPolicy="no-referrer"
@@ -890,9 +890,9 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                     <span>{lang === 'en' ? "Verified Passport Photo" : "Hoton Fasfo Tabbatacce"}</span>
                   </h3>
                   <div className="relative group overflow-hidden rounded-xl border border-border-main/50 h-32 w-32 bg-bg-surface flex items-center justify-center shadow-md">
-                    {selectedPerson.passport_photo_url ? (
+                    {selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport ? (
                       <img 
-                        src={selectedPerson.passport_photo_url} 
+                        src={selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport} 
                         alt="Official Passport" 
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                         referrerPolicy="no-referrer"

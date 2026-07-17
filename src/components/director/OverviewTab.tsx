@@ -123,19 +123,19 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
   // Statistics calculations
   const totalDrivers = drivers.length;
-  const activeDrivers = drivers.filter(d => ['approved', 'available', 'on-trip'].includes(d.status)).length;
-  const restingDrivers = drivers.filter(d => d.status === 'off-duty').length;
-  const pendingDrivers = drivers.filter(d => d.status === 'pending').length;
-  const smartDrivers = drivers.filter(d => d.classification === 'Smart').length;
+  const activeDrivers = drivers.filter(d => d && ['approved', 'available', 'on-trip'].includes(d.status)).length;
+  const restingDrivers = drivers.filter(d => d && d.status === 'off-duty').length;
+  const pendingDrivers = drivers.filter(d => d && d.status === 'pending').length;
+  const smartDrivers = drivers.filter(d => d && d.classification === 'Smart').length;
 
   const totalVehicles = vehicles.length;
-  const activeVehiclesCount = vehicles.filter(v => v.status === 'assigned' || v.status === 'active').length;
+  const activeVehiclesCount = vehicles.filter(v => v && (v.status === 'assigned' || v.status === 'active')).length;
 
   const totalShareholders = shareholders.length;
-  const totalInvestments = shareholders.reduce((sum, sh) => sum + (sh.investment_amount || 0), 0);
+  const totalInvestments = shareholders.reduce((sum, sh) => sum + (sh && sh.investment_amount ? sh.investment_amount : 0), 0);
 
-  const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0);
-  const totalExpenses = financials.filter(f => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
+  const totalRevenue = financials.filter(f => f && f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0);
+  const totalExpenses = financials.filter(f => f && f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
   const netProfit = totalRevenue - totalExpenses;
 
   const sharePct = shareholderSettings?.distributionPercentage ?? 2;

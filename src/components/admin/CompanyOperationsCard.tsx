@@ -304,9 +304,9 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   }
 
   // Determine styling based on status
-  const isSetup = opsState.status === 'Setup Mode';
-  const isPaused = opsState.status === 'Paused';
-  const isOperational = opsState.status === 'Operational Mode';
+  const isSetup = (opsState?.status || 'Setup Mode') === 'Setup Mode';
+  const isPaused = opsState?.status === 'Paused';
+  const isOperational = opsState?.status === 'Operational Mode';
 
   let borderStyle = 'border-amber-500/30 bg-amber-950/10';
   let badgeStyle = 'bg-amber-500/10 text-amber-500 border-amber-500/20';
@@ -343,7 +343,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                   {lang === 'en' ? 'ENTERPRISE SYSTEM STATE' : 'TSARIN GUDANAR DA SASHIN AIKI'}
                 </span>
                 <span className={`px-2 py-0.2 rounded-full text-[8px] font-extrabold uppercase tracking-wider border ${badgeStyle}`}>
-                  {opsState.status}
+                  {opsState?.status || 'Setup Mode'}
                 </span>
               </div>
               <h3 className="text-sm font-black text-text-main tracking-tight mt-0.5">
@@ -360,7 +360,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
           </div>
 
           {/* Quick Metrics & Action Area */}
-          <div className="flex flex-col gap-2.5 w-full mt-1 border-t border-border-main/20 pt-2.5">
+          <div className="flex flex-col gap-2.5 w-full mt-1 border-t border-brand-gold/10 pt-2.5">
             
             {/* Operating Cycle stats */}
             {!isSetup && (
@@ -369,13 +369,13 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                   <span className="text-[8px] uppercase tracking-wider text-text-muted block font-semibold">{lang === 'en' ? 'Cycle' : 'Zagaye'}</span>
                   <div className="text-xs font-black text-text-main flex items-center justify-center gap-1 mt-0.5">
                     <Clock className="h-3 w-3 text-primary-gold" />
-                    {opsState.currentCycle || 'N/A'}
+                    {opsState?.currentCycle || 'N/A'}
                   </div>
                 </div>
                 <div className="border-l border-border-main/30 pl-2">
                   <span className="text-[8px] uppercase tracking-wider text-text-muted block font-semibold">{lang === 'en' ? 'Cycle Day' : 'Rana'}</span>
                   <span className="text-xs font-black text-text-main mt-0.5 block">
-                    Day {opsState.currentDay || 1}/30
+                    Day {opsState?.currentDay || 1}/30
                   </span>
                 </div>
               </div>
@@ -460,13 +460,13 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
             <span className="text-[10px] font-mono text-text-muted">ROOT_NODE_SECURE</span>
           </div>
 
-          {(!opsState.auditLog || opsState.auditLog.length === 0) ? (
+          {(!opsState?.auditLog || opsState.auditLog.length === 0) ? (
             <div className="text-center py-6 text-text-muted text-xs font-mono">
               {lang === 'en' ? 'No operational phase shifts recorded yet.' : 'Babu tarihin sauya matakin aiki tukunna.'}
             </div>
           ) : (
             <div className="flex flex-col gap-3 max-h-64 overflow-y-auto pr-1">
-              {opsState.auditLog.map((log: any, idx: number) => (
+              {(opsState?.auditLog || []).map((log: any, idx: number) => (
                 <div key={log.id || idx} className="p-3 rounded-lg bg-bg-base/80 border border-border-main/50 flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs">
                   <div>
                     <div className="flex items-center gap-2">

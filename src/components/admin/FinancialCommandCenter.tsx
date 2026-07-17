@@ -852,7 +852,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     >
                       <div className="h-8 w-8 rounded-full bg-slate-200 overflow-hidden shrink-0">
                         <img 
-                          src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100" 
+                          src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100'} 
                           alt="" 
                           className="h-full w-full object-cover"
                           referrerPolicy="no-referrer"
@@ -885,7 +885,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                   <div className="flex items-center gap-3">
                     <div className="h-12 w-12 rounded-full border border-slate-200 overflow-hidden bg-slate-100 shrink-0">
                       <img 
-                        src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150" 
+                        src={matchedDriver.passport_photo_url || matchedDriver.passportPhoto || matchedDriver.passport_photo || matchedDriver.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'} 
                         alt="" 
                         className="h-full w-full object-cover"
                         referrerPolicy="no-referrer"
@@ -1378,7 +1378,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                           <div className="flex items-center gap-2.5">
                             <div className="h-8 w-8 rounded-full border border-slate-200 overflow-hidden shrink-0 bg-slate-900 flex items-center justify-center">
                               <img 
-                                src={sh.passport_photo_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
+                                src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
                                 alt={sh.full_name} 
                                 className="h-full w-full object-cover"
                                 referrerPolicy="no-referrer"

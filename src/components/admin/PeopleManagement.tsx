@@ -745,7 +745,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                         <td className="p-4">
                           <div className="flex items-center gap-3">
                             <img
-                              src={d.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
+                              src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
                               alt={d.fullName}
                               className="h-8 w-8 rounded-full border border-border-main/50 object-cover"
                               referrerPolicy="no-referrer"
@@ -1190,7 +1190,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <img
-                                src={s.passport_photo_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150'}
+                                src={s.passport_photo_url || s.passportPhoto || s.passport_photo || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150'}
                                 alt={s.full_name}
                                 className="h-8 w-8 rounded-full border border-border-main/50 object-cover"
                                 referrerPolicy="no-referrer"
@@ -1358,7 +1358,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <img
-                                src={d.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
+                                src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
                                 alt={d.fullName}
                                 className="h-8 w-8 rounded-full border object-cover"
                                 referrerPolicy="no-referrer"
@@ -2014,7 +2014,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
           <div className="flex flex-col gap-4 p-2 max-w-md">
             <div className="flex items-center gap-3 bg-bg-base p-3 rounded-xl border border-border-main/40">
               <img
-                src={reviewDriver.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
+                src={reviewDriver.passport_photo_url || reviewDriver.passportPhoto || reviewDriver.passport_photo || reviewDriver.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
                 alt={reviewDriver.fullName}
                 className="h-12 w-12 rounded-full border border-border-main/50 object-cover"
                 referrerPolicy="no-referrer"
@@ -2092,7 +2092,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
           <div className="flex flex-col gap-4 p-2 max-w-2xl text-text-main">
             <div className="flex flex-col sm:flex-row items-center gap-4 border-b border-border-main/40 pb-4">
               <img
-                src={selectedDriverFor360.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
+                src={selectedDriverFor360.passport_photo_url || selectedDriverFor360.passportPhoto || selectedDriverFor360.passport_photo || selectedDriverFor360.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
                 alt={selectedDriverFor360.fullName}
                 className="h-20 w-20 rounded-full border border-border-main shadow-sm object-cover"
                 referrerPolicy="no-referrer"

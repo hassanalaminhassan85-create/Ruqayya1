@@ -267,7 +267,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
         api.getVehicles(),
         api.getDrivers(),
         api.getShareholders(),
-        api.request('/api/director/cycles/history').catch(() => []), // safety fallback
+        api.request('/api/director/cycles').catch(() => ({ cycles: [] })), // safety fallback
         api.getNotifications()
       ]);
       setLogs(lgList || []);
@@ -275,7 +275,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
       setVehicles(vhList || []);
       setDrivers(drList || []);
       setShareholders(shList || []);
-      setCycles(cyList || []);
+      setCycles(cyList?.cycles || []);
       setNotifications(ntList || []);
     } catch (err) {
       console.error("HTTP Fallback also failed:", err);
@@ -353,24 +353,24 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
 
   // Recalculate dynamic statistics
   const totalDriversCount = drivers.length;
-  const smartDriversCount = drivers.filter(d => d.classification === 'Smart').length;
-  const assistedDriversCount = drivers.filter(d => d.classification === 'Assisted').length;
-  const pendingDriversCount = drivers.filter(d => d.status === 'pending').length;
-  const activeDriversCount = drivers.filter(d => d.status === 'approved' || d.status === 'available' || d.status === 'on-trip').length;
-  const restDriversCount = drivers.filter(d => d.status === 'off-duty').length;
+  const smartDriversCount = drivers.filter(d => d && d.classification === 'Smart').length;
+  const assistedDriversCount = drivers.filter(d => d && d.classification === 'Assisted').length;
+  const pendingDriversCount = drivers.filter(d => d && d.status === 'pending').length;
+  const activeDriversCount = drivers.filter(d => d && (d.status === 'approved' || d.status === 'available' || d.status === 'on-trip')).length;
+  const restDriversCount = drivers.filter(d => d && d.status === 'off-duty').length;
   const totalVehiclesCount = vehicles.length;
   const totalShareholdersCount = shareholders.length;
-  const totalInvestmentsSum = shareholders.reduce((s, r) => s + (r.investment_amount || 0), 0);
+  const totalInvestmentsSum = shareholders.reduce((s, r) => s + (r && r.investment_amount ? r.investment_amount : 0), 0);
 
-  const totalRevenueSum = financials.filter(f => f.type === 'revenue').reduce((s, r) => s + r.amount, 0);
-  const totalExpensesSum = financials.filter(f => f.type === 'expense').reduce((s, r) => s + r.amount, 0);
+  const totalRevenueSum = financials.filter(f => f && f.type === 'revenue').reduce((s, r) => s + r.amount, 0);
+  const totalExpensesSum = financials.filter(f => f && f.type === 'expense').reduce((s, r) => s + r.amount, 0);
   const netGeneratedAmount = totalRevenueSum - totalExpensesSum;
   
-  const shareholderPercentage = shareholderSettings.distributionPercentage !== undefined ? shareholderSettings.distributionPercentage : 2;
+  const shareholderPercentage = shareholderSettings && shareholderSettings.distributionPercentage !== undefined ? shareholderSettings.distributionPercentage : 2;
   const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
 
   // outstanding payment simulator based on active trips
-  const totalOutstandingPayments = tripManifests.filter(t => t.status === 'in-transit').reduce((s, r) => s + r.freightCharges, 0);
+  const totalOutstandingPayments = tripManifests.filter(t => t && t.status === 'in-transit').reduce((s, r) => s + r.freightCharges, 0);
   const totalVehicleBalanceRemaining = 14250000; // Standard company outstanding leasing balance
 
   const activeCycle = (cycles || []).find(c => c && (c.status === 'active' || c.status === 'paused'));
@@ -425,6 +425,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
         endDate: cycleGoalForm.endDate,
         endGoalTons: parseFloat(cycleGoalForm.endGoalTons)
       });
+      await fetchFallbackData();
       setActionSuccess(lang === 'en' ? "New company cycle started successfully." : "An fara sabon zagayen aiki lafiya.");
     } catch (err: any) {
       setActionError(err.message || "An error occurred.");
@@ -439,6 +440,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     setIsSubmitting(true);
     try {
       await api.pauseCycle({ reason });
+      await fetchFallbackData();
       setActionSuccess(lang === 'en' ? "Operating cycle paused successfully." : "An dakatar da zagayen aiki lafiya.");
       setShowCyclePauseModal(false);
       setCyclePauseReason('');
@@ -455,6 +457,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     setIsSubmitting(true);
     try {
       await api.resumeCycle({ reason });
+      await fetchFallbackData();
       setActionSuccess(lang === 'en' ? "Operating cycle resumed successfully." : "An dawo da zagayen aiki lafiya.");
       setShowCycleResumeModal(false);
       setCycleResumeReason('');
@@ -474,6 +477,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
       await api.endCycle({
         endDate: new Date().toISOString().split('T')[0]
       });
+      await fetchFallbackData();
       setActionSuccess(lang === 'en' ? "Active cycle successfully audited, archived, and permanently locked." : "An kammala duba kudaden zagayen aiki kuma an rufe shi gaba daya.");
     } catch (err: any) {
       setActionError(err.message || "An error occurred.");
@@ -487,6 +491,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     setActionSuccess(null);
     try {
       await api.updateShareholderSettings({ distributionPercentage: pct });
+      await fetchFallbackData();
       setActionSuccess(lang === 'en' ? `Shareholder distribution pool percentage adjusted to ${pct}%.` : `An sauya rabon jari na masu hannun jari zuwa kashi ${pct}%.`);
     } catch (err: any) {
       setActionError(err.message);
@@ -1627,7 +1632,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                               {/* Official Passport Photograph */}
                               <div className="relative group overflow-hidden rounded-lg border border-border-main h-20 w-20 shrink-0 bg-slate-900 flex items-center justify-center shadow-md">
                                 <img 
-                                  src={(selectedDriver as any).passport_photo_url || selectedDriver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
+                                  src={(selectedDriver as any).passport_photo_url || (selectedDriver as any).passportPhoto || (selectedDriver as any).passport_photo || selectedDriver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
                                   alt={selectedDriver.fullName} 
                                   className="h-full w-full object-cover"
                                   referrerPolicy="no-referrer"
@@ -1924,7 +1929,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                                 <td className="p-3 font-extrabold text-text-main font-sans text-xs flex items-center gap-2.5">
                                   <div className="h-8 w-8 rounded-full border border-border-main overflow-hidden shrink-0 bg-slate-900 flex items-center justify-center">
                                     <img 
-                                      src={sh.passport_photo_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
+                                      src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
                                       alt={sh.full_name} 
                                       className="h-full w-full object-cover"
                                       referrerPolicy="no-referrer"
