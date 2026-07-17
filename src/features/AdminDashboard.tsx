@@ -162,6 +162,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         if (detail.finance) setFinance(detail.finance);
         if (detail.driver_payments) setPayments(detail.driver_payments);
         if (detail.vehicles) setVehicles(detail.vehicles);
+        if (detail.cycles) {
+          const activeCyc = (detail.cycles || []).find((c: any) => c && (c.status === 'active' || c.status === 'paused'));
+          setActiveCycle(activeCyc || null);
+        }
       }
     };
 
@@ -201,14 +205,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             setTotalEarnings(revTotal);
 
             const activeCyc = (data.cycles || []).find((c: any) => c && (c.status === 'active' || c.status === 'paused'));
-            if (activeCyc) {
-              setActiveCycle(activeCyc);
-            } else if (data.financials && data.financials.length > 0) {
-              setActiveCycle({
-                startDate: data.financials[data.financials.length - 1].date || new Date().toISOString(),
-                status: 'active'
-              });
-            }
+            setActiveCycle(activeCyc || null);
           }
         } catch (err) {
           console.error("Failed to parse live stream chunk in AdminDashboard:", err);

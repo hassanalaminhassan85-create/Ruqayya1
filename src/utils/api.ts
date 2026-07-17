@@ -360,7 +360,7 @@ export const api = {
   },
 
   // Executive Director Controls
-  startCycle: async (payload: { startDate: string; endDate?: string; endGoalTons?: number }) => {
+  startCycle: async (payload: { cycleId?: string; startDate: string; endDate?: string; endGoalTons?: number }) => {
     return api.request('/api/director/cycles/start', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -538,9 +538,10 @@ export const api = {
   getOperationsState: async () => {
     return api.request('/api/operations/state');
   },
-  startOperations: async () => {
+  startOperations: async (payload?: { cycleId?: string }) => {
     return api.request('/api/operations/start', {
-      method: 'POST'
+      method: 'POST',
+      body: payload ? JSON.stringify(payload) : undefined
     });
   },
   pauseOperations: async (reason: string) => {

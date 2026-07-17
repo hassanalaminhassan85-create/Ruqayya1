@@ -235,10 +235,36 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
   const [adminForm, setAdminForm] = useState({ fullName: '', email: '', password: '', phone: '' });
   const [shareholderForm, setShareholderForm] = useState({ fullName: '', email: '', phone: '', address: '', investmentAmount: '' });
   const [cycleGoalForm, setCycleGoalForm] = useState({ 
+    cycleId: '',
     startDate: new Date().toISOString().split('T')[0], 
     endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0], 
     endGoalTons: '200' 
   });
+
+  useEffect(() => {
+    const active = (cycles || []).find(c => c && (c.status === 'active' || c.status === 'paused'));
+    if (!active && !cycleGoalForm.cycleId && cycles.length >= 0) {
+      let maxNum = 0;
+      for (const c of cycles) {
+        if (c && c.id) {
+          const matches = c.id.match(/\d+/g);
+          if (matches) {
+            const numStr = matches[matches.length - 1];
+            const num = parseInt(numStr, 10);
+            if (!isNaN(num) && num > maxNum) {
+              maxNum = num;
+            }
+          }
+        }
+      }
+      const nextNum = maxNum + 1;
+      const padded = String(nextNum).padStart(3, '0');
+      setCycleGoalForm(prev => ({
+        ...prev,
+        cycleId: `CYC-${padded}`
+      }));
+    }
+  }, [cycles, cycleGoalForm.cycleId]);
   const [showCyclePauseModal, setShowCyclePauseModal] = useState(false);
   const [showCycleResumeModal, setShowCycleResumeModal] = useState(false);
   const [cyclePauseReason, setCyclePauseReason] = useState('');
@@ -420,11 +446,16 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     setActionSuccess(null);
     setIsSubmitting(true);
     try {
-      await api.startCycle({
+      const res = await api.startCycle({
+        cycleId: cycleGoalForm.cycleId,
         startDate: cycleGoalForm.startDate,
         endDate: cycleGoalForm.endDate,
         endGoalTons: parseFloat(cycleGoalForm.endGoalTons)
       });
+      setCycleGoalForm(prev => ({ ...prev, cycleId: '' }));
+      if (res && res.success && res.cycle) {
+        setCycles(prev => [res.cycle, ...prev]);
+      }
       await fetchFallbackData();
       setActionSuccess(lang === 'en' ? "New company cycle started successfully." : "An fara sabon zagayen aiki lafiya.");
     } catch (err: any) {
@@ -439,7 +470,10 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     setActionSuccess(null);
     setIsSubmitting(true);
     try {
-      await api.pauseCycle({ reason });
+      const res = await api.pauseCycle({ reason });
+      if (res && res.success && res.cycle) {
+        setCycles(prev => prev.map(c => c.id === res.cycle.id ? res.cycle : c));
+      }
       await fetchFallbackData();
       setActionSuccess(lang === 'en' ? "Operating cycle paused successfully." : "An dakatar da zagayen aiki lafiya.");
       setShowCyclePauseModal(false);
@@ -456,7 +490,10 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     setActionSuccess(null);
     setIsSubmitting(true);
     try {
-      await api.resumeCycle({ reason });
+      const res = await api.resumeCycle({ reason });
+      if (res && res.success && res.cycle) {
+        setCycles(prev => prev.map(c => c.id === res.cycle.id ? res.cycle : c));
+      }
       await fetchFallbackData();
       setActionSuccess(lang === 'en' ? "Operating cycle resumed successfully." : "An dawo da zagayen aiki lafiya.");
       setShowCycleResumeModal(false);
@@ -474,9 +511,12 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     setActionSuccess(null);
     setIsSubmitting(true);
     try {
-      await api.endCycle({
+      const res = await api.endCycle({
         endDate: new Date().toISOString().split('T')[0]
       });
+      if (res && res.success && res.cycle) {
+        setCycles(prev => prev.map(c => c.id === res.cycle.id ? res.cycle : c));
+      }
       await fetchFallbackData();
       setActionSuccess(lang === 'en' ? "Active cycle successfully audited, archived, and permanently locked." : "An kammala duba kudaden zagayen aiki kuma an rufe shi gaba daya.");
     } catch (err: any) {
@@ -1244,6 +1284,18 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                         <CardDescription>Launch and setup corporate performance metrics.</CardDescription>
                       </CardHeader>
                       <form onSubmit={handleStartCycle} className="mt-4 flex flex-col gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Cycle Identifier (Unique ID)" : "Lambar Gano Zagaye (ID na Musamman)"}</label>
+                          <input
+                            type="text"
+                            required
+                            disabled={!!activeCycle}
+                            className="bg-bg-surface border border-border-main p-2.5 rounded-xl text-xs font-mono font-semibold text-brand-gold disabled:opacity-50"
+                            placeholder="e.g. CYC-001"
+                            value={cycleGoalForm.cycleId}
+                            onChange={(e) => setCycleGoalForm({ ...cycleGoalForm, cycleId: e.target.value })}
+                          />
+                        </div>
                         <div className="flex flex-col gap-1.5">
                           <label className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Cycle Commencement Date" : "Ranar Fara Zagaye"}</label>
                           <input

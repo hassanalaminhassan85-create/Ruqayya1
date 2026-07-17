@@ -162,18 +162,22 @@ export function loadDB(): DBState {
   return state;
 }
 
-let dbChangeListener: (() => void) | null = null;
+let dbChangeListeners: (() => void)[] = [];
 
 export function setDBChangeListener(listener: () => void) {
-  dbChangeListener = listener;
+  dbChangeListeners.push(listener);
 }
 
 export function saveDB(state: DBState): void {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf8');
-    if (dbChangeListener) {
-      dbChangeListener();
-    }
+    dbChangeListeners.forEach(listener => {
+      try {
+        listener();
+      } catch (err) {
+        console.error('Error in DB change listener:', err);
+      }
+    });
   } catch (error) {
     console.error('Error saving database:', error);
   }

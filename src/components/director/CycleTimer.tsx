@@ -35,6 +35,27 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
   const [resumeReason, setResumeReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [skewOffset, setSkewOffset] = useState<number>(0);
+  const [lastCycleId, setLastCycleId] = useState<string | null>(null);
+
+  // Monitor activeCycle to calculate static clock skew offset
+  useEffect(() => {
+    if (activeCycle) {
+      if (activeCycle.id !== lastCycleId) {
+        setLastCycleId(activeCycle.id);
+        const startMs = new Date(activeCycle.created_at || activeCycle.startDate).getTime();
+        const nowMs = Date.now();
+        if (!isNaN(startMs) && startMs > nowMs) {
+          setSkewOffset(startMs - nowMs);
+        } else {
+          setSkewOffset(0);
+        }
+      }
+    } else {
+      setLastCycleId(null);
+      setSkewOffset(0);
+    }
+  }, [activeCycle, lastCycleId]);
 
   // Compute active duration elapsed in seconds, deducting paused intervals
   const computeActiveDuration = (cycle: any) => {
@@ -44,7 +65,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     const startMs = new Date(cycle.created_at || cycle.startDate).getTime();
     if (isNaN(startMs)) return 0;
 
-    let nowMs = Date.now();
+    let nowMs = Date.now() + skewOffset;
     if (cycle.status === 'paused' && cycle.pausedAt) {
       const pausedMs = new Date(cycle.pausedAt).getTime();
       if (!isNaN(pausedMs)) {
@@ -90,7 +111,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [activeCycle]);
+  }, [activeCycle, skewOffset]);
 
   const formatDateOnly = (dateStr: string | null | undefined) => {
     if (!dateStr) return 'N/A';

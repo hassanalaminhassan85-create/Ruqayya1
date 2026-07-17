@@ -3656,6 +3656,29 @@ app.post('/api/director/cycles/schedule', authenticateSession, (req, res) => {
 });
 
 
+// Helper to generate the next unique sequential Cycle ID starting with 001
+function generateNextSequentialCycleId(cycles: any[]): string {
+  let maxNum = 0;
+  if (Array.isArray(cycles)) {
+    for (const c of cycles) {
+      if (c && c.id) {
+        const matches = c.id.match(/\d+/g);
+        if (matches) {
+          const numStr = matches[matches.length - 1];
+          const num = parseInt(numStr, 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    }
+  }
+  const nextNum = maxNum + 1;
+  const padded = String(nextNum).padStart(3, '0');
+  return `CYC-${padded}`;
+}
+
+
 // ==================================================
 // 22. AUTHENTICATED: EXECUTIVE DIRECTOR CONTROLS & MANAGEMENT
 // ==================================================
@@ -3668,7 +3691,7 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
     }
 
-    const { startDate, endDate, endGoalTons } = req.body;
+    const { cycleId: requestedCycleId, startDate, endDate, endGoalTons } = req.body;
     if (!startDate) {
       return res.status(400).json({ error: 'Start date parameter is mandatory.' });
     }
@@ -3679,7 +3702,15 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
       return res.status(400).json({ error: 'An active or paused operating cycle is already running. Complete and lock it first.' });
     }
 
-    const cycleId = `CYC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    let cycleId = requestedCycleId;
+    if (cycleId && db.cycles.some(c => c.id === cycleId)) {
+      return res.status(400).json({ error: `Duplicate Cycle ID error: '${cycleId}' already exists in database. Please generate or enter a unique ID.` });
+    }
+
+    if (!cycleId) {
+      cycleId = generateNextSequentialCycleId(db.cycles || []);
+    }
+
     const newCycle = {
       id: cycleId,
       startDate,
@@ -4213,6 +4244,8 @@ app.post('/api/operations/start', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied: Only Administrators can start operations.' });
     }
 
+    const { cycleId: requestedCycleId } = req.body || {};
+
     const db = loadDB();
     const company_settings = db.company_settings || {};
     const missing: string[] = [];
@@ -4305,7 +4338,14 @@ app.post('/api/operations/start', authenticateSession, (req, res) => {
     if (!db.cycles) db.cycles = [];
     const activeCycle = db.cycles.find((c: any) => c.status === 'active');
     if (!activeCycle) {
-      const cycleId = `CYC-${Math.floor(100 + Math.random() * 900)}`;
+      let cycleId = requestedCycleId;
+      if (cycleId && db.cycles.some((c: any) => c.id === cycleId)) {
+        return res.status(400).json({ error: `Duplicate Cycle ID error: '${cycleId}' already exists in database.` });
+      }
+      if (!cycleId) {
+        cycleId = generateNextSequentialCycleId(db.cycles);
+      }
+
       db.cycles.unshift({
         id: cycleId,
         startDate: new Date().toISOString().split('T')[0],
@@ -4343,7 +4383,12 @@ app.post('/api/operations/start', authenticateSession, (req, res) => {
       req
     );
 
-    res.json({ success: true, message: 'Company operations successfully started!', state: updatedState });
+    res.json({ 
+      success: true, 
+      message: 'Company operations successfully started!', 
+      state: updatedState,
+      detail: generateFilteredPayload(actor.role, null, null, db)
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -4429,7 +4474,12 @@ app.post('/api/operations/pause', authenticateSession, (req, res) => {
       req
     );
 
-    res.json({ success: true, message: 'Company operations paused.', state });
+    res.json({ 
+      success: true, 
+      message: 'Company operations paused.', 
+      state,
+      detail: generateFilteredPayload(actor.role, null, null, db)
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -4505,7 +4555,12 @@ app.post('/api/operations/resume', authenticateSession, (req, res) => {
       req
     );
 
-    res.json({ success: true, message: 'Company operations resumed.', state });
+    res.json({ 
+      success: true, 
+      message: 'Company operations resumed.', 
+      state,
+      detail: generateFilteredPayload(actor.role, null, null, db)
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

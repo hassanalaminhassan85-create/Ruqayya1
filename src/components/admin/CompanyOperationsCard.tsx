@@ -62,6 +62,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   const [pauseReason, setPauseReason] = useState('');
   const [actionError, setActionError] = useState('');
   const [checklist, setChecklist] = useState<any>([]);
+  const [generatedCycleId, setGeneratedCycleId] = useState('');
 
   // Inline forms state
   const [showSalaryForm, setShowSalaryForm] = useState(false);
@@ -224,10 +225,13 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   const handleStartCompanyOperations = async () => {
     setActionError('');
     try {
-      const res = await api.startOperations();
+      const res = await api.startOperations({ cycleId: generatedCycleId });
       if (res && res.success) {
         setOpsState(res.state);
         setShowChecklistModal(false);
+        if (res.detail) {
+          window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
+        }
         if (onStateChange) onStateChange();
         fetchOperationsState();
       }
@@ -248,6 +252,9 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         setOpsState(res.state);
         setShowPauseModal(false);
         setPauseReason('');
+        if (res.detail) {
+          window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
+        }
         if (onStateChange) onStateChange();
         fetchOperationsState();
       }
@@ -262,6 +269,9 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
       const res = await api.resumeOperations('Resumed by administrator');
       if (res && res.success) {
         setOpsState(res.state);
+        if (res.detail) {
+          window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
+        }
         if (onStateChange) onStateChange();
         fetchOperationsState();
       }
@@ -290,8 +300,30 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
     }
   };
 
-  const handleOpenChecklist = () => {
+  const handleOpenChecklist = async () => {
     evaluateChecklist();
+    try {
+      const res = await api.request('/api/director/cycles').catch(() => ({ cycles: [] }));
+      const existingCycles = res?.cycles || [];
+      let maxNum = 0;
+      for (const c of existingCycles) {
+        if (c && c.id) {
+          const matches = c.id.match(/\d+/g);
+          if (matches) {
+            const numStr = matches[matches.length - 1];
+            const num = parseInt(numStr, 10);
+            if (!isNaN(num) && num > maxNum) {
+              maxNum = num;
+            }
+          }
+        }
+      }
+      const nextNum = maxNum + 1;
+      const padded = String(nextNum).padStart(3, '0');
+      setGeneratedCycleId(`CYC-${padded}`);
+    } catch (err) {
+      setGeneratedCycleId(`CYC-001`);
+    }
     setShowChecklistModal(true);
   };
 
@@ -543,6 +575,24 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                   <span className="font-extrabold text-emerald-400 font-mono text-xs mt-1 block">
                     {new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0]}
                   </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex justify-between items-center">
+                <div className="flex-1 mr-2">
+                  <label className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block">
+                    {lang === 'en' ? 'CYCLE IDENTIFIER (UNIQUE ID)' : 'LAMBAR SHIGA ZAGAYE (ID)'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={generatedCycleId}
+                    onChange={(e) => setGeneratedCycleId(e.target.value)}
+                    className="font-extrabold text-amber-400 font-mono text-sm mt-1 bg-transparent border-b border-slate-800 focus:border-amber-400 focus:outline-none w-full"
+                  />
+                </div>
+                <div className="text-[9px] text-slate-500 italic font-medium shrink-0">
+                  {lang === 'en' ? 'Sequential Serial' : 'Jerin Serial'}
                 </div>
               </div>
 
