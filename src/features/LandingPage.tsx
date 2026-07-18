@@ -100,6 +100,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   // Driver Registration Fields
   const [regFullName, setRegFullName] = useState('');
+  const [regRtlId, setRegRtlId] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -329,8 +330,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     setRegSuccess(false);
 
     // Validation
-    if (!regFullName || !regEmail || !regPhone || !regAddress || !regPassword) {
-      setRegError(lang === 'en' ? "Step 1: Missing core profile fields." : "Mataki na 1: Akwai guraren da ba a cike ba.");
+    if (!regFullName || !regRtlId || !regEmail || !regPhone || !regAddress || !regPassword) {
+      setRegError(lang === 'en' ? "Step 1: Missing core profile fields (RTL-ID is required)." : "Mataki na 1: Akwai guraren da ba a cike ba (ana buƙatar RTL-ID).");
       setRegStep(1);
       return;
     }
@@ -360,6 +361,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     const payload = {
       personal: {
         fullName: regFullName,
+        companyDriverId: regRtlId,
         email: regEmail,
         phone: regPhone,
         password: regPassword,
@@ -397,6 +399,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       
       // Clear registration form
       setRegFullName('');
+      setRegRtlId('');
       setRegEmail('');
       setRegPhone('');
       setRegPassword('');
@@ -1008,18 +1011,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             </div>
                           </div>
 
-                          <div className="flex flex-col">
-                            <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-1.5">{lang === 'en' ? 'Email Address' : 'Imel'} <span className="text-amber-500">*</span></label>
-                            <div className="relative flex items-center h-12 rounded-xl border bg-slate-950/30 border-white/10 focus-within:border-[#D4AF37]">
-                              <User className="h-4 w-4 absolute left-3.5 text-slate-400" />
-                              <input 
-                                type="email" 
-                                required 
-                                value={regEmail}
-                                onChange={(e) => setRegEmail(e.target.value)}
-                                placeholder="driver@ruqayyatransport.com" 
-                                className="w-full h-full pl-10 pr-3 bg-transparent border-0 text-white text-xs font-semibold focus:outline-none"
-                              />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="flex flex-col">
+                              <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-1.5">{lang === 'en' ? 'Email Address' : 'Imel'} <span className="text-amber-500">*</span></label>
+                              <div className="relative flex items-center h-12 rounded-xl border bg-slate-950/30 border-white/10 focus-within:border-[#D4AF37]">
+                                <User className="h-4 w-4 absolute left-3.5 text-slate-400" />
+                                <input 
+                                  type="email" 
+                                  required 
+                                  value={regEmail}
+                                  onChange={(e) => setRegEmail(e.target.value)}
+                                  placeholder="driver@ruqayyatransport.com" 
+                                  className="w-full h-full pl-10 pr-3 bg-transparent border-0 text-white text-xs font-semibold focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col">
+                              <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-1.5">{lang === 'en' ? 'RTL-ID Number' : 'Lambar RTL-ID'} <span className="text-amber-500">*</span></label>
+                              <div className="relative flex items-center h-12 rounded-xl border bg-slate-950/30 border-white/10 focus-within:border-[#D4AF37]">
+                                <Hash className="h-4 w-4 absolute left-3.5 text-slate-400" />
+                                <input 
+                                  type="text" 
+                                  required 
+                                  value={regRtlId}
+                                  onChange={(e) => setRegRtlId(e.target.value.toUpperCase())}
+                                  placeholder="e.g. RTL-2026-089" 
+                                  className="w-full h-full pl-10 pr-3 bg-transparent border-0 text-white text-xs font-semibold focus:outline-none font-mono"
+                                />
+                              </div>
                             </div>
                           </div>
 
@@ -1127,13 +1147,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             type="button" 
                             variant="secondary"
                             onClick={() => {
-                              if (regFullName && regEmail && regPhone && regAddress && regPassword && regPassportPhoto) {
+                              if (regFullName && regRtlId && regEmail && regPhone && regAddress && regPassword && regPassportPhoto) {
                                 setRegStep(2);
                                 setRegError('');
-                              } else if (!regPassportPhoto && regFullName && regEmail && regPhone && regAddress && regPassword) {
+                              } else if (!regPassportPhoto && regFullName && regRtlId && regEmail && regPhone && regAddress && regPassword) {
                                 setRegError(lang === 'en' ? "Please upload your driver passport photograph to continue." : "Da fatan a saka hoton fasfo na direba.");
                               } else {
-                                setRegError(lang === 'en' ? "Please fill in all profile fields before continuing." : "Da fatan a cike dukkan guraren da ke kasa.");
+                                setRegError(lang === 'en' ? "Please fill in all profile fields before continuing (including your RTL-ID)." : "Da fatan a cike dukkan guraren da ke kasa (tare da RTL-ID dinka).");
                               }
                             }}
                             className="w-full h-11 rounded-xl text-slate-950 font-extrabold bg-[#D4AF37] hover:bg-amber-500 cursor-pointer text-xs mt-2 flex items-center justify-center gap-2"

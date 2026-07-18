@@ -683,6 +683,13 @@ app.post('/api/auth/register-driver', (req, res) => {
     const db = loadDB();
 
     // Check unique constraints
+    if (personal.companyDriverId) {
+      const idExists = db.drivers.some(d => d.company_driver_id && d.company_driver_id.toUpperCase() === personal.companyDriverId.toUpperCase());
+      if (idExists) {
+        return res.status(400).json({ error: `RTL Driver ID ${personal.companyDriverId} is already associated with another driver.` });
+      }
+    }
+
     const emailExists = db.users.some(u => u.email.toLowerCase() === personal.email.toLowerCase());
     if (emailExists) {
       return res.status(400).json({ error: 'This email address is already registered inside our fleet.' });
@@ -5937,14 +5944,44 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
     }
     const db = loadDB();
-    const activeVehiclesCount = db.vehicles.filter((v: any) => v.status === 'active' || v.status === 'assigned' || v.status === 'idle').length || db.vehicles.length || 5;
+    // Calculate active vehicles count from trip manifests over a 30-day cycle
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const activeTricycleIds = new Set<string>();
+    
+    (db.trip_manifests || []).forEach((t: any) => {
+      const tripDateStr = t.created_at || t.departure_time;
+      if (tripDateStr) {
+        const tripDate = new Date(tripDateStr);
+        if (tripDate >= thirtyDaysAgo && tripDate <= now) {
+          const vid = t.vehicle_id || t.vehicleId;
+          if (vid) {
+            activeTricycleIds.add(vid);
+          }
+        }
+      }
+    });
+
+    let activeVehiclesCount = activeTricycleIds.size;
+    if (activeVehiclesCount === 0) {
+      // Fallback: get all vehicles that had ANY trip manifest ever
+      const allTripVehicleIds = new Set<string>();
+      (db.trip_manifests || []).forEach((t: any) => {
+        const vid = t.vehicle_id || t.vehicleId;
+        if (vid) allTripVehicleIds.add(vid);
+      });
+      activeVehiclesCount = allTripVehicleIds.size;
+    }
+    if (activeVehiclesCount === 0) {
+      // Secondary fallback to active vehicles
+      activeVehiclesCount = db.vehicles.filter((v: any) => v.status === 'active' || v.status === 'assigned' || v.status === 'idle').length || db.vehicles.length || 5;
+    }
     
     const barristerSal = activeVehiclesCount * 1000;
-    const managerSal = activeVehiclesCount * 1000;
-    const hegelSal = activeVehiclesCount * 500;
+    const managerSal = activeVehiclesCount * 500;
     const adamSal = activeVehiclesCount * 1000;
     const abakakaSal = activeVehiclesCount * 1000;
-    const totalPayroll = barristerSal + managerSal + hegelSal + adamSal + abakakaSal;
+    const totalPayroll = barristerSal + managerSal + adamSal + abakakaSal;
 
     const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
     const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
@@ -5957,7 +5994,6 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
     const entries = [
       { name: 'Barrister', amount: barristerSal },
       { name: 'Manager', amount: managerSal },
-      { name: 'Hegel', amount: hegelSal },
       { name: 'Admin Adam', amount: adamSal },
       { name: 'Admin Abakaka', amount: abakakaSal }
     ];

@@ -976,7 +976,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                         </span>
                       </div>
                       <div className="bg-bg-surface p-2.5 border border-border-main rounded-lg">
-                        <span className="text-[10px] text-text-muted block">WEEKLY MINIMUM DUE</span>
+                        <span className="text-[10px] text-text-muted block">AGREED 30 CYCLE AMOUNT TO BRING TO COMPANY</span>
                         <span className="text-sm font-extrabold text-text-main block mt-1">
                           ₦{(selectedPerson.agreed_amount || 30000).toLocaleString()}
                         </span>
@@ -1342,7 +1342,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-text-muted">Weekly Installment Agreement</label>
+                        <label className="text-text-muted">Agreed 30 Cycle Amount to Bring to Company</label>
                         <input
                           type="number"
                           required

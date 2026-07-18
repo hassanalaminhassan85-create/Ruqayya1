@@ -111,8 +111,8 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
       nin: "National Identity (NIN)",
       license: "Driver License Code",
       licenseExpiry: "License Expiry Date",
-      leaseVal: "30-Day Lease Value (₦)",
-      rigLease: "Rig Capital Value (₦)",
+      leaseVal: "Agreed 30 Cycle Amount to Bring to Company (₦)",
+      rigLease: "Vehicle Purchase Amount (₦)",
       gName: "Guarantor Full Name",
       gPhone: "Guarantor Phone",
       gAddress: "Guarantor Residential Address",
@@ -137,8 +137,8 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
       nin: "Lambar NIN",
       license: "Lambar Lasisin Mota",
       licenseExpiry: "Ranar Karewa",
-      leaseVal: "Yarjejeniyar Kwanaki 30 (₦)",
-      rigLease: "Kudin Mota gaba daya (₦)",
+      leaseVal: "Agreed 30 Cycle Amount to Bring to Company (₦)",
+      rigLease: "Vehicle Purchase Amount (₦)",
       gName: "Cikakken Sunan Guarantor",
       gPhone: "Lambar Wayar Guarantor",
       gAddress: "Adireshin Gidan Guarantor",
@@ -730,14 +730,14 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
                   <span className="text-[9px] text-text-muted">Historically logged payments.</span>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="font-bold text-text-main">Agreed 30-Day Rate (₦)</label>
+                  <label className="font-bold text-text-main">Agreed 30 Cycle Amount to Bring to Company (₦)</label>
                   <input
                     type="number"
                     value={agreedAmount}
                     onChange={(e) => setAgreedAmount(e.target.value)}
                     className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none font-mono text-text-main"
                   />
-                  <span className="text-[9px] text-text-muted">Cycle obligation amount.</span>
+                  <span className="text-[9px] text-text-muted">Agreed 30 cycle amount to bring to the company.</span>
                 </div>
               </div>
 

@@ -1258,6 +1258,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                   payments={[]}
                   shareholders={shareholders}
                   onSync={fetchFallbackData}
+                  trips={tripManifests}
                 />
               )}
 

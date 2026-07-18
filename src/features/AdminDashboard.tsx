@@ -864,6 +864,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 payments={payments}
                 shareholders={shareholders}
                 onSync={syncAllData}
+                trips={trips}
               />
             )}
 

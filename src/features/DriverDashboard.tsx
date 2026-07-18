@@ -77,7 +77,7 @@ const localDict = {
       status: "Duty Status"
     },
     metrics: {
-      agreedAmount: "Agreed 30-Day Rate",
+      agreedAmount: "Agreed 30 Cycle Amount to Bring to Company",
       outstanding: "Outstanding Installments",
       totalPaid: "Total Paid",
       vehicleBalance: "Vehicle Remaining Balance",
@@ -182,7 +182,7 @@ const localDict = {
       status: "Yanayin Aiki"
     },
     metrics: {
-      agreedAmount: "Kuɗin Yarjejeniya (Kwanaki 30)",
+      agreedAmount: "Agreed 30 Cycle Amount to Bring to Company",
       outstanding: "Kuɗin da Ke Kansa",
       totalPaid: "Jimillar Kuɗin da Aka Biya",
       vehicleBalance: "Sauran Kuɗin Mota",

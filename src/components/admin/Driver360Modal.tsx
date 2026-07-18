@@ -797,7 +797,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="font-bold text-text-main">30-Day Lease Value (₦)</label>
+                    <label className="font-bold text-text-main">Agreed 30 Cycle Amount to Bring to Company (₦)</label>
                     <input type="number" value={editAgreedAmount} onChange={(e) => setEditAgreedAmount(e.target.value)} className="w-full bg-bg-base border border-border-main px-2 py-1 rounded-lg focus:outline-none font-mono" />
                   </div>
                   <div className="flex flex-col gap-1">

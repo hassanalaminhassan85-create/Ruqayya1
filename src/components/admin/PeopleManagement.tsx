@@ -1684,7 +1684,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold block text-text-muted mb-0.5">30-DAY AGREED LEASE RATE (₦) *</label>
+                    <label className="text-[10px] font-bold block text-text-muted mb-0.5">AGREED 30 CYCLE AMOUNT TO BRING TO COMPANY (₦) *</label>
                     <input
                       type="number"
                       value={drvAgreedAmount}
@@ -1694,7 +1694,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                     <span className="text-[9px] text-text-muted block mt-0.5">Default standardized rate: ₦180,000</span>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold block text-text-muted mb-0.5">RIG CAPITAL LEASE COST (₦) *</label>
+                    <label className="text-[10px] font-bold block text-text-muted mb-0.5">VEHICLE PURCHASE AMOUNT (₦) *</label>
                     <input
                       type="number"
                       value={drvCapitalValue}
@@ -2125,8 +2125,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
               <div className="bg-bg-base/40 p-4 rounded-xl border border-border-main/50 flex flex-col gap-2">
                 <span className="text-[10px] font-bold text-brand-navy block uppercase">Lease & Amortization Position</span>
                 <div className="text-xs flex flex-col gap-1.5 font-medium">
-                  <div><span className="text-text-muted">30-Day Lease Rate:</span> <span className="font-mono font-bold text-brand-navy">₦{(selectedDriverFor360.agreedAmount || 180000).toLocaleString()}</span></div>
-                  <div><span className="text-text-muted">Rig Capital Value:</span> <span className="font-mono text-text-main">₦{(selectedDriverFor360.vehiclePurchasePrice || 15000000).toLocaleString()}</span></div>
+                  <div><span className="text-text-muted">Agreed 30 Cycle Amount to Bring to Company:</span> <span className="font-mono font-bold text-brand-navy">₦{(selectedDriverFor360.agreedAmount || 180000).toLocaleString()}</span></div>
+                  <div><span className="text-text-muted">Vehicle Purchase Amount:</span> <span className="font-mono text-text-main">₦{(selectedDriverFor360.vehiclePurchasePrice || 15000000).toLocaleString()}</span></div>
                   <div><span className="text-text-muted">Outstanding Balance:</span> <span className="font-mono font-black text-brand-navy">₦{(selectedDriverFor360.remainingVehicleBalance || 15000000).toLocaleString()}</span></div>
                 </div>
               </div>

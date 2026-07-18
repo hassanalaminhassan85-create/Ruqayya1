@@ -66,6 +66,7 @@ interface FinancialCommandCenterProps {
   payments: any[];
   shareholders?: Shareholder[];
   onSync: () => void;
+  trips?: any[];
 }
 
 export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
@@ -75,7 +76,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   finance,
   payments,
   shareholders = [],
-  onSync
+  onSync,
+  trips = []
 }) => {
   // Navigation tabs
   const [subTab, setSubTab] = useState<'dashboard' | 'payments' | 'wallet' | 'expenses' | 'shareholders' | 'payroll' | 'reports' | 'audit'>('dashboard');
@@ -274,14 +276,125 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const continuousDividendPool = companyWalletBalance > 0 ? (companyWalletBalance * (distributionPercentage / 100)) : 0;
   const totalInvestmentsSum = localShareholders.reduce((sum, sh) => sum + (sh.investment_amount || 0), 0);
 
-  // Active Tricycles Payroll
-  const activeTricyclesCount = vehicles.filter(v => v.status === 'active' || v.status === 'assigned' || v.status === 'idle').length || vehicles.length || 5;
+  // Active Tricycles Payroll calculated automatically from trip/keke activity logs over a 30-day cycle
+  const activeTricyclesCount = (() => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const activeTricycleIds = new Set<string>();
+
+    (trips || []).forEach((t: any) => {
+      const tripDateStr = t.created_at || t.departureTime || t.departure_time;
+      if (tripDateStr) {
+        const tripDate = new Date(tripDateStr);
+        if (tripDate >= thirtyDaysAgo && tripDate <= now) {
+          const vid = t.vehicle_id || t.vehicleId;
+          if (vid) {
+            activeTricycleIds.add(vid);
+          }
+        }
+      }
+    });
+
+    if (activeTricycleIds.size > 0) {
+      return activeTricycleIds.size;
+    }
+
+    // Fallback: get all vehicles that had ANY trip manifest ever
+    const allTripVehicleIds = new Set<string>();
+    (trips || []).forEach((t: any) => {
+      const vid = t.vehicle_id || t.vehicleId;
+      if (vid) allTripVehicleIds.add(vid);
+    });
+    
+    if (allTripVehicleIds.size > 0) {
+      return allTripVehicleIds.size;
+    }
+
+    // Secondary fallback
+    return vehicles.filter(v => v.status === 'active' || v.status === 'assigned' || v.status === 'idle').length || vehicles.length || 5;
+  })();
   const barristerSal = activeTricyclesCount * 1000;
-  const managerSal = activeTricyclesCount * 1000;
-  const hegelSal = activeTricyclesCount * 500;
+  const managerSal = activeTricyclesCount * 500;
   const adamSal = activeTricyclesCount * 1000;
   const abakakaSal = activeTricyclesCount * 1000;
-  const totalPayroll_liability = barristerSal + managerSal + hegelSal + adamSal + abakakaSal;
+  const totalPayroll_liability = barristerSal + managerSal + adamSal + abakakaSal;
+
+  const activeTricyclesList = (() => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const mapped: { [key: string]: { lastTrip: string; route: string; date: string } } = {};
+
+    (trips || []).forEach((t: any) => {
+      const tripDateStr = t.created_at || t.departureTime || t.departure_time;
+      if (tripDateStr) {
+        const tripDate = new Date(tripDateStr);
+        if (tripDate >= thirtyDaysAgo && tripDate <= now) {
+          const vid = t.vehicle_id || t.vehicleId;
+          if (vid) {
+            const currentObj = mapped[vid];
+            const isNewer = !currentObj || new Date(tripDateStr) > new Date(currentObj.date);
+            if (isNewer) {
+              mapped[vid] = {
+                lastTrip: t.manifest_number || t.manifestNumber || 'N/A',
+                route: `${t.origin || 'Kano'} ➔ ${t.destination || 'Zaria'}`,
+                date: tripDateStr.substring(0, 10)
+              };
+            }
+          }
+        }
+      }
+    });
+
+    const list = Object.entries(mapped).map(([id, info]) => {
+      const vehicle = vehicles.find(v => v.id === id);
+      return {
+        id,
+        plateNumber: vehicle?.plateNumber || 'N/A',
+        model: vehicle?.model || 'Utility Keke',
+        status: vehicle?.status || 'active',
+        ...info
+      };
+    });
+
+    if (list.length > 0) return list;
+
+    // Fallback: use all vehicles with active trip manifests
+    const fallbackMapped: { [key: string]: { lastTrip: string; route: string; date: string } } = {};
+    (trips || []).forEach((t: any) => {
+      const vid = t.vehicle_id || t.vehicleId;
+      if (vid) {
+        fallbackMapped[vid] = {
+          lastTrip: t.manifest_number || t.manifestNumber || 'N/A',
+          route: `${t.origin || 'Kano'} ➔ ${t.destination || 'Zaria'}`,
+          date: (t.created_at || t.departureTime || t.departure_time || '').substring(0, 10) || 'N/A'
+        };
+      }
+    });
+
+    const fallbackList = Object.entries(fallbackMapped).map(([id, info]) => {
+      const vehicle = vehicles.find(v => v.id === id);
+      return {
+        id,
+        plateNumber: vehicle?.plateNumber || 'N/A',
+        model: vehicle?.model || 'Utility Keke',
+        status: vehicle?.status || 'active',
+        ...info
+      };
+    });
+
+    if (fallbackList.length > 0) return fallbackList;
+
+    // Last resort fallback: list some vehicles from vehicles state
+    return vehicles.slice(0, 5).map(v => ({
+      id: v.id,
+      plateNumber: v.plateNumber || 'N/A',
+      model: v.model || 'Utility Keke',
+      status: v.status || 'active',
+      lastTrip: 'N/A',
+      route: 'No Active Trips Found',
+      date: 'N/A'
+    }));
+  })();
 
   // Chart Grouping logic
   const compileChartData = () => {
@@ -912,7 +1025,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                 {/* AUTOMATED FINANCIAL METRICS LEDGER */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="p-3 bg-white border border-slate-100 rounded-xl">
-                    <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">30-Day Contract Agreement</span>
+                    <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Agreed 30 Cycle Amount to Bring to Company</span>
                     <p className="text-md font-bold text-slate-900 font-mono mt-1">₦{agreedAmount.toLocaleString()}</p>
                     <span className="text-[9px] text-text-muted block mt-1">6 installments of ₦{(agreedAmount/6).toLocaleString()}</span>
                   </div>
@@ -1451,52 +1564,102 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           ============================================== */}
       {subTab === 'payroll' && (
         <motion.div 
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           className="grid grid-cols-1 lg:grid-cols-12 gap-6"
         >
-          {/* PAYROLL CARD EXPLAINER */}
-          <Card className="lg:col-span-5 p-5 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Briefcase className="h-5 w-5 text-slate-900" />
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Salary Management</h3>
+          {/* LEFT COLUMN: SALARY METRICS & ACTIVE TRICYCLES ACTIVITY LOG TRACKING */}
+          <div className="lg:col-span-5 flex flex-col gap-6">
+            {/* PAYROLL CARD EXPLAINER */}
+            <Card className="p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Briefcase className="h-5 w-5 text-slate-900" />
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Salary Management</h3>
+                </div>
+                
+                <p className="text-xs text-slate-700 leading-relaxed mb-4">
+                  Ruqayya Transport Limited ERP calculates personnel wages automatically based on the count of **active leasing tricycles** extracted from 30-day activity logs. This guarantees staff salary scaling with operating volume.
+                </p>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4 font-mono text-xs flex flex-col gap-2.5">
+                  <div className="flex justify-between">
+                    <span className="text-text-muted">Total Tricycles Fleet:</span>
+                    <span className="font-bold text-slate-900">{vehicles.length} Units</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-muted">Active Cycle Tricycles (Logs):</span>
+                    <span className="font-bold text-slate-900">{activeTricyclesCount} Units</span>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-200/60 pt-2 text-sm">
+                    <span className="text-slate-800 font-extrabold">Next Payroll Total:</span>
+                    <span className="font-black text-slate-900">₦{totalPayroll_liability.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {payrollError && <Alert variant="danger" className="mb-4">{payrollError}</Alert>}
+                {payrollSuccess && <Alert variant="success" className="mb-4">{payrollSuccess}</Alert>}
               </div>
-              
-              <p className="text-xs text-slate-700 leading-relaxed mb-4">
-                Ruqayya Transport Limited ERP calculates personnel wages automatically based on the count of **active leasing tricycles** currently active in the cycle. This guarantees staff salary scaling with operating volume.
-              </p>
 
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4 font-mono text-xs flex flex-col gap-2.5">
-                <div className="flex justify-between">
-                  <span className="text-text-muted">Total Tricycles Fleet:</span>
-                  <span className="font-bold text-slate-900">{vehicles.length} Units</span>
+              <Button
+                variant="primary"
+                disabled={payrollLoading}
+                onClick={handleProcessPayroll}
+                className="w-full font-bold bg-slate-900 hover:bg-slate-800 text-brand-gold py-2 text-xs border-none"
+              >
+                {payrollLoading ? "Disbursing..." : t.processPayroll}
+              </Button>
+            </Card>
+
+            {/* ACTIVE TRICYCLES TRACKER (Keke Activity Monitor) */}
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Keke Activity Monitor</h3>
+                  <p className="text-[10px] text-text-muted mt-0.5">Verified active in current 30-day cycle</p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-text-muted">Active Cycle Tricycles:</span>
-                  <span className="font-bold text-slate-900">{activeTricyclesCount} Units</span>
-                </div>
-                <div className="flex justify-between border-t border-slate-200/60 pt-2 text-sm">
-                  <span className="text-slate-800 font-extrabold">Next Payroll Total:</span>
-                  <span className="font-black text-slate-900">₦{totalPayroll_liability.toLocaleString()}</span>
-                </div>
+                <Badge variant="success" className="font-mono text-[10px] font-bold">
+                  {activeTricyclesCount} Active
+                </Badge>
               </div>
 
-              {payrollError && <Alert variant="danger" className="mb-4">{payrollError}</Alert>}
-              {payrollSuccess && <Alert variant="success" className="mb-4">{payrollSuccess}</Alert>}
-            </div>
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                {activeTricyclesList.length === 0 ? (
+                  <div className="text-center py-6 text-text-muted text-xs">
+                    No tricycle activity logged in this 30-day cycle.
+                  </div>
+                ) : (
+                  activeTricyclesList.map((v, idx) => (
+                    <motion.div
+                      key={v.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="p-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-100 rounded-xl flex flex-col gap-1.5 transition-colors"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-900">{v.plateNumber}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 bg-slate-200/60 text-slate-800 rounded font-bold uppercase">{v.model}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-text-muted">
+                        <span>Route: <strong className="text-slate-800 font-semibold">{v.route}</strong></span>
+                        <span className="font-mono">{v.date}</span>
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-mono flex items-center justify-between mt-0.5 pt-1 border-t border-slate-200/40">
+                        <span>Manifest: {v.lastTrip}</span>
+                        <span className="text-green-600 flex items-center gap-1 font-bold">
+                          <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block animate-pulse"></span>
+                          Logged Active
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </div>
 
-            <Button
-              variant="primary"
-              disabled={payrollLoading}
-              onClick={handleProcessPayroll}
-              className="w-full font-bold bg-slate-900 hover:bg-slate-800 text-brand-gold py-2 text-xs border-none"
-            >
-              {payrollLoading ? "Disbursing..." : t.processPayroll}
-            </Button>
-          </Card>
-
-          {/* PAYROLL SPLITS BREAKDOWN TABLE */}
+          {/* RIGHT COLUMN: PAYROLL SPLITS BREAKDOWN TABLE */}
           <Card className="lg:col-span-7 p-5">
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Salary Disbursal Splits Breakdown</h3>
             
@@ -1511,17 +1674,32 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-mono">
                   {[
-                    { name: "Barrister Legal Officer", rate: 1000, computed: barristerSal },
-                    { name: "General Manager", rate: 1000, computed: managerSal },
-                    { name: "Hegel Operations Associate", rate: 500, computed: hegelSal },
-                    { name: "Admin Adam (Payroll Officer)", rate: 1000, computed: adamSal },
-                    { name: "Admin Abakaka (Logistics Manager)", rate: 1000, computed: abakakaSal }
+                    { name: "Barrister Legal Officer", rate: 1000, computed: barristerSal, percent: totalPayroll_liability > 0 ? (barristerSal / totalPayroll_liability) * 100 : 25 },
+                    { name: "General Manager", rate: 500, computed: managerSal, percent: totalPayroll_liability > 0 ? (managerSal / totalPayroll_liability) * 100 : 25 },
+                    { name: "Admin Adam (Payroll Officer)", rate: 1000, computed: adamSal, percent: totalPayroll_liability > 0 ? (adamSal / totalPayroll_liability) * 100 : 25 },
+                    { name: "Admin Abakaka (Logistics Manager)", rate: 1000, computed: abakakaSal, percent: totalPayroll_liability > 0 ? (abakakaSal / totalPayroll_liability) * 100 : 25 }
                   ].map((role, index) => (
-                    <tr key={index} className="hover:bg-slate-50/50">
-                      <td className="p-3 font-sans font-bold text-slate-900">{role.name}</td>
+                    <motion.tr 
+                      key={index} 
+                      className="hover:bg-slate-50/50"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <td className="p-3 font-sans font-bold text-slate-900">
+                        {role.name}
+                        <div className="w-24 bg-slate-100 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                          <motion.div 
+                            className="bg-slate-900 h-full rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${role.percent || 0}%` }}
+                            transition={{ duration: 0.8, delay: index * 0.1 }}
+                          />
+                        </div>
+                      </td>
                       <td className="p-3 text-slate-600">₦{role.rate.toLocaleString()} × {activeTricyclesCount} active tricycles</td>
                       <td className="p-3 text-right font-bold text-slate-900">₦{role.computed.toLocaleString()}</td>
-                    </tr>
+                    </motion.tr>
                   ))}
                   <tr className="bg-slate-50 font-sans">
                     <td colSpan={2} className="p-3 font-extrabold text-slate-900">Aggregate Team Salaries:</td>

@@ -59,6 +59,7 @@ interface ReportCenterProps {
   payments: any[];
   shareholders: Shareholder[];
   onSync: () => void;
+  trips?: any[];
 }
 
 interface SavedReport {
@@ -90,7 +91,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   finance = [],
   payments = [],
   shareholders = [],
-  onSync
+  onSync,
+  trips = []
 }) => {
   // Navigation tabs inside Report Center
   const [reportTab, setReportTab] = useState<'financial' | 'driver' | 'shareholder' | 'payroll' | 'expense' | 'collection' | 'wallet' | 'company' | 'audit'>('financial');
@@ -309,7 +311,42 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
   // Additional stats
   const activeDriversCount = drivers.filter(d => d && (d.status === 'approved' || d.status === 'available' || d.status === 'on-trip')).length;
-  const activeVehiclesCount = vehicles.filter(v => v && (v.status === 'active' || v.status === 'assigned')).length;
+  const activeVehiclesCount = (() => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const activeTricycleIds = new Set<string>();
+
+    (trips || []).forEach((t: any) => {
+      const tripDateStr = t.created_at || t.departureTime || t.departure_time;
+      if (tripDateStr) {
+        const tripDate = new Date(tripDateStr);
+        if (tripDate >= thirtyDaysAgo && tripDate <= now) {
+          const vid = t.vehicle_id || t.vehicleId;
+          if (vid) {
+            activeTricycleIds.add(vid);
+          }
+        }
+      }
+    });
+
+    if (activeTricycleIds.size > 0) {
+      return activeTricycleIds.size;
+    }
+
+    // Fallback: get all vehicles that had ANY trip manifest ever
+    const allTripVehicleIds = new Set<string>();
+    (trips || []).forEach((t: any) => {
+      const vid = t.vehicle_id || t.vehicleId;
+      if (vid) allTripVehicleIds.add(vid);
+    });
+    
+    if (allTripVehicleIds.size > 0) {
+      return allTripVehicleIds.size;
+    }
+
+    // Secondary fallback
+    return vehicles.filter(v => v && (v.status === 'active' || v.status === 'assigned')).length || vehicles.length || 5;
+  })();
   const totalOutstandingBalance = drivers.reduce((sum, d) => sum + (d && d.remaining_vehicle_balance ? d.remaining_vehicle_balance : 0), 0);
   
   // Continuous 2% shareholder pool math
@@ -320,11 +357,10 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
   // Active Team Payroll formula: count * salary
   const barristerSal = activeVehiclesCount * 1000;
-  const managerSal = activeVehiclesCount * 1000;
-  const advisorSal = activeVehiclesCount * 500;
+  const managerSal = activeVehiclesCount * 500;
   const fieldSal1 = activeVehiclesCount * 1000;
   const fieldSal2 = activeVehiclesCount * 1000;
-  const totalCurrentPayroll = barristerSal + managerSal + advisorSal + fieldSal1 + fieldSal2;
+  const totalCurrentPayroll = barristerSal + managerSal + fieldSal1 + fieldSal2;
 
   // HANDLERS FOR SIGNATURE PAD DRAWING
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -881,14 +917,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       <tr className="hover:bg-slate-50">
                         <td className="p-2.5 font-sans font-bold text-slate-900">Operations Manager (Sarkin Napep)</td>
                         <td className="p-2.5 text-slate-500">Operations Executive</td>
-                        <td className="p-2.5">₦1,000 / Active Vehicle</td>
-                        <td className="p-2.5 text-right font-bold">₦{managerSal.toLocaleString()}</td>
-                      </tr>
-                      <tr className="hover:bg-slate-50">
-                        <td className="p-2.5 font-sans font-bold text-slate-900">Dr. Hegel</td>
-                        <td className="p-2.5 text-slate-500">Enterprise Advisor</td>
                         <td className="p-2.5">₦500 / Active Vehicle</td>
-                        <td className="p-2.5 text-right font-bold">₦{advisorSal.toLocaleString()}</td>
+                        <td className="p-2.5 text-right font-bold">₦{managerSal.toLocaleString()}</td>
                       </tr>
                       <tr className="hover:bg-slate-50">
                         <td className="p-2.5 font-sans font-bold text-slate-900">Adam (Technical Inspector)</td>
