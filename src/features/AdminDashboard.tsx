@@ -30,7 +30,8 @@ import {
   UserX,
   RotateCcw,
   MessageSquare,
-  Wallet
+  Wallet,
+  Coins
 } from 'lucide-react';
 
 import { AdminKPIs } from '../components/admin/AdminKPIs';
@@ -108,6 +109,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [reviewRemarks, setReviewRemarks] = useState('');
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState('');
+  const [lookupTerms, setLookupTerms] = useState<{ agreedAmount: number, purchasePrice: number } | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
+  useEffect(() => {
+    if (selectedReviewDriver) {
+      setLookupLoading(true);
+      setLookupTerms(null);
+      api.getContractLookup(selectedReviewDriver.id)
+        .then((terms: any) => {
+          setLookupTerms(terms);
+          setLookupLoading(false);
+        })
+        .catch((err) => {
+          console.error("Contract lookup failed:", err);
+          setLookupLoading(false);
+        });
+    } else {
+      setLookupTerms(null);
+    }
+  }, [selectedReviewDriver]);
 
   const syncAllData = async () => {
     const token = api.getToken();
@@ -1194,6 +1215,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                     <span className="block text-[10px] font-bold text-text-main font-sans">Tonnage Capacity:</span>
                     <span className="text-text-main font-bold">{selectedReviewDriver.vehicle.capacity}</span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Part 3.5: Dynamic Contract terms lookup */}
+            {selectedReviewDriver.vehicle && (
+              <div className="flex flex-col gap-2 mt-2 animate-fadeIn">
+                <h4 className="text-[10px] font-extrabold uppercase text-text-muted tracking-wider flex items-center gap-1.5 border-b border-border-main/30 pb-1">
+                  <Coins className="h-3.5 w-3.5 text-brand-gold" /> Dynamic Contract Terms (Calculated)
+                </h4>
+                <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-xl p-3 flex flex-col gap-2">
+                  {lookupLoading ? (
+                    <div className="text-[10px] text-text-muted animate-pulse py-1">
+                      Querying dynamic terms lookup service...
+                    </div>
+                  ) : lookupTerms ? (
+                    <div className="grid grid-cols-2 gap-3 text-[10px]">
+                      <div>
+                        <span className="block font-bold text-text-main">30-Day Cycle Remittance:</span>
+                        <span className="font-mono text-[#D4AF37] font-extrabold text-xs">₦{(lookupTerms.agreedAmount || 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="block font-bold text-text-main">Calculated Vehicle Valuation:</span>
+                        <span className="font-mono text-[#D4AF37] font-extrabold text-xs">₦{(lookupTerms.purchasePrice || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="col-span-2 text-[9px] text-text-muted italic border-t border-border-main/20 pt-1.5 mt-1">
+                        * Values are calculated dynamically from the carrier specifications (brand, model, age, capacity) by the lookup engine. These specific values will be assigned automatically upon approval.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-rose-400">
+                      Could not retrieve dynamic contract terms. Default terms will be assigned.
+                    </div>
+                  )}
                 </div>
               </div>
             )}

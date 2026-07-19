@@ -28,7 +28,8 @@ import {
   Lock,
   ChevronRight,
   Sparkles,
-  DollarSign
+  DollarSign,
+  Coins
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -517,6 +518,26 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
   };
 
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [lookupTerms, setLookupTerms] = useState<{ agreedAmount: number, purchasePrice: number } | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
+  useEffect(() => {
+    if (reviewDriver) {
+      setLookupLoading(true);
+      setLookupTerms(null);
+      api.getContractLookup(reviewDriver.id)
+        .then((terms: any) => {
+          setLookupTerms(terms);
+          setLookupLoading(false);
+        })
+        .catch((err) => {
+          console.error("Contract lookup failed:", err);
+          setLookupLoading(false);
+        });
+    } else {
+      setLookupTerms(null);
+    }
+  }, [reviewDriver]);
 
   // Filter lists based on Search input
   const filteredDriversList = drivers.filter(d => {
@@ -2026,6 +2047,38 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
             </div>
 
             <div className="flex flex-col gap-3">
+              {reviewDriver.vehicle && (
+                <div className="flex flex-col gap-1.5 bg-[#D4AF37]/5 border border-[#D4AF37]/25 p-3 rounded-xl">
+                  <div className="flex items-center gap-1 text-[10px] font-extrabold uppercase text-[#D4AF37] tracking-wider">
+                    <Coins className="h-3.5 w-3.5" />
+                    Dynamic Contract Terms (Calculated)
+                  </div>
+                  {lookupLoading ? (
+                    <div className="text-[10px] text-text-muted animate-pulse py-1">
+                      Querying dynamic terms lookup service...
+                    </div>
+                  ) : lookupTerms ? (
+                    <div className="grid grid-cols-2 gap-2 text-[10px] mt-1 text-left">
+                      <div>
+                        <span className="block font-bold text-text-main">30-Day Rent Rate:</span>
+                        <span className="font-mono text-[#D4AF37] font-extrabold text-xs">₦{(lookupTerms.agreedAmount || 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="block font-bold text-text-main">Vehicle Value:</span>
+                        <span className="font-mono text-[#D4AF37] font-extrabold text-xs">₦{(lookupTerms.purchasePrice || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="col-span-2 text-[9px] text-text-muted italic border-t border-border-main/20 pt-1 mt-0.5">
+                        * Automatically calculated from carrier specs ({reviewDriver.vehicle.brand} {reviewDriver.vehicle.model}, {reviewDriver.vehicle.capacity}).
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-rose-400">
+                      Could not retrieve dynamic contract terms. Default terms will be assigned.
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="text-[10px] font-bold block text-text-muted mb-0.5">ASSIGN RTL CORPORATE DRIVER ID *</label>
                 <input

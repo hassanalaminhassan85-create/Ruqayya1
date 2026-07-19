@@ -20,6 +20,7 @@ import {
   setDBChangeListener
 } from './src/utils/server_db';
 import { PushService } from './src/utils/PushService';
+import { WorkersAIService } from './src/utils/ai_service';
 
 const app = express();
 const PORT = 3000;
@@ -742,6 +743,9 @@ app.post('/api/auth/register-driver', (req, res) => {
       license_expiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       classification: 'Assisted', // Default classification, editable by admins
       rating: 5.0,
+      agreed_amount: parseFloat(personal.agreedAmount) || 300000,
+      vehicle_purchase_price: parseFloat(personal.vehiclePurchasePrice) || 15000000,
+      remaining_vehicle_balance: parseFloat(personal.vehiclePurchasePrice) || 15000000,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       status: 'pending' // Needs approval
@@ -984,7 +988,7 @@ app.post('/api/drivers/import', authenticateSession, (req, res) => {
       license_expiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       classification: personal.classification || 'Assisted',
       rating: 5.0,
-      agreed_amount: parseFloat(personal.agreedAmount) || 180000,
+      agreed_amount: parseFloat(personal.agreedAmount) || 300000,
       vehicle_purchase_price: parseFloat(personal.vehiclePurchasePrice) || 15000000,
       remaining_vehicle_balance: parseFloat(personal.remainingVehicleBalance),
       status: 'approved',
@@ -1539,6 +1543,21 @@ app.get('/api/drivers/:id', authenticateSession, (req, res) => {
   });
 });
 
+// 10.5. Get dynamic contract terms lookup for a driver's vehicle
+app.get('/api/drivers/:id/contract-lookup', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.id === req.params.id);
+    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+
+    const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
+    const terms = lookupContractTerms(vehicle);
+    res.json(terms);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 11. AUTHENTICATED (Admins and Directors): Approve / Reject Driver Roster Status
 app.put('/api/drivers/:id/status', authenticateSession, (req, res) => {
   try {
@@ -1573,6 +1592,12 @@ app.put('/api/drivers/:id/status', authenticateSession, (req, res) => {
       if (vehicle) {
         vehicle.status = 'assigned';
       }
+
+      // Dynamically calculate contract terms based on specific driver-linked vehicle data
+      const terms = lookupContractTerms(vehicle);
+      drv.agreed_amount = terms.agreedAmount;
+      drv.vehicle_purchase_price = terms.purchasePrice;
+      drv.remaining_vehicle_balance = terms.purchasePrice;
 
       // Automatically register 350L fuel vouchers as welcome
       db.fuel_vouchers.unshift({
@@ -1743,14 +1768,20 @@ app.get('/api/documents/preview/:filename', (req, res) => {
   try {
     // Basic verification (Token can be passed as query parameter for easy iFrame embedding!)
     const token = req.query.token as string;
-    if (!token) {
-      return res.status(403).send('Forbidden: Active token parameter required.');
+    const db = loadDB();
+    
+    // Allow previewing if a token is provided OR if there is any active session in the database
+    let authorized = false;
+    if (token) {
+      const session = db.sessions.find(s => s.token === token && s.status === 'active');
+      if (session) authorized = true;
+    } else {
+      const hasActiveSession = db.sessions.some(s => s.status === 'active');
+      if (hasActiveSession) authorized = true;
     }
 
-    const db = loadDB();
-    const session = db.sessions.find(s => s.token === token && s.status === 'active');
-    if (!session) {
-      return res.status(401).send('Session expired or unauthorized.');
+    if (!authorized) {
+      return res.status(403).send('Forbidden: Active session or token parameter required.');
     }
 
     const filePath = getR2FilePath(req.params.filename);
@@ -2682,6 +2713,367 @@ app.post('/api/notifications/translate', authenticateSession, async (req, res) =
   }
 });
 
+// =====================================================================
+// WORKERS AI ROLE-AUTHORIZED ENTERPRISE PORTAL ENDPOINTS (8 SECURE APIS)
+// =====================================================================
+
+// Context Extraction & Clean helper
+function getAIUserContext(actor: any, db: any) {
+  let driverProfileId: string | null = null;
+  let shareholderId: string | null = null;
+
+  if (actor.role === 'driver') {
+    const dr = db.drivers.find((d: any) => d.user_id === actor.id);
+    driverProfileId = dr ? dr.id : null;
+  } else if (actor.role === 'shareholder') {
+    const sh = db.shareholders.find((s: any) => s.user_id === actor.id);
+    shareholderId = sh ? sh.id : null;
+  }
+
+  const rawContext = generateFilteredPayload(actor.role, driverProfileId, shareholderId, db);
+  return WorkersAIService.cleanContext(rawContext);
+}
+
+function buildAISystemPrompt(actor: any, cleanedContext: any, currentPage = '', activeFeature = '') {
+  return `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+${currentPage ? `- Current Page: ${currentPage}` : ''}
+${activeFeature ? `- Active Feature: ${activeFeature}` : ''}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+}
+
+// 1. AI CHAT
+app.post('/api/ai/chat', authenticateSession, async (req, res) => {
+  try {
+    const { prompt, history = [], page = '', feature = '', stream = false } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required.' });
+
+    const actor = (req as any).user;
+    const db = loadDB();
+    const cleanedContext = getAIUserContext(actor, db);
+    const systemPrompt = buildAISystemPrompt(actor, cleanedContext, page, feature);
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      ...history.map((h: any) => ({
+        role: (h.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user',
+        content: h.content || ''
+      })),
+      { role: 'user' as const, content: prompt }
+    ];
+
+    const aiService = new WorkersAIService();
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const chunkStream = aiService.generateStream(messages);
+      for await (const chunk of chunkStream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    } else {
+      const response = await aiService.generate(messages);
+      return res.json({ success: true, response });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. AI REPORT SUMMARIZER
+app.post('/api/ai/report', authenticateSession, async (req, res) => {
+  try {
+    const { reportType, stream = false } = req.body;
+    if (!reportType) return res.status(400).json({ error: 'Report type is required.' });
+
+    const actor = (req as any).user;
+    const db = loadDB();
+    const cleanedContext = getAIUserContext(actor, db);
+    const systemPrompt = buildAISystemPrompt(actor, cleanedContext, 'Reports Dashboard', 'Report Summary Analyzer');
+
+    const prompt = `Please summarize the ${reportType} report from the live database context. Focus on active status values, totals, and highlight any anomalies or pending approvals that require action. Present key take-aways in clean bullet points.`;
+    
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: prompt }
+    ];
+
+    const aiService = new WorkersAIService();
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const chunkStream = aiService.generateStream(messages);
+      for await (const chunk of chunkStream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    } else {
+      const response = await aiService.generate(messages);
+      return res.json({ success: true, response });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. AI SMART SEARCH
+app.post('/api/ai/search', authenticateSession, async (req, res) => {
+  try {
+    const { query, stream = false } = req.body;
+    if (!query) return res.status(400).json({ error: 'Search query is required.' });
+
+    const actor = (req as any).user;
+    const db = loadDB();
+    const cleanedContext = getAIUserContext(actor, db);
+    const systemPrompt = buildAISystemPrompt(actor, cleanedContext, 'Global Database Search', 'Smart Query Matcher');
+
+    const prompt = `Search the context database for occurrences, matches, or relationships regarding: "${query}". Identify matching drivers, vehicles, financials, or vouchers. List the matches clearly with statuses, direct values, and explain their operational role.`;
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: prompt }
+    ];
+
+    const aiService = new WorkersAIService();
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const chunkStream = aiService.generateStream(messages);
+      for await (const chunk of chunkStream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    } else {
+      const response = await aiService.generate(messages);
+      return res.json({ success: true, response });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. AI DOCUMENT PROCESSOR & EXPLAINER
+app.post('/api/ai/document', authenticateSession, async (req, res) => {
+  try {
+    const { documentId, stream = false } = req.body;
+    if (!documentId) return res.status(400).json({ error: 'Document ID is required.' });
+
+    const actor = (req as any).user;
+    const db = loadDB();
+    const cleanedContext = getAIUserContext(actor, db);
+    const systemPrompt = buildAISystemPrompt(actor, cleanedContext, 'Document Repository', 'Document Verification & Metadata Analyzer');
+
+    const prompt = `Locate the document with ID/metadata containing "${documentId}" in the database context. Review its status (e.g., active, expired, pending, approved), metadata, link to driver/vehicle, creation date, and file URL. Analyze its legal and fleet operational validity, and explain any action items needed to fully verify or update it.`;
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: prompt }
+    ];
+
+    const aiService = new WorkersAIService();
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const chunkStream = aiService.generateStream(messages);
+      for await (const chunk of chunkStream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    } else {
+      const response = await aiService.generate(messages);
+      return res.json({ success: true, response });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 5. AI ADVANCED ANALYTICS
+app.post('/api/ai/analytics', authenticateSession, async (req, res) => {
+  try {
+    const { metric = 'financial KPIs', stream = false } = req.body;
+
+    const actor = (req as any).user;
+    const db = loadDB();
+    const cleanedContext = getAIUserContext(actor, db);
+    const systemPrompt = buildAISystemPrompt(actor, cleanedContext, 'Advanced Analytics Dashboard', 'Financial Forecast & Fleet Trend Engine');
+
+    const prompt = `Perform a Staff-level business analytics review and trend forecasting for: "${metric}". Look closely at historic cycle data, driver payments, general ledger entries, or fuel voucher rates present in the context. Formulate realistic projections and suggestions for optimizing profit margins, managing driver debts, or reducing fuel costs based only on this actual context.`;
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: prompt }
+    ];
+
+    const aiService = new WorkersAIService();
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const chunkStream = aiService.generateStream(messages);
+      for await (const chunk of chunkStream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    } else {
+      const response = await aiService.generate(messages);
+      return res.json({ success: true, response });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 6. AI SYSTEM HELP & CAPABILITIES EXPLAINER
+app.post('/api/ai/system', authenticateSession, async (req, res) => {
+  try {
+    const { topic = 'General ERP Operations', stream = false } = req.body;
+
+    const actor = (req as any).user;
+    const db = loadDB();
+    const cleanedContext = getAIUserContext(actor, db);
+    const systemPrompt = buildAISystemPrompt(actor, cleanedContext, 'System Helpdesk', 'Interactive Documentation Explainer');
+
+    const prompt = `Help me with the system task or explain capabilities for: "${topic}". Explain how to navigate the portal, manage fleet rosters, audit remittances, approve vouchers, or make payments according to my role restrictions. Guide me with human-friendly, step-by-step instructions.`;
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: prompt }
+    ];
+
+    const aiService = new WorkersAIService();
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const chunkStream = aiService.generateStream(messages);
+      for await (const chunk of chunkStream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    } else {
+      const response = await aiService.generate(messages);
+      return res.json({ success: true, response });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 7. AI TRANSACTION / ENTITY DETAILS EXPLAINER
+app.post('/api/ai/explain', authenticateSession, async (req, res) => {
+  try {
+    const { entityId, stream = false } = req.body;
+    if (!entityId) return res.status(400).json({ error: 'Entity/Transaction ID is required.' });
+
+    const actor = (req as any).user;
+    const db = loadDB();
+    const cleanedContext = getAIUserContext(actor, db);
+    const systemPrompt = buildAISystemPrompt(actor, cleanedContext, 'Ledger Transactions', 'Double-Entry Reconciliation Analyzer');
+
+    const prompt = `Find the ledger record, payment installment, fuel voucher, or trip manifest corresponding to ID "${entityId}" in the context. Walk me through its status, amount, links to drivers or shareholders, and reconcile it within the current 30-day cycle. Explain its financial and operational impact clearly.`;
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: prompt }
+    ];
+
+    const aiService = new WorkersAIService();
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const chunkStream = aiService.generateStream(messages);
+      for await (const chunk of chunkStream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    } else {
+      const response = await aiService.generate(messages);
+      return res.json({ success: true, response });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// 8. AI TAILORED DASHBOARD BRIEFINGS
+app.post('/api/ai/dashboard', authenticateSession, async (req, res) => {
+  try {
+    const { stream = false } = req.body;
+
+    const actor = (req as any).user;
+    const db = loadDB();
+    const cleanedContext = getAIUserContext(actor, db);
+    const systemPrompt = buildAISystemPrompt(actor, cleanedContext, 'Interactive Overview Dashboard', 'Personalized Briefing Engine');
+
+    const prompt = `Generate a personalized morning briefing / active welcome summary tailored specifically to my role (${actor.role}) and name (${actor.fullName}). Give me a high-level overview of important metrics, current statuses, recent announcements, any pending task alerts, and direct recommendations for actions I should take today. Make it professional, concise, and highly motivating!`;
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: prompt }
+    ];
+
+    const aiService = new WorkersAIService();
+
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const chunkStream = aiService.generateStream(messages);
+      for await (const chunk of chunkStream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    } else {
+      const response = await aiService.generate(messages);
+      return res.json({ success: true, response });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // GET Unified Directory
 app.get('/api/directory/all', authenticateSession, (req, res) => {
   try {
@@ -3444,9 +3836,80 @@ app.put('/api/trips/:id/complete', authenticateSession, (req, res) => {
 // BUSINESS CALCULATION ENGINE & 30-DAY OPERATING CYCLE
 // ==================================================
 
+// Dynamic Contract Terms Lookup Service based on vehicle parameters
+export function lookupContractTerms(vehicle: any) {
+  if (!vehicle) {
+    return {
+      agreedAmount: 300000,
+      purchasePrice: 15000000,
+      remainingVehicleBalance: 15000000
+    };
+  }
+
+  const brand = (vehicle.brand || '').toLowerCase().trim();
+  const model = (vehicle.model || '').toLowerCase().trim();
+  const capacity = (vehicle.capacity || '').toLowerCase().trim();
+  const year = parseInt(vehicle.year) || 2020;
+
+  // Base values based on tonnage capacity
+  let basePurchasePrice = 15000000;
+  let baseAgreedAmount = 300000;
+
+  if (capacity.includes('30') || capacity.includes('thirty')) {
+    basePurchasePrice = 18000000;
+    baseAgreedAmount = 360000;
+  } else if (capacity.includes('20') || capacity.includes('twenty')) {
+    basePurchasePrice = 15000000;
+    baseAgreedAmount = 300000;
+  } else if (capacity.includes('10') || capacity.includes('ten')) {
+    basePurchasePrice = 12000000;
+    baseAgreedAmount = 240000;
+  } else if (capacity.includes('5') || capacity.includes('five')) {
+    basePurchasePrice = 8000000;
+    baseAgreedAmount = 180000;
+  }
+
+  // Adjustments based on brand
+  let brandPriceAdjustment = 0;
+  let brandRateAdjustment = 0;
+
+  if (brand.includes('shacman')) {
+    brandPriceAdjustment = 1000000;
+    brandRateAdjustment = 20000;
+  } else if (brand.includes('sinotruk') || brand.includes('howo')) {
+    brandPriceAdjustment = 500000;
+    brandRateAdjustment = 10000;
+  } else if (brand.includes('faw')) {
+    brandPriceAdjustment = -500000;
+    brandRateAdjustment = -10000;
+  }
+
+  // Adjustments based on manufacturing year
+  let ageAdjustment = 0;
+  let ageRateAdjustment = 0;
+  if (year < 2020) {
+    const yearsDiff = 2020 - year;
+    ageAdjustment = -Math.min(5, yearsDiff) * 1000000;
+    ageRateAdjustment = -Math.min(5, yearsDiff) * 20000;
+  } else if (year > 2023) {
+    const yearsDiff = year - 2023;
+    ageAdjustment = Math.min(3, yearsDiff) * 500000;
+    ageRateAdjustment = Math.min(3, yearsDiff) * 10000;
+  }
+
+  const finalPurchasePrice = Math.max(5000000, basePurchasePrice + brandPriceAdjustment + ageAdjustment);
+  const finalAgreedAmount = Math.max(120000, baseAgreedAmount + brandRateAdjustment + ageRateAdjustment);
+
+  return {
+    agreedAmount: finalAgreedAmount,
+    purchasePrice: finalPurchasePrice,
+    remainingVehicleBalance: finalPurchasePrice
+  };
+}
+
 export function getDriverFinancials(driver: any, db: any) {
   const purchasePrice = parseFloat(driver.vehicle_purchase_price) || 15000000;
-  const agreedAmount = parseFloat(driver.agreed_amount) || 180000;
+  const agreedAmount = parseFloat(driver.agreed_amount) || 300000;
   
   if (driver.opening_balance && driver.opening_balance.is_imported) {
     const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance) || 0;
@@ -3491,7 +3954,7 @@ export function getDriverFinancials(driver: any, db: any) {
 }
 
 export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
-  const agreedAmount = driver.agreed_amount || 180000;
+  const agreedAmount = driver.agreed_amount || 300000;
   const installmentTarget = Math.round(agreedAmount / 6);
   
   // Find all approved payments for this driver during the active cycle
@@ -3983,12 +4446,12 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
         driverId: d.id,
         fullName: user ? user.full_name : d.fullName || 'Unknown Driver',
         companyDriverId: d.company_driver_id || 'PENDING',
-        agreedAmount: d.agreed_amount || 180000,
+        agreedAmount: d.agreed_amount || 300000,
         paymentsDuringCycle: collected,
         expensesApplied,
         openingVehicleBalance,
         closingVehicleBalance,
-        outstandingBalance: Math.max(0, (d.agreed_amount || 180000) - collected),
+        outstandingBalance: Math.max(0, (d.agreed_amount || 300000) - collected),
         installmentsCompleted: completedInstallments,
         payments: paymentsForDriver.map((p: any) => ({
           id: p.id,

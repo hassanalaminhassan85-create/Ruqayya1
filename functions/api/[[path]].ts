@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { WorkersAIService } from '../../src/utils/ai_service';
 
 interface Env {
   DB?: any;
@@ -6,6 +7,8 @@ interface Env {
   PUSH_SUBSCRIPTIONS?: any;
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
+  ruqayya?: any;
+  GEMINI_API_KEY?: string;
 }
 
 // Global PBKDF2 password hashing helper (matches server_db.ts SHA-512)
@@ -1805,6 +1808,279 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     });
     await dbManager.saveDB(db);
     return buildResponse({ success: true });
+  }
+
+  // =====================================================================
+  // WORKERS AI ROLE-AUTHORIZED ENTERPRISE PORTAL ENDPOINTS (8 SECURE APIS)
+  // =====================================================================
+  if (path.startsWith('/api/ai/')) {
+    const authResult = authenticate();
+    if (!authResult.authenticated) {
+      return buildResponse({ error: authResult.error }, authResult.status || 401);
+    }
+    const actor = authResult.user;
+
+    // Resolve profile IDs for context generation
+    let driverProfileId: string | null = null;
+    let shareholderId: string | null = null;
+
+    if (actor.role === 'driver') {
+      const dr = db.drivers.find((d: any) => d.user_id === actor.id);
+      driverProfileId = dr ? dr.id : null;
+    } else if (actor.role === 'shareholder') {
+      const sh = db.shareholders.find((s: any) => s.user_id === actor.id);
+      shareholderId = sh ? sh.id : null;
+    }
+
+    const rawContext = generateFilteredPayload(actor.role, driverProfileId, shareholderId, db);
+    const cleanedContext = WorkersAIService.cleanContext(rawContext);
+
+    // Parse request body
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      // Allow empty or default bodies
+    }
+
+    const stream = body.stream === true;
+    let systemPrompt = '';
+    let messages: any[] = [];
+    let prompt = '';
+
+    if (path === '/api/ai/chat') {
+      const { prompt: reqPrompt, history = [], page = '', feature = '' } = body;
+      if (!reqPrompt) return buildResponse({ error: 'Prompt is required.' }, 400);
+      prompt = reqPrompt;
+      systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+${page ? `- Current Page: ${page}` : ''}
+${feature ? `- Active Feature: ${feature}` : ''}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+      messages = [
+        { role: 'system' as const, content: systemPrompt },
+        ...history.map((h: any) => ({
+          role: (h.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user',
+          content: h.content || ''
+        })),
+        { role: 'user' as const, content: prompt }
+      ];
+    } else if (path === '/api/ai/report') {
+      const { reportType } = body;
+      if (!reportType) return buildResponse({ error: 'Report type is required.' }, 400);
+      systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+      prompt = `Please summarize the ${reportType} report from the live database context. Focus on active status values, totals, and highlight any anomalies or pending approvals that require action. Present key take-aways in clean bullet points.`;
+      messages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: prompt }
+      ];
+    } else if (path === '/api/ai/search') {
+      const { query } = body;
+      if (!query) return buildResponse({ error: 'Search query is required.' }, 400);
+      systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+      prompt = `Search the context database for occurrences, matches, or relationships regarding: "${query}". Identify matching drivers, vehicles, financials, or vouchers. List the matches clearly with statuses, direct values, and explain their operational role.`;
+      messages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: prompt }
+      ];
+    } else if (path === '/api/ai/document') {
+      const { documentId } = body;
+      if (!documentId) return buildResponse({ error: 'Document ID is required.' }, 400);
+      systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+      prompt = `Locate the document with ID/metadata containing "${documentId}" in the database context. Review its status (e.g., active, expired, pending, approved), metadata, link to driver/vehicle, creation date, and file URL. Analyze its legal and fleet operational validity, and explain any action items needed to fully verify or update it.`;
+      messages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: prompt }
+      ];
+    } else if (path === '/api/ai/analytics') {
+      const { metric = 'financial KPIs' } = body;
+      systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+      prompt = `Perform a Staff-level business analytics review and trend forecasting for: "${metric}". Look closely at historic cycle data, driver payments, general ledger entries, or fuel voucher rates present in the context. Formulate realistic projections and suggestions for optimizing profit margins, managing driver debts, or reducing fuel costs based only on this actual context.`;
+      messages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: prompt }
+      ];
+    } else if (path === '/api/ai/system') {
+      const { topic = 'General ERP Operations' } = body;
+      systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+      prompt = `Help me with the system task or explain capabilities for: "${topic}". Explain how to navigate the portal, manage fleet rosters, audit remittances, approve vouchers, or make payments according to my role restrictions. Guide me with human-friendly, step-by-step instructions.`;
+      messages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: prompt }
+      ];
+    } else if (path === '/api/ai/explain') {
+      const { entityId } = body;
+      if (!entityId) return buildResponse({ error: 'Entity/Transaction ID is required.' }, 400);
+      systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+      prompt = `Find the ledger record, payment installment, fuel voucher, or trip manifest corresponding to ID "${entityId}" in the context. Walk me through its status, amount, links to drivers or shareholders, and reconcile it within the current 30-day cycle. Explain its financial and operational impact clearly.`;
+      messages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: prompt }
+      ];
+    } else if (path === '/api/ai/dashboard') {
+      systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+
+CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
+2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
+3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+
+Your current authenticated user context is:
+- Name: ${actor.fullName}
+- Email: ${actor.email}
+- Role: ${actor.role}
+
+Here is the secure, authorized live database context:
+${JSON.stringify(cleanedContext, null, 2)}
+`;
+      prompt = `Generate a personalized morning briefing / active welcome summary tailored specifically to my role (${actor.role}) and name (${actor.fullName}). Give me a high-level overview of important metrics, current statuses, recent announcements, any pending task alerts, and direct recommendations for actions I should take today. Make it professional, concise, and highly motivating!`;
+      messages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: prompt }
+      ];
+    } else {
+      return buildResponse({ error: 'Not Found' }, 404);
+    }
+
+    if (stream) {
+      const aiService = new WorkersAIService(env);
+      const encoder = new TextEncoder();
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+
+      (async () => {
+        try {
+          const chunkStream = aiService.generateStream(messages);
+          for await (const chunk of chunkStream) {
+            await writer.write(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
+          }
+          await writer.write(encoder.encode('data: [DONE]\n\n'));
+        } catch (e: any) {
+          await writer.write(encoder.encode(`data: ${JSON.stringify({ error: e.message })}\n\n`));
+        } finally {
+          await writer.close();
+        }
+      })();
+
+      return new Response(readable, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': '*',
+          'Access-Control-Allow-Methods': '*'
+        }
+      });
+    } else {
+      const aiService = new WorkersAIService(env);
+      const responseText = await aiService.generate(messages);
+      return buildResponse({ success: true, response: responseText });
+    }
   }
 
   // 14. SHAREHOLDERS ENDPOINTS

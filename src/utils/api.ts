@@ -228,6 +228,10 @@ export const api = {
     return api.request(`/api/drivers/${id}`);
   },
 
+  getContractLookup: async (id: string) => {
+    return api.request(`/api/drivers/${id}/contract-lookup`);
+  },
+
   updateDriverStatus: async (id: string, payload: { status: 'approved' | 'rejected' | 'correction_requested'; remarks?: string; companyDriverId?: string }) => {
     return api.request(`/api/drivers/${id}/status`, {
       method: 'PUT',

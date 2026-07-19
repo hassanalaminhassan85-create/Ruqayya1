@@ -28,7 +28,9 @@ import {
   FileSpreadsheet,
   Upload,
   Camera,
-  Paperclip
+  Paperclip,
+  Coins,
+  Wallet
 } from 'lucide-react';
 import { Dictionary, Language, Theme } from '../types';
 import { Button } from '../components/ui/Button';
@@ -127,6 +129,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [regVehicleChassisNo, setRegVehicleChassisNo] = useState('');
   const [regVehicleEngineNo, setRegVehicleEngineNo] = useState('');
   const [regVehicleCapacity, setRegVehicleCapacity] = useState('30 Tons');
+  const [regAgreedAmount, setRegAgreedAmount] = useState('300000');
+  const [regVehiclePurchasePrice, setRegVehiclePurchasePrice] = useState('15000000');
 
   // Get normalized pathname to customize form
   const cleanPath = normalizePath(pathname || '/');
@@ -369,7 +373,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         nin: regNin,
         licenseNumber: regLicense,
         licenseExpiry: regLicenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        passportPhoto: regPassportPhoto
+        passportPhoto: regPassportPhoto,
+        agreedAmount: regAgreedAmount,
+        vehiclePurchasePrice: regVehiclePurchasePrice
       },
       guarantor: {
         fullName: regGuarantorName,
@@ -425,6 +431,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       setRegVehicleChassisNo('');
       setRegVehicleEngineNo('');
       setRegVehicleCapacity('30 Tons');
+      setRegAgreedAmount('300000');
+      setRegVehiclePurchasePrice('15000000');
       
       setRegStep(1);
 
@@ -1377,6 +1385,42 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                   onChange={(e) => setRegVehicleRegNo(e.target.value.toUpperCase())}
                                   placeholder="e.g. REG-55322 (Optional)" 
                                   className="w-full h-full px-3.5 bg-transparent border-0 text-white text-xs font-semibold focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-white/5 pt-3 mt-1">
+                            <div className="flex flex-col">
+                              <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-1.5">
+                                {lang === 'en' ? 'Contract 30-Day Rate (₦)' : 'Yarjejeniyar Kwanaki 30 (₦)'} <span className="text-amber-500">*</span>
+                              </label>
+                              <div className="relative flex items-center h-12 rounded-xl border bg-slate-950/30 border-white/10 focus-within:border-[#D4AF37]">
+                                <Coins className="h-4 w-4 absolute left-3.5 text-slate-400" />
+                                <input 
+                                  type="number" 
+                                  required 
+                                  value={regAgreedAmount}
+                                  onChange={(e) => setRegAgreedAmount(e.target.value)}
+                                  placeholder="300000" 
+                                  className="w-full h-full pl-10 pr-3 bg-transparent border-0 text-white text-xs font-semibold focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col">
+                              <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-1.5">
+                                {lang === 'en' ? 'Total Vehicle Purchase / Lease Price (₦)' : 'Kudin Mota gaba daya (₦)'} <span className="text-amber-500">*</span>
+                              </label>
+                              <div className="relative flex items-center h-12 rounded-xl border bg-slate-950/30 border-white/10 focus-within:border-[#D4AF37]">
+                                <Wallet className="h-4 w-4 absolute left-3.5 text-slate-400" />
+                                <input 
+                                  type="number" 
+                                  required 
+                                  value={regVehiclePurchasePrice}
+                                  onChange={(e) => setRegVehiclePurchasePrice(e.target.value)}
+                                  placeholder="15000000" 
+                                  className="w-full h-full pl-10 pr-3 bg-transparent border-0 text-white text-xs font-semibold focus:outline-none"
                                 />
                               </div>
                             </div>

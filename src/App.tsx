@@ -24,6 +24,8 @@ import { api } from './utils/api';
 import { registerPushSubscription } from './utils/notificationHelper';
 import { CircularLogo } from './components/CircularLogo';
 import { PWAPanel } from './components/PWAPanel';
+import { AICopilotDrawer } from './components/AICopilotDrawer';
+import { AIPortalWorkspace } from './components/AIPortalWorkspace';
 import { offlineSync } from './utils/offlineSync';
 import { 
   Truck, 
@@ -55,7 +57,8 @@ import {
   Building,
   TrendingDown,
   Briefcase,
-  Coins
+  Coins,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -115,6 +118,7 @@ export default function App() {
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showPayrollModal, setShowPayrollModal] = useState(false);
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+  const [aiCopilotOpen, setAiCopilotOpen] = useState(false);
   const [timeStr, setTimeStr] = useState<string>('');
 
   // Ticking WAT clock effect
@@ -461,6 +465,7 @@ export default function App() {
   const getSidebarItems = () => {
     const items = [
       { id: 'dashboard', label: lang === 'en' ? "Dashboard" : "Gudunmawar Aiki", icon: <Layers className="h-4 w-4 shrink-0" />, active: activeSection === 'dashboard' },
+      { id: 'ai-assistant', label: lang === 'en' ? "Ruqayya AI" : "Mataimakin AI", icon: <Sparkles className="h-4 w-4 shrink-0 text-brand-gold" />, active: activeSection === 'ai-assistant' },
       { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
       { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
       { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Coins className="h-4 w-4 shrink-0" />, active: activeSection === 'finance' },
@@ -477,17 +482,17 @@ export default function App() {
 
     if (currentRole === 'driver') {
       return items.filter(item => 
-        ['dashboard', 'notifications', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'ai-assistant', 'notifications', 'settings', 'help'].includes(item.id)
       );
     }
     if (currentRole === 'admin') {
       return items.filter(item => 
-        ['dashboard', 'drivers', 'fleet', 'finance', 'trips', 'reports', 'communications', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'ai-assistant', 'drivers', 'fleet', 'finance', 'trips', 'reports', 'communications', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
       );
     }
     if (currentRole === 'shareholder') {
       return items.filter(item => 
-        ['dashboard', 'shareholders', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'ai-assistant', 'shareholders', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
       );
     }
     return items; // Director can view all
@@ -506,6 +511,15 @@ export default function App() {
     }
     if (activeSection === 'help') {
       return <HelpCenter lang={lang} />;
+    }
+    if (activeSection === 'ai-assistant') {
+      return (
+        <AIPortalWorkspace
+          lang={lang}
+          currentRole={currentRole}
+          userName={currentRole === 'driver' ? driverName || 'Driver' : currentRole.charAt(0).toUpperCase() + currentRole.slice(1)}
+        />
+      );
     }
     if (activeSection === 'pwa') {
       return (
@@ -1289,6 +1303,28 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* GLOBAL FLOATING AI COPILOT TRIGGER */}
+      {currentRole !== 'public' && (
+        <button
+          id="ai-copilot-trigger"
+          onClick={() => setAiCopilotOpen(true)}
+          className="fixed bottom-6 right-6 h-12 w-12 bg-slate-900 hover:bg-slate-800 text-brand-gold border border-brand-gold/40 rounded-full shadow-2xl flex items-center justify-center cursor-pointer transition-all hover:scale-110 active:scale-95 group z-45"
+          title={lang === 'en' ? "Open Ruqayya AI" : "Bude Ruqayya AI"}
+        >
+          <div className="absolute inset-0 rounded-full border-2 border-brand-gold/10 group-hover:border-brand-gold/30 group-hover:animate-ping opacity-70" />
+          <Sparkles className="h-5 w-5 animate-pulse" />
+        </button>
+      )}
+
+      {/* AICOPILOT DRAWER */}
+      <AICopilotDrawer
+        isOpen={aiCopilotOpen}
+        onClose={() => setAiCopilotOpen(false)}
+        lang={lang}
+        currentRole={currentRole}
+        userName={currentRole === 'driver' ? driverName : currentRole === 'admin' ? "Operator Ibrahim" : "Director Kabir"}
+      />
     </div>
   );
 }
