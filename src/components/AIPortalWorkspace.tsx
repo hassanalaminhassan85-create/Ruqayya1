@@ -111,7 +111,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
     setStreamingContent('');
     
     try {
-      const token = localStorage.getItem('ruqayya_erp_token');
+      const token = localStorage.getItem('ruqayya_token');
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -271,7 +271,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
     setIsLoading(true);
     setStreamingContent('');
     try {
-      const token = localStorage.getItem('ruqayya_erp_token');
+      const token = localStorage.getItem('ruqayya_token');
       const response = await fetch('/api/ai/dashboard', {
         method: 'POST',
         headers: {

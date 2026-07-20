@@ -93,7 +93,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     setStreamingContent('');
     
     try {
-      const token = localStorage.getItem('ruqayya_erp_token');
+      const token = localStorage.getItem('ruqayya_token');
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -265,7 +265,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     setIsLoading(true);
     setStreamingContent('');
     try {
-      const token = localStorage.getItem('ruqayya_erp_token');
+      const token = localStorage.getItem('ruqayya_token');
       const response = await fetch('/api/ai/dashboard', {
         method: 'POST',
         headers: {
