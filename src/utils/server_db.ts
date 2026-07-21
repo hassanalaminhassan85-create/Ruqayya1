@@ -170,6 +170,16 @@ export function setDBChangeListener(listener: () => void) {
 
 export function saveDB(state: DBState): void {
   try {
+    // Automatically recalculate Company Wallet balance
+    if (state) {
+      if (!state.company_settings) state.company_settings = {};
+      if (state.company_settings.wallet_initial_amount === undefined) {
+        state.company_settings.wallet_initial_amount = state.company_settings.wallet_balance !== undefined ? state.company_settings.wallet_balance : 0;
+      }
+      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+      state.company_settings.wallet_balance = (state.company_settings.wallet_initial_amount || 0) + totalRev - totalExp;
+    }
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf8');
     dbChangeListeners.forEach(listener => {
       try {

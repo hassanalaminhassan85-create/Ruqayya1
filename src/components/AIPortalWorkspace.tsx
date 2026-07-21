@@ -8,6 +8,7 @@ import {
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface Message {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
 }
@@ -156,18 +157,19 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
         }
         
         if (accumulated) {
-          setMessages(prev => [...prev, { role: 'assistant', content: accumulated }]);
+          setMessages(prev => [...prev, { id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, role: 'assistant', content: accumulated }]);
         }
       } else {
         const data = await response.json() as any;
         if (data.response) {
-          setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+          setMessages(prev => [...prev, { id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, role: 'assistant', content: data.response }]);
         }
       }
     } catch (err: any) {
       setMessages(prev => [
         ...prev, 
         { 
+          id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           role: 'assistant', 
           content: `### ${lang === 'en' ? 'System Error' : 'Kuskuren Tsari'}\n\n${err.message}` 
         }
@@ -193,7 +195,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
 
     setInput('');
     setAttachedFiles([]);
-    setMessages(prev => [...prev, { role: 'user', content: userPrompt }]);
+    setMessages(prev => [...prev, { id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, role: 'user', content: userPrompt }]);
 
     // Determine if it's document query or general chat
     if (hasAttachments) {
@@ -217,7 +219,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
     if (userMsgs.length === 0 || isLoading) return;
     
     const lastPrompt = userMsgs[userMsgs.length - 1].content;
-    setMessages(prev => [...prev, { role: 'user', content: `${lang === 'en' ? 'Retry query:' : 'Sake tambaya:'} "${lastPrompt}"` }]);
+    setMessages(prev => [...prev, { id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, role: 'user', content: `${lang === 'en' ? 'Retry query:' : 'Sake tambaya:'} "${lastPrompt}"` }]);
     
     await executeAICommand('/api/ai/chat', {
       prompt: lastPrompt,
@@ -229,6 +231,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
   // Shortcuts
   const triggerReportSummary = async (type: string) => {
     setMessages(prev => [...prev, { 
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       role: 'user', 
       content: lang === 'en' ? `Summarize ${type} reports` : `Takaice rahoton ${type}` 
     }]);
@@ -237,6 +240,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
 
   const triggerSmartSearch = async (query: string) => {
     setMessages(prev => [...prev, { 
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       role: 'user', 
       content: lang === 'en' ? `Search database for: "${query}"` : `Nemi bayanai akan: "${query}"` 
     }]);
@@ -245,6 +249,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
 
   const triggerAnalyticsForecast = async (metric: string) => {
     setMessages(prev => [...prev, { 
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       role: 'user', 
       content: lang === 'en' ? `Generate analytical forecast for ${metric}` : `Bincika & hasashen ${metric}` 
     }]);
@@ -253,6 +258,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
 
   const triggerSystemHelp = async (topic: string) => {
     setMessages(prev => [...prev, { 
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       role: 'user', 
       content: lang === 'en' ? `Explain system task: ${topic}` : `Bayyana yadda ake: ${topic}` 
     }]);
@@ -261,6 +267,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
 
   const triggerLedgerExplain = async (entityId: string) => {
     setMessages(prev => [...prev, { 
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       role: 'user', 
       content: lang === 'en' ? `Explain & audit ledger transaction ${entityId}` : `Warware Matsalar Ciniki ${entityId}` 
     }]);
@@ -313,12 +320,13 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
           }
         }
         if (accumulated) {
-          setMessages([{ role: 'assistant', content: accumulated }]);
+          setMessages([{ id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, role: 'assistant', content: accumulated }]);
         }
       }
     } catch (err: any) {
       setMessages([
         { 
+          id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           role: 'assistant', 
           content: `### Welcome back, ${userName}! 
 
@@ -553,7 +561,7 @@ We loaded your secure role-based permissions context. Since you're operating ins
             {/* MESSAGE ITERATIONS */}
             {messages.map((msg, idx) => (
               <div 
-                key={idx}
+                key={msg.id}
                 className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
               >
                 {/* ICON */}

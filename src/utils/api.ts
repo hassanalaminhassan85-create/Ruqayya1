@@ -509,6 +509,36 @@ export const api = {
     });
   },
 
+  archiveDriver: async (id: string) => {
+    return api.request(`/api/drivers/${id}/archive`, {
+      method: 'PUT'
+    });
+  },
+
+  restoreDriver: async (id: string) => {
+    return api.request(`/api/drivers/${id}/restore`, {
+      method: 'PUT'
+    });
+  },
+
+  deleteDriver: async (id: string) => {
+    return api.request(`/api/drivers/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  archiveShareholder: async (id: string) => {
+    return api.request(`/api/shareholders/${id}/archive`, {
+      method: 'PUT'
+    });
+  },
+
+  restoreShareholder: async (id: string) => {
+    return api.request(`/api/shareholders/${id}/restore`, {
+      method: 'PUT'
+    });
+  },
+
   addExpenseDirect: async (payload: { amount: number; category: string; description: string; date: string; driverId?: string; receiptUrl?: string }) => {
     return api.request('/api/expenses', {
       method: 'POST',

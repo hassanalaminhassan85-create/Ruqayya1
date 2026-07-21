@@ -129,7 +129,7 @@ export const dbStore = {
   saveTrips: (data: DailyRemittance[]) => saveStoreItem(TRIPS_KEY, data),
   addTrip: (trip: Omit<DailyRemittance, 'id' | 'remittanceNumber'>): DailyRemittance => {
     const trips = dbStore.getTrips();
-    const id = `T-${Date.now()}`;
+    const id = `T-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const remittanceNumber = `REM-2026-${(trips.length + 1).toString().padStart(4, '0')}`;
     const newTrip: DailyRemittance = { id, remittanceNumber, ...trip };
     trips.push(newTrip);
@@ -176,7 +176,7 @@ export const dbStore = {
   saveVouchers: (data: FuelVoucher[]) => saveStoreItem(VOUCHERS_KEY, data),
   addVoucher: (voucher: Omit<FuelVoucher, 'id' | 'voucherNumber' | 'status' | 'requestDate'>): FuelVoucher => {
     const vouchers = dbStore.getVouchers();
-    const id = `FV-${Date.now()}`;
+    const id = `FV-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const voucherNumber = `FL-2026-${(vouchers.length + 1).toString().padStart(4, '0')}`;
     const newVoucher: FuelVoucher = {
       id,
@@ -241,7 +241,7 @@ export const dbStore = {
   saveFinance: (data: FinancialRecord[]) => saveStoreItem(FINANCE_KEY, data),
   addFinancialRecord: (record: Omit<FinancialRecord, 'id'>, actorId: string, actorRole: Role): FinancialRecord => {
     const ledger = dbStore.getFinance();
-    const id = `FIN-${Date.now()}`;
+    const id = `FIN-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const newRecord: FinancialRecord = { id, ...record };
     ledger.unshift(newRecord);
     dbStore.saveFinance(ledger);
@@ -254,7 +254,7 @@ export const dbStore = {
   saveNotifications: (data: AppNotification[]) => saveStoreItem(NOTIFICATIONS_KEY, data),
   addNotification: (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>): AppNotification => {
     const list = dbStore.getNotifications();
-    const id = `N-${Date.now()}`;
+    const id = `N-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const newNotification: AppNotification = {
       id,
       ...notification,

@@ -60,6 +60,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
   // Unified Search and Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [driverFilter, setDriverFilter] = useState<'all' | 'Smart' | 'Assisted'>('all');
+  const [driverStatusFilter, setDriverStatusFilter] = useState<'all' | 'active' | 'archived'>('active');
+  const [shareholderStatusFilter, setShareholderStatusFilter] = useState<'all' | 'active' | 'archived'>('active');
   const [docCategoryFilter, setDocCategoryFilter] = useState<'all' | 'driver' | 'vehicle' | 'company'>('all');
   const [docStatusFilter, setDocStatusFilter] = useState<'all' | 'active' | 'expired' | 'pending'>('all');
 
@@ -545,13 +547,24 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
     const matchSearch = d.fullName.toLowerCase().includes(query) || 
                         d.phone.includes(query) || 
                         (d.companyDriverId && d.companyDriverId.toLowerCase().includes(query));
+    
+    const isArchived = d.status === 'archived';
+    if (driverStatusFilter === 'active' && isArchived) return false;
+    if (driverStatusFilter === 'archived' && !isArchived) return false;
+
     if (driverFilter === 'all') return matchSearch;
     return matchSearch && d.classification === driverFilter;
   });
 
   const filteredShareholdersList = shareholders.filter(s => {
     const query = searchQuery.toLowerCase();
-    return s.full_name.toLowerCase().includes(query) || s.phone.includes(query) || s.email.toLowerCase().includes(query);
+    const matchSearch = s.full_name.toLowerCase().includes(query) || s.phone.includes(query) || s.email.toLowerCase().includes(query);
+    
+    const isArchived = s.status === 'archived';
+    if (shareholderStatusFilter === 'active' && isArchived) return false;
+    if (shareholderStatusFilter === 'archived' && !isArchived) return false;
+
+    return matchSearch;
   });
 
   // Calculate dynamic investment stats
@@ -688,7 +701,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
           </div>
 
           {subTab === 'drivers' && (
-            <div className="flex items-center gap-1 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
               <span className="text-[10px] text-text-muted font-bold uppercase shrink-0 mr-1">Filter:</span>
               <select
                 value={driverFilter}
@@ -698,6 +711,30 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                 <option value="all">All Classifications</option>
                 <option value="Smart">Smart Carrier</option>
                 <option value="Assisted">Assisted Carrier</option>
+              </select>
+              <select
+                value={driverStatusFilter}
+                onChange={(e) => setDriverStatusFilter(e.target.value as any)}
+                className="bg-bg-base border border-border-main text-text-main text-xs py-1.5 px-3 rounded-lg focus:outline-none"
+              >
+                <option value="active">Active/Pending Drivers</option>
+                <option value="archived">Archived Drivers</option>
+                <option value="all">All Drivers</option>
+              </select>
+            </div>
+          )}
+
+          {subTab === 'shareholders' && (
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+              <span className="text-[10px] text-text-muted font-bold uppercase shrink-0 mr-1">Filter:</span>
+              <select
+                value={shareholderStatusFilter}
+                onChange={(e) => setShareholderStatusFilter(e.target.value as any)}
+                className="bg-bg-base border border-border-main text-text-main text-xs py-1.5 px-3 rounded-lg focus:outline-none"
+              >
+                <option value="active">Active Shareholders</option>
+                <option value="archived">Archived Shareholders</option>
+                <option value="all">All Shareholders</option>
               </select>
             </div>
           )}
@@ -808,7 +845,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                           </Badge>
                         </td>
                         <td className="p-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
                             <Button
                               variant="outline"
                               size="sm"
@@ -817,6 +854,61 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                             >
                               <Eye className="h-3 w-3" />
                               360° Dossier
+                            </Button>
+                            {d.status !== 'archived' ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  if (confirm(lang === 'en' ? `Are you sure you want to archive driver ${d.fullName}?` : `Kun tabbatar kuna son ajiye bayanan direba ${d.fullName}?` )) {
+                                    try {
+                                      await api.archiveDriver(d.id);
+                                      setAlertSuccess(lang === 'en' ? "Driver archived successfully!" : "An yi nasarar ajiye bayanan direba!");
+                                      onSync();
+                                    } catch (err: any) {
+                                      setAlertError(err.message || "Archive failed.");
+                                    }
+                                  }
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-bold text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                              >
+                                {lang === 'en' ? 'Archive' : 'Ajiye'}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    await api.restoreDriver(d.id);
+                                    setAlertSuccess(lang === 'en' ? "Driver restored successfully!" : "An yi nasarar dawo da direba!");
+                                    onSync();
+                                  } catch (err: any) {
+                                    setAlertError(err.message || "Restore failed.");
+                                  }
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-bold text-green-600 border-green-500/30 hover:bg-green-500/10"
+                              >
+                                {lang === 'en' ? 'Restore' : 'Maido'}
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                if (confirm(lang === 'en' ? `WARNING: This will permanently delete driver ${d.fullName} and purge all related records. This cannot be undone. Proceed?` : `GARGADI: Wannan zai goge direba ${d.fullName} da dukkan bayanan sa gaba daya. Ci gaba?`)) {
+                                  try {
+                                    await api.deleteDriver(d.id);
+                                    setAlertSuccess(lang === 'en' ? "Driver permanently deleted!" : "An goge direba gaba daya!");
+                                    onSync();
+                                  } catch (err: any) {
+                                    setAlertError(err.message || "Deletion failed.");
+                                  }
+                                }
+                              }}
+                              className="px-2.5 py-1 text-[10px] font-bold text-red-600 border-red-500/30 hover:bg-red-500/10"
+                            >
+                              {lang === 'en' ? 'Delete' : 'Goge'}
                             </Button>
                           </div>
                         </td>
@@ -1242,14 +1334,71 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                             </Badge>
                           </td>
                           <td className="p-4 text-center">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedShareholderLedger(s)}
-                              className="px-2.5 py-1 text-[10px] font-extrabold border-brand-navy text-brand-navy hover:bg-brand-navy/5 cursor-pointer"
-                            >
-                              Earnings Ledger
-                            </Button>
+                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedShareholderLedger(s)}
+                                className="px-2.5 py-1 text-[10px] font-extrabold border-brand-navy text-brand-navy hover:bg-brand-navy/5 cursor-pointer"
+                              >
+                                Earnings Ledger
+                              </Button>
+                              {s.status !== 'archived' ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (confirm(lang === 'en' ? `Are you sure you want to archive shareholder ${s.full_name}?` : `Kun tabbatar kuna son ajiye bayanan mai hannun jari ${s.full_name}?` )) {
+                                      try {
+                                        await api.archiveShareholder(s.id);
+                                        setAlertSuccess(lang === 'en' ? "Shareholder archived successfully!" : "An yi nasarar ajiye bayanan mai hannun jari!");
+                                        onSync();
+                                      } catch (err: any) {
+                                        setAlertError(err.message || "Archive failed.");
+                                      }
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-bold text-amber-600 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer"
+                                >
+                                  {lang === 'en' ? 'Archive' : 'Ajiye'}
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={async () => {
+                                    try {
+                                      await api.restoreShareholder(s.id);
+                                      setAlertSuccess(lang === 'en' ? "Shareholder restored successfully!" : "An yi nasarar dawo da mai hannun jari!");
+                                      onSync();
+                                    } catch (err: any) {
+                                      setAlertError(err.message || "Restore failed.");
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-bold text-green-600 border-green-500/30 hover:bg-green-500/10 cursor-pointer"
+                                >
+                                  {lang === 'en' ? 'Restore' : 'Maido'}
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  if (confirm(lang === 'en' ? `WARNING: This will permanently delete shareholder ${s.full_name}. This action cannot be undone. Proceed?` : `GARGADI: Wannan zai goge mai hannun jari ${s.full_name} gaba daya. Ci gaba?`)) {
+                                    try {
+                                      await api.deleteShareholder(s.id);
+                                      setAlertSuccess(lang === 'en' ? "Shareholder permanently deleted!" : "An goge mai hannun jari gaba daya!");
+                                      onSync();
+                                    } catch (err: any) {
+                                      setAlertError(err.message || "Deletion failed.");
+                                    }
+                                  }
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-bold text-red-600 border-red-500/30 hover:bg-red-500/10 cursor-pointer"
+                              >
+                                {lang === 'en' ? 'Delete' : 'Goge'}
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );

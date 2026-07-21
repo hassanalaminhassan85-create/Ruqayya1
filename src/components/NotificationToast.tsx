@@ -40,20 +40,21 @@ export const NotificationToastCard: React.FC<NotificationToastProps> = ({
     }
 
     timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 0.1) {
-          clearInterval(timerRef.current!);
-          onClose(notification.id);
-          return 0;
-        }
-        return prev - 0.1;
-      });
+      setTimeLeft((prev) => Math.max(0, prev - 0.1));
     }, 100);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isHovered, notification.id, onClose]);
+  }, [isHovered]);
+
+  // Handle toast close when timer reaches zero
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      onClose(notification.id);
+    }
+  }, [timeLeft, notification.id, onClose]);
 
   const handleMarkAsRead = async () => {
     try {

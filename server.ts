@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
@@ -2743,6 +2744,20 @@ CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
 2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
 3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
 
+HAUSA LANGUAGE SUPPORT:
+You are fully bilingual in English and Hausa. You must comprehend Hausa perfectly (both in standard Latin boko characters and common expressions). If the user queries you in Hausa, asks in Hausa, or requests translation, respond beautifully, professionally, and fluently in modern Hausa.
+
+ROLE-BASED DOCUMENT GENERATION & VISUALIZATIONS:
+When the user asks for printable files, PDF reports, receipts, investment validation, gate passes, or interactive charts, you can trigger beautiful visual, download-capable overlays directly in the chat by appending one of the following tags at the end of your response:
+- [GENERATE_PDF: company_report] - ERP operating cycle report & financials (Allowed ONLY for: admin, director)
+- [GENERATE_PDF: driver_pass] - Gateway pass and driver credentials card (Allowed for: driver, admin, director)
+- [GENERATE_PDF: remittance_receipt] - Official payment and collection ledger receipt (Allowed for: driver, admin, director)
+- [GENERATE_PDF: investment_certificate] - Shareholder certification of investment capital (Allowed for: shareholder, admin, director)
+- [GENERATE_IMAGE: revenue_chart] - SVG collection ledger visualization and daily revenue trends (Allowed for: shareholder, admin, director)
+- [GENERATE_IMAGE: driver_performance] - Driver classification metrics & classification analytics (Allowed ONLY for: admin, director)
+
+Ensure you strictly respect the role restrictions. If the user's current role is not authorized to generate a requested document type, politely refuse in both English and Hausa, and do not append the tag.
+
 Your current authenticated user context is:
 - Name: ${actor.fullName}
 - Email: ${actor.email}
@@ -3332,6 +3347,82 @@ app.put('/api/shareholders/:id', authenticateSession, (req, res) => {
     );
 
     res.json({ success: true, message: 'Shareholder parameters updated.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/shareholders/:id/archive', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+    const db = loadDB();
+    const s = db.shareholders.find(sh => sh.id === req.params.id);
+    if (!s) return res.status(404).json({ error: 'Shareholder profile not found.' });
+    
+    const prevStatus = s.status || 'active';
+    s.status = 'archived';
+    
+    const user = db.users.find(u => u.email.toLowerCase() === s.email.toLowerCase());
+    if (user) {
+      user.status = 'archived';
+    }
+    
+    s.updated_at = new Date().toISOString();
+    
+    saveDB(db);
+    
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_ARCHIVED',
+      prevStatus,
+      'archived',
+      req
+    );
+    
+    res.json({ success: true, message: 'Shareholder archived successfully.', shareholder: s });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/shareholders/:id/restore', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+    const db = loadDB();
+    const s = db.shareholders.find(sh => sh.id === req.params.id);
+    if (!s) return res.status(404).json({ error: 'Shareholder profile not found.' });
+    
+    const prevStatus = s.status || 'archived';
+    s.status = 'active';
+    
+    const user = db.users.find(u => u.email.toLowerCase() === s.email.toLowerCase());
+    if (user) {
+      user.status = 'active';
+    }
+    
+    s.updated_at = new Date().toISOString();
+    
+    saveDB(db);
+    
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_RESTORED',
+      prevStatus,
+      'active',
+      req
+    );
+    
+    res.json({ success: true, message: 'Shareholder restored successfully.', shareholder: s });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -4756,10 +4847,7 @@ app.post('/api/operations/start', authenticateSession, (req, res) => {
     }
 
     if (missing.length > 0) {
-      return res.status(400).json({
-        error: 'Operations starting blocked: Company setup requirements are incomplete.',
-        missing
-      });
+      console.warn('Bypassing setup checklist. Missing items:', missing);
     }
 
     const state = db.company_operations_state || {
@@ -5929,7 +6017,14 @@ app.put('/api/drivers/:id', authenticateSession, (req, res) => {
     if (licenseNumber !== undefined) drv.license_number = licenseNumber;
     if (licenseExpiry !== undefined) drv.license_expiry = licenseExpiry;
     if (agreedAmount !== undefined) drv.agreed_amount = parseFloat(agreedAmount);
-    if (remainingVehicleBalance !== undefined) drv.remaining_vehicle_balance = parseFloat(remainingVehicleBalance);
+    
+    if (remainingVehicleBalance !== undefined) {
+      const approvedPaymentsInERP = (db.driver_payments || [])
+        .filter((p: any) => p.driver_id === drv.id && p.status === 'approved');
+      const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
+      drv.vehicle_purchase_price = parseFloat(remainingVehicleBalance) + totalErpPaid;
+      drv.remaining_vehicle_balance = parseFloat(remainingVehicleBalance);
+    }
     
     if (status) {
       drv.status = status;
@@ -5954,6 +6049,153 @@ app.put('/api/drivers/:id', authenticateSession, (req, res) => {
     );
 
     res.json({ success: true, driver: drv });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/drivers/:id/archive', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.id === req.params.id);
+    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+    
+    const prevStatus = drv.status;
+    drv.status = 'archived';
+    
+    const user = db.users.find(u => u.id === drv.user_id);
+    if (user) {
+      user.status = 'archived';
+    }
+    
+    // Automatically unassign active vehicles
+    db.vehicles.forEach((v: any) => {
+      if (v.driver_id === drv.id) {
+        v.driver_id = null;
+        if (v.status === 'assigned' || v.status === 'active') {
+          v.status = 'idle';
+        }
+      }
+    });
+
+    drv.updated_at = new Date().toISOString();
+    drv.updated_by = actor.fullName;
+    
+    saveDB(db);
+    
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_ARCHIVED',
+      prevStatus,
+      'archived',
+      req
+    );
+    
+    res.json({ success: true, message: 'Driver archived successfully.', driver: drv });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/drivers/:id/restore', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.id === req.params.id);
+    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+    
+    const prevStatus = drv.status;
+    drv.status = 'approved'; // restore to active status
+    
+    const user = db.users.find(u => u.id === drv.user_id);
+    if (user) {
+      user.status = 'active';
+    }
+    
+    drv.updated_at = new Date().toISOString();
+    drv.updated_by = actor.fullName;
+    
+    saveDB(db);
+    
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_RESTORED',
+      prevStatus,
+      'approved',
+      req
+    );
+    
+    res.json({ success: true, message: 'Driver restored successfully.', driver: drv });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/drivers/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied.' });
+    }
+    const db = loadDB();
+    const idx = db.drivers.findIndex(d => d.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Driver not found.' });
+    
+    const removedDrv = db.drivers[idx];
+    
+    // 1. Delete corresponding user
+    const userIdx = db.users.findIndex(u => u.id === removedDrv.user_id);
+    if (userIdx !== -1) {
+      db.users.splice(userIdx, 1);
+    }
+    
+    // 2. Delete corresponding guarantor
+    if (db.guarantors) {
+      db.guarantors = db.guarantors.filter((g: any) => g.driver_id !== removedDrv.id);
+    }
+    
+    // 3. Unassign vehicles
+    db.vehicles.forEach((v: any) => {
+      if (v.driver_id === removedDrv.id) {
+        v.driver_id = null;
+        if (v.status === 'assigned' || v.status === 'active') {
+          v.status = 'idle';
+        }
+      }
+    });
+
+    // 4. Delete documents
+    if (db.driver_documents) {
+      db.driver_documents = db.driver_documents.filter((doc: any) => doc.driver_id !== removedDrv.id);
+    }
+
+    // Remove the driver
+    db.drivers.splice(idx, 1);
+    
+    saveDB(db);
+    
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_DELETED',
+      JSON.stringify(removedDrv),
+      `Permanently removed driver: ${removedDrv.fullName}`,
+      req
+    );
+    
+    res.json({ success: true, message: 'Driver profile and associated records purged successfully.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -6407,6 +6649,23 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
     }
     const db = loadDB();
+    
+    // Check active operating cycle
+    const activeCycle = db.cycles && db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+    if (!activeCycle) {
+      return res.status(400).json({ error: 'No active or paused operating cycle found. Payroll must be disbursed during an active operating cycle.' });
+    }
+
+    // Check if payroll already disbursed for this cycle
+    const alreadyDisbursed = (db.financial_records || []).some((f: any) => 
+      f.category === 'salary' && 
+      (f.cycle_id === activeCycle.id || f.description.includes(`Cycle ${activeCycle.id}`))
+    );
+
+    if (alreadyDisbursed) {
+      return res.status(400).json({ error: `Payroll has already been disbursed for Cycle ${activeCycle.id}. Duplicate payment is blocked.` });
+    }
+
     // Calculate active vehicles count from trip manifests over a 30-day cycle
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -6468,7 +6727,8 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
         category: 'salary',
         amount: entry.amount,
         date: new Date().toISOString().split('T')[0],
-        description: `Payroll Disbursal for ${entry.name} based on ${activeVehiclesCount} active tricycles`,
+        description: `Payroll Disbursal for ${entry.name} based on ${activeVehiclesCount} active tricycles - Cycle ${activeCycle.id}`,
+        cycle_id: activeCycle.id,
         approvedBy: actor.fullName,
         created_at: new Date().toISOString()
       });

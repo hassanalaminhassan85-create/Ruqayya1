@@ -344,7 +344,7 @@ export const AddExpenseModal: React.FC<{
     try {
       // Post to financial record endpoint
       const expenseItem = {
-        id: `fin-expense-${Date.now()}`,
+        id: `fin-expense-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         type: 'expense',
         category,
         amount: Number(amount),
@@ -374,7 +374,7 @@ export const AddExpenseModal: React.FC<{
       const localStored = localStorage.getItem('ruqayya_custom_expenses');
       const parsed = localStored ? JSON.parse(localStored) : [];
       localStorage.setItem('ruqayya_custom_expenses', JSON.stringify([...parsed, {
-        id: `fin-expense-${Date.now()}`,
+        id: `fin-expense-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         type: 'expense',
         category,
         amount: Number(amount),
@@ -499,7 +499,7 @@ export const PayrollModal: React.FC<{
       const calculatedTotal = Number(wage) * (Number(workingDays) / 26);
       
       const payload = {
-        id: `pay-payroll-${Date.now()}`,
+        id: `pay-payroll-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         type: 'expense',
         category: 'Staff Salaries',
         amount: calculatedTotal,
@@ -695,7 +695,7 @@ export const RecordPaymentModal: React.FC<{
     setLoading(true);
     try {
       const paymentItem = {
-        id: `pay-remit-${Date.now()}`,
+        id: `pay-remit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         driverId,
         amount: Number(amount),
         date: new Date().toISOString().split('T')[0],

@@ -210,11 +210,69 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
     timestamp: Date.now()
   };
 
+  const mappedVehicles = (db.vehicles || []).map((v: any) => ({
+    ...v,
+    plateNumber: v.plate_number || v.plateNumber || '',
+    fuelType: v.fuel_type || v.fuelType || 'diesel',
+    capacity: v.capacity || '30 Tons',
+    driverId: v.driver_id || v.driverId || null,
+    lastServiceDate: v.last_service_date || v.lastServiceDate || new Date().toISOString().split('T')[0],
+    mileage: v.mileage !== undefined ? v.mileage : 0
+  }));
+
+  const mappedDrivers = (db.drivers || []).map((d: any) => {
+    const user = db.users.find((u: any) => u.id === d.user_id);
+    const guarantor = db.guarantors.find((g: any) => g.driver_id === d.id);
+    const vehicle = mappedVehicles.find((v: any) => v.driverId === d.id || v.driver_id === d.id);
+    const financials = getDriverFinancials(d, db);
+    const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === d.id);
+    const passportDoc = documents.find((doc: any) => doc.document_type === 'passport_photo');
+    const passport_photo_url = passportDoc ? passportDoc.file_url : '';
+    return {
+      ...d,
+      fullName: user?.full_name || d.fullName || 'Candidate',
+      email: user?.email || d.email || '',
+      phone: user?.phone || d.phone || '',
+      guarantor,
+      vehicle,
+      documents,
+      passport_photo_url,
+      passportPhoto: passport_photo_url, // For fallback
+      passportPhotoUrl: passport_photo_url, // For fallback
+      licenseNumber: d.license_number || d.licenseNumber || 'KND-9828A',
+      licenseExpiry: d.license_expiry || d.licenseExpiry || '2028-10-12',
+      classification: d.classification || 'Assisted',
+      remaining_vehicle_balance: financials.remainingVehicleBalance,
+      total_amount_paid: financials.totalAmountPaid,
+      vehicle_purchase_price: financials.vehiclePurchasePrice,
+      total_payments_made: financials.totalPaymentsMade
+    };
+  });
+
+  const mappedTrips = (db.trip_manifests || []).map((t: any) => ({
+    ...t,
+    manifestNumber: t.manifest_number || t.manifestNumber || t.remittanceNumber || '',
+    remittanceNumber: t.manifest_number || t.manifestNumber || t.remittanceNumber || '',
+    vehicleId: t.vehicle_id || t.vehicleId || '',
+    driverId: t.driver_id || t.driverId || '',
+    origin: t.origin || '',
+    destination: t.destination || '',
+    departureTime: t.departure_time || t.departureTime || '',
+    expectedArrivalTime: t.expected_arrival_time || t.expectedArrivalTime || '',
+    status: t.status || 'in-transit',
+    cargoType: t.cargo_type || t.cargoType || t.tricycleType || 'Utility Tricycle',
+    tricycleType: t.cargo_type || t.cargoType || t.tricycleType || 'Utility Tricycle',
+    weight: t.weight || 0,
+    freightCharges: t.freight_charges || t.freightCharges || t.remittanceAmount || 15000,
+    remittanceAmount: t.freight_charges || t.freightCharges || t.remittanceAmount || 15000,
+    remittanceCount: t.remittanceCount || 1
+  }));
+
   if (role === 'director') {
     return {
       ...common,
-      drivers: db.drivers || [],
-      vehicles: db.vehicles || [],
+      drivers: mappedDrivers,
+      vehicles: mappedVehicles,
       vouchers: db.fuel_vouchers || [],
       financials: db.financial_records || [],
       notifications: db.notifications || [],
@@ -224,7 +282,7 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       shareholders: db.shareholders || [],
       cycles: db.cycles || [],
       shareholder_settings: db.shareholder_settings || {},
-      trip_manifests: db.trip_manifests || [],
+      trip_manifests: mappedTrips,
       driver_payments: db.driver_payments || [],
       messages: db.messages || [],
       vehicle_documents: db.vehicle_documents || [],
@@ -234,8 +292,8 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
   } else if (role === 'admin') {
     return {
       ...common,
-      drivers: db.drivers || [],
-      vehicles: db.vehicles || [],
+      drivers: mappedDrivers,
+      vehicles: mappedVehicles,
       vouchers: db.fuel_vouchers || [],
       financials: db.financial_records || [],
       notifications: db.notifications || [],
@@ -243,7 +301,7 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       admins: db.admins || [],
       shareholders: (db.shareholders || []).map((s: any) => ({ id: s.id, full_name: s.full_name, status: s.status })),
       cycles: db.cycles || [],
-      trip_manifests: db.trip_manifests || [],
+      trip_manifests: mappedTrips,
       driver_payments: db.driver_payments || [],
       messages: db.messages || [],
       vehicle_documents: db.vehicle_documents || [],
@@ -266,18 +324,18 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       notifications: (db.notifications || []).filter((n: any) => n.user_id === shareholderId || n.target_role === 'shareholder' || (!n.user_id && !n.target_role))
     };
   } else if (role === 'driver') {
-    const activeDriver = db.drivers.find((d: any) => d.id === driverProfileId) || {};
+    const activeDriver = mappedDrivers.find((d: any) => d.id === driverProfileId) || {};
     const driverVouchers = (db.fuel_vouchers || []).filter((v: any) => v.driver_id === driverProfileId);
     const driverPayments = (db.driver_payments || []).filter((p: any) => p.driver_id === driverProfileId);
     const driverDocuments = (db.driver_documents || []).filter((doc: any) => doc.driver_id === driverProfileId);
-    const driverTrips = (db.trip_manifests || []).filter((t: any) => t.driver_id === driverProfileId);
+    const driverTrips = mappedTrips.filter((t: any) => t.driverId === driverProfileId);
     const driverNotifications = (db.notifications || []).filter((n: any) => n.user_id === activeDriver.user_id || n.target_role === 'driver' || (!n.user_id && !n.target_role));
     const driverMessages = (db.messages || []).filter((m: any) => m.sender_id === activeDriver.user_id || m.receiver_id === activeDriver.user_id);
 
     return {
       ...common,
       drivers: [activeDriver],
-      vehicles: (db.vehicles || []).filter((v: any) => v.driver_id === driverProfileId),
+      vehicles: mappedVehicles.filter((v: any) => v.driverId === driverProfileId),
       vouchers: driverVouchers,
       driver_payments: driverPayments,
       driver_documents: driverDocuments,
@@ -1184,6 +1242,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const g = db.guarantors.find((gua: any) => gua.driver_id === drv.id) || null;
         const v = db.vehicles.find((veh: any) => veh.driver_id === drv.id) || null;
         const financials = getDriverFinancials(drv, db);
+        const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === drv.id);
+        const passportDoc = documents.find((doc: any) => doc.document_type === 'passport_photo');
+        const passport_photo_url = passportDoc ? passportDoc.file_url : '';
 
         return {
           ...drv,
@@ -1192,7 +1253,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           phone: u.phone || drv.phone || '',
           guarantor: g,
           vehicle: v,
-          financials
+          financials,
+          documents,
+          passport_photo_url,
+          passportPhoto: passport_photo_url,
+          passportPhotoUrl: passport_photo_url
         };
       });
 
@@ -1338,6 +1403,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const g = db.guarantors.find((gua: any) => gua.driver_id === drv.id) || null;
         const v = db.vehicles.find((veh: any) => veh.driver_id === drv.id) || null;
         const financials = getDriverFinancials(drv, db);
+        const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === drv.id);
+        const passportDoc = documents.find((doc: any) => doc.document_type === 'passport_photo');
+        const passport_photo_url = passportDoc ? passportDoc.file_url : '';
 
         return buildResponse({
           ...drv,
@@ -1346,7 +1414,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           phone: u.phone || '',
           guarantor: g,
           vehicle: v,
-          financials
+          financials,
+          documents,
+          passport_photo_url,
+          passportPhoto: passport_photo_url,
+          passportPhotoUrl: passport_photo_url
         });
       }
 

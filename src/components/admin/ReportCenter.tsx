@@ -458,7 +458,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
     const shaHash = Array.from({length: 32}, () => Math.floor(Math.random()*16).toString(16)).join('');
     
     const newReport: SavedReport = {
-      id: "REP-" + Date.now(),
+      id: "REP-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9),
       reportNumber: repNum,
       reportType: reportType.toUpperCase() + " Statement",
       category: reportTab.toUpperCase() + " Report",

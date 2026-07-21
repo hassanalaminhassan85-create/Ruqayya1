@@ -62,7 +62,7 @@ export class WorkersAIService {
     messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
     options: AIServiceOptions = {}
   ): Promise<string> {
-    const model = options.model || '@cf/meta/llama-3-8b-instruct';
+    const model = options.model || '@cf/meta/llama-3.1-8b-instruct';
     const maxRetries = options.maxRetries ?? 3;
     const timeoutMs = options.timeoutMs ?? 15000;
 
@@ -70,7 +70,7 @@ export class WorkersAIService {
     while (attempt < maxRetries) {
       attempt++;
       try {
-        // Option A: Real Workers AI Binding
+        // Option A: Real Workers AI Binding or Remote REST API
         if (this.env.ruqayya && typeof this.env.ruqayya.run === 'function') {
           const runPromise = this.env.ruqayya.run(model, {
             messages,
@@ -90,6 +90,43 @@ export class WorkersAIService {
             return response.trim();
           }
           throw new Error('Invalid response structure from Workers AI binding.');
+        } else {
+          // Fallback: Direct Cloudflare REST API if account credentials are provided
+          const cfAccountId = (this.env as any)?.CLOUDFLARE_ACCOUNT_ID || (typeof process !== 'undefined' ? process.env?.CLOUDFLARE_ACCOUNT_ID : undefined);
+          const cfApiToken = (this.env as any)?.CLOUDFLARE_API_TOKEN || (typeof process !== 'undefined' ? process.env?.CLOUDFLARE_API_TOKEN : undefined);
+          
+          if (cfAccountId && cfApiToken) {
+            const runPromise = fetch(
+              `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/run/${model}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${cfApiToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  messages,
+                  stream: false
+                })
+              }
+            ).then(async (res) => {
+              if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Cloudflare API returned status ${res.status}: ${text}`);
+              }
+              return res.json();
+            });
+
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Workers AI REST request timed out.')), timeoutMs)
+            );
+
+            const response: any = await Promise.race([runPromise, timeoutPromise]);
+            if (response && response.result && typeof response.result.response === 'string') {
+              return response.result.response.trim();
+            }
+            throw new Error('Invalid response structure from Cloudflare Workers AI REST API.');
+          }
         }
 
         // Option B: Local/Preview Fallback via Gemini API
@@ -141,10 +178,10 @@ export class WorkersAIService {
     messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
     options: AIServiceOptions = {}
   ): AsyncGenerator<string, void, unknown> {
-    const model = options.model || '@cf/meta/llama-3-8b-instruct';
+    const model = options.model || '@cf/meta/llama-3.1-8b-instruct';
 
     try {
-      // Option A: Real Workers AI Streaming
+      // Option A: Real Workers AI Streaming or Remote REST API Streaming
       if (this.env.ruqayya && typeof this.env.ruqayya.run === 'function') {
         const response: any = await this.env.ruqayya.run(model, {
           messages,
@@ -182,6 +219,62 @@ export class WorkersAIService {
           return;
         }
         throw new Error('Workers AI binding did not return a stream.');
+      } else {
+        // Fallback: Direct Cloudflare REST API Streaming
+        const cfAccountId = (this.env as any)?.CLOUDFLARE_ACCOUNT_ID || (typeof process !== 'undefined' ? process.env?.CLOUDFLARE_ACCOUNT_ID : undefined);
+        const cfApiToken = (this.env as any)?.CLOUDFLARE_API_TOKEN || (typeof process !== 'undefined' ? process.env?.CLOUDFLARE_API_TOKEN : undefined);
+        
+        if (cfAccountId && cfApiToken) {
+          const res = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/ai/run/${model}`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${cfApiToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                messages,
+                stream: true
+              })
+            }
+          );
+
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Cloudflare API returned status ${res.status}: ${text}`);
+          }
+
+          const bodyReader = res.body;
+          if (bodyReader) {
+            const reader = bodyReader.getReader();
+            const decoder = new TextDecoder();
+            
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data:')) {
+                  const dataStr = line.slice(5).trim();
+                  if (dataStr === '[DONE]') break;
+                  try {
+                    const parsed = JSON.parse(dataStr);
+                    if (parsed.response) {
+                      yield parsed.response;
+                    }
+                  } catch {
+                    yield dataStr;
+                  }
+                }
+              }
+            }
+            return;
+          }
+          throw new Error('Cloudflare REST API did not return a stream.');
+        }
       }
 
       // Option B: Local/Preview Fallback Streaming via Gemini API
