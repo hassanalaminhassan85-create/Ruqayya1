@@ -541,7 +541,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                         </tr>
                       ) : (
                         paginatedVehicles.map((v, idx) => (
-                          <tr key={v.id || `vehicle-${idx}`} className="hover:bg-bg-base/20">
+                          <tr key={`${v.id || 'vehicle'}-${idx}`} className="hover:bg-bg-base/20">
                             <td className="p-3 font-bold font-mono text-[11px] text-brand-gold">{v.plateNumber}</td>
                             <td className="p-3 font-extrabold text-text-main">{v.model}</td>
                             <td className="p-3 font-bold text-text-muted">{v.capacity}</td>
@@ -659,7 +659,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                         </tr>
                       ) : (
                         filteredDrivers.map((d, idx) => (
-                          <tr key={d.id || `driver-${idx}`} className="hover:bg-bg-base/20">
+                          <tr key={`${d.id || 'driver'}-${idx}`} className="hover:bg-bg-base/20">
                             <td className="p-3 font-bold font-mono text-[11px]">{d.company_driver_id || `PEND-${d.id.substring(0, 5).toUpperCase()}`}</td>
                             <td className="p-3 font-extrabold text-text-main">
                               <div className="flex flex-col">
@@ -766,7 +766,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                         const driverName = drivers.find(d => d.id === t.driverId)?.fullName || "Driver";
                         const vehiclePlate = vehicles.find(v => v.id === t.vehicleId)?.plateNumber || "Tricycle";
                         return (
-                          <tr key={t.id || `trip-${idx}`} className="hover:bg-bg-base/20">
+                          <tr key={`${t.id || 'trip'}-${idx}`} className="hover:bg-bg-base/20">
                             <td className="p-3 font-bold font-mono text-[11px] text-brand-gold">{t.remittanceNumber}</td>
                             <td className="p-3">
                               <div className="flex flex-col">
@@ -843,7 +843,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                         const driverObj = drivers.find(d => d.id === v.driverId);
                         const vehicleObj = vehicles.find(vh => vh.id === v.vehicleId);
                         return (
-                          <tr key={v.id || `voucher-${idx}`} className="hover:bg-bg-base/20">
+                          <tr key={`${v.id || 'voucher'}-${idx}`} className="hover:bg-bg-base/20">
                             <td className="p-3 font-bold font-mono text-[11px]">{v.voucherNumber}</td>
                             <td className="p-3 font-bold">{driverObj?.fullName || "Driver"}</td>
                             <td className="p-3 font-semibold text-brand-gold">{vehicleObj?.plateNumber || "Vehicle"}</td>

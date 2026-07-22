@@ -1392,9 +1392,9 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                                 <td colSpan={6} className="p-4 text-center text-xs font-sans text-text-muted">{lang === 'en' ? "No historical operating cycles logged." : "Babu tsofaffin zagaye a ajiye."}</td>
                               </tr>
                             ) : (
-                              cycles.map(cyc => (
+                              cycles.map((cyc, idx) => (
                                 <tr
-                                  key={cyc.id}
+                                  key={`${cyc.id || 'cyc'}-${idx}`}
                                   className="hover:bg-bg-base/30 cursor-pointer"
                                   onClick={() => setSelectedCycle(cyc)}
                                 >
@@ -1578,10 +1578,10 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
-                          {users.filter(u => u.role_id === 'role-admin').map(adm => {
+                          {users.filter(u => u.role_id === 'role-admin').map((adm, idx) => {
                             const adminProfile = admins.find(a => a.user_id === adm.id) || {};
                             return (
-                              <tr key={adm.id} className="hover:bg-bg-base/30">
+                              <tr key={`${adm.id || 'adm'}-${idx}`} className="hover:bg-bg-base/30">
                                 <td className="p-3 text-brand-gold font-bold">{adminProfile.company_id || 'ADM-OFF'}</td>
                                 <td className="p-3 font-extrabold text-text-main font-sans text-xs">{adm.full_name}</td>
                                 <td className="p-3 font-sans text-xs text-text-muted">{adm.email}</td>
@@ -1656,9 +1656,9 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                         <CardDescription>Select driver to inspect complete dossier files.</CardDescription>
                       </CardHeader>
                       <div className="mt-4 flex flex-col gap-2.5 max-h-[480px] overflow-y-auto pr-1">
-                        {drivers.map(drv => (
+                        {drivers.map((drv, idx) => (
                           <button
-                            key={drv.id}
+                            key={`${drv.id || 'drv'}-${idx}`}
                             onClick={() => setSelectedDriver(drv)}
                             className={`w-full p-3 rounded-xl border text-left flex items-center justify-between text-xs transition-colors cursor-pointer ${selectedDriver?.id === drv.id ? 'bg-brand-gold/10 border-brand-gold' : 'bg-bg-surface border-border-main hover:bg-bg-base/40'}`}
                           >
@@ -1974,11 +1974,11 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
-                          {shareholders.map(sh => {
+                          {shareholders.map((sh, idx) => {
                             const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
                             const estimatedShareholderEarnings = distributionPool * (pctStake / 100);
                             return (
-                              <tr key={sh.id} className="hover:bg-bg-base/30">
+                              <tr key={`${sh.id || 'sh'}-${idx}`} className="hover:bg-bg-base/30">
                                 <td className="p-3 font-extrabold text-text-main font-sans text-xs flex items-center gap-2.5">
                                   <div className="h-8 w-8 rounded-full border border-border-main overflow-hidden shrink-0 bg-slate-900 flex items-center justify-center">
                                     <img 
@@ -2288,8 +2288,8 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                              {drivers.map(drv => (
-                                <tr key={drv.id}>
+                              {drivers.map((drv, idx) => (
+                                <tr key={`${drv.id || 'drv'}-${idx}`}>
                                   <td className="p-2.5 font-mono font-bold text-slate-800">{drv.company_driver_id || 'PENDING'}</td>
                                   <td className="p-2.5 font-bold">{drv.fullName}</td>
                                   <td className="p-2.5">{drv.classification || 'Unclassified'}</td>
@@ -2315,10 +2315,10 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200 font-mono">
-                              {shareholders.map(sh => {
+                              {shareholders.map((sh, idx) => {
                                 const weight = totalInvestmentsSum > 0 ? (sh.investment_amount / totalInvestmentsSum) : 0;
                                 return (
-                                  <tr key={sh.id}>
+                                  <tr key={`${sh.id || 'sh'}-${idx}`}>
                                     <td className="p-2.5 font-sans font-bold">{sh.full_name}</td>
                                     <td className="p-2.5">₦{sh.investment_amount?.toLocaleString()}</td>
                                     <td className="p-2.5 text-blue-800 font-bold">{(weight * 100).toFixed(2)}%</td>
@@ -2348,8 +2348,8 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                               {financials
                                 .filter(f => selectedReportType === 'revenue' ? f.type === 'revenue' : selectedReportType === 'expense' ? f.type === 'expense' : true)
                                 .slice(0, 10)
-                                .map(fin => (
-                                  <tr key={fin.id}>
+                                .map((fin, idx) => (
+                                  <tr key={`${fin.id || 'fin'}-${idx}`}>
                                     <td className="p-2.5 font-sans text-xs">{fin.description}</td>
                                     <td className="p-2.5 text-slate-500">{fin.date}</td>
                                     <td className={`p-2.5 text-right font-bold ${fin.type === 'revenue' ? 'text-emerald-700' : 'text-rose-700'}`}>
@@ -2411,8 +2411,8 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border-main/40 font-mono text-text-main text-[11px]">
-                        {logs.map(log => (
-                          <tr key={log.id} className="hover:bg-bg-base/30">
+                        {logs.map((log, idx) => (
+                          <tr key={`${log.id || 'log'}-${idx}`} className="hover:bg-bg-base/30">
                             <td className="p-3 text-brand-gold font-bold">{log.id}</td>
                             <td className="p-3 text-text-muted font-sans text-xs">{log.created_at?.replace('T', ' ').substring(0, 19) || log.timestamp}</td>
                             <td className="p-3 font-sans text-xs font-extrabold">{log.user_email || log.userId}</td>

@@ -639,7 +639,7 @@ export const NotificationInbox: React.FC<NotificationInboxProps> = ({ lang }) =>
 
                     return (
                       <motion.div
-                        key={n.id || `inbox-notif-${idx}`}
+                        key={`${n.id || 'inbox-notif'}-${idx}`}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, height: 0 }}
@@ -851,8 +851,8 @@ export const NotificationInbox: React.FC<NotificationInboxProps> = ({ lang }) =>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-main/50 font-medium">
-                    {historyLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-bg-base/30">
+                    {historyLogs.map((log, idx) => (
+                      <tr key={`${log.id || 'log'}-${idx}`} className="hover:bg-bg-base/30">
                         <td className="p-3 font-mono text-[10px] text-brand-gold font-bold">{log.id}</td>
                         <td className="p-3">
                           <span className="block font-bold text-text-main">{log.user_email}</span>
