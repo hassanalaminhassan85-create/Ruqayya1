@@ -2657,6 +2657,929 @@ ${JSON.stringify(cleanedContext, null, 2)}
     }
   }
 
+  // == INJECTED COMPATIBILITY ENDPOINTS FOR CLOUDFLARE DEPLOYMENT ==
+
+  // 18. SERVER-SENT EVENTS (SSE) STATE STREAM FALLBACK
+  if (path === '/api/sse' && method === 'GET') {
+    const actor = user;
+    let driverProfileId: string | null = null;
+    let shareholderId: string | null = null;
+
+    if (actor.role === 'driver') {
+      const dr = (db.drivers || []).find((d: any) => d.user_id === actor.id);
+      driverProfileId = dr ? dr.id : null;
+    } else if (actor.role === 'shareholder') {
+      const sh = (db.shareholders || []).find((s: any) => s.user_id === actor.id);
+      shareholderId = sh ? sh.id : null;
+    }
+
+    const encoder = new TextEncoder();
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+
+    (async () => {
+      try {
+        const initialPayload = generateFilteredPayload(actor.role, driverProfileId, shareholderId, db);
+        await writer.write(encoder.encode(`data: ${JSON.stringify(initialPayload)}\n\n`));
+        
+        // Emulate heartbeats for up to 20 seconds, then close gracefully to prompt automatic reconnect
+        for (let i = 0; i < 4; i++) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'heartbeat', timestamp: Date.now() })}\n\n`));
+        }
+      } catch (err) {
+        // Safe ignore on client disconnect
+      } finally {
+        try {
+          await writer.close();
+        } catch (e) {}
+      }
+    })();
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Methods': '*'
+      }
+    });
+  }
+
+  // 19. UNIFIED DIRECTORY ENDPOINT
+  if (path === '/api/directory/all' && method === 'GET') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Administrative or Board credentials required.' }, 403);
+    }
+    try {
+      const drivers = (db.drivers || []).map((drv: any) => {
+        const u = (db.users || []).find((userObj: any) => userObj.id === drv.user_id);
+        const g = (db.guarantors || []).find((gua: any) => gua.driver_id === drv.id);
+        const v = (db.vehicles || []).find((veh: any) => veh.driver_id === drv.id);
+        const financials = getDriverFinancials(drv, db);
+        const driverDocs = (db.driver_documents || []).filter((doc: any) => doc.driver_id === drv.id);
+        const passportDoc = driverDocs.find((doc: any) => doc.document_type === 'passport_photo');
+        const passport_photo_url = passportDoc ? passportDoc.file_url : '';
+        return {
+          ...drv,
+          fullName: u?.full_name || 'Candidate',
+          email: u?.email || '',
+          phone: u?.phone || '',
+          status: drv.status,
+          registrationDate: drv.created_at || u?.created_at || new Date().toISOString(),
+          guarantor: g,
+          vehicle: v,
+          documents: driverDocs,
+          passport_photo_url,
+          passportPhoto: passport_photo_url,
+          passportPhotoUrl: passport_photo_url,
+          remaining_vehicle_balance: financials.remainingVehicleBalance,
+          total_amount_paid: financials.totalAmountPaid,
+          vehicle_purchase_price: financials.vehiclePurchasePrice,
+          total_payments_made: financials.totalPaymentsMade
+        };
+      });
+
+      const shareholders = (db.shareholders || []).map((sh: any) => {
+        const fundedVehicles = (db.vehicles || []).filter((v: any) => v.shareholder_id === sh.id).map((v: any) => v.plate_number);
+        const fundedDrivers = (db.drivers || []).filter((d: any) => d.shareholder_id === sh.id).map((d: any) => {
+          const u = (db.users || []).find((userObj: any) => userObj.id === d.user_id);
+          return u?.full_name || 'Driver';
+        });
+
+        return {
+          ...sh,
+          fullName: sh.full_name,
+          email: sh.email,
+          phone: sh.phone,
+          status: sh.status,
+          registrationDate: sh.created_at || sh.investment_date || new Date().toISOString(),
+          bank_name: sh.bank_name || "Access Bank PLC",
+          account_number: sh.account_number || "0094102945",
+          lifetime_dividends: sh.lifetime_dividends || 0,
+          funded_vehicles: fundedVehicles,
+          funded_drivers: fundedDrivers,
+          documents: (db.company_documents || []).filter((doc: any) => doc.title.toLowerCase().includes(sh.full_name.toLowerCase()) || doc.document_type === 'Shareholder Agreement')
+        };
+      });
+
+      const admins = (db.admins || []).map((adm: any) => {
+        const u = (db.users || []).find((userObj: any) => userObj.id === adm.user_id);
+        const logsCount = (db.audit_logs || []).filter((l: any) => l.userId === adm.user_id).length;
+        const lastActiveLog = (db.audit_logs || []).find((l: any) => l.userId === adm.user_id);
+
+        return {
+          ...adm,
+          fullName: u?.full_name || 'Corporate Operator',
+          email: u?.email || '',
+          phone: u?.phone || '',
+          status: adm.status || u?.status || 'active',
+          registrationDate: adm.created_at || u?.created_at || new Date().toISOString(),
+          privilege_level: adm.privilege_level || 'Level 1: Fleet Operations',
+          assigned_tasks: adm.assigned_tasks || ['Fleet Dispatch', 'Voucher Issuance', 'Real-time Tracking'],
+          actions_audited: logsCount,
+          last_active: lastActiveLog ? lastActiveLog.timestamp : (adm.created_at || new Date().toISOString())
+        };
+      });
+
+      const directors = (db.directors || []).map((dir: any) => {
+        const u = (db.users || []).find((userObj: any) => userObj.id === dir.user_id);
+        const signaturesCount = (db.audit_logs || []).filter((l: any) => l.userId === dir.user_id && l.action.includes('APPROVED')).length;
+        return {
+          ...dir,
+          fullName: u?.full_name || 'Board Member',
+          email: u?.email || '',
+          phone: u?.phone || '',
+          status: dir.status || u?.status || 'active',
+          registrationDate: dir.created_at || u?.created_at || new Date().toISOString(),
+          portfolio: dir.portfolio || 'Executive Director',
+          shareholding_equity: dir.shareholding_equity || '10.0%',
+          approved_signatures: signaturesCount
+        };
+      });
+
+      return buildResponse({
+        success: true,
+        drivers,
+        shareholders,
+        admins,
+        directors
+      });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // 20. OPERATIONS STATE & CONTROL CENTER ENDPOINTS
+  if (path === '/api/operations/state' && method === 'GET') {
+    try {
+      const state = db.company_operations_state || {
+        status: 'Setup Mode',
+        currentCycle: '',
+        currentDay: 1,
+        startedBy: null,
+        startedAt: null,
+        pauseHistory: [],
+        auditLog: []
+      };
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayCollections = (db.driver_payments || [])
+        .filter((p: any) => p.status === 'approved' && p.date && p.date.startsWith(todayStr))
+        .reduce((sum: number, p: any) => sum + p.amount, 0);
+
+      const totalDrivers = (db.drivers || []).length;
+      const totalTricycles = (db.vehicles || []).length;
+      const companyWalletBalance = db.company_settings?.wallet_balance || 0;
+      const systemHealth = 'Healthy';
+
+      return buildResponse({
+        success: true,
+        state,
+        metrics: {
+          totalDrivers,
+          totalTricycles,
+          todayCollections,
+          companyWalletBalance,
+          systemHealth
+        }
+      });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/operations/start' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Only Administrators can start operations.' }, 403);
+    }
+    try {
+      const body = await request.json().catch(() => ({})) as any;
+      const requestedCycleId = body.cycleId;
+
+      const company_settings = db.company_settings || {};
+      const missing: string[] = [];
+
+      if (!company_settings.companyName || !company_settings.companyAddress || !company_settings.phone || !company_settings.email) {
+        missing.push('Corporate Profile details complete in Settings');
+      }
+
+      const adminCount = (db.users || []).filter((u: any) => u.role_id === 'role-admin' || u.role_id === 'role-director' || u.role === 'admin' || u.role === 'director').length;
+      if (adminCount < 1) {
+        missing.push('At least one Administrator profile');
+      }
+
+      if (!db.drivers || db.drivers.length < 1) {
+        missing.push('At least one registered driver profile');
+      }
+
+      if (!db.vehicles || db.vehicles.length < 1) {
+        missing.push('At least one registered vehicle asset');
+      } else {
+        const assigned = db.vehicles.some((v: any) => v.driver_id);
+        if (!assigned) {
+          missing.push('At least one vehicle assigned to a driver');
+        }
+      }
+
+      if (!db.shareholders || db.shareholders.length < 1) {
+        missing.push('At least one registered shareholder');
+      }
+
+      if (!company_settings.salary_configured && (!company_settings.salaries || company_settings.salaries.length < 1)) {
+        missing.push('Salary Configuration');
+      }
+
+      if (!company_settings.wallet_initialized && company_settings.wallet_balance === undefined) {
+        missing.push('Company Wallet Initialized');
+      }
+
+      const state = db.company_operations_state || {
+        status: 'Setup Mode',
+        currentCycle: '',
+        currentDay: 1,
+        startedBy: null,
+        startedAt: null,
+        pauseHistory: [],
+        auditLog: []
+      };
+
+      if (state.status !== 'Setup Mode') {
+        return buildResponse({ error: 'Company operations have already been initialized.' }, 400);
+      }
+
+      const updatedState = {
+        status: 'Operational Mode',
+        currentCycle: 'Cycle 001',
+        currentDay: 1,
+        startedBy: user.fullName,
+        startedAt: new Date().toISOString(),
+        pauseHistory: state.pauseHistory || [],
+        auditLog: [
+          {
+            id: generateUUID(),
+            action: 'Start Operations',
+            user: user.fullName,
+            timestamp: new Date().toISOString(),
+            reason: 'Company ready for live transit & leasing business',
+            ip: '127.0.0.1',
+            device: 'Cloudflare Pages Functions',
+            browser: 'Cloudflare Worker'
+          },
+          ...(state.auditLog || [])
+        ]
+      };
+
+      db.company_operations_state = updatedState;
+
+      if (!db.cycles) db.cycles = [];
+      const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+      if (!activeCycle) {
+        let cycleId = requestedCycleId;
+        if (cycleId && db.cycles.some((c: any) => c.id === cycleId)) {
+          return buildResponse({ error: `Duplicate Cycle ID error: '${cycleId}' already exists in database.` }, 400);
+        }
+        if (!cycleId) {
+          cycleId = `CYC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+
+        db.cycles.unshift({
+          id: cycleId,
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: null,
+          endGoalTons: 200,
+          status: 'active',
+          created_at: new Date().toISOString(),
+          created_by: user.fullName,
+          locked: false,
+          financials: []
+        });
+        updatedState.currentCycle = cycleId;
+      } else {
+        updatedState.currentCycle = activeCycle.id;
+      }
+
+      if (db.drivers) {
+        db.drivers.forEach((drv: any) => {
+          if (drv.status === 'approved') {
+            drv.status = 'active';
+          }
+        });
+      }
+
+      writeAuditLog(user.id, user.email, user.role, 'COMPANY_OPERATIONS_START', 'Setup Mode', `Activated live enterprise operations. First 30-day operating cycle commenced by ${user.fullName}`, db);
+      await dbManager.saveDB(db);
+
+      let driverProfileId: string | null = null;
+      let shareholderId: string | null = null;
+      if (user.role === 'driver') {
+        const dr = (db.drivers || []).find((d: any) => d.user_id === user.id);
+        driverProfileId = dr ? dr.id : null;
+      } else if (user.role === 'shareholder') {
+        const sh = (db.shareholders || []).find((s: any) => s.user_id === user.id);
+        shareholderId = sh ? sh.id : null;
+      }
+
+      return buildResponse({
+        success: true,
+        message: 'Company operations successfully started!',
+        state: updatedState,
+        detail: generateFilteredPayload(user.role, driverProfileId, shareholderId, db)
+      });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/operations/pause' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Only Administrators can pause operations.' }, 403);
+    }
+    try {
+      const { reason } = await request.json() as any;
+      if (!reason) {
+        return buildResponse({ error: 'Reason for suspension is mandatory.' }, 400);
+      }
+
+      const state = db.company_operations_state || { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+      if (state.status !== 'Operational Mode') {
+        return buildResponse({ error: 'Operations can only be paused from Operational Mode.' }, 400);
+      }
+
+      const pauseId = generateUUID();
+      const pauseEntry = {
+        id: pauseId,
+        pausedBy: user.fullName,
+        pausedAt: new Date().toISOString(),
+        reason
+      };
+
+      state.status = 'Paused';
+      state.pauseHistory = [pauseEntry, ...(state.pauseHistory || [])];
+      state.auditLog = [
+        {
+          id: generateUUID(),
+          action: 'Pause Operations',
+          user: user.fullName,
+          timestamp: new Date().toISOString(),
+          reason,
+          ip: '127.0.0.1',
+          device: 'Cloudflare Pages Functions',
+          browser: 'Cloudflare Worker'
+        },
+        ...(state.auditLog || [])
+      ];
+
+      if (!db.cycles) db.cycles = [];
+      const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+      if (activeCycle) {
+        activeCycle.status = 'paused';
+        activeCycle.pauseReason = reason;
+        activeCycle.pausedAt = new Date().toISOString();
+        activeCycle.pausedBy = user.fullName;
+        if (!activeCycle.pauseHistory) {
+          activeCycle.pauseHistory = [];
+        }
+        activeCycle.pauseHistory.unshift({
+          id: generateUUID(),
+          pausedBy: user.fullName,
+          pausedAt: new Date().toISOString(),
+          reason
+        });
+      }
+
+      db.company_operations_state = state;
+      writeAuditLog(user.id, user.email, user.role, 'COMPANY_OPERATIONS_PAUSE', 'Operational Mode', `Suspended company operations: ${reason}`, db);
+      await dbManager.saveDB(db);
+
+      let driverProfileId: string | null = null;
+      let shareholderId: string | null = null;
+      if (user.role === 'driver') {
+        const dr = (db.drivers || []).find((d: any) => d.user_id === user.id);
+        driverProfileId = dr ? dr.id : null;
+      } else if (user.role === 'shareholder') {
+        const sh = (db.shareholders || []).find((s: any) => s.user_id === user.id);
+        shareholderId = sh ? sh.id : null;
+      }
+
+      return buildResponse({
+        success: true,
+        message: 'Company operations paused.',
+        state,
+        detail: generateFilteredPayload(user.role, driverProfileId, shareholderId, db)
+      });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/operations/resume' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Only Administrators can resume operations.' }, 403);
+    }
+    try {
+      const { reason } = await request.json().catch(() => ({})) as any;
+      const state = db.company_operations_state || { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+
+      if (state.status !== 'Paused') {
+        return buildResponse({ error: 'Operations can only be resumed when Paused.' }, 400);
+      }
+
+      if (state.pauseHistory && state.pauseHistory.length > 0) {
+        const lastPause = state.pauseHistory[0];
+        lastPause.resumedBy = user.fullName;
+        lastPause.resumedAt = new Date().toISOString();
+        if (reason) lastPause.resumeReason = reason;
+      }
+
+      state.status = 'Operational Mode';
+      state.auditLog = [
+        {
+          id: generateUUID(),
+          action: 'Resume Operations',
+          user: user.fullName,
+          timestamp: new Date().toISOString(),
+          reason: reason || 'Operations resumed by administrator',
+          ip: '127.0.0.1',
+          device: 'Cloudflare Pages Functions',
+          browser: 'Cloudflare Worker'
+        },
+        ...(state.auditLog || [])
+      ];
+
+      if (!db.cycles) db.cycles = [];
+      const pausedCycle = db.cycles.find((c: any) => c.status === 'paused');
+      if (pausedCycle) {
+        pausedCycle.status = 'active';
+        pausedCycle.resumedAt = new Date().toISOString();
+        pausedCycle.resumedBy = user.fullName;
+        if (pausedCycle.pauseHistory && pausedCycle.pauseHistory.length > 0) {
+          pausedCycle.pauseHistory[0].resumedBy = user.fullName;
+          pausedCycle.pauseHistory[0].resumedAt = new Date().toISOString();
+          if (reason) pausedCycle.pauseHistory[0].resumeReason = reason;
+        }
+      }
+
+      db.company_operations_state = state;
+      writeAuditLog(user.id, user.email, user.role, 'COMPANY_OPERATIONS_RESUME', 'Paused', `Resumed company operations: ${reason || 'Manual resumption'}`, db);
+      await dbManager.saveDB(db);
+
+      let driverProfileId: string | null = null;
+      let shareholderId: string | null = null;
+      if (user.role === 'driver') {
+        const dr = (db.drivers || []).find((d: any) => d.user_id === user.id);
+        driverProfileId = dr ? dr.id : null;
+      } else if (user.role === 'shareholder') {
+        const sh = (db.shareholders || []).find((s: any) => s.user_id === user.id);
+        shareholderId = sh ? sh.id : null;
+      }
+
+      return buildResponse({
+        success: true,
+        message: 'Company operations resumed.',
+        state,
+        detail: generateFilteredPayload(user.role, driverProfileId, shareholderId, db)
+      });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/operations/config-salaries' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied.' }, 403);
+    }
+    try {
+      const { salaries } = await request.json() as any;
+      if (!salaries || !Array.isArray(salaries)) {
+        return buildResponse({ error: 'Invalid salary configurations payload.' }, 400);
+      }
+
+      db.company_settings = db.company_settings || {};
+      db.company_settings.salaries = salaries;
+      db.company_settings.salary_configured = true;
+
+      await dbManager.saveDB(db);
+      return buildResponse({ success: true, message: 'Salary rules configured successfully!', settings: db.company_settings });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/operations/config-wallet' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied.' }, 403);
+    }
+    try {
+      const { balance } = await request.json() as any;
+      if (balance === undefined || isNaN(parseFloat(balance))) {
+        return buildResponse({ error: 'Balance value is mandatory.' }, 400);
+      }
+
+      db.company_settings = db.company_settings || {};
+      db.company_settings.wallet_balance = parseFloat(balance);
+      db.company_settings.wallet_initialized = true;
+
+      await dbManager.saveDB(db);
+      return buildResponse({ success: true, message: 'Company wallet initialized successfully!', settings: db.company_settings });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/operations/config-rules' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied.' }, 403);
+    }
+    try {
+      const { rules_shareholder_configured, rules_cycle_configured, roles_configured } = await request.json() as any;
+      db.company_settings = db.company_settings || {};
+
+      if (rules_shareholder_configured !== undefined) db.company_settings.rules_shareholder_configured = rules_shareholder_configured;
+      if (rules_cycle_configured !== undefined) db.company_settings.rules_cycle_configured = rules_cycle_configured;
+      if (roles_configured !== undefined) db.company_settings.roles_configured = roles_configured;
+
+      await dbManager.saveDB(db);
+      return buildResponse({ success: true, message: 'Operational rules configured successfully!', settings: db.company_settings });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // 21. SHAREHOLDER FINANCE ADJUSTMENT ENDPOINTS
+  if (path === '/api/finance/withdraw' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Admin or Director role required.' }, 403);
+    }
+    try {
+      const { shareholderId, amount, remarks } = await request.json() as any;
+      if (!shareholderId || !amount || parseFloat(amount) <= 0) {
+        return buildResponse({ error: 'Invalid withdrawal amount or shareholder ID.' }, 400);
+      }
+
+      const sh = db.shareholders.find((s: any) => s.id === shareholderId);
+      if (!sh) return buildResponse({ error: 'Shareholder not found.' }, 404);
+
+      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const netGeneratedAmount = totalRev - totalExp;
+      const shareholderPercentage = db.shareholder_settings?.distributionPercentage || 2;
+      const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
+      
+      const totalInvestmentsSum = db.shareholders.reduce((s: number, r: any) => s + (r.investment_amount || 0), 0);
+      const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+      const currentEarnings = distributionPool * (pctStake / 100);
+      const totalWithdrawn = sh.total_withdrawn || 0;
+      const availableWithdrawal = currentEarnings - totalWithdrawn;
+
+      const withdrawAmt = parseFloat(amount);
+      if (withdrawAmt > availableWithdrawal) {
+        return buildResponse({ error: `Over-withdrawal prevented. Maximum available: ₦${availableWithdrawal.toLocaleString()}` }, 400);
+      }
+
+      const walletBalance = totalRev - totalExp;
+      if (walletBalance < withdrawAmt) {
+        return buildResponse({ error: `Insufficient company cash balance to fulfill withdrawal. Wallet balance: ₦${walletBalance.toLocaleString()}` }, 400);
+      }
+
+      sh.total_withdrawn = totalWithdrawn + withdrawAmt;
+      sh.updated_at = new Date().toISOString();
+
+      if (!db.financial_records) db.financial_records = [];
+      db.financial_records.unshift({
+        id: `FIN-WD-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+        type: 'expense',
+        category: 'other',
+        amount: withdrawAmt,
+        date: new Date().toISOString().split('T')[0],
+        description: `Shareholder Dividend Withdrawal - ${sh.full_name} (${remarks || 'Approved Disbursal'})`,
+        approvedBy: user.fullName,
+        created_at: new Date().toISOString()
+      });
+
+      if (!db.notifications) db.notifications = [];
+      db.notifications.unshift({
+        id: generateUUID(),
+        title_en: 'Shareholder Withdrawal Approved',
+        title_ha: 'An Amince da Fitowar Kudin Shareholder',
+        message_en: `Withdrew ₦${withdrawAmt.toLocaleString()} from available dividends of ${sh.full_name}.`,
+        message_ha: `An cire ₦${withdrawAmt.toLocaleString()} daga ribar Alhaji/Hajiya ${sh.full_name}.`,
+        type: 'success',
+        read_status: 0,
+        created_at: new Date().toISOString()
+      });
+
+      writeAuditLog(user.id, user.email, user.role, 'SHAREHOLDER_WITHDRAWAL', null, `Shareholder ${sh.full_name} withdrew ₦${withdrawAmt.toLocaleString()}`, db);
+      await dbManager.saveDB(db);
+
+      return buildResponse({ success: true, shareholder: sh });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/finance/reinvest' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Admin or Director role required.' }, 403);
+    }
+    try {
+      const { shareholderId, amount } = await request.json() as any;
+      if (!shareholderId || !amount || parseFloat(amount) <= 0) {
+        return buildResponse({ error: 'Invalid reinvestment amount or shareholder ID.' }, 400);
+      }
+
+      const sh = db.shareholders.find((s: any) => s.id === shareholderId);
+      if (!sh) return buildResponse({ error: 'Shareholder not found.' }, 404);
+
+      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const netGeneratedAmount = totalRev - totalExp;
+      const shareholderPercentage = db.shareholder_settings?.distributionPercentage || 2;
+      const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
+      
+      const totalInvestmentsSum = db.shareholders.reduce((s: number, r: any) => s + (r.investment_amount || 0), 0);
+      const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+      const currentEarnings = distributionPool * (pctStake / 100);
+      const totalWithdrawn = sh.total_withdrawn || 0;
+      const availableWithdrawal = currentEarnings - totalWithdrawn;
+
+      const reinvestAmt = parseFloat(amount);
+      if (reinvestAmt > availableWithdrawal) {
+        return buildResponse({ error: `Over-reinvestment prevented. Maximum available: ₦${availableWithdrawal.toLocaleString()}` }, 400);
+      }
+
+      sh.investment_amount += reinvestAmt;
+      sh.total_reinvested = (sh.total_reinvested || 0) + reinvestAmt;
+      sh.total_withdrawn = totalWithdrawn + reinvestAmt;
+      sh.updated_at = new Date().toISOString();
+
+      if (!db.financial_records) db.financial_records = [];
+      db.financial_records.unshift({
+        id: `FIN-REINV-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+        type: 'revenue',
+        category: 'other',
+        amount: reinvestAmt,
+        date: new Date().toISOString().split('T')[0],
+        description: `Capital Reinvestment - ${sh.full_name} (Rollover of ₦${reinvestAmt.toLocaleString()} dividends into Capital)`,
+        approvedBy: user.fullName,
+        created_at: new Date().toISOString()
+      });
+      
+      db.financial_records.unshift({
+        id: `FIN-REINV-EXP-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+        type: 'expense',
+        category: 'other',
+        amount: reinvestAmt,
+        date: new Date().toISOString().split('T')[0],
+        description: `Shareholder Reinvestment Debit - ${sh.full_name} (Transfer to capital stock)`,
+        approvedBy: user.fullName,
+        created_at: new Date().toISOString()
+      });
+
+      if (!db.notifications) db.notifications = [];
+      db.notifications.unshift({
+        id: generateUUID(),
+        title_en: 'Shareholder Reinvestment Processed',
+        title_ha: 'Sake Zuba Jari na Shareholder',
+        message_en: `Successfully reinvested ₦${reinvestAmt.toLocaleString()} dividends into capital stock for ${sh.full_name}.`,
+        message_ha: `An sake zuba jarin ribar ₦${reinvestAmt.toLocaleString()} a matsayin jari na ${sh.full_name}.`,
+        type: 'success',
+        read_status: 0,
+        created_at: new Date().toISOString()
+      });
+
+      writeAuditLog(user.id, user.email, user.role, 'SHAREHOLDER_REINVESTMENT', null, `Shareholder ${sh.full_name} reinvested ₦${reinvestAmt.toLocaleString()}`, db);
+      await dbManager.saveDB(db);
+
+      return buildResponse({ success: true, shareholder: sh });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/finance/payroll' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Admin or Director role required.' }, 403);
+    }
+    try {
+      const activeCycle = db.cycles && db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+      if (!activeCycle) {
+        return buildResponse({ error: 'No active or paused operating cycle found. Payroll must be disbursed during an active operating cycle.' }, 400);
+      }
+
+      const alreadyDisbursed = (db.financial_records || []).some((f: any) => 
+        f.category === 'salary' && 
+        (f.cycle_id === activeCycle.id || f.description.includes(`Cycle ${activeCycle.id}`))
+      );
+
+      if (alreadyDisbursed) {
+        return buildResponse({ error: `Payroll has already been disbursed for Cycle ${activeCycle.id}. Duplicate payment is blocked.` }, 400);
+      }
+
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const activeTricycleIds = new Set<string>();
+      
+      (db.trip_manifests || []).forEach((t: any) => {
+        const tripDateStr = t.created_at || t.departure_time;
+        if (tripDateStr) {
+          const tripDate = new Date(tripDateStr);
+          if (tripDate >= thirtyDaysAgo && tripDate <= now) {
+            const vid = t.vehicle_id || t.vehicleId;
+            if (vid) {
+              activeTricycleIds.add(vid);
+            }
+          }
+        }
+      });
+
+      let activeVehiclesCount = activeTricycleIds.size;
+      if (activeVehiclesCount === 0) {
+        const allTripVehicleIds = new Set<string>();
+        (db.trip_manifests || []).forEach((t: any) => {
+          const vid = t.vehicle_id || t.vehicleId;
+          if (vid) allTripVehicleIds.add(vid);
+        });
+        activeVehiclesCount = allTripVehicleIds.size;
+      }
+      if (activeVehiclesCount === 0) {
+        activeVehiclesCount = db.vehicles.filter((v: any) => v.status === 'active' || v.status === 'assigned' || v.status === 'idle').length || db.vehicles.length || 5;
+      }
+      
+      const barristerSal = activeVehiclesCount * 1000;
+      const managerSal = activeVehiclesCount * 500;
+      const adamSal = activeVehiclesCount * 1000;
+      const abakakaSal = activeVehiclesCount * 1000;
+      const totalPayroll = barristerSal + managerSal + adamSal + abakakaSal;
+
+      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const walletBalance = totalRev - totalExp;
+
+      if (walletBalance < totalPayroll) {
+        return buildResponse({ error: `Insufficient funds in company wallet to process payroll. Required: ₦${totalPayroll.toLocaleString()}, Available: ₦${walletBalance.toLocaleString()}` }, 400);
+      }
+
+      const entries = [
+        { name: 'Barrister', amount: barristerSal },
+        { name: 'Manager', amount: managerSal },
+        { name: 'Admin Adam', amount: adamSal },
+        { name: 'Admin Abakaka', amount: abakakaSal }
+      ];
+
+      if (!db.financial_records) db.financial_records = [];
+      entries.forEach(entry => {
+        db.financial_records.unshift({
+          id: `FIN-PAY-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+          type: 'expense',
+          category: 'salary',
+          amount: entry.amount,
+          date: new Date().toISOString().split('T')[0],
+          description: `Payroll Disbursal for ${entry.name} based on ${activeVehiclesCount} active tricycles - Cycle ${activeCycle.id}`,
+          cycle_id: activeCycle.id,
+          approvedBy: user.fullName,
+          created_at: new Date().toISOString()
+        });
+      });
+
+      if (!db.notifications) db.notifications = [];
+      db.notifications.unshift({
+        id: generateUUID(),
+        title_en: 'Payroll Successfully Processed',
+        title_ha: 'An Shigar da Albashin Ma’aikata',
+        message_en: `Disbursed ₦${totalPayroll.toLocaleString()} in salaries for ${activeVehiclesCount} active tricycles in the cycle.`,
+        message_ha: `An fitar da albashi na ₦${totalPayroll.toLocaleString()} na babura ${activeVehiclesCount} masu aiki a wannan zagaye.`,
+        type: 'success',
+        read_status: 0,
+        created_at: new Date().toISOString()
+      });
+
+      writeAuditLog(user.id, user.email, user.role, 'PAYROLL_GENERATED', null, `Processed payroll of ₦${totalPayroll.toLocaleString()} for ${activeVehiclesCount} active tricycles.`, db);
+      await dbManager.saveDB(db);
+
+      return buildResponse({ success: true, totalPayroll, activeVehiclesCount });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // 22. INTERNAL CHAT MESSAGES ENDPOINTS
+  if (path === '/api/messages') {
+    if (method === 'GET') {
+      return buildResponse(db.messages || []);
+    }
+    if (method === 'POST') {
+      try {
+        const { receiverId, receiverRole, text, attachmentUrl, attachmentType, attachmentName } = await request.json() as any;
+        if (!receiverId || !receiverRole) {
+          return buildResponse({ error: 'Receiver id and role parameters required.' }, 400);
+        }
+
+        if (!db.messages) db.messages = [];
+        const newMessage = {
+          id: `MSG-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+          sender_id: user.id,
+          sender_name: user.fullName,
+          sender_role: user.role,
+          receiver_id: receiverId,
+          receiver_role: receiverRole,
+          text: text || '',
+          attachment_url: attachmentUrl || '',
+          attachment_type: attachmentType || '',
+          attachment_name: attachmentName || '',
+          delivered_status: 1,
+          read_status: 0,
+          created_at: new Date().toISOString()
+        };
+
+        db.messages.push(newMessage);
+        await dbManager.saveDB(db);
+
+        return buildResponse({ success: true, message: newMessage });
+      } catch (err: any) {
+        return buildResponse({ error: err.message }, 500);
+      }
+    }
+  }
+
+  if (path === '/api/messages/read' && method === 'PUT') {
+    try {
+      const { senderId } = await request.json() as any;
+      if (!db.messages) db.messages = [];
+
+      let updatedCount = 0;
+      db.messages.forEach((m: any) => {
+        if (m.sender_id === senderId && m.receiver_id === user.id && m.read_status === 0) {
+          m.read_status = 1;
+          updatedCount++;
+        }
+      });
+
+      if (updatedCount > 0) {
+        await dbManager.saveDB(db);
+      }
+
+      return buildResponse({ success: true, updatedCount });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // 23. ANNOUNCEMENTS BROADCAST ENDPOINTS
+  if (path === '/api/announcements') {
+    if (method === 'GET') {
+      return buildResponse(db.announcements || []);
+    }
+    if (method === 'POST') {
+      if (user.role !== 'admin' && user.role !== 'director') {
+        return buildResponse({ error: 'Access Denied: Admins or Directors only.' }, 403);
+      }
+      try {
+        const { title, message, targetAudience, imageUrl, attachmentUrl, attachmentName } = await request.json() as any;
+        if (!title || !message || !targetAudience) {
+          return buildResponse({ error: 'Title, message and target audience are required.' }, 400);
+        }
+
+        if (!db.announcements) db.announcements = [];
+        const newAnnouncement = {
+          id: `ANN-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+          title,
+          message,
+          target_audience: targetAudience,
+          image_url: imageUrl || '',
+          attachment_url: attachmentUrl || '',
+          attachment_name: attachmentName || '',
+          published_by: user.fullName,
+          created_at: new Date().toISOString()
+        };
+
+        db.announcements.unshift(newAnnouncement);
+
+        if (!db.notifications) db.notifications = [];
+        db.notifications.unshift({
+          id: generateUUID(),
+          title_en: `Announcement: ${title}`,
+          title_ha: `Sanarwa: ${title}`,
+          message_en: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+          message_ha: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+          type: 'info',
+          target_role: targetAudience === 'all' ? undefined : targetAudience,
+          read_status: 0,
+          created_at: new Date().toISOString()
+        });
+
+        writeAuditLog(user.id, user.email, user.role, 'ANNOUNCEMENT_PUBLISHED', newAnnouncement.id, `Published broadcast announcement: ${title} to ${targetAudience}`, db);
+        await dbManager.saveDB(db);
+
+        return buildResponse({ success: true, announcement: newAnnouncement });
+      } catch (err: any) {
+        return buildResponse({ error: err.message }, 500);
+      }
+    }
+  }
+
   // Fallback 404 for unmatched endpoints
   return buildResponse({ error: `The requested corporate endpoint ${path} is non-existent.` }, 404);
 };
