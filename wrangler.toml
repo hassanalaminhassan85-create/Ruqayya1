@@ -1,0 +1,28 @@
+name = "ruqayya-transport-erp"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-07-07"
+compatibility_flags = [ "nodejs_compat" ]
+
+[vars]
+GEMINI_API_KEY = ""
+APP_URL = ""
+CLOUDFLARE_ACCOUNT_ID = ""
+CLOUDFLARE_API_TOKEN = ""
+VAPID_PUBLIC_KEY = ""
+VAPID_PRIVATE_KEY = ""
+
+[[kv_namespaces]]
+binding = "PUSH_SUBSCRIPTIONS"
+id = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ruqayya"
+database_id = "2e4092ba-4766-45d4-bb5d-934d6bbac2e6"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "ruqayya"
+
+[ai]
+binding = "AI"
