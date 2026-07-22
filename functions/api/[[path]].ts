@@ -2545,8 +2545,8 @@ ${JSON.stringify(cleanedContext, null, 2)}
 
   // 17. RE-ROUTING EXECUTIVE DIRECT CONTROLS
   if (path.startsWith('/api/director/')) {
-    if (user.role !== 'director') {
-      return buildResponse({ error: 'Access Denied: Executive Director privileges required.' }, 403);
+    if (user.role !== 'director' && user.role !== 'admin') {
+      return buildResponse({ error: 'Access Denied: Executive Director or Admin privileges required.' }, 403);
     }
     const ctrl = path.replace('/api/director/', '');
 
@@ -2558,16 +2558,132 @@ ${JSON.stringify(cleanedContext, null, 2)}
         const newCycle = {
           id: `CYC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
           startDate,
+          endDate: null,
           status: 'active',
           locked: false,
-          endGoalTons: endGoalTons || 200
+          endGoalTons: endGoalTons || 200,
+          created_at: new Date().toISOString(),
+          created_by: user.fullName,
+          financials: [],
+          pauseHistory: []
         };
 
         db.cycles.push(newCycle);
         writeAuditLog(user.id, user.email, user.role, 'CYCLE_STARTED', null, `Started operating cycle: ${newCycle.id}`, db);
         await dbManager.saveDB(db);
 
-        return buildResponse(newCycle);
+        return buildResponse({ success: true, cycle: newCycle });
+      } catch (err: any) {
+        return buildResponse({ error: err.message }, 500);
+      }
+    }
+
+    if (ctrl === 'cycles/pause' && method === 'POST') {
+      try {
+        const { reason } = await request.json() as any;
+        if (!reason) {
+          return buildResponse({ error: 'Reason for pause is required.' }, 400);
+        }
+
+        const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+        if (!activeCycle) {
+          return buildResponse({ error: 'No active operating cycle found to pause.' }, 400);
+        }
+
+        activeCycle.status = 'paused';
+        activeCycle.pauseReason = reason;
+        activeCycle.pausedAt = new Date().toISOString();
+        activeCycle.pausedBy = user.fullName;
+
+        if (!activeCycle.pauseHistory) {
+          activeCycle.pauseHistory = [];
+        }
+        activeCycle.pauseHistory.unshift({
+          id: generateUUID(),
+          pausedBy: user.fullName,
+          pausedAt: new Date().toISOString(),
+          reason
+        });
+
+        if (!db.company_operations_state) {
+          db.company_operations_state = { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+        }
+        db.company_operations_state.status = 'Paused';
+        if (!db.company_operations_state.pauseHistory) {
+          db.company_operations_state.pauseHistory = [];
+        }
+        db.company_operations_state.pauseHistory.unshift({
+          id: generateUUID(),
+          pausedBy: user.fullName,
+          pausedAt: new Date().toISOString(),
+          reason
+        });
+
+        if (!db.notifications) db.notifications = [];
+        db.notifications.unshift({
+          id: generateUUID(),
+          title_en: 'Operating Cycle Paused',
+          title_ha: 'An Dakatar da Zagayen Sufuri',
+          message_en: `Operating Cycle ${activeCycle.id} was paused by ${user.fullName}. Reason: ${reason}`,
+          message_ha: `An dakatar da Zagayen Gudanarwa ${activeCycle.id} ta hanyar ${user.fullName}. Dalili: ${reason}`,
+          type: 'warning',
+          read_status: 0,
+          created_at: new Date().toISOString()
+        });
+
+        writeAuditLog(user.id, user.email, user.role, 'CYCLE_PAUSE', null, `Paused operating cycle ${activeCycle.id}. Reason: ${reason}`, db);
+        await dbManager.saveDB(db);
+
+        return buildResponse({ success: true, cycle: activeCycle });
+      } catch (err: any) {
+        return buildResponse({ error: err.message }, 500);
+      }
+    }
+
+    if (ctrl === 'cycles/resume' && method === 'POST') {
+      try {
+        const { reason } = await request.json().catch(() => ({})) as any;
+        const pausedCycle = db.cycles.find((c: any) => c.status === 'paused');
+        if (!pausedCycle) {
+          return buildResponse({ error: 'No paused operating cycle found to resume.' }, 400);
+        }
+
+        pausedCycle.status = 'active';
+        pausedCycle.resumedAt = new Date().toISOString();
+        pausedCycle.resumedBy = user.fullName;
+        if (pausedCycle.pauseHistory && pausedCycle.pauseHistory.length > 0) {
+          pausedCycle.pauseHistory[0].resumedBy = user.fullName;
+          pausedCycle.pauseHistory[0].resumedAt = new Date().toISOString();
+          if (reason) pausedCycle.pauseHistory[0].resumeReason = reason;
+        }
+
+        if (!db.company_operations_state) {
+          db.company_operations_state = { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+        }
+        db.company_operations_state.status = 'Operational Mode';
+        if (db.company_operations_state.pauseHistory && db.company_operations_state.pauseHistory.length > 0) {
+          const lastPause = db.company_operations_state.pauseHistory[0];
+          lastPause.resumedBy = user.fullName;
+          lastPause.resumedAt = new Date().toISOString();
+          if (reason) lastPause.resumeReason = reason;
+        }
+
+        if (!db.notifications) db.notifications = [];
+        db.notifications.unshift({
+          id: generateUUID(),
+          title_en: 'Operating Cycle Resumed',
+          title_ha: 'An Sake Kaddamar da Zagayen Sufuri',
+          message_en: `Operating Cycle ${pausedCycle.id} was resumed by ${user.fullName}.`,
+          message_ha: `An sake dawo da Zagayen Gudanarwa ${pausedCycle.id} ta hanyar ${user.fullName}.`,
+          type: 'success',
+          read_status: 0,
+          created_at: new Date().toISOString()
+        });
+
+        writeAuditLog(user.id, user.email, user.role, 'CYCLE_RESUME', null, `Resumed operating cycle ${pausedCycle.id}`, db);
+        await dbManager.saveDB(db);
+
+        return buildResponse({ success: true, cycle: pausedCycle });
       } catch (err: any) {
         return buildResponse({ error: err.message }, 500);
       }
@@ -2663,7 +2779,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
     }
 
     if (ctrl === 'cycles' && method === 'GET') {
-      return buildResponse(db.cycles || []);
+      return buildResponse({ success: true, cycles: db.cycles || [] });
     }
   }
 
