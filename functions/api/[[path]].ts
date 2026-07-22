@@ -361,16 +361,27 @@ class D1Manager {
     this.env = env;
   }
 
+  private getD1(): any {
+    if (this.env.DB && typeof this.env.DB.prepare === 'function') {
+      return this.env.DB;
+    }
+    if (this.env.ruqayya && typeof this.env.ruqayya.prepare === 'function') {
+      return this.env.ruqayya;
+    }
+    return null;
+  }
+
   async getDB(): Promise<any> {
-    if (this.env.DB) {
-      await this.env.DB.prepare(`
+    const d1 = this.getD1();
+    if (d1) {
+      await d1.prepare(`
         CREATE TABLE IF NOT EXISTS collections (
           name TEXT PRIMARY KEY,
           data TEXT
         )
       `).run();
 
-      const dbResponse = await this.env.DB.prepare("SELECT name, data FROM collections").all();
+      const dbResponse = await d1.prepare("SELECT name, data FROM collections").all();
       const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
       if (results && results.length > 0) {
         const state: any = {};
@@ -392,16 +403,17 @@ class D1Manager {
   }
 
   async saveDB(state: any): Promise<void> {
-    if (this.env.DB) {
+    const d1 = this.getD1();
+    if (d1) {
       const statements = [];
       for (const [key, val] of Object.entries(state)) {
         statements.push(
-          this.env.DB.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
+          d1.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
             .bind(key, JSON.stringify(val))
         );
       }
       if (statements.length > 0) {
-        await this.env.DB.batch(statements);
+        await d1.batch(statements);
       }
     } else {
       this.memoryDb = state;
@@ -701,17 +713,15 @@ async function sendPushNotification(
   subscription: any,
   payload: string
 ): Promise<{ success: boolean; expired?: boolean }> {
-  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
-    console.warn("VAPID keys are missing from environment secrets.");
-    return { success: false };
-  }
+  const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
+  const privateKey = env.VAPID_PRIVATE_KEY || 'vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk';
 
   try {
     const webpush = await import('web-push').then(m => m.default || m);
     webpush.setVapidDetails(
       'mailto:hassanalaminhassan85@gmail.com',
-      env.VAPID_PUBLIC_KEY,
-      env.VAPID_PRIVATE_KEY
+      publicKey,
+      privateKey
     );
 
     await webpush.sendNotification(subscription, payload);
@@ -997,7 +1007,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // PUBLIC: VAPID Public Key Retrieval
   if (path === '/api/notifications/vapid-public-key' && method === 'GET') {
-    const publicKey = env.VAPID_PUBLIC_KEY || 'BEl62v96YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962YvC9R962';
+    const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
     return buildResponse({ publicKey });
   }
 
