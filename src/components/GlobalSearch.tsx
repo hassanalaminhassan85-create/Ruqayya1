@@ -100,17 +100,16 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectResult, lang
       return <span>{text}</span>;
     }
     const escapedHighlight = highlight.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = new RegExp(`(${escapedHighlight})`, 'gi');
-    const parts = text.split(regex);
+    const parts = text.split(new RegExp(`(${escapedHighlight})`, 'gi'));
     return (
       <span>
         {parts.map((part, i) => 
-          regex.test(part) ? (
-            <mark key={i} className="bg-amber-500/20 text-brand-gold rounded px-0.5 font-bold">
+          part.toLowerCase() === highlight.toLowerCase() ? (
+            <mark key={`mark-${i}`} className="bg-amber-500/20 text-brand-gold rounded px-0.5 font-bold">
               {part}
             </mark>
           ) : (
-            part
+            <React.Fragment key={`part-${i}`}>{part}</React.Fragment>
           )
         )}
       </span>

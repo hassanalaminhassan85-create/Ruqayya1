@@ -1,4 +1,3 @@
-import webpush from 'web-push';
 import { WorkersAIService } from '../../src/utils/ai_service';
 
 interface Env {
@@ -8,6 +7,7 @@ interface Env {
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
   ruqayya?: any;
+  AI?: any;
   GEMINI_API_KEY?: string;
 }
 
@@ -703,18 +703,19 @@ async function sendPushNotification(
     return { success: false };
   }
 
-  webpush.setVapidDetails(
-    'mailto:hassanalaminhassan85@gmail.com',
-    env.VAPID_PUBLIC_KEY,
-    env.VAPID_PRIVATE_KEY
-  );
-
   try {
+    const webpush = await import('web-push').then(m => m.default || m);
+    webpush.setVapidDetails(
+      'mailto:hassanalaminhassan85@gmail.com',
+      env.VAPID_PUBLIC_KEY,
+      env.VAPID_PRIVATE_KEY
+    );
+
     await webpush.sendNotification(subscription, payload);
     return { success: true };
   } catch (error: any) {
     console.error("Error sending push notification via web-push:", error);
-    if (error.statusCode === 410 || error.statusCode === 404) {
+    if (error && (error.statusCode === 410 || error.statusCode === 404)) {
       return { success: false, expired: true };
     }
     return { success: false };

@@ -629,7 +629,7 @@ export const NotificationInbox: React.FC<NotificationInboxProps> = ({ lang }) =>
                 </div>
 
                 <AnimatePresence initial={false}>
-                  {filtered.map((n) => {
+                  {filtered.map((n, idx) => {
                     const isSelected = selectedIds.includes(n.id);
                     const catInfo = categoryConfig[n.category || 'system'] || categoryConfig.system;
                     const prioInfo = priorityConfig[n.priority || 'medium'] || priorityConfig.medium;
@@ -639,7 +639,7 @@ export const NotificationInbox: React.FC<NotificationInboxProps> = ({ lang }) =>
 
                     return (
                       <motion.div
-                        key={n.id}
+                        key={n.id || `inbox-notif-${idx}`}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, height: 0 }}

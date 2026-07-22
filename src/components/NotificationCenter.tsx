@@ -249,9 +249,9 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
                   {lang === 'en' ? "Your notification stream is clear." : "Babu wata sanarwa a halin yanzu."}
                 </div>
               ) : (
-                notifications.map((n) => (
+                notifications.map((n, idx) => (
                   <div
-                    key={n.id}
+                    key={n.id || `notif-${idx}`}
                     className={`p-3.5 flex gap-3 transition-colors relative group ${
                       n.read ? 'opacity-70 hover:bg-bg-base/20' : 'bg-brand-gold/5 hover:bg-brand-gold/10'
                     }`}

@@ -59,31 +59,31 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
         // Render normal markdown blocks (headers, lists, tables)
         const lines = part.split('\n');
         return (
-          <div key={index} className="space-y-2">
+          <div key={`part-${index}`} className="space-y-2">
             {lines.map((line, lineIdx) => {
               const trimmed = line.trim();
 
               // Empty lines
-              if (!trimmed) return <div key={lineIdx} className="h-2" />;
+              if (!trimmed) return <div key={`line-${lineIdx}`} className="h-2" />;
 
               // Headers
               if (trimmed.startsWith('# ')) {
                 return (
-                  <h1 key={lineIdx} className="text-lg font-black text-brand-gold tracking-tight pt-2 border-b border-slate-800 pb-1 mt-3">
+                  <h1 key={`h1-${lineIdx}`} className="text-lg font-black text-brand-gold tracking-tight pt-2 border-b border-slate-800 pb-1 mt-3">
                     {renderInlineStyles(trimmed.slice(2))}
                   </h1>
                 );
               }
               if (trimmed.startsWith('## ')) {
                 return (
-                  <h2 key={lineIdx} className="text-sm font-extrabold text-brand-gold tracking-tight pt-2 mt-2">
+                  <h2 key={`h2-${lineIdx}`} className="text-sm font-extrabold text-brand-gold tracking-tight pt-2 mt-2">
                     {renderInlineStyles(trimmed.slice(3))}
                   </h2>
                 );
               }
               if (trimmed.startsWith('### ')) {
                 return (
-                  <h3 key={lineIdx} className="text-xs font-bold text-slate-100 tracking-tight pt-1">
+                  <h3 key={`h3-${lineIdx}`} className="text-xs font-bold text-slate-100 tracking-tight pt-1">
                     {renderInlineStyles(trimmed.slice(4))}
                   </h3>
                 );
@@ -92,7 +92,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
               // Bullet Points
               if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
                 return (
-                  <div key={lineIdx} className="flex gap-2.5 items-start pl-2 text-slate-200">
+                  <div key={`bullet-${lineIdx}`} className="flex gap-2.5 items-start pl-2 text-slate-200">
                     <span className="h-1.5 w-1.5 rounded-full bg-brand-gold shrink-0 mt-2" />
                     <span className="flex-1">{renderInlineStyles(trimmed.slice(2))}</span>
                   </div>
@@ -103,7 +103,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
               const numMatch = trimmed.match(/^(\d+)\.\s(.*)/);
               if (numMatch) {
                 return (
-                  <div key={lineIdx} className="flex gap-2 items-start pl-2 text-slate-200">
+                  <div key={`num-${lineIdx}`} className="flex gap-2 items-start pl-2 text-slate-200">
                     <span className="text-[10px] font-mono font-black text-brand-gold shrink-0 mt-0.5">{numMatch[1]}.</span>
                     <span className="flex-1">{renderInlineStyles(numMatch[2])}</span>
                   </div>
@@ -116,9 +116,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
                 if (trimmed.includes('---')) return null;
                 const cells = trimmed.split('|').map(c => c.trim()).filter(Boolean);
                 return (
-                  <div key={lineIdx} className="grid grid-flow-col auto-cols-fr gap-2 bg-slate-950/40 p-2.5 border border-slate-800/80 rounded-lg text-[10.5px] my-1 items-center">
+                  <div key={`tbl-${lineIdx}`} className="grid grid-flow-col auto-cols-fr gap-2 bg-slate-950/40 p-2.5 border border-slate-800/80 rounded-lg text-[10.5px] my-1 items-center">
                     {cells.map((cell, cIdx) => (
-                      <span key={cIdx} className="truncate font-semibold text-slate-300">
+                      <span key={`cell-${lineIdx}-${cIdx}`} className="truncate font-semibold text-slate-300">
                         {renderInlineStyles(cell)}
                       </span>
                     ))}
@@ -128,7 +128,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
 
               // Normal text line
               return (
-                <p key={lineIdx} className="leading-relaxed whitespace-pre-wrap">
+                <p key={`p-${lineIdx}`} className="leading-relaxed whitespace-pre-wrap">
                   {renderInlineStyles(trimmed)}
                 </p>
               );
@@ -149,14 +149,14 @@ function renderInlineStyles(text: string): React.ReactNode[] {
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <strong key={i} className="font-extrabold text-brand-gold">
+        <strong key={`bold-${i}`} className="font-extrabold text-brand-gold">
           {part.slice(2, -2)}
         </strong>
       );
     }
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={i} className="px-1.5 py-0.5 rounded-md bg-slate-950 text-brand-gold border border-slate-800 font-mono text-[10px]">
+        <code key={`code-${i}`} className="px-1.5 py-0.5 rounded-md bg-slate-950 text-brand-gold border border-slate-800 font-mono text-[10px]">
           {part.slice(1, -1)}
         </code>
       );
@@ -166,7 +166,7 @@ function renderInlineStyles(text: string): React.ReactNode[] {
       if (match) {
         return (
           <a
-            key={i}
+            key={`link-${i}`}
             href={match[2]}
             target="_blank"
             rel="noopener noreferrer"
@@ -177,6 +177,6 @@ function renderInlineStyles(text: string): React.ReactNode[] {
         );
       }
     }
-    return part;
+    return <React.Fragment key={`txt-${i}`}>{part}</React.Fragment>;
   });
 }

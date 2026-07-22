@@ -12,6 +12,9 @@ export interface CFEnv {
   ruqayya?: {
     run: (model: string, options: any) => Promise<any>;
   };
+  AI?: {
+    run: (model: string, options: any) => Promise<any>;
+  };
 }
 
 export class WorkersAIService {
@@ -71,8 +74,9 @@ export class WorkersAIService {
       attempt++;
       try {
         // Option A: Real Workers AI Binding or Remote REST API
-        if (this.env.ruqayya && typeof this.env.ruqayya.run === 'function') {
-          const runPromise = this.env.ruqayya.run(model, {
+        const aiBinding = this.env.AI || this.env.ruqayya;
+        if (aiBinding && typeof aiBinding.run === 'function') {
+          const runPromise = aiBinding.run(model, {
             messages,
             stream: false
           });
@@ -182,8 +186,9 @@ export class WorkersAIService {
 
     try {
       // Option A: Real Workers AI Streaming or Remote REST API Streaming
-      if (this.env.ruqayya && typeof this.env.ruqayya.run === 'function') {
-        const response: any = await this.env.ruqayya.run(model, {
+      const aiBinding = this.env.AI || this.env.ruqayya;
+      if (aiBinding && typeof aiBinding.run === 'function') {
+        const response: any = await aiBinding.run(model, {
           messages,
           stream: true
         });
