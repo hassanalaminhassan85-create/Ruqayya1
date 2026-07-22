@@ -65,7 +65,7 @@ export class WorkersAIService {
     messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
     options: AIServiceOptions = {}
   ): Promise<string> {
-    const model = options.model || '@cf/meta/llama-3.1-8b-instruct';
+    const model = options.model || '@cf/meta/llama-3.1-8b-instruct-fp8';
     const maxRetries = options.maxRetries ?? 3;
     const timeoutMs = options.timeoutMs ?? 15000;
 
@@ -190,7 +190,7 @@ export class WorkersAIService {
     messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
     options: AIServiceOptions = {}
   ): AsyncGenerator<string, void, unknown> {
-    const model = options.model || '@cf/meta/llama-3.1-8b-instruct';
+    const model = options.model || '@cf/meta/llama-3.1-8b-instruct-fp8';
 
     try {
       // Option A: Real Workers AI Streaming or Remote REST API Streaming
