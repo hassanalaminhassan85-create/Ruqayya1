@@ -370,7 +370,8 @@ class D1Manager {
         )
       `).run();
 
-      const { results } = await this.env.DB.prepare("SELECT name, data FROM collections").all();
+      const dbResponse = await this.env.DB.prepare("SELECT name, data FROM collections").all();
+      const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
       if (results && results.length > 0) {
         const state: any = {};
         for (const row of results) {
@@ -399,7 +400,9 @@ class D1Manager {
             .bind(key, JSON.stringify(val))
         );
       }
-      await this.env.DB.batch(statements);
+      if (statements.length > 0) {
+        await this.env.DB.batch(statements);
+      }
     } else {
       this.memoryDb = state;
     }
@@ -1840,20 +1843,35 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (env.R2_BUCKET) {
       const object = await env.R2_BUCKET.get(filename);
       if (!object) {
-        return new Response('File not found in storage bucket.', { status: 404 });
+        return new Response('File not found in storage bucket.', {
+          status: 404,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': '*',
+            'Access-Control-Allow-Methods': '*'
+          }
+        });
       }
       const fileData = await object.arrayBuffer();
       return new Response(fileData, {
         headers: {
           'Content-Type': filename.endsWith('.pdf') ? 'application/pdf' : 'image/png',
-          'Cache-Control': 'max-age=3600'
+          'Cache-Control': 'max-age=3600',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': '*',
+          'Access-Control-Allow-Methods': '*'
         }
       });
     } else {
       // Memory mock empty image for safety if no R2 bound
       const mockPixel = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 108, 11, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 96, 64, 0, 0, 0, 2, 0, 1, 73, 175, 168, 116, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
       return new Response(mockPixel, {
-        headers: { 'Content-Type': 'image/png' }
+        headers: {
+          'Content-Type': 'image/png',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': '*',
+          'Access-Control-Allow-Methods': '*'
+        }
       });
     }
   }

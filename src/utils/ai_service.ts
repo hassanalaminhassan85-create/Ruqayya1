@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+// Pure REST fetch implementation of Gemini API to prevent runtime/bundler crashes on Cloudflare Pages/Workers.
 
 export interface AIServiceOptions {
   model?: string;
@@ -136,11 +136,6 @@ export class WorkersAIService {
         // Option B: Local/Preview Fallback via Gemini API
         const apiKey = (this.env as any)?.GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined);
         if (apiKey) {
-          const ai = new GoogleGenAI({
-            apiKey: apiKey,
-            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-          });
-
           // Translate standard chat messages to Gemini's format
           const systemMsg = messages.find(m => m.role === 'system');
           const chatHistory = messages.filter(m => m.role !== 'system').map(m => ({
@@ -148,16 +143,29 @@ export class WorkersAIService {
             parts: [{ text: m.content }]
           }));
 
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
-            contents: chatHistory,
-            config: {
-              systemInstruction: systemMsg?.content,
-              temperature: 0.2
-            }
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'aistudio-build'
+            },
+            body: JSON.stringify({
+              contents: chatHistory,
+              systemInstruction: systemMsg ? { parts: [{ text: systemMsg.content }] } : undefined,
+              generationConfig: {
+                temperature: 0.2
+              }
+            })
           });
 
-          const resText = response.text || '';
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API returned status ${response.status}: ${errText}`);
+          }
+
+          const resData: any = await response.json();
+          const resText = resData.candidates?.[0]?.content?.parts?.[0]?.text || '';
           return resText.trim();
         }
 
@@ -285,32 +293,78 @@ export class WorkersAIService {
       // Option B: Local/Preview Fallback Streaming via Gemini API
       const apiKey = (this.env as any)?.GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined);
       if (apiKey) {
-        const ai = new GoogleGenAI({
-          apiKey: apiKey,
-          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-        });
-
         const systemMsg = messages.find(m => m.role === 'system');
         const chatHistory = messages.filter(m => m.role !== 'system').map(m => ({
           role: m.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: m.content }]
         }));
 
-        const responseStream = await ai.models.generateContentStream({
-          model: 'gemini-3.5-flash',
-          contents: chatHistory,
-          config: {
-            systemInstruction: systemMsg?.content,
-            temperature: 0.2
-          }
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse&key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'aistudio-build'
+          },
+          body: JSON.stringify({
+            contents: chatHistory,
+            systemInstruction: systemMsg ? { parts: [{ text: systemMsg.content }] } : undefined,
+            generationConfig: {
+              temperature: 0.2
+            }
+          })
         });
 
-        for await (const chunk of responseStream) {
-          if (chunk.text) {
-            yield chunk.text;
-          }
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Gemini Streaming API returned status ${response.status}: ${errText}`);
         }
-        return;
+
+        const bodyReader = response.body;
+        if (bodyReader) {
+          const reader = bodyReader.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep the incomplete line in buffer
+            
+            for (const line of lines) {
+              const cleanLine = line.trim();
+              if (cleanLine.startsWith('data:')) {
+                const dataStr = cleanLine.slice(5).trim();
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  const chunkText = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+                  if (chunkText) {
+                    yield chunkText;
+                  }
+                } catch {
+                  // Ignore parsing errors for empty or comment lines
+                }
+              }
+            }
+          }
+          
+          // Parse any trailing content in buffer
+          if (buffer.trim().startsWith('data:')) {
+            const dataStr = buffer.trim().slice(5).trim();
+            try {
+              const parsed = JSON.parse(dataStr);
+              const chunkText = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (chunkText) {
+                yield chunkText;
+              }
+            } catch {}
+          }
+          return;
+        }
+        throw new Error('Gemini API did not return a stream.');
       }
 
       // Option C: Hard static fallback streaming

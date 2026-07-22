@@ -626,8 +626,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                 {(!driver.documents || driver.documents.length === 0) ? (
                   <div className="col-span-3 text-center py-8 text-text-muted italic">{lang === 'en' ? "No documents uploaded." : "Babu takardun da aka dora."}</div>
                 ) : (
-                  driver.documents.map((doc: any) => (
-                    <Card key={doc.id} className="p-3 flex flex-col justify-between border border-border-main/60 bg-bg-base/30 text-xs">
+                  driver.documents.map((doc: any, idx: number) => (
+                    <Card key={doc.id || `doc-${doc.created_at || idx}`} className="p-3 flex flex-col justify-between border border-border-main/60 bg-bg-base/30 text-xs">
                       <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-brand-gold shrink-0" />
                         <div className="flex flex-col">

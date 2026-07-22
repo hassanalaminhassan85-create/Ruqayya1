@@ -1442,8 +1442,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    allDocuments.map((doc) => (
-                      <tr key={doc.id} className="hover:bg-bg-base/20 transition-all">
+                    allDocuments.map((doc, idx) => (
+                      <tr key={doc.id || `doc-pm-${idx}`} className="hover:bg-bg-base/20 transition-all">
                         <td className="p-4">
                           <div className="flex items-center gap-2.5">
                             <FileText className="h-5 w-5 text-brand-navy shrink-0" />
