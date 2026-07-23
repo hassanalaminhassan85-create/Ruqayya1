@@ -25,7 +25,7 @@ import { registerPushSubscription } from './utils/notificationHelper';
 import { CircularLogo } from './components/CircularLogo';
 import { PWAPanel } from './components/PWAPanel';
 import { AICopilotDrawer } from './components/AICopilotDrawer';
-import { AIPortalWorkspace } from './components/AIPortalWorkspace';
+import { ChatDashboard } from './components/ChatDashboard';
 import { offlineSync } from './utils/offlineSync';
 import { 
   Truck, 
@@ -58,7 +58,8 @@ import {
   TrendingDown,
   Briefcase,
   Coins,
-  Sparkles
+  Sparkles,
+  ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -109,7 +110,7 @@ export default function App() {
 
   // Tab states for active roles to link hamburger sidebar & dashboards
   const [driverTab, setDriverTab] = useState<'overview' | 'payments' | 'history' | 'vehicle' | 'documents' | 'profile'>('overview');
-  const [adminTab, setAdminTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory'>('fleet');
+  const [adminTab, setAdminTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('fleet');
   const [directorTab, setDirectorTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory'>('overview');
   const [shareholderTab, setShareholderTab] = useState<'overview' | 'cycles' | 'ledger' | 'settings'>('overview');
 
@@ -468,9 +469,11 @@ export default function App() {
       { id: 'ai-assistant', label: lang === 'en' ? "Ruqayya AI" : "Mataimakin AI", icon: <Sparkles className="h-4 w-4 shrink-0 text-brand-gold" />, active: activeSection === 'ai-assistant' },
       { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
       { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
+      { id: 'vouchers', label: lang === 'en' ? "Fuel Vouchers" : "Rasit na Mai", icon: <Fuel className="h-4 w-4 shrink-0" />, active: activeSection === 'vouchers' },
       { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Coins className="h-4 w-4 shrink-0" />, active: activeSection === 'finance' },
       { id: 'shareholders', label: lang === 'en' ? "Shareholders" : "Masu Hannun Jari", icon: <TrendingUp className="h-4 w-4 shrink-0" />, active: activeSection === 'shareholders' },
       { id: 'trips', label: lang === 'en' ? "Trips" : "Takardun Tafiya", icon: <MapPin className="h-4 w-4 shrink-0" />, active: activeSection === 'trips' },
+      { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-4 w-4 shrink-0 text-brand-gold" />, active: activeSection === 'people' },
       { id: 'reports', label: lang === 'en' ? "Reports" : "Rahoton Aiki", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'reports' },
       { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-4 w-4 shrink-0" />, active: activeSection === 'communications' },
       { id: 'documents', label: lang === 'en' ? "Documents" : "Taskar Takardu", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'documents' },
@@ -487,7 +490,7 @@ export default function App() {
     }
     if (currentRole === 'admin') {
       return items.filter(item => 
-        ['dashboard', 'ai-assistant', 'drivers', 'fleet', 'finance', 'trips', 'reports', 'communications', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
+        ['dashboard', 'ai-assistant', 'drivers', 'fleet', 'vouchers', 'finance', 'trips', 'people', 'communications', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
       );
     }
     if (currentRole === 'shareholder') {
@@ -514,10 +517,11 @@ export default function App() {
     }
     if (activeSection === 'ai-assistant') {
       return (
-        <AIPortalWorkspace
+        <ChatDashboard
           lang={lang}
           currentRole={currentRole}
           userName={currentRole === 'driver' ? driverName || 'Driver' : currentRole.charAt(0).toUpperCase() + currentRole.slice(1)}
+          onExit={() => setActiveSection('dashboard')}
         />
       );
     }
@@ -573,7 +577,7 @@ export default function App() {
     }
 
     if (currentRole === 'admin') {
-      let adminTabValue: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' = 'fleet';
+      let adminTabValue: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings' = 'fleet';
       if (activeSection === 'dashboard') {
         adminTabValue = 'fleet'; // Shows active fleet dashboard stats
       }
@@ -586,10 +590,11 @@ export default function App() {
       else if (activeSection === 'vouchers') adminTabValue = 'vouchers';
       else if (activeSection === 'finance') adminTabValue = 'finance';
       else if (activeSection === 'directory') adminTabValue = 'directory';
+      else if (activeSection === 'people') adminTabValue = 'people';
       else if (activeSection === 'reports') {
         adminTabValue = 'directory';
       }
-      else if (activeSection === 'settings') adminTabValue = 'fleet';
+      else if (activeSection === 'settings') adminTabValue = 'settings';
       else {
         return (
           <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
@@ -618,6 +623,8 @@ export default function App() {
             else if (tab === 'vouchers') setActiveSection('vouchers');
             else if (tab === 'finance') setActiveSection('finance');
             else if (tab === 'directory') setActiveSection('directory');
+            else if (tab === 'people') setActiveSection('people');
+            else if (tab === 'settings') setActiveSection('settings');
           }}
         />
       );
@@ -754,7 +761,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30">
+    <div className={`w-full max-w-full bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30 ${
+      activeSection === 'ai-assistant' ? 'h-screen overflow-hidden' : 'min-h-screen overflow-x-hidden'
+    }`}>
       
       <NotificationToastContainer lang={lang} currentRole={currentRole} />
       
@@ -778,7 +787,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* TOP NAVIGATION HEADER */}
-      {currentRole !== 'public' && (
+      {currentRole !== 'public' && activeSection !== 'ai-assistant' && (
         <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-2 sm:px-4 py-3 shadow-xs">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-4">
             <div className="flex items-center gap-3">
@@ -808,6 +817,16 @@ export default function App() {
                   <span className="text-[9px] font-bold text-brand-gold tracking-widest block uppercase -mt-1">{lang === 'en' ? "TRANSPORT" : "SUFURI"}</span>
                 </div>
               </div>
+
+              {activeSection === 'ai-assistant' && (
+                <button
+                  onClick={() => setActiveSection('dashboard')}
+                  className="px-2.5 py-1.5 bg-[#101524] border border-slate-800 text-slate-300 hover:text-white hover:border-brand-gold/40 text-[10.5px] font-extrabold rounded-xl flex items-center gap-1.5 transition-all shadow-sm shrink-0 cursor-pointer animate-fadeIn"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 text-brand-gold shrink-0" />
+                  <span className="hidden sm:inline">{lang === 'en' ? "Back to ERP" : "Koma ga ERP"}</span>
+                </button>
+              )}
 
               <div className="hidden md:flex items-center gap-2 pl-3 ml-1 border-l border-border-main/50 text-[10px] font-semibold text-text-muted">
                 <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -892,8 +911,10 @@ export default function App() {
               )}
 
               <NotificationCenter lang={lang} />
-              <LanguageSwitcher currentLanguage={lang} onLanguageChange={handleLanguageChange} />
-              <ThemeSwitcher currentTheme={theme} onThemeChange={handleThemeChange} />
+              <div className="hidden sm:flex items-center gap-1.5">
+                <LanguageSwitcher currentLanguage={lang} onLanguageChange={handleLanguageChange} />
+                <ThemeSwitcher currentTheme={theme} onThemeChange={handleThemeChange} />
+              </div>
 
               {currentRole !== 'public' && (
                 <button
@@ -911,7 +932,7 @@ export default function App() {
       )}
 
       {/* QUICK ACTIONS HORIZONTAL BAR */}
-      {currentRole !== 'public' && currentRole !== 'driver' && (
+      {currentRole !== 'public' && currentRole !== 'driver' && activeSection !== 'ai-assistant' && (
         <div className="bg-bg-surface border-b border-border-main/50 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shadow-xs">
           <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 min-w-0 pr-4">
@@ -1027,9 +1048,9 @@ export default function App() {
       />
 
       {/* MAIN CONTAINER LAYOUT */}
-      <div className={`flex-1 flex w-full ${currentRole === 'public' ? 'max-w-none' : 'max-w-7xl mx-auto'}`}>
+      <div className={`flex-1 flex w-full ${(currentRole === 'public' || activeSection === 'ai-assistant') ? 'max-w-none' : 'max-w-7xl mx-auto'}`}>
         {/* SIDEBAR BACKDROP FOR MOBILE */}
-        {sidebarOpen && currentRole !== 'public' && (
+        {sidebarOpen && currentRole !== 'public' && activeSection !== 'ai-assistant' && (
           <div 
             className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-30 md:hidden"
             onClick={(e) => {
@@ -1040,7 +1061,7 @@ export default function App() {
         )}
 
         {/* SIDEBAR FOR AUTHENTICATED ROLES */}
-        {currentRole !== 'public' && (
+        {currentRole !== 'public' && activeSection !== 'ai-assistant' && (
           <aside 
             onClick={(e) => e.stopPropagation()}
             className={`fixed inset-y-0 left-0 z-40 ${sidebarCollapsed ? 'md:w-20' : 'md:w-64'} w-64 bg-brand-navy text-white transform md:translate-x-0 md:static md:h-auto transition-all duration-300 ease-in-out border-r border-slate-800/80 p-4 flex flex-col gap-5 flex-shrink-0 ${
@@ -1146,7 +1167,7 @@ export default function App() {
         )}
 
         {/* WORKSPACE SURFACE VIEW */}
-        <main className={`flex-1 ${currentRole === 'public' ? 'p-0 flex flex-col' : 'p-4 md:p-6 grid grid-cols-1'} w-full max-w-full overflow-x-hidden`}>
+        <main className={`flex-1 ${(currentRole === 'public' || activeSection === 'ai-assistant') ? 'p-0 flex flex-col' : 'p-4 md:p-6 grid grid-cols-1'} w-full max-w-full overflow-x-hidden`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={currentRole + '-' + activeSection}
@@ -1154,7 +1175,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className={`flex-1 ${currentRole === 'public' ? 'flex flex-col' : 'grid grid-cols-1 w-full max-w-full'}`}
+              className={`flex-1 ${(currentRole === 'public' || activeSection === 'ai-assistant') ? 'flex flex-col' : 'grid grid-cols-1 w-full max-w-full'}`}
             >
               {currentRole === 'public' ? (
                 <LandingPage

@@ -29,7 +29,10 @@ import {
   ChevronRight, 
   Percent, 
   Calendar,
-  Layers
+  Layers,
+  ArrowRight,
+  Navigation,
+  Fuel
 } from 'lucide-react';
 
 interface ShareholderDashboardProps {
@@ -483,23 +486,127 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
             <User className="h-10 w-10 text-brand-gold/60" />
           </div>
           <div>
-            <span className="text-[14px] font-semibold tracking-wider text-brand-gold uppercase">
-              {lang === 'en' ? "Verified Equity Shareholder" : "Gwarzon Mai Hannun Jari"}
+            <span className="text-[12px] font-black tracking-widest text-brand-gold uppercase block">
+              {(() => {
+                const hours = new Date().getHours();
+                let greeting = "Good Morning";
+                if (hours >= 12 && hours < 17) greeting = "Good Afternoon";
+                if (hours >= 17) greeting = "Good Evening";
+                
+                if (lang === 'ha') {
+                  if (hours < 12) greeting = "In kwana lafiya (Barka da Asuba)";
+                  else if (hours < 17) greeting = "Barka da Rana";
+                  else greeting = "Barka da Yamma";
+                }
+                return `${greeting}, ${shareholder.full_name}!`;
+              })()}
             </span>
-            <h2 className="text-[28px] md:text-[30px] lg:text-[36px] font-bold text-text-main tracking-tight mt-1">{shareholder.full_name}</h2>
-            <p className="text-[14px] text-text-muted mt-2 flex items-center gap-1.5 font-medium">
-              <Calendar className="h-3.5 w-3.5" />
-              {lang === 'en' ? `Vested Since: ${shareholder.investment_date}` : `An Fara Jari Tun Ranar: ${shareholder.investment_date}`}
-            </p>
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider block mt-0.5">
+              {lang === 'en' ? "Verified Boardroom Node" : "Tantantaccen Dan Hukuma"}
+            </span>
+            <h2 className="text-[28px] md:text-[30px] lg:text-[32px] font-black text-text-main tracking-tight mt-1">{shareholder.full_name}</h2>
+            
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-xs font-semibold text-text-muted">
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5" />
+                {lang === 'en' ? `Vested Since: ${shareholder.investment_date}` : `An Fara Jari Tun Ranar: ${shareholder.investment_date}`}
+              </span>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                ENCRYPTED VAULT SESSION
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-end gap-2 border-t md:border-t-0 border-border-main/50 pt-4 md:pt-0 w-full md:w-auto">
           <Badge variant={shareholder.status === 'active' ? 'success' : 'danger'}>
             {(shareholder.status || '').toUpperCase()}
           </Badge>
-          <span className="text-[14px] font-semibold text-text-main tabular-nums">ID: {shareholder.id.substring(0, 8).toUpperCase()}</span>
+          <span className="text-xs font-mono font-bold text-text-muted">ID: {shareholder.id.substring(0, 8).toUpperCase()}</span>
         </div>
+      </div>
+
+      {/* PRIORITY ACTION CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('overview');
+            setTimeout(() => {
+              const el = document.getElementById('equity-stats-grid');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+          }}
+          className="text-left bg-gradient-to-br from-brand-navy to-slate-900 border border-slate-800 text-white p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-brand-gold/10 rounded-xl border border-brand-gold/20 text-brand-gold group-hover:scale-110 transition-transform">
+              <Briefcase className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-brand-gold group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-brand-gold uppercase tracking-wider block">
+              {lang === 'en' ? "CAPITAL OVERVIEW" : "BAYANIN JARI"}
+            </span>
+            <h4 className="text-sm font-extrabold text-white leading-tight mt-0.5">
+              {lang === 'en' ? "Inspect Equity Pool" : "Duba Jari Da Rabon Jari"}
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-0.5 leading-none">
+              {lang === 'en' ? "Verify asset weights, valuations & percentages" : "Duba kashi da nauyin jarin ku"}
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('cycles')}
+          className="text-left bg-bg-surface border border-border-main p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-600 group-hover:scale-110 transition-transform">
+              <Layers className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider block">
+              {lang === 'en' ? "PRODUCTION RUNS" : "ZAGAYEN AIKI"}
+            </span>
+            <h4 className="text-sm font-extrabold text-text-main leading-tight mt-0.5">
+              {lang === 'en' ? "Verify Operating Cycle" : "Duba Zagayen Gudanarwa"}
+            </h4>
+            <p className="text-[11px] text-text-muted mt-0.5 leading-none">
+              {lang === 'en' ? "Track tonnage counts and progress margins" : "Bincika nauyi da cigaba a yanzu"}
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('ledger')}
+          className="text-left bg-bg-surface border border-border-main p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-brand-gold/10 rounded-xl border border-brand-gold/20 text-brand-gold group-hover:scale-110 transition-transform">
+              <Printer className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-brand-gold group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-brand-gold uppercase tracking-wider block">
+              {lang === 'en' ? "FINANCIAL STATEMENT" : "BAYANIN AKANTAK"}
+            </span>
+            <h4 className="text-sm font-extrabold text-text-main leading-tight mt-0.5">
+              {lang === 'en' ? "Print Equity Voucher" : "Buga Takardar Jari"}
+            </h4>
+            <p className="text-[11px] text-text-muted mt-0.5 leading-none">
+              {lang === 'en' ? "Generate verified receipts of disbursements" : "Hada tabbatattun rasit na kudaden ku"}
+            </p>
+          </div>
+        </button>
       </div>
 
       {/* Tab Navigators */}
@@ -541,7 +648,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
             <div className="flex flex-col gap-6">
               
               {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div id="equity-stats-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card hoverEffect className="flex flex-col gap-1.5 p-5">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block">{t.stats.fleetValue}</span>

@@ -707,30 +707,111 @@ const buildResponse = (data: any, status = 200, headers = {}) => {
   });
 };
 
-// Helper to send a single push notification
+// Helper to sign and generate standard ES256 VAPID JWT header for Web Push using Web Crypto
+async function generateVapidHeader(env: Env, endpoint: string): Promise<string> {
+  const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
+  const privateKey = env.VAPID_PRIVATE_KEY || 'vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk';
+
+  function base64url(buffer: ArrayBuffer | Uint8Array): string {
+    const binary = String.fromCharCode(...new Uint8Array(buffer));
+    const b64 = btoa(binary);
+    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function decodeBase64url(str: string): Uint8Array {
+    let sanitized = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (sanitized.length % 4) sanitized += '=';
+    const binary = atob(sanitized);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  const decodedPublic = decodeBase64url(publicKey);
+  const x_b64url = base64url(decodedPublic.slice(1, 33));
+  const y_b64url = base64url(decodedPublic.slice(33, 65));
+
+  const jwkPrivate = {
+    kty: 'EC',
+    crv: 'P-256',
+    x: x_b64url,
+    y: y_b64url,
+    d: privateKey
+  };
+
+  const key = await crypto.subtle.importKey(
+    'jwk',
+    jwkPrivate,
+    {
+      name: 'ECDSA',
+      namedCurve: 'P-256'
+    },
+    false,
+    ['sign']
+  );
+
+  const url = new URL(endpoint);
+  const audience = `${url.protocol}//${url.host}`;
+
+  const header = { typ: 'JWT', alg: 'ES256' };
+  const payload = {
+    aud: audience,
+    exp: Math.floor(Date.now() / 1000) + 12 * 3600,
+    sub: 'mailto:hassanalaminhassan85@gmail.com'
+  };
+
+  const textEncoder = new TextEncoder();
+  const unsignedToken = `${base64url(textEncoder.encode(JSON.stringify(header)))}.${base64url(textEncoder.encode(JSON.stringify(payload)))}`;
+
+  const signature = await crypto.subtle.sign(
+    {
+      name: 'ECDSA',
+      hash: { name: 'SHA-256' }
+    },
+    key,
+    textEncoder.encode(unsignedToken)
+  );
+
+  const jwt = `${unsignedToken}.${base64url(new Uint8Array(signature))}`;
+  return `vapid t=${jwt}, k=${publicKey}`;
+}
+
+// Helper to send a single push notification natively using standard fetch
 async function sendPushNotification(
   env: Env,
   subscription: any,
   payload: string
 ): Promise<{ success: boolean; expired?: boolean }> {
-  const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
-  const privateKey = env.VAPID_PRIVATE_KEY || 'vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk';
-
   try {
-    const webpush = await import('web-push').then(m => m.default || m);
-    webpush.setVapidDetails(
-      'mailto:hassanalaminhassan85@gmail.com',
-      publicKey,
-      privateKey
-    );
+    const endpoint = subscription.endpoint;
+    if (!endpoint) {
+      return { success: false };
+    }
 
-    await webpush.sendNotification(subscription, payload);
-    return { success: true };
-  } catch (error: any) {
-    console.error("Error sending push notification via web-push:", error);
-    if (error && (error.statusCode === 410 || error.statusCode === 404)) {
+    const authHeader = await generateVapidHeader(env, endpoint);
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': authHeader,
+        'TTL': '2419200',
+        'Content-Length': '0'
+      }
+    });
+
+    if (res.status === 200 || res.status === 201) {
+      return { success: true };
+    }
+
+    console.error(`Push subscription delivery failed with status ${res.status}`);
+    if (res.status === 410 || res.status === 404) {
       return { success: false, expired: true };
     }
+    return { success: false };
+  } catch (error: any) {
+    console.error("Error sending native push notification via Web Crypto:", error);
     return { success: false };
   }
 }

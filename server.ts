@@ -6764,6 +6764,94 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
 });
 
 
+// SECURE SYSTEM OPERATIONAL RESET TOOL (Admin & Director ONLY)
+app.post('/api/admin/reset-test-data', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
+    }
+
+    const { confirmationText } = req.body;
+    if (confirmationText !== 'RESET RUQAYYA ERP') {
+      return res.status(400).json({ error: 'Invalid confirmation text. Must match RESET RUQAYYA ERP.' });
+    }
+
+    const db = loadDB();
+
+    // 1. Purge operational test data collections
+    db.drivers = [];
+    db.shareholders = [];
+    db.guarantors = [];
+    db.vehicles = [];
+    db.vehicle_documents = [];
+    db.driver_documents = [];
+    db.company_documents = [];
+    db.fuel_vouchers = [];
+    db.financial_records = [];
+    db.trip_manifests = [];
+    db.cycles = [];
+    db.driver_payments = [];
+    db.messages = [];
+    db.announcements = [];
+    db.notifications = [];
+
+    // 2. Reset company operations state to brand-new setup mode
+    db.company_operations_state = {
+      status: 'Setup Mode',
+      currentCycle: '',
+      currentDay: 1,
+      startedBy: null,
+      startedAt: null,
+      pauseHistory: [],
+      auditLog: []
+    };
+
+    // 3. Filter users to preserve active administrative / corporate management accounts
+    const adminsAndDirectors = db.users.filter((u: any) => {
+      const isCoreAdmin = u.username === 'ADAM' || u.username === 'MMR';
+      const isAdminOrDirectorRole = u.role_id === 'role-director' || u.role_id === 'role-admin' || u.role === 'director' || u.role === 'admin';
+      return isCoreAdmin || isAdminOrDirectorRole;
+    });
+    db.users = adminsAndDirectors;
+
+    const keptUserIds = new Set(adminsAndDirectors.map((u: any) => u.id));
+    db.admins = db.admins.filter((a: any) => keptUserIds.has(a.user_id));
+    db.directors = db.directors.filter((d: any) => keptUserIds.has(d.user_id));
+
+    // 4. Preserve current user session to prevent immediate logout of the operator
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const currentToken = authHeader.substring(7);
+      db.sessions = db.sessions.filter((s: any) => s.token === currentToken);
+    } else {
+      db.sessions = [];
+    }
+
+    // 5. Establish secure, clean bootstrap audit trail
+    db.audit_logs = [
+      {
+        id: `AUD-${Date.now()}-RESET`,
+        user_id: actor.id,
+        user_email: actor.email,
+        user_role: actor.role,
+        action: 'SYSTEM_RESET_OPERATIONAL_DATA',
+        previous_value: 'Active test operational data environment.',
+        new_value: `Operational data reset executed. All vehicles, drivers, vouchers, financial records, and logs successfully purged. Configuration preserved.`,
+        ip_address: req.ip || '127.0.0.1',
+        created_at: new Date().toISOString()
+      }
+    ];
+
+    saveDB(db);
+
+    res.json({ success: true, message: 'All operational test data has been successfully reset.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Boot and seed database parameters on start
 seedDBIfEmpty();
 

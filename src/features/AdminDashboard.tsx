@@ -16,12 +16,14 @@ import {
   MapPin, 
   Fuel, 
   CirclePlus, 
+  Plus,
   ClipboardCheck, 
   ArrowRight, 
   ShieldCheck, 
   CheckCircle2, 
   Search, 
   X,
+  Navigation,
   FileText,
   User,
   Activity,
@@ -31,7 +33,8 @@ import {
   RotateCcw,
   MessageSquare,
   Wallet,
-  Coins
+  Coins,
+  Settings
 } from 'lucide-react';
 
 import { AdminKPIs } from '../components/admin/AdminKPIs';
@@ -49,13 +52,13 @@ import { CycleTimer } from '../components/director/CycleTimer';
 interface AdminDashboardProps {
   lang: Language;
   dictionary: Dictionary;
-  activeTab?: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people';
-  setActiveTab?: (tab: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people') => void;
+  activeTab?: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings';
+  setActiveTab?: (tab: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings') => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
   // Tabs & Views
-  const [localActiveTab, setLocalActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people'>('fleet');
+  const [localActiveTab, setLocalActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('fleet');
   const activeTab = propActiveTab || localActiveTab;
   const setActiveTab = propSetActiveTab || setLocalActiveTab;
   
@@ -111,6 +114,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [reviewSuccess, setReviewSuccess] = useState('');
   const [lookupTerms, setLookupTerms] = useState<{ agreedAmount: number, purchasePrice: number } | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
+
+  // Secure System Reset States & Handler
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetStatus, setResetStatus] = useState('');
+
+  const handleExecuteSystemReset = async () => {
+    if (resetConfirmText !== 'RESET RUQAYYA ERP') {
+      setResetStatus(lang === 'en' ? "Please type RESET RUQAYYA ERP exactly to confirm." : "Da fatan za a rubuta RESET RUQAYYA ERP daidai don tabbatarwa.");
+      return;
+    }
+    setResetLoading(true);
+    setResetStatus(lang === 'en' ? "Initializing database purge..." : "Ana fara share ma'ajiyar bayanai...");
+    try {
+      await api.resetTestData(resetConfirmText);
+      setResetStatus(lang === 'en' ? "Success! All operational test data wiped. Reloading environment..." : "An yi nasara! An goge dukkan bayanan gwaji. Ana sake loda tsarin...");
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      setResetStatus(lang === 'en' ? `Error: ${err.message || "Failed to execute system reset."}` : `Kuskure: Goge tsarin ya gaza.`);
+      setResetLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedReviewDriver) {
@@ -394,82 +421,167 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const pendingVouchers = vouchers.filter(v => v.status === 'pending');
 
   return (
-    <div className="flex flex-col gap-4 w-full flex-1 max-w-7xl mx-auto p-2 md:p-4 bg-bg-base">
+    <div className="flex flex-col gap-3 w-full flex-1 max-w-7xl mx-auto p-2 md:p-4 bg-bg-base">
       
       {/* Header with quick indicators */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border-main/50 pb-2 mb-1">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-border-main/50 pb-2 mb-1">
         <div>
-          <h2 className="text-base font-black tracking-tight text-text-main uppercase flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-brand-gold animate-ping" />
-            {lang === 'en' ? "Admin Operations Control" : "Gudanarwar Masu Kula (Admin)"}
-          </h2>
-          <p className="text-[10px] text-text-muted mt-0.5 leading-none">
+          <span className="text-[10px] font-black tracking-widest text-brand-gold uppercase block">
+            {(() => {
+              const hours = new Date().getHours();
+              let greeting = "Good Morning";
+              if (hours >= 12 && hours < 17) greeting = "Good Afternoon";
+              if (hours >= 17) greeting = "Good Evening";
+              
+              if (lang === 'ha') {
+                if (hours < 12) greeting = "In kwana lafiya (Barka da Safiya)";
+                else if (hours < 17) greeting = "Barka da Rana";
+                else greeting = "Barka da Yamma";
+              }
+              return `${greeting}, Operations Admin`;
+            })()}
+          </span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <h2 className="text-sm font-black tracking-tight text-text-main uppercase flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-gold animate-ping" />
+              {lang === 'en' ? "Admin Operations Control" : "Gudanarwar Masu Kula (Admin)"}
+            </h2>
+          </div>
+          <p className="text-[9px] text-text-muted mt-0.5 leading-none font-semibold">
             {lang === 'en' ? "Tricycle lease assets, certified driver registry nodes, and remittance ledger control." : "Kekunan napep, tantance direbobi, da duba kudaden remittance."}
           </p>
         </div>
+
+        {/* Telemetry Indicator */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="px-2 py-0.5 rounded-md bg-brand-gold/10 border border-brand-gold/20 text-brand-gold font-mono text-[9px] font-bold">
+          <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-mono text-[8px] font-bold">
+            SECURE ACCESS II
+          </span>
+          <span className="px-1.5 py-0.5 rounded-md bg-brand-gold/10 border border-brand-gold/20 text-brand-gold font-mono text-[8px] font-bold">
             FLEET: {vehicles.length} RIGS
           </span>
-          <span className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-500 font-mono text-[9px] font-bold">
+          <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-500 font-mono text-[8px] font-bold">
             DRIVERS: {drivers.length} ACTIVE
           </span>
         </div>
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-text-muted font-bold font-mono text-xs">
+        <div className="py-6 text-center text-text-muted font-bold font-mono text-xs">
           {lang === 'en' ? "Syncing real-time tricycle assets..." : "Ana duba rukunin kekuna..."}
         </div>
       ) : (
         <>
-          {/* Compressed Control Panel Card Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-            <div className="flex flex-col bg-bg-surface border border-border-main/50 rounded-2xl p-4 shadow-sm h-full justify-between">
-              <div className="flex items-center justify-between pb-2 border-b border-border-main/40 mb-2 shrink-0">
-                <h3 className="text-xs font-black text-text-main uppercase tracking-wider flex items-center gap-1.5">
-                  <Activity className="h-4 w-4 text-brand-gold animate-pulse" />
-                  {lang === 'en' ? "Operations State" : "Matakin Ayyuka"}
-                </h3>
-                <span className="text-[10px] font-mono text-text-muted">ERP_NODE_SYS</span>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                <CompanyOperationsCard
-                  lang={lang}
-                  onStateChange={syncAllData}
-                  driversCount={drivers.length}
-                  vehiclesCount={vehicles.length}
-                />
-              </div>
+          {/* Redesigned compact responsive dashboard overview fold */}
+          <div className="flex flex-col gap-2.5 w-full">
+            {/* Operations State: main full-width compact card at the top */}
+            <div className="w-full">
+              <CompanyOperationsCard
+                lang={lang}
+                onStateChange={syncAllData}
+                driversCount={drivers.length}
+                vehiclesCount={vehicles.length}
+              />
             </div>
 
-            <div className="flex flex-col bg-bg-surface border border-border-main/50 rounded-2xl p-4 shadow-sm h-full justify-between">
-              <div className="flex items-center justify-between pb-2 border-b border-border-main/40 mb-2 shrink-0">
-                <h3 className="text-xs font-black text-text-main uppercase tracking-wider flex items-center gap-1.5">
-                  <Wallet className="h-4 w-4 text-brand-gold" />
-                  {lang === 'en' ? "Enterprise Treasury" : "Asusun Kamfani"}
-                </h3>
-                <span className="text-[10px] font-mono text-text-muted">NODE_FIN_ACTIVE</span>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                <CompanyWalletCard
-                  lang={lang}
-                  finance={finance}
-                  payments={payments}
-                  onStateChange={syncAllData}
-                />
-              </div>
+            {/* Enterprise Treasury & Active Cycle Timer side-by-side underneath */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full">
+              <CompanyWalletCard
+                lang={lang}
+                finance={finance}
+                payments={payments}
+                onStateChange={syncAllData}
+              />
+              <CycleTimer
+                lang={lang}
+                activeCycle={activeCycle}
+                onStateChange={syncAllData}
+              />
             </div>
+          </div>
 
-            <div className="flex flex-col bg-bg-surface border border-border-main/50 rounded-2xl p-4 shadow-sm h-full justify-between">
-              <div className="flex-1 flex flex-col justify-center">
-                <CycleTimer
-                  lang={lang}
-                  activeCycle={activeCycle}
-                  onStateChange={syncAllData}
-                />
+          {/* PRIORITY ACTION CARDS (moved below the core overview) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-1">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('fleet');
+                setTimeout(() => {
+                  const el = document.getElementById('register-tricycle-card');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              }}
+              className="text-left bg-gradient-to-br from-brand-navy to-slate-900 border border-slate-800 text-white p-3.5 rounded-xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-24 group"
+            >
+              <div className="flex justify-between items-start w-full">
+                <div className="p-1.5 bg-brand-gold/10 rounded-lg border border-brand-gold/20 text-brand-gold group-hover:scale-110 transition-transform">
+                  <Truck className="h-4 w-4" />
+                </div>
+                <ArrowRight className="h-3.5 w-3.5 text-slate-500 group-hover:text-brand-gold group-hover:translate-x-1 transition-all" />
               </div>
-            </div>
+              <div>
+                <span className="text-[8px] font-black text-brand-gold uppercase tracking-wider block">
+                  {lang === 'en' ? "ASSETS INVENTORY" : "KAYAN KAMFANI"}
+                </span>
+                <h4 className="text-xs font-extrabold text-white leading-tight mt-0.5">
+                  {lang === 'en' ? "Register a New Tricycle" : "Rijistar Sabon Keke"}
+                </h4>
+                <p className="text-[10px] text-slate-400 mt-0.5 leading-none">
+                  {lang === 'en' ? "Onboard newly acquired tricycles directly" : "Shigar da sabon Keke/Napep cikin jerin rukunin"}
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('drivers');
+                setDriverFilter('pending');
+              }}
+              className="text-left bg-bg-surface border border-border-main p-3.5 rounded-xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-24 group"
+            >
+              <div className="flex justify-between items-start w-full">
+                <div className="p-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20 text-emerald-600 group-hover:scale-110 transition-transform">
+                  <Users className="h-4 w-4" />
+                </div>
+                <ArrowRight className="h-3.5 w-3.5 text-text-muted group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+              </div>
+              <div>
+                <span className="text-[8px] font-black text-emerald-600 uppercase tracking-wider block">
+                  {lang === 'en' ? "DRIVER REGISTRY" : "TAKARDUN DIREBOBI"}
+                </span>
+                <h4 className="text-xs font-extrabold text-text-main leading-tight mt-0.5">
+                  {lang === 'en' ? "Approve Pending Drivers" : "Tantance Sabbin Direbobi"}
+                </h4>
+                <p className="text-[10px] text-text-muted mt-0.5 leading-none">
+                  {lang === 'en' ? "Review and certify newly applied driver profiles" : "Duba da yarda da takardun direban da ke jira"}
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('vouchers')}
+              className="text-left bg-bg-surface border border-border-main p-3.5 rounded-xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-24 group"
+            >
+              <div className="flex justify-between items-start w-full">
+                <div className="p-1.5 bg-brand-gold/10 rounded-lg border border-brand-gold/20 text-brand-gold group-hover:scale-110 transition-transform">
+                  <Fuel className="h-4 w-4" />
+                </div>
+                <ArrowRight className="h-3.5 w-3.5 text-text-muted group-hover:text-brand-gold group-hover:translate-x-1 transition-all" />
+              </div>
+              <div>
+                <span className="text-[8px] font-black text-brand-gold uppercase tracking-wider block">
+                  {lang === 'en' ? "FUEL DISBURSEMENT" : "KUDIN MAN FETUR"}
+                </span>
+                <h4 className="text-xs font-extrabold text-text-main leading-tight mt-0.5">
+                  {lang === 'en' ? "Disburse Fuel Voucher" : "Amince da Rasit na Mai"}
+                </h4>
+                <p className="text-[10px] text-text-muted mt-0.5 leading-none">
+                  {lang === 'en' ? "Approve pending liters and distribute invoices" : "Bada litar mai da buga takardun shaida"}
+                </p>
+              </div>
+            </button>
           </div>
 
           {/* Dashboard Summary Widgets */}
@@ -495,7 +607,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
               { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
               { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> },
-              { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-3.5 w-3.5" /> }
+              { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-3.5 w-3.5" /> },
+              { id: 'settings', label: lang === 'en' ? "System Settings" : "Saitunan Tsarin", icon: <Settings className="h-3.5 w-3.5 text-brand-gold" /> }
             ]}
           />
 
@@ -516,7 +629,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                       className="w-full pl-9 pr-4 py-1.5 text-xs bg-bg-base border border-border-main rounded-lg focus:outline-none"
                     />
                   </div>
-                  <span className="text-[10px] text-text-muted font-bold font-mono">Found {filteredVehicles.length} rigs registered</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-text-muted font-bold font-mono">Found {filteredVehicles.length} rigs registered</span>
+                    <Button 
+                      id="register-tricycle-card"
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setIsAddVehicleOpen(true)}
+                      className="font-bold flex items-center gap-1.5 text-xs border-brand-gold text-brand-gold hover:bg-brand-gold/10 cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {lang === 'en' ? "Add Tricycle" : "Sanya Keke"}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -919,6 +1044,176 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             {/* TAB 9: ENTERPRISE DIRECTORY */}
             {activeTab === 'directory' && (
               <EnterpriseDirectory lang={lang} dictionary={dictionary} />
+            )}
+
+            {/* TAB 10: SYSTEM SETTINGS & PRODUCTION RESET UTILITIES */}
+            {activeTab === 'settings' && (
+              <div className="flex flex-col gap-6">
+                {/* System Status Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-bg-surface border border-border-main/50 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Activity className="h-5 w-5 text-emerald-500" />
+                        <h3 className="text-sm font-black text-text-main uppercase tracking-wider">
+                          {lang === 'en' ? "System Status" : "Matakin Tsarin"}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-text-muted mb-4 leading-relaxed">
+                        {lang === 'en'
+                          ? "Real-time monitoring stats for the RUQAYYA TRANSPORT ERP cloud container node."
+                          : "Kididdigar lokaci na gaske don asusun kula da rukunin tsarin RUQAYYA."}
+                      </p>
+                      
+                      <div className="space-y-2.5">
+                        <div className="flex justify-between items-center text-xs pb-2 border-b border-border-main/20">
+                          <span className="text-text-muted">{lang === 'en' ? "Node Status" : "Matakin Node"}</span>
+                          <span className="font-bold text-emerald-500 flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                            ONLINE
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs pb-2 border-b border-border-main/20">
+                          <span className="text-text-muted">{lang === 'en' ? "Secure Encryption" : "Tsaro na AES"}</span>
+                          <span className="font-mono font-bold text-text-main">AES-256-GCM</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs pb-2 border-b border-border-main/20">
+                          <span className="text-text-muted">{lang === 'en' ? "Database Protocol" : "Asusun Database"}</span>
+                          <span className="font-mono font-bold text-brand-gold">Local-JSON Sync Engine</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-text-muted">{lang === 'en' ? "Primary Location" : "Wurin Node"}</span>
+                          <span className="font-bold text-text-main">Kano, Nigeria</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-bg-surface border border-border-main/50 rounded-2xl p-6 shadow-xs">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText className="h-5 w-5 text-brand-gold" />
+                      <h3 className="text-sm font-black text-text-main uppercase tracking-wider">
+                        {lang === 'en' ? "Database Registry Stats" : "Rahoton Ma'ajiyar Bayanai"}
+                      </h3>
+                    </div>
+                    <p className="text-xs text-text-muted mb-4 leading-relaxed">
+                      {lang === 'en'
+                        ? "Active data objects compiled within the system storage layer."
+                        : "Adadin bayanan da aka ajiye a cikin ma'ajiyar tsarin."}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-bg-base border border-border-main/30 rounded-xl p-3">
+                        <span className="text-[10px] text-text-muted uppercase block leading-none">{lang === 'en' ? "Vehicles" : "Ababen Hawa"}</span>
+                        <span className="text-lg font-black text-text-main mt-1 block">{vehicles.length}</span>
+                      </div>
+                      <div className="bg-bg-base border border-border-main/30 rounded-xl p-3">
+                        <span className="text-[10px] text-text-muted uppercase block leading-none">{lang === 'en' ? "Drivers" : "Direbobi"}</span>
+                        <span className="text-lg font-black text-text-main mt-1 block">{drivers.length}</span>
+                      </div>
+                      <div className="bg-bg-base border border-border-main/30 rounded-xl p-3">
+                        <span className="text-[10px] text-text-muted uppercase block leading-none">{lang === 'en' ? "Vouchers" : "Rasit"}</span>
+                        <span className="text-lg font-black text-text-main mt-1 block">{vouchers.length}</span>
+                      </div>
+                      <div className="bg-bg-base border border-border-main/30 rounded-xl p-3">
+                        <span className="text-[10px] text-text-muted uppercase block leading-none">{lang === 'en' ? "Remittances" : "Kudaden shiga"}</span>
+                        <span className="text-lg font-black text-text-main mt-1 block">{trips.length}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Secure Production Reset Tool */}
+                <div className="bg-bg-surface border-2 border-rose-500/20 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-rose-500" />
+                  
+                  <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertTriangle className="h-5 w-5 text-rose-500 animate-pulse" />
+                        <h3 className="text-sm font-black text-text-main uppercase tracking-wider text-rose-600">
+                          {lang === 'en' ? "Production Testing & Reset Tool" : "Kayan Goge Bayanan Gwaji"}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-text-muted leading-relaxed max-w-2xl">
+                        {lang === 'en'
+                          ? "This administrative utility wipes operational test entries to prepare the ERP for pristine production deployment. It purges all drivers, tricycle fleet items, voucher authorizations, financial records, and operational logs."
+                          : "Wannan kayan aiki yana share duk bayanan gwaji don shirya ERP don amfanin gaske. Zai goge duk direbobi, kekuna, rasit na mai, kudaden shiga, da rahotanni."}
+                      </p>
+                      
+                      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[11px] font-mono font-bold text-text-muted">
+                        <span className="flex items-center gap-1 text-rose-500">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                          {lang === 'en' ? "DELETES ALL OPERATIONAL DATA" : "ZAI GOGE DUK BAYANAN AYYUKA"}
+                        </span>
+                        <span className="flex items-center gap-1 text-emerald-500">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          {lang === 'en' ? "PRESERVES ADMIN ACCOUNTS" : "ZAI AJIYE ASUSUN KULAWA"}
+                        </span>
+                        <span className="flex items-center gap-1 text-emerald-500">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          {lang === 'en' ? "PRESERVES ROLES & CONFIG" : "ZAI AJIYE MATAKAN TSARIN"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-5 border-t border-border-main/20 flex flex-col gap-4 max-w-xl">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-black text-text-main uppercase tracking-wider">
+                        {lang === 'en' ? "Confirm Reset Authorization" : "Tabbatar da Izinin Goge Tsarin"}
+                      </label>
+                      <p className="text-[10px] text-text-muted leading-tight mb-2">
+                        {lang === 'en'
+                          ? 'To authorize this destructive action, please type "RESET RUQAYYA ERP" exactly as shown below:'
+                          : 'Don ba da izinin wannan aiki, da fatan za a rubuta "RESET RUQAYYA ERP" a akwatin da ke ƙasa:'}
+                      </p>
+                      <input
+                        type="text"
+                        value={resetConfirmText}
+                        onChange={(e) => setResetConfirmText(e.target.value)}
+                        placeholder="RESET RUQAYYA ERP"
+                        className="w-full px-3 py-2 text-xs rounded-lg border-2 border-border-main bg-bg-base font-mono font-bold focus:border-rose-500 focus:outline-hidden transition-all text-rose-600 tracking-wide"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-2">
+                      <button
+                        type="button"
+                        onClick={handleExecuteSystemReset}
+                        disabled={resetConfirmText !== 'RESET RUQAYYA ERP' || resetLoading}
+                        className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 border transition-all cursor-pointer ${
+                          resetConfirmText === 'RESET RUQAYYA ERP' && !resetLoading
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 hover:shadow-md hover:scale-[1.01]'
+                            : 'bg-bg-base text-text-muted border-border-main/50 cursor-not-allowed'
+                        }`}
+                      >
+                        {resetLoading ? (
+                          <>
+                            <span className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            {lang === 'en' ? "Executing Purge..." : "Ana Goge Tsarin..."}
+                          </>
+                        ) : (
+                          <>
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            {lang === 'en' ? "Reset Operational Data" : "Goge Bayanan Gwaji"}
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {resetStatus && (
+                      <div className={`mt-3 p-3 rounded-xl border text-xs font-bold ${
+                        resetStatus.startsWith('Error') || resetStatus.startsWith('Tabbatar')
+                          ? 'bg-rose-500/10 border-rose-500/20 text-rose-600'
+                          : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'
+                      }`}>
+                        {resetStatus}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </>

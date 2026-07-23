@@ -851,30 +851,138 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           </div>
 
           <div>
-            <span className="text-[14px] font-semibold tracking-wider text-brand-gold uppercase">
+            <span className="text-[12px] font-black tracking-widest text-brand-gold uppercase block">
+              {(() => {
+                const hours = new Date().getHours();
+                let greeting = "Good Morning";
+                if (hours >= 12 && hours < 17) greeting = "Good Afternoon";
+                if (hours >= 17) greeting = "Good Evening";
+                
+                if (lang === 'ha') {
+                  if (hours < 12) greeting = "In kwana lafiya (Barka da Asuba)";
+                  else if (hours < 17) greeting = "Barka da Rana";
+                  else greeting = "Barka da Yamma";
+                }
+                return `${greeting}, ${driver.fullName}!`;
+              })()}
+            </span>
+            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider block mt-0.5">
               {t.welcome.certified.replace('{class}', driver.classification)}
             </span>
-            <h2 className="text-[28px] md:text-[30px] lg:text-[36px] font-bold text-text-main tracking-tight mt-1">{driver.fullName}</h2>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2.5 text-[14px] font-medium text-text-muted">
+            <h2 className="text-[28px] md:text-[30px] lg:text-[32px] font-black text-text-main tracking-tight mt-1">{driver.fullName}</h2>
+            
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-xs font-semibold text-text-muted">
               <span><strong>{t.welcome.driverId}:</strong> {driver.id.substring(0, 8).toUpperCase()}</span>
               <span>•</span>
               <span><strong>{t.welcome.license}:</strong> {driver.licenseNumber} ({t.welcome.licenseExp}: {driver.licenseExpiry})</span>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                SECURE AES-256
+              </span>
             </div>
           </div>
         </div>
 
         <div className="flex flex-row md:flex-col items-end gap-3.5 w-full md:w-auto border-t md:border-t-0 border-border-main/50 pt-4 md:pt-0 z-10 justify-between">
           <div className="text-right">
-            <span className="text-[14px] font-semibold text-text-muted block uppercase mb-1">{t.welcome.rating}</span>
-            <span className="text-[16px] font-semibold text-text-main tabular-nums">⭐ {driver.rating} / 5.0</span>
+            <span className="text-xs font-bold text-text-muted block uppercase mb-1">{t.welcome.rating}</span>
+            <span className="text-sm font-black text-text-main tabular-nums">⭐ {driver.rating} / 5.0</span>
           </div>
           <div className="text-right">
-            <span className="text-[14px] font-semibold text-text-muted block uppercase mb-1">{t.welcome.status}</span>
+            <span className="text-xs font-bold text-text-muted block uppercase mb-1">{t.welcome.status}</span>
             <Badge variant={driver.status === 'on-trip' ? 'warning' : driver.status === 'rest' ? 'orange' : 'success'}>
               {(driver.status || '').toUpperCase()}
             </Badge>
           </div>
         </div>
+      </div>
+
+      {/* PRIORITY ACTION CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('overview');
+            setTimeout(() => {
+              const el = document.getElementById('active-remittance-card');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+          }}
+          className="text-left bg-gradient-to-br from-brand-navy to-slate-900 border border-slate-800 text-white p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-brand-gold/10 rounded-xl border border-brand-gold/20 text-brand-gold group-hover:scale-110 transition-transform">
+              <Navigation className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-brand-gold group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-brand-gold uppercase tracking-wider block">
+              {lang === 'en' ? "PRIORITY TASK" : "AIKI MAI GANGARA"}
+            </span>
+            <h4 className="text-sm font-extrabold text-white leading-tight mt-0.5">
+              {lang === 'en' ? "Log Daily Remittance" : "Kammala Remittance"}
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-0.5 leading-none">
+              {lang === 'en' ? "Check active trip & remittance counts" : "Duba mota da remittance na yau"}
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('overview');
+            setTimeout(() => {
+              const el = document.getElementById('fuel-voucher-form-container');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+          }}
+          className="text-left bg-bg-surface border border-border-main p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-600 group-hover:scale-110 transition-transform">
+              <Fuel className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider block">
+              {lang === 'en' ? "DISPATCH OUTLAYS" : "RABON MAI"}
+            </span>
+            <h4 className="text-sm font-extrabold text-text-main leading-tight mt-0.5">
+              {lang === 'en' ? "Raise Fuel Voucher" : "Nemi Rasit na Mai"}
+            </h4>
+            <p className="text-[11px] text-text-muted mt-0.5 leading-none">
+              {lang === 'en' ? "Request approved fuel gallons directly" : "Aiko da buƙatar man fetur"}
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('payments')}
+          className="text-left bg-bg-surface border border-border-main p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-brand-gold/10 rounded-xl border border-brand-gold/20 text-brand-gold group-hover:scale-110 transition-transform">
+              <CreditCard className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-brand-gold group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-brand-gold uppercase tracking-wider block">
+              {lang === 'en' ? "FINANCIAL CONTROL" : "KUDADE DA BIYA"}
+            </span>
+            <h4 className="text-sm font-extrabold text-text-main leading-tight mt-0.5">
+              {lang === 'en' ? "View Installment Deadlines" : "Kwanakin Rabon Kudi"}
+            </h4>
+            <p className="text-[11px] text-text-muted mt-0.5 leading-none">
+              {lang === 'en' ? "Check outstanding 5-day cycle splits" : "Duba sassan biyan kuɗi na kwana 5"}
+            </p>
+          </div>
+        </button>
       </div>
 
       {/* Horizontal Premium Sub-Tab Navigation Bar */}
@@ -928,7 +1036,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
               <div className="lg:col-span-8 flex flex-col gap-6">
                 
                 {/* Active Dispatched Trip manifest */}
-                <Card className="border-brand-gold bg-brand-gold/[0.01]">
+                <Card id="active-remittance-card" className="border-brand-gold bg-brand-gold/[0.01]">
                   <CardHeader className="border-brand-gold/10">
                     <div className="flex items-center gap-2">
                       <Navigation className="h-4 w-4 text-brand-gold animate-pulse" />
@@ -1029,7 +1137,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
               <div className="lg:col-span-4 flex flex-col gap-6">
                 
                 {/* Fuel Voucher Request card */}
-                <Card>
+                <Card id="fuel-voucher-form-container">
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <Fuel className="h-4 w-4 text-brand-gold animate-bounce" />

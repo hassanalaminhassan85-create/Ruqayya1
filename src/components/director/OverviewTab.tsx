@@ -547,6 +547,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
         {/* Operating Cycle Card */}
         <div 
+          id="active-cycle-hud"
           onMouseEnter={() => setHoveredCard('cycle')}
           onMouseLeave={() => setHoveredCard(null)}
           className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:border-slate-300 hover:shadow-lg hover:-translate-y-0.5 shadow-xs relative"
@@ -939,7 +940,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           </div>
 
           {/* Corporate Database Backup & Recovery (Notion / Linear Inspired) */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5">
+          <div id="database-backup-section" className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5">
             <div>
               <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
                 <Database className="h-4.5 w-4.5 text-slate-600" />

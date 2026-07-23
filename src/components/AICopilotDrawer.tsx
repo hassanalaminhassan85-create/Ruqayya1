@@ -770,7 +770,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
               >
                 {messages.map((msg, idx) => (
                   <motion.div 
-                    key={msg.id || `msg-${idx}`}
+                    key={msg.id ? `drawer-msg-${msg.id}` : `drawer-idx-${idx}`}
                     variants={{
                       hidden: { opacity: 0, y: 12, scale: 0.98 },
                       show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 260, damping: 20 } }

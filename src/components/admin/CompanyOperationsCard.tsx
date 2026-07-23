@@ -353,37 +353,37 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   return (
     <div id="company-operations-container" className="w-full flex flex-col gap-2">
       {/* Primary operations banner card */}
-      <Card className={`relative overflow-hidden border p-4 transition-all duration-300 rounded-xl shadow-md backdrop-blur-md ${borderStyle}`}>
+      <Card className={`relative overflow-hidden border p-3 sm:p-4 transition-all duration-300 rounded-xl shadow-md backdrop-blur-md ${borderStyle}`}>
         {/* Glow effect at background */}
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 rounded-full blur-2xl opacity-10 bg-primary-gold" />
         
-        <div className="flex flex-col gap-3 z-10 relative">
+        <div className="flex flex-col gap-2 z-10 relative">
           
           {/* Status block */}
-          <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-lg border flex items-center justify-center shrink-0 ${
+          <div className="flex items-start gap-2.5">
+            <div className={`p-1.5 rounded-lg border flex items-center justify-center shrink-0 ${
               isSetup ? 'bg-amber-500/15 border-amber-500/20 text-amber-500' :
               isPaused ? 'bg-rose-500/15 border-rose-500/20 text-rose-500' :
               'bg-emerald-500/15 border-emerald-500/20 text-emerald-500'
             }`}>
-              <Activity className={`h-5 w-5 ${isOperational ? 'animate-pulse' : ''}`} />
+              <Activity className={`h-4.5 w-4.5 ${isOperational ? 'animate-pulse' : ''}`} />
             </div>
             
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted font-bold">
+                <span className="font-mono text-[8px] sm:text-[9px] uppercase tracking-widest text-text-muted font-bold">
                   {lang === 'en' ? 'ENTERPRISE SYSTEM STATE' : 'TSARIN GUDANAR DA SASHIN AIKI'}
                 </span>
-                <span className={`px-2 py-0.2 rounded-full text-[8px] font-extrabold uppercase tracking-wider border ${badgeStyle}`}>
+                <span className={`px-1.5 py-0.2 rounded-full text-[7px] sm:text-[8px] font-extrabold uppercase tracking-wider border ${badgeStyle}`}>
                   {opsState?.status || 'Setup Mode'}
                 </span>
               </div>
-              <h3 className="text-sm font-black text-text-main tracking-tight mt-0.5">
+              <h3 className="text-xs sm:text-sm font-black text-text-main tracking-tight mt-0.5 leading-none">
                 {isSetup && (lang === 'en' ? 'Setup & Staging Phase' : 'Matakin Shirya Kayan Aiki')}
                 {isOperational && (lang === 'en' ? 'Live Fleet Operations Active' : 'Rukunin Keken Napep Na Kan Hanyar Aiki')}
                 {isPaused && (lang === 'en' ? 'Corporate Suspension Active' : 'An Dakatar da Ayyuka Na Dan Lokaci')}
               </h3>
-              <p className="text-[10px] text-text-muted max-w-sm leading-relaxed mt-0.5">
+              <p className="text-[9px] sm:text-[10px] text-text-muted max-w-sm leading-tight mt-0.5">
                 {isSetup && (lang === 'en' ? 'Configure drivers, assign tricycles, and finalize wallet setups safely before live operations.' : 'Sanya direbobi, kekuna, da asusun wallet kafin a fara aiki.')}
                 {isOperational && (lang === 'en' ? 'Auto remittance logs, fuel vouchers, and profit allocation models are fully live.' : 'Ana lissafin kudaden remittance da rabon riba na kwanaki 30 a raye.')}
                 {isPaused && (lang === 'en' ? 'System locked. Installments are frozen and drivers cannot submit transactions.' : 'An dakatar da lissafi, sanya kudi, da duk wani aiki na asusu har sai an dawo da shi.')}
@@ -392,91 +392,92 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
           </div>
 
           {/* Quick Metrics & Action Area */}
-          <div className="flex flex-col gap-2.5 w-full mt-1 border-t border-brand-gold/10 pt-2.5">
-            
-            {/* Operating Cycle stats */}
-            {!isSetup && (
-              <div className="grid grid-cols-2 gap-2 bg-card-bg/40 border border-border-main/30 rounded-lg py-1 px-3 text-center">
-                <div>
-                  <span className="text-[8px] uppercase tracking-wider text-text-muted block font-semibold">{lang === 'en' ? 'Cycle' : 'Zagaye'}</span>
-                  <div className="text-xs font-black text-text-main flex items-center justify-center gap-1 mt-0.5">
-                    <Clock className="h-3 w-3 text-primary-gold" />
-                    {opsState?.currentCycle || 'N/A'}
+          <div className="flex flex-col gap-2 w-full mt-1 border-t border-brand-gold/10 pt-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
+              {/* Operating Cycle stats */}
+              {!isSetup && (
+                <div className="flex items-center gap-3 bg-card-bg/40 border border-border-main/30 rounded-lg py-1 px-2.5 text-center shrink-0">
+                  <div className="text-left">
+                    <span className="text-[7.5px] uppercase tracking-wider text-text-muted block font-semibold leading-none">{lang === 'en' ? 'Cycle' : 'Zagaye'}</span>
+                    <div className="text-[10px] font-black text-text-main flex items-center gap-1 mt-0.5 leading-none">
+                      <Clock className="h-2.5 w-2.5 text-brand-gold" />
+                      {opsState?.currentCycle || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="border-l border-border-main/30 pl-2 text-left">
+                    <span className="text-[7.5px] uppercase tracking-wider text-text-muted block font-semibold leading-none">{lang === 'en' ? 'Cycle Day' : 'Rana'}</span>
+                    <span className="text-[10px] font-black text-text-main mt-0.5 block leading-none">
+                      Day {opsState?.currentDay || 1}/30
+                    </span>
                   </div>
                 </div>
-                <div className="border-l border-border-main/30 pl-2">
-                  <span className="text-[8px] uppercase tracking-wider text-text-muted block font-semibold">{lang === 'en' ? 'Cycle Day' : 'Rana'}</span>
-                  <span className="text-xs font-black text-text-main mt-0.5 block">
-                    Day {opsState?.currentDay || 1}/30
-                  </span>
-                </div>
+              )}
+
+              {/* State Controls */}
+              <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end w-full">
+                {isSetup && (
+                  <Button 
+                    id="btn-start-ops"
+                    onClick={handleOpenChecklist}
+                    className="flex-1 max-w-[180px] bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black flex items-center justify-center gap-1 py-1 px-2.5 rounded-lg shadow-sm transition-all duration-200 cursor-pointer text-[9px] sm:text-[10px]"
+                  >
+                    <Play className="h-3 w-3 fill-slate-950" />
+                    {lang === 'en' ? 'Start Operations' : 'Fara Gudanarwa'}
+                  </Button>
+                )}
+
+                {isOperational && (
+                  <Button 
+                    id="btn-pause-ops"
+                    onClick={() => { setActionError(''); setShowPauseModal(true); }}
+                    className="flex-1 max-w-[120px] bg-rose-600/10 hover:bg-rose-600/20 text-rose-500 border border-rose-600/30 font-bold flex items-center justify-center gap-1 py-1 px-2 rounded-lg cursor-pointer text-[9px] sm:text-[10px]"
+                  >
+                    <Pause className="h-3 w-3" />
+                    {lang === 'en' ? 'Pause' : 'Dakatar'}
+                  </Button>
+                )}
+
+                {isPaused && (
+                  <Button 
+                    id="btn-resume-ops"
+                    onClick={handleResumeCompanyOperations}
+                    className="flex-1 max-w-[120px] bg-emerald-500 text-slate-950 hover:bg-emerald-600 font-extrabold flex items-center justify-center gap-1 py-1 px-2 rounded-lg border-b border-emerald-700 cursor-pointer text-[9px] sm:text-[10px]"
+                  >
+                    <Play className="h-3 w-3 fill-slate-950" />
+                    {lang === 'en' ? 'Resume' : 'Ci Gaba'}
+                  </Button>
+                )}
+
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowHistory(!showHistory)}
+                  className="px-1.5 py-1 rounded-lg border border-border-main hover:bg-card-bg/80 text-text-muted font-bold text-[9px] sm:text-[10px] flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                >
+                  <History className="h-3 w-3" />
+                  {showHistory ? <ChevronUp className="h-2.5 w-2.5" /> : <ChevronDown className="h-2.5 w-2.5" />}
+                </Button>
               </div>
-            )}
-
-            {/* State Controls */}
-            <div className="flex items-center justify-between gap-1.5 w-full">
-              {isSetup && (
-                <Button 
-                  id="btn-start-ops"
-                  onClick={handleOpenChecklist}
-                  className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black flex items-center justify-center gap-1 py-2 rounded-lg shadow-sm transition-all duration-200 cursor-pointer text-[10px]"
-                >
-                  <Play className="h-3.5 w-3.5 fill-slate-950" />
-                  {lang === 'en' ? 'Start Operations' : 'Fara Gudanarwa'}
-                </Button>
-              )}
-
-              {isOperational && (
-                <Button 
-                  id="btn-pause-ops"
-                  onClick={() => { setActionError(''); setShowPauseModal(true); }}
-                  className="flex-1 bg-rose-600/10 hover:bg-rose-600/20 text-rose-500 border border-rose-600/30 font-bold flex items-center justify-center gap-1 py-2 rounded-lg cursor-pointer text-[10px]"
-                >
-                  <Pause className="h-3.5 w-3.5" />
-                  {lang === 'en' ? 'Pause' : 'Dakatar'}
-                </Button>
-              )}
-
-              {isPaused && (
-                <Button 
-                  id="btn-resume-ops"
-                  onClick={handleResumeCompanyOperations}
-                  className="flex-1 bg-emerald-500 text-slate-950 hover:bg-emerald-600 font-extrabold flex items-center justify-center gap-1 py-2 rounded-lg border-b border-emerald-700 cursor-pointer text-[10px]"
-                >
-                  <Play className="h-3.5 w-3.5 fill-slate-950" />
-                  {lang === 'en' ? 'Resume' : 'Ci Gaba'}
-                </Button>
-              )}
-
-              <Button 
-                variant="outline"
-                onClick={() => setShowHistory(!showHistory)}
-                className="px-2 py-2 rounded-lg border border-border-main hover:bg-card-bg/80 text-text-muted font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <History className="h-3.5 w-3.5" />
-                {showHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              </Button>
             </div>
           </div>
         </div>
 
         {/* Small live metrics grid underneath for immediate visibility */}
-        <div className="grid grid-cols-4 gap-1 border-t border-border-main/30 mt-2.5 pt-2 text-[10px] leading-tight">
-          <div className="flex flex-col items-center justify-center p-1 bg-slate-500/5 rounded">
-            <span className="text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Drivers' : 'Direbobi'}</span>
+        <div className="grid grid-cols-4 gap-1 border-t border-border-main/30 mt-2 pt-1.5 text-[9px] sm:text-[10px] leading-tight">
+          <div className="flex flex-col items-center justify-center p-0.5 sm:p-1 bg-slate-500/5 rounded">
+            <span className="text-[6.5px] sm:text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Drivers' : 'Direbobi'}</span>
             <span className="text-xs font-black text-text-main">{metrics.totalDrivers || driversCount}</span>
           </div>
-          <div className="flex flex-col items-center justify-center p-1 bg-slate-500/5 rounded">
-            <span className="text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Fleet' : 'Kekuna'}</span>
+          <div className="flex flex-col items-center justify-center p-0.5 sm:p-1 bg-slate-500/5 rounded">
+            <span className="text-[6.5px] sm:text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Fleet' : 'Kekuna'}</span>
             <span className="text-xs font-black text-text-main">{metrics.totalTricycles || vehiclesCount}</span>
           </div>
-          <div className="flex flex-col items-center justify-center p-1 bg-slate-500/5 rounded">
-            <span className="text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? "Remits" : 'Remittance'}</span>
+          <div className="flex flex-col items-center justify-center p-0.5 sm:p-1 bg-slate-500/5 rounded">
+            <span className="text-[6.5px] sm:text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? "Remits" : 'Remittance'}</span>
             <span className="text-xs font-black text-text-main">₦{(metrics.todayCollections || 0).toLocaleString()}</span>
           </div>
-          <div className="flex flex-col items-center justify-center p-1 bg-slate-500/5 rounded">
-            <span className="text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Health' : 'Lafiya'}</span>
-            <span className="text-[10px] font-black text-cyan-500">{metrics.systemHealth}</span>
+          <div className="flex flex-col items-center justify-center p-0.5 sm:p-1 bg-slate-500/5 rounded">
+            <span className="text-[6.5px] sm:text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Health' : 'Lafiya'}</span>
+            <span className="text-[9px] sm:text-[10px] font-black text-cyan-500">{metrics.systemHealth}</span>
           </div>
         </div>
       </Card>

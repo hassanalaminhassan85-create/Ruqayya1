@@ -48,7 +48,9 @@ import {
   Phone,
   Mail,
   Coins,
-  Globe
+  Globe,
+  ArrowRight,
+  Navigation
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -730,15 +732,30 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     <div className="flex flex-col gap-6 w-full flex-1 max-w-7xl mx-auto p-2 md:p-6 bg-bg-base relative print:bg-white print:p-0">
       
       {/* EXECUTIVE CONTROL HUB UPPER HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-main/50 pb-4 print:hidden">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-main/50 pb-4 print:hidden">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl md:text-2xl font-extrabold text-text-main tracking-tight uppercase font-mono flex items-center gap-2">
-              <Shield className="h-6 w-6 text-brand-gold" />
+          <span className="text-[11px] font-black tracking-widest text-brand-gold uppercase block">
+            {(() => {
+              const hours = new Date().getHours();
+              let greeting = "Good Morning";
+              if (hours >= 12 && hours < 17) greeting = "Good Afternoon";
+              if (hours >= 17) greeting = "Good Evening";
+              
+              if (lang === 'ha') {
+                if (hours < 12) greeting = "In kwana lafiya (Barka da Safiya)";
+                else if (hours < 17) greeting = "Barka da Rana";
+                else greeting = "Barka da Yamma";
+              }
+              return `${greeting}, Director General`;
+            })()}
+          </span>
+          <div className="flex items-center gap-2 mt-0.5">
+            <h2 className="text-xl md:text-2xl font-black text-text-main tracking-tight uppercase font-mono flex items-center gap-2">
+              <Shield className="h-6 w-6 text-brand-gold animate-pulse" />
               {lang === 'en' ? "Director General Headquarters" : "Babban Ofishin Babban Darakta"}
             </h2>
           </div>
-          <p className="text-xs text-text-muted mt-1 leading-relaxed max-w-2xl">
+          <p className="text-xs text-text-muted mt-1 leading-relaxed max-w-2xl font-medium">
             {lang === 'en' 
               ? "Highest operational authority node. Command center for financial ledger audits, driver certifications, corporate shareholder settings, and 30-day operating cycle control." 
               : "Babban iko na gudanarwa. Hanyar sarrafa kudaden shiga, binciken direbobi, masu hannun jari, da tsarin zagayen aiki."}
@@ -746,15 +763,108 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
         </div>
         
         {/* SSE & Status Indicators */}
-        <div className="flex items-center gap-3 bg-bg-surface border border-border-main p-2.5 rounded-xl self-start">
-          <div className="flex flex-col items-end">
-            <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest">{lang === 'en' ? "Telemetry Status" : "Matsayin Hanyar Sadarwa"}</span>
-            <span className="text-xs font-extrabold text-text-main font-mono flex items-center gap-1.5 mt-0.5">
-              <span className={`h-2 w-2 rounded-full ${sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-              {sseConnected ? "SSE LIVE STREAM" : "HTTP FALLBACK"}
-            </span>
+        <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
+          <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold flex items-center gap-1.5 shadow-2xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+            CLEARANCE LEVEL III
+          </span>
+          <div className="flex items-center gap-3 bg-bg-surface border border-border-main p-2 rounded-xl">
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] font-black text-text-muted uppercase tracking-widest leading-none">{lang === 'en' ? "Telemetry Status" : "Matsayin Hanyar Sadarwa"}</span>
+              <span className="text-[10px] font-extrabold text-text-main font-mono flex items-center gap-1.5 mt-1 leading-none">
+                <span className={`h-1.5 w-1.5 rounded-full ${sseConnected ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                {sseConnected ? "SSE SECURE SYNC" : "FALLBACK HTTP"}
+              </span>
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* PRIORITY ACTION CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('overview');
+            setTimeout(() => {
+              const el = document.getElementById('active-cycle-hud');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+          }}
+          className="text-left bg-gradient-to-br from-brand-navy to-slate-900 border border-slate-800 text-white p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-brand-gold/10 rounded-xl border border-brand-gold/20 text-brand-gold group-hover:scale-110 transition-transform">
+              <Clock className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-500 group-hover:text-brand-gold group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-brand-gold uppercase tracking-wider block">
+              {lang === 'en' ? "OPERATIONS CONTROL" : "ZAGAYEN AIKI"}
+            </span>
+            <h4 className="text-sm font-extrabold text-white leading-tight mt-0.5">
+              {lang === 'en' ? "Audit Operating Cycle" : "Bincika Zagayen Gudanarwa"}
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-0.5 leading-none">
+              {lang === 'en' ? "Continuous 30-day lock audits & tonnage progression" : "Duba nauyin kwanaki 30 da aminci"}
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('shareholders')}
+          className="text-left bg-bg-surface border border-border-main p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-600 group-hover:scale-110 transition-transform">
+              <Percent className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider block">
+              {lang === 'en' ? "EQUITY CONTROL" : "MASU HANNUN JARI"}
+            </span>
+            <h4 className="text-sm font-extrabold text-text-main leading-tight mt-0.5">
+              {lang === 'en' ? "Manage Shareholder Weights" : "Sarrafa Rabon Masu Jari"}
+            </h4>
+            <p className="text-[11px] text-text-muted mt-0.5 leading-none">
+              {lang === 'en' ? "Regulate percent parameters & investment nodes" : "Sarrafa kudaden shiga da rabon jari"}
+            </p>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('overview');
+            setTimeout(() => {
+              const el = document.getElementById('database-backup-section');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+          }}
+          className="text-left bg-bg-surface border border-border-main p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
+        >
+          <div className="flex justify-between items-start w-full">
+            <div className="p-2 bg-brand-gold/10 rounded-xl border border-brand-gold/20 text-brand-gold group-hover:scale-110 transition-transform">
+              <RefreshCw className="h-5 w-5" />
+            </div>
+            <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-brand-gold group-hover:translate-x-1 transition-all" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black text-brand-gold uppercase tracking-wider block">
+              {lang === 'en' ? "DATA SYSTEM SECURE" : "AJIYAR SYSTEM"}
+            </span>
+            <h4 className="text-sm font-extrabold text-text-main leading-tight mt-0.5">
+              {lang === 'en' ? "Secure Database Backup" : "Ajiye Kundayen Asali"}
+            </h4>
+            <p className="text-[11px] text-text-muted mt-0.5 leading-none">
+              {lang === 'en' ? "Trigger manual JSON backup compiles & restoratives" : "Sauke ko mayar da bayanan asali na JSON"}
+            </p>
+          </div>
+        </button>
       </div>
 
       {/* GLOBAL INSTANT SEARCH CORRIDOR (Executive Requirement) */}

@@ -607,5 +607,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     });
+  },
+  resetTestData: async (confirmationText: string) => {
+    return api.request('/api/admin/reset-test-data', {
+      method: 'POST',
+      body: JSON.stringify({ confirmationText })
+    });
   }
 };
