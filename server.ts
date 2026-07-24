@@ -2296,7 +2296,7 @@ app.post('/api/notifications/settings', authenticateSession, (req, res) => {
 });
 
 // GET Web Push VAPID Public Key
-app.get('/api/notifications/vapid-public-key', authenticateSession, (req, res) => {
+app.get('/api/notifications/vapid-public-key', (req, res) => {
   try {
     const publicKey = PushService.getPublicKey();
     res.json({ publicKey });

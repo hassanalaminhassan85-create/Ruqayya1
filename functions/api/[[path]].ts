@@ -374,32 +374,43 @@ class D1Manager {
   async getDB(): Promise<any> {
     const d1 = this.getD1();
     let db: any = null;
-    if (d1) {
-      await d1.prepare(`
-        CREATE TABLE IF NOT EXISTS collections (
-          name TEXT PRIMARY KEY,
-          data TEXT
-        )
-      `).run();
+    const startTime = Date.now();
+    try {
+      if (d1) {
+        console.log(`[D1 SQL DB QUERY] CREATE TABLE IF NOT EXISTS collections`);
+        await d1.prepare(`
+          CREATE TABLE IF NOT EXISTS collections (
+            name TEXT PRIMARY KEY,
+            data TEXT
+          )
+        `).run();
 
-      const dbResponse = await d1.prepare("SELECT name, data FROM collections").all();
-      const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
-      if (results && results.length > 0) {
-        const state: any = {};
-        for (const row of results) {
-          state[row.name] = JSON.parse(row.data);
+        console.log(`[D1 SQL DB QUERY] SELECT name, data FROM collections`);
+        const dbResponse = await d1.prepare("SELECT name, data FROM collections").all();
+        const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
+        if (results && results.length > 0) {
+          const state: any = {};
+          for (const row of results) {
+            state[row.name] = JSON.parse(row.data);
+          }
+          db = await this.ensureDefaults(state);
+          console.log(`[D1 SQL DB SUCCESS] Loaded database state in ${Date.now() - startTime}ms`);
+        } else {
+          console.log(`[D1 SQL DB SEED] No collections found, preparing seed defaults...`);
+          const seedState = await this.ensureDefaults({});
+          await this.saveDB(seedState);
+          db = seedState;
         }
-        db = await this.ensureDefaults(state);
       } else {
-        const seedState = await this.ensureDefaults({});
-        await this.saveDB(seedState);
-        db = seedState;
+        if (!this.memoryDb) {
+          console.log(`[MEMORY DB QUERY] No persistent DB bound, initializing Memory fallback...`);
+          this.memoryDb = await this.ensureDefaults({});
+        }
+        db = this.memoryDb;
       }
-    } else {
-      if (!this.memoryDb) {
-        this.memoryDb = await this.ensureDefaults({});
-      }
-      db = this.memoryDb;
+    } catch (dbError) {
+      console.error(`[DB RESOLUTION ERROR] Query failed or database connection broken:`, dbError);
+      throw dbError;
     }
 
     // Lazy automatic background-engine runs here on Cloudflare Pages (Serverless)
@@ -1492,18 +1503,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const vehicle = db.vehicles.find((v: any) => v.driver_id === dr.id) || null;
         const financials = getDriverFinancials(dr, db);
         profileDetails = {
-          driverId: dr.id,
-          companyDriverId: dr.company_driver_id,
-          address: dr.address,
-          nin: dr.nin,
-          licenseNumber: dr.license_number,
-          licenseExpiry: dr.license_expiry,
-          classification: dr.classification,
-          rating: dr.rating,
-          status: dr.status,
+          ...dr,
           guarantor,
           vehicle,
-          financials
+          remaining_vehicle_balance: financials.remainingVehicleBalance,
+          total_amount_paid: financials.totalAmountPaid,
+          vehicle_purchase_price: financials.vehiclePurchasePrice,
+          total_payments_made: financials.totalPaymentsMade
         };
       }
     } else if (user.role === 'shareholder') {
@@ -1520,7 +1526,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         phone: userRec.phone,
         role: user.role,
         permissions,
-        profileDetails
+        profile: profileDetails,
+        profileDetails: profileDetails
       }
     });
   }
@@ -1550,7 +1557,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     // GET /api/drivers (List drivers)
     if (parts.length === 0 && method === 'GET') {
       const searchParam = url.searchParams.get('search')?.toLowerCase() || '';
-      let list = db.drivers || [];
+      let list = (db.drivers || []).filter(Boolean);
 
       if (user.role === 'driver') {
         list = list.filter((d: any) => d.user_id === user.id);
@@ -1582,9 +1589,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
       if (searchParam) {
         return buildResponse(results.filter((drv: any) => 
-          drv.fullName.toLowerCase().includes(searchParam) ||
-          drv.company_driver_id.toLowerCase().includes(searchParam) ||
-          drv.nin.includes(searchParam)
+          (drv.fullName || '').toLowerCase().includes(searchParam) ||
+          (drv.company_driver_id || '').toLowerCase().includes(searchParam) ||
+          (drv.nin || '').includes(searchParam)
         ));
       }
       return buildResponse(results);
@@ -2710,10 +2717,13 @@ ${JSON.stringify(cleanedContext, null, 2)}
 
   // 17. RE-ROUTING EXECUTIVE DIRECT CONTROLS
   if (path.startsWith('/api/director/')) {
-    if (user.role !== 'director' && user.role !== 'admin') {
-      return buildResponse({ error: 'Access Denied: Executive Director or Admin privileges required.' }, 403);
-    }
     const ctrl = path.replace('/api/director/', '');
+    const isPublicCyclesGet = ctrl === 'cycles' && method === 'GET';
+    if (!isPublicCyclesGet) {
+      if (user.role !== 'director' && user.role !== 'admin') {
+        return buildResponse({ error: 'Access Denied: Executive Director or Admin privileges required.' }, 403);
+      }
+    }
 
     if (ctrl === 'cycles/start' && method === 'POST') {
       try {

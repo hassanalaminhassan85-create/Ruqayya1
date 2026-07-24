@@ -1,0 +1,29 @@
+# Configuration for the Ruqayya Transport background Worker
+name = "ruqayya-transport-cron-worker"
+main = "cycle-timer.ts"
+compatibility_date = "2026-07-07"
+compatibility_flags = [ "nodejs_compat" ]
+
+[triggers]
+crons = [ "*/30 * * * *" ]
+
+[[kv_namespaces]]
+binding = "PUSH_SUBSCRIPTIONS"
+id = "e4dfd23b21c349c48f5c9fe0825970e0"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ruqayya"
+database_id = "2e4092ba-4766-45d4-bb5d-934d6bbac2e6"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "ruqayya"
+
+[ai]
+binding = "AI"
+
+[vars]
+# Optional VAPID keys for direct push notifications
+VAPID_PUBLIC_KEY = "BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg"
+VAPID_PRIVATE_KEY = "vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk"

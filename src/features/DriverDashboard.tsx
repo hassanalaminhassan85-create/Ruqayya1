@@ -330,45 +330,60 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
   const syncDriverData = async (dataPayload?: any) => {
     const token = api.getToken();
     if (!token || token === 'null' || token === 'undefined') {
+      console.warn("[DriverDashboard] API Token is missing or invalid. Halting synchronization.");
       setLoading(false);
       return;
     }
     try {
       let me;
-      let tripsList;
-      let vouchersList;
-      let paymentsList;
+      let tripsList = [];
+      let vouchersList = [];
+      let paymentsList = [];
+
+      console.log(`[DriverDashboard Query] Sync triggered. SSE update: ${!!dataPayload}`);
 
       if (dataPayload) {
-        // SSE Hydration
-        const dbUsers = dataPayload.users || [];
+        console.log("[DriverDashboard SSE] Processing real-time data payload...", dataPayload);
         const dbDrivers = dataPayload.drivers || [];
         const dbVehicles = dataPayload.vehicles || [];
         const dbVouchers = dataPayload.vouchers || [];
         const dbTrips = dataPayload.trip_manifests || [];
         const dbPayments = dataPayload.driver_payments || [];
 
-        // Find active logged-in user
-        const token = api.getToken();
-        const activeUser = dbUsers.find((u: any) => 
-          (driver?.email && u.email && u.email.toLowerCase() === driver.email.toLowerCase()) || 
-          (u.full_name && u.full_name === driverName)
+        // Try to identify driver profile from the drivers array (since driver role SSE payload is scoped to the logged-in driver)
+        let profile = dbDrivers.find((d: any) => 
+          (driver?.id && d.id === driver.id) || 
+          (driver?.userId && d.user_id === driver.userId) ||
+          (d.fullName && d.fullName === driverName) ||
+          (d.full_name && d.full_name === driverName)
         );
-        if (!activeUser) return;
 
-        const profile = dbDrivers.find((d: any) => d.user_id === activeUser.id);
-        if (!profile) return;
+        if (!profile && dbDrivers.length > 0) {
+          profile = dbDrivers[0];
+        }
+
+        if (!profile) {
+          console.warn("[DriverDashboard SSE] No driver profile found in SSE payload drivers list. Halting SSE update.");
+          return;
+        }
+
+        console.log("[DriverDashboard SSE] Extracted driver profile from live stream:", profile);
+
+        const userId = profile.user_id || driver?.userId || '';
+        const userEmail = profile.email || driver?.email || '';
+        const userFullName = profile.fullName || profile.full_name || driverName || driver?.fullName || '';
+        const userPhone = profile.phone || driver?.phone || '';
 
         me = {
           user: {
-            id: activeUser.id,
-            fullName: activeUser.full_name,
-            email: activeUser.email,
-            phone: activeUser.phone,
+            id: userId,
+            fullName: userFullName,
+            email: userEmail,
+            phone: userPhone,
             role: 'driver',
             profile: {
               ...profile,
-              vehicle: dbVehicles.find((v: any) => v.driver_id === profile.id) || null
+              vehicle: dbVehicles.find((v: any) => (v.driverId === profile.id || v.driver_id === profile.id)) || null
             }
           }
         };
@@ -380,11 +395,33 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
         setCycles(dbCycles);
       } else {
         // HTTP Hydration
+        console.log("[DriverDashboard Query] Executing GET /api/auth/me...");
         me = await api.getMe();
-        tripsList = await api.getTrips();
-        vouchersList = await api.getVouchers();
-        paymentsList = await api.request('/api/payments');
-        const dbCyclesRes = await api.request('/api/director/cycles').catch(() => null);
+        console.log("[DriverDashboard HTTP] Me Response:", me);
+
+        console.log("[DriverDashboard Query] Executing GET /api/trips...");
+        tripsList = await api.getTrips().catch((err) => {
+          console.error("[DriverDashboard Query Rejection] Failed to load trips from API:", err);
+          return [];
+        });
+
+        console.log("[DriverDashboard Query] Executing GET /api/vouchers...");
+        vouchersList = await api.getVouchers().catch((err) => {
+          console.error("[DriverDashboard Query Rejection] Failed to load vouchers from API:", err);
+          return [];
+        });
+
+        console.log("[DriverDashboard Query] Executing GET /api/payments...");
+        paymentsList = await api.request('/api/payments').catch((err) => {
+          console.error("[DriverDashboard Query Rejection] Failed to load payments from API:", err);
+          return [];
+        });
+
+        console.log("[DriverDashboard Query] Executing GET /api/director/cycles...");
+        const dbCyclesRes = await api.request('/api/director/cycles').catch((err) => {
+          console.error("[DriverDashboard Query Rejection] Failed to load cycles from API:", err);
+          return null;
+        });
         if (dbCyclesRes && dbCyclesRes.cycles) {
           setCycles(dbCyclesRes.cycles);
         }
@@ -392,7 +429,12 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
 
       if (me && me.user && me.user.role === 'driver') {
         const profile = me.user.profile;
-        if (!profile) return;
+        if (!profile) {
+          console.error("[DriverDashboard Error] Driver user profile record is missing or empty inside the user payload:", me);
+          return;
+        }
+
+        console.log("[DriverDashboard HTTP] Active profile resolved:", profile);
 
         const updatedDriver = {
           id: profile.id,
@@ -466,9 +508,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
 
         const myPayments = paymentsList.filter((p: any) => p.driver_id === profile.id);
         setPayments(myPayments);
+      } else {
+        console.warn("[DriverDashboard Error] User is authenticated but role is not driver or user record is null:", me);
       }
     } catch (e) {
-      console.error("Failed to hydrate Driver Dashboard from backend services:", e);
+      console.error("[DriverDashboard Query Rejection] Failed to hydrate Driver Dashboard from backend services:", e);
     } finally {
       setLoading(false);
     }
@@ -673,13 +717,55 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
     }
   };
 
-  if (loading || !driver) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <div className="h-10 w-10 border-4 border-brand-gold border-t-transparent rounded-full animate-spin"></div>
         <p className="text-xs text-text-muted font-mono font-bold uppercase tracking-wider">
           {lang === 'en' ? "Initializing Encrypted Operator Terminal..." : "Ana Bude Tashar Direba Ta Musamman..."}
         </p>
+      </div>
+    );
+  }
+
+  if (!driver) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-6 max-w-md mx-auto text-center px-4">
+        <div className="p-3 bg-red-100 dark:bg-red-950 rounded-full text-red-600 dark:text-red-400">
+          <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-text-main">
+            {lang === 'en' ? "Profile Loading Failure" : "Kasa Bude Bayanan Direba"}
+          </h3>
+          <p className="text-sm text-text-muted mt-2">
+            {lang === 'en' 
+              ? "We could not find a driver record linked to your user account. Please contact system administrators or re-verify your registration." 
+              : "Ba mu sami bayanan direba da ke da alaƙa da asusunku ba. Da fatan za a tuntuɓi masu gudanarwa."}
+          </p>
+        </div>
+        <div className="flex gap-4">
+          <button 
+            onClick={() => {
+              setLoading(true);
+              syncDriverData();
+            }}
+            className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-brand-gold text-black rounded transition hover:bg-opacity-90"
+          >
+            {lang === 'en' ? "Retry Sync" : "Sake Gwada"}
+          </button>
+          <button 
+            onClick={() => {
+              api.clearToken();
+              window.location.reload();
+            }}
+            className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-zinc-200 dark:bg-zinc-800 text-text-main rounded transition hover:bg-opacity-80"
+          >
+            {lang === 'en' ? "Sign Out" : "Fita"}
+          </button>
+        </div>
       </div>
     );
   }

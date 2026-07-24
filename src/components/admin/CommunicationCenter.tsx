@@ -59,6 +59,9 @@ interface UserSummary {
   role: 'driver' | 'admin' | 'director' | 'shareholder';
   phone?: string;
   avatar?: string;
+  driverId?: string;
+  vehiclePlate?: string;
+  driverStatus?: string;
 }
 
 export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }) => {
@@ -90,6 +93,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [searchUserQuery, setSearchUserQuery] = useState('');
+  const [rosterFilter, setRosterFilter] = useState<'all' | 'driver' | 'staff' | 'shareholder'>('all');
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -161,19 +165,33 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
   const compileUsersList = (db: any, currUser: any) => {
     const list: UserSummary[] = [];
 
-    // Add corporate office actors (admins & directors)
     if (db.users) {
       db.users.forEach((u: any) => {
         if (u.id === currUser.id) return; // skip self
-        const role = db.roles.find((r: any) => r.id === u.role_id);
-        const roleName = role ? role.name : 'public';
+        const role = db.roles?.find((r: any) => r.id === u.role_id);
+        const roleName = role ? role.name : (u.role || 'public');
         
         if (roleName !== 'public') {
+          let drvProfile: any = null;
+          if (roleName === 'driver' && db.drivers) {
+            const drv = db.drivers.find((d: any) => d.user_id === u.id);
+            if (drv) {
+              const v = db.vehicles?.find((veh: any) => veh.driver_id === drv.id) || null;
+              drvProfile = {
+                ...drv,
+                vehicle: v
+              };
+            }
+          }
+
           list.push({
             id: u.id,
             fullName: u.full_name,
             role: roleName as any,
-            phone: u.phone || undefined
+            phone: u.phone || undefined,
+            driverId: drvProfile?.company_driver_id,
+            vehiclePlate: drvProfile?.vehicle?.plate_number,
+            driverStatus: drvProfile?.status
           });
         }
       });
@@ -387,8 +405,21 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
   }).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) : [];
 
   const filteredUsers = usersList.filter(u => {
-    return String(u.fullName || '').toLowerCase().includes(searchUserQuery.toLowerCase()) ||
-           String(u.role || '').toLowerCase().includes(searchUserQuery.toLowerCase());
+    const matchesSearch = String(u.fullName || '').toLowerCase().includes(searchUserQuery.toLowerCase()) ||
+                          String(u.role || '').toLowerCase().includes(searchUserQuery.toLowerCase()) ||
+                          String(u.driverId || '').toLowerCase().includes(searchUserQuery.toLowerCase()) ||
+                          String(u.vehiclePlate || '').toLowerCase().includes(searchUserQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+
+    if (rosterFilter === 'driver') {
+      return u.role === 'driver';
+    } else if (rosterFilter === 'staff') {
+      return u.role === 'admin' || u.role === 'director';
+    } else if (rosterFilter === 'shareholder') {
+      return u.role === 'shareholder';
+    }
+    return true;
   });
 
   return (
@@ -462,9 +493,57 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
                   type="text"
                   value={searchUserQuery}
                   onChange={(e) => setSearchUserQuery(e.target.value)}
-                  placeholder={lang === 'en' ? "Search people..." : "Nemo mutum..."}
+                  placeholder={lang === 'en' ? "Search name, role, plate..." : "Nemo suna, matsayi..."}
                   className="w-full pl-8 pr-3 py-2 text-xs bg-bg-base border border-border-main/50 rounded-lg focus:outline-none"
                 />
+              </div>
+
+              {/* Roster Filters */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setRosterFilter('all')}
+                  className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full transition-colors cursor-pointer whitespace-nowrap border ${
+                    rosterFilter === 'all'
+                      ? 'bg-brand-navy text-brand-gold border-brand-gold/40'
+                      : 'bg-bg-base text-text-muted border-border-main/40 hover:text-text-main'
+                  }`}
+                >
+                  {lang === 'en' ? "All" : "Duka"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRosterFilter('driver')}
+                  className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full transition-colors cursor-pointer whitespace-nowrap border ${
+                    rosterFilter === 'driver'
+                      ? 'bg-brand-navy text-brand-gold border-brand-gold/40'
+                      : 'bg-bg-base text-text-muted border-border-main/40 hover:text-text-main'
+                  }`}
+                >
+                  {lang === 'en' ? "Drivers" : "Direbobi"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRosterFilter('staff')}
+                  className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full transition-colors cursor-pointer whitespace-nowrap border ${
+                    rosterFilter === 'staff'
+                      ? 'bg-brand-navy text-brand-gold border-brand-gold/40'
+                      : 'bg-bg-base text-text-muted border-border-main/40 hover:text-text-main'
+                  }`}
+                >
+                  {lang === 'en' ? "Staff" : "Ma'aikata"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRosterFilter('shareholder')}
+                  className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full transition-colors cursor-pointer whitespace-nowrap border ${
+                    rosterFilter === 'shareholder'
+                      ? 'bg-brand-navy text-brand-gold border-brand-gold/40'
+                      : 'bg-bg-base text-text-muted border-border-main/40 hover:text-text-main'
+                  }`}
+                >
+                  {lang === 'en' ? "Investors" : "Masu Jari"}
+                </button>
               </div>
             </div>
 
@@ -505,15 +584,36 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
                         </div>
                         <div className="min-w-0 flex flex-col gap-0.5">
                           <span className="text-xs font-bold text-text-main truncate block">{u.fullName}</span>
-                          <span className="text-[10px] text-text-muted capitalize block font-medium font-mono">{u.role}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[9px] text-text-muted capitalize font-semibold font-mono bg-bg-base px-1.5 py-0.5 rounded border border-border-main/40">{u.role}</span>
+                            {u.role === 'driver' && u.driverId && (
+                              <span className="text-[9px] text-brand-gold font-bold font-mono bg-brand-navy/10 px-1.5 py-0.5 rounded border border-brand-gold/10">{u.driverId}</span>
+                            )}
+                            {u.role === 'driver' && u.vehiclePlate && (
+                              <span className="text-[9px] text-blue-600 dark:text-blue-400 font-extrabold font-mono bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded border border-blue-200/30">{u.vehiclePlate}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {unreadCount > 0 && (
-                        <span className="h-4 min-w-4 bg-brand-danger text-white rounded-full text-[9px] font-bold flex items-center justify-center px-1">
-                          {unreadCount}
-                        </span>
-                      )}
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {u.role === 'driver' && u.driverStatus && (
+                          <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded-full border ${
+                            u.driverStatus === 'active' || u.driverStatus === 'approved'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200/40'
+                              : u.driverStatus === 'suspended'
+                              ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200/40'
+                              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200/40'
+                          }`}>
+                            {u.driverStatus}
+                          </span>
+                        )}
+                        {unreadCount > 0 && (
+                          <span className="h-4 min-w-4 bg-brand-danger text-white rounded-full text-[9px] font-bold flex items-center justify-center px-1">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })
@@ -526,16 +626,48 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
             {selectedUser ? (
               <>
                 {/* Active Thread Bar */}
-                <div className="px-5 py-3.5 border-b border-border-main/50 bg-bg-base/30 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-brand-navy text-brand-gold flex items-center justify-center">
-                      <User className="h-4 w-4" />
+                <div className="px-5 py-3.5 border-b border-border-main/50 bg-bg-base/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-full bg-brand-navy text-brand-gold flex items-center justify-center shrink-0 border border-brand-gold/30">
+                      <User className="h-4.5 w-4.5" />
                     </div>
-                    <div>
-                      <span className="text-xs font-extrabold text-text-main block">{selectedUser.fullName}</span>
-                      <span className="text-[10px] text-text-muted block font-mono capitalize">{selectedUser.role} Portal Thread</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-extrabold text-text-main block truncate">{selectedUser.fullName}</span>
+                        {selectedUser.role === 'driver' && selectedUser.driverStatus && (
+                          <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.2 rounded-full border ${
+                            selectedUser.driverStatus === 'active' || selectedUser.driverStatus === 'approved'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200/40'
+                              : selectedUser.driverStatus === 'suspended'
+                              ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200/40'
+                              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200/40'
+                          }`}>
+                            {selectedUser.driverStatus}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-text-muted block font-mono capitalize">
+                        {selectedUser.role === 'driver' 
+                          ? `${lang === 'en' ? "Driver ID" : "ID na Direba"}: ${selectedUser.driverId || 'N/A'}` 
+                          : `${selectedUser.role} Portal Thread`}
+                      </span>
                     </div>
                   </div>
+
+                  {selectedUser.role === 'driver' && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedUser.vehiclePlate && (
+                        <div className="text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded border border-blue-200/40 font-mono">
+                          Tricycle: {selectedUser.vehiclePlate}
+                        </div>
+                      )}
+                      {selectedUser.phone && (
+                        <div className="text-[10px] font-bold text-text-muted bg-bg-surface px-2 py-1 rounded border border-border-main/50 font-mono">
+                          {selectedUser.phone}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Conversation Box */}
@@ -601,6 +733,53 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
                   )}
                   <div ref={messagesEndRef} />
                 </div>
+
+                {/* Quick Templates Bar (For driver communication) */}
+                {selectedUser.role === 'driver' && (
+                  <div className="px-5 py-2.5 bg-bg-base/40 border-t border-border-main/40 flex flex-col gap-1.5">
+                    <span className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider flex items-center gap-1">
+                      <MessageSquare className="h-3 w-3 text-brand-gold" />
+                      {lang === 'en' ? "Quick Templates" : "Gajerun Rubutu"}
+                    </span>
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none flex-wrap">
+                      {[
+                        {
+                          title: lang === 'en' ? "💰 Payment Due" : "💰 Biyan Kuɗi",
+                          text: lang === 'en' 
+                            ? "Friendly reminder: your upcoming installment payment is due. Please process." 
+                            : "Gargaɗi na abokantaka: lokacin biyan kuɗin ku na gaba ya kusa. Da fatan za a tura."
+                        },
+                        {
+                          title: lang === 'en' ? "🔧 Inspection" : "🔧 Duba Babur",
+                          text: lang === 'en'
+                            ? "Your vehicle is scheduled for routine safety inspection tomorrow at the main garage."
+                            : "An tsara abun hawan ku don binciken lafiya na yau da kullun gobe a babban gareji."
+                        },
+                        {
+                          title: lang === 'en' ? "🦺 Safety Alert" : "🦺 Tsaro",
+                          text: lang === 'en'
+                            ? "Please remember to wear your security reflective vest at all times during operating hours."
+                            : "Don Allah a tuna da sanya rigar tsaro ta nuna haske a kowane lokaci lokacin aiki."
+                        },
+                        {
+                          title: lang === 'en' ? "👋 Office Visit" : "👋 Ziyara",
+                          text: lang === 'en'
+                            ? "Please visit the corporate office or check in with an administrator for an update regarding your driver profile."
+                            : "Don Allah ku ziyarci ofishin kamfani ko ku duba tare da mai kula don sabon bayani game da ku."
+                        }
+                      ].map((tmpl, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setChatText(tmpl.text)}
+                          className="px-2.5 py-1 text-[10px] font-bold rounded bg-bg-surface hover:bg-brand-navy hover:text-brand-gold border border-border-main text-text-main transition-colors cursor-pointer whitespace-nowrap"
+                        >
+                          {tmpl.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Secure File upload indicator */}
                 {attachmentName && (

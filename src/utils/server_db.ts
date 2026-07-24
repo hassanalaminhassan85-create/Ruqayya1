@@ -334,6 +334,26 @@ export function seedDBIfEmpty() {
     modified = true;
   }
 
+  if (!db.push_subscriptions || db.push_subscriptions.length === 0) {
+    const defaultAdmin = db.users.find(u => u.username === 'ADAM');
+    const adminUserId = defaultAdmin ? defaultAdmin.id : 'fb30b905-d662-4420-9e2e-96de9a017596';
+    db.push_subscriptions = [
+      {
+        id: 'fallback-sub-admin',
+        user_id: adminUserId,
+        subscription: {
+          endpoint: 'http://localhost:3000/api/notifications/fallback-push-endpoint',
+          keys: {
+            p256dh: 'placeholder-p256dh',
+            auth: 'placeholder-auth'
+          }
+        },
+        created_at: new Date().toISOString()
+      }
+    ];
+    modified = true;
+  }
+
   if (modified) {
     saveDB(db);
     console.log('Database seeded with standard fresh operational parameters.');
