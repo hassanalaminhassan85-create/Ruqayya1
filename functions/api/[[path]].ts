@@ -373,6 +373,7 @@ class D1Manager {
 
   async getDB(): Promise<any> {
     const d1 = this.getD1();
+    let db: any = null;
     if (d1) {
       await d1.prepare(`
         CREATE TABLE IF NOT EXISTS collections (
@@ -388,18 +389,101 @@ class D1Manager {
         for (const row of results) {
           state[row.name] = JSON.parse(row.data);
         }
-        return await this.ensureDefaults(state);
+        db = await this.ensureDefaults(state);
       } else {
         const seedState = await this.ensureDefaults({});
         await this.saveDB(seedState);
-        return seedState;
+        db = seedState;
       }
     } else {
       if (!this.memoryDb) {
         this.memoryDb = await this.ensureDefaults({});
       }
-      return this.memoryDb;
+      db = this.memoryDb;
     }
+
+    // Lazy automatic background-engine runs here on Cloudflare Pages (Serverless)
+    if (db) {
+      let dbChanged = false;
+      const now = new Date();
+      const opsState = db.company_operations_state || { status: 'Setup Mode' };
+
+      if (opsState.status !== 'Setup Mode') {
+        // 1. Scan for vehicle purchase contract completions
+        const activeDrivers = (db.drivers || []).filter((d: any) => d.status === 'active');
+        activeDrivers.forEach((drv: any) => {
+          if (drv.remaining_vehicle_balance !== undefined && drv.remaining_vehicle_balance <= 0 && drv.status !== 'completed') {
+            drv.status = 'completed';
+            dbChanged = true;
+            
+            if (!db.notifications) db.notifications = [];
+            db.notifications.unshift({
+              id: 'notif_' + Math.floor(Math.random() * 1000000),
+              user_id: drv.user_id,
+              title_en: 'Vehicle Contract Completed!',
+              title_ha: 'Kwangilar Mota Ta Cika!',
+              message_en: 'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!',
+              message_ha: 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!',
+              type: 'success',
+              read_status: 0,
+              created_at: now.toISOString()
+            });
+          }
+        });
+
+        // 2. Automated rest mode tracking and recovery release
+        const restDrivers = (db.drivers || []).filter((d: any) => d.status === 'rest_mode');
+        restDrivers.forEach((drv: any) => {
+          if (drv.rest_release_date && new Date(drv.rest_release_date) <= now) {
+            drv.status = 'active';
+            drv.rest_release_date = null;
+            dbChanged = true;
+
+            if (!db.notifications) db.notifications = [];
+            db.notifications.unshift({
+              id: 'notif_' + Math.floor(Math.random() * 1000000),
+              user_id: drv.user_id,
+              title_en: 'Rest Period Concluded',
+              title_ha: 'Lokacin Hutu Ya Cika',
+              message_en: 'Your medical rest period has completed. Your status is now reverted to Active duty.',
+              message_ha: 'Lokacin hutun lafiyar ku ya cika. An mayar da ku a matsayin mai aiki mai karshe.',
+              type: 'info',
+              read_status: 0,
+              created_at: now.toISOString()
+            });
+          }
+        });
+
+        // 3. Dynamic financial status completion checks
+        const activeDriversList = (db.drivers || []).filter((d: any) => d.status === 'active' || d.status === 'approved' || d.status === 'available');
+        activeDriversList.forEach((drv: any) => {
+          const financials = getDriverFinancials(drv, db);
+          if (financials && financials.remainingVehicleBalance <= 0 && drv.status !== 'completed') {
+            drv.status = 'completed';
+            dbChanged = true;
+            
+            if (!db.notifications) db.notifications = [];
+            db.notifications.unshift({
+              id: 'notif_' + Math.floor(Math.random() * 1000000),
+              user_id: drv.user_id,
+              title_en: 'Vehicle Contract Completed!',
+              title_ha: 'Kwangilar Mota Ta Cika!',
+              message_en: 'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!',
+              message_ha: 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!',
+              type: 'success',
+              read_status: 0,
+              created_at: now.toISOString()
+            });
+          }
+        });
+      }
+
+      if (dbChanged) {
+        await this.saveDB(db);
+      }
+    }
+
+    return db;
   }
 
   async saveDB(state: any): Promise<void> {
