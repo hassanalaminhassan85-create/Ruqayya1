@@ -487,6 +487,133 @@ class D1Manager {
             });
           }
         });
+
+        // 4. Lazy operating cycle status & currentDay advancement
+        if (db.cycles && Array.isArray(db.cycles)) {
+          const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+          if (activeCycle) {
+            // Calculate active seconds elapsed
+            const startMs = new Date(activeCycle.created_at || activeCycle.startDate).getTime();
+            if (!isNaN(startMs)) {
+              let nowMs = Date.now();
+              if (activeCycle.status === 'paused' && activeCycle.pausedAt) {
+                const pausedMs = new Date(activeCycle.pausedAt).getTime();
+                if (!isNaN(pausedMs)) {
+                  nowMs = pausedMs;
+                }
+              }
+
+              let totalMs = nowMs - startMs;
+              if (totalMs < 0) totalMs = 0;
+
+              // Deduct pause intervals
+              let totalPausedMs = 0;
+              if (activeCycle.pauseHistory && Array.isArray(activeCycle.pauseHistory)) {
+                activeCycle.pauseHistory.forEach((p: any) => {
+                  const pStart = new Date(p.pausedAt).getTime();
+                  if (isNaN(pStart)) return;
+
+                  if (p.resumedAt) {
+                    const pEnd = new Date(p.resumedAt).getTime();
+                    if (!isNaN(pEnd)) {
+                      totalPausedMs += (pEnd - pStart);
+                    }
+                  } else if (activeCycle.status === 'active') {
+                    totalPausedMs += Date.now() - pStart;
+                  }
+                });
+              }
+
+              let activeMs = totalMs - totalPausedMs;
+              if (activeMs < 0) activeMs = 0;
+              const secondsElapsed = Math.floor(activeMs / 1000);
+
+              const daysElapsed = Math.floor(secondsElapsed / (24 * 3600)) + 1;
+              const currentDayInDB = opsState.currentDay || 1;
+
+              if (daysElapsed !== currentDayInDB && daysElapsed <= 30) {
+                opsState.currentDay = daysElapsed;
+                db.company_operations_state = opsState;
+                dbChanged = true;
+                console.log(`[LAZY ENGINE] Advanced current day parameter to Day ${daysElapsed}`);
+              }
+
+              // Auto-conclude the cycle after 30 days
+              if (daysElapsed > 30 && activeCycle.status === 'active') {
+                activeCycle.status = 'completed';
+                activeCycle.endDate = new Date().toISOString().split('T')[0];
+                activeCycle.locked = true;
+
+                // Run automatic shareholder distribution engine calculations
+                const totalRevenue = (db.financial_records || [])
+                  .filter((f: any) => f.type === 'revenue' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(activeCycle.endDate))
+                  .reduce((sum: number, f: any) => sum + f.amount, 0);
+
+                const totalExpenses = (db.financial_records || [])
+                  .filter((f: any) => f.type === 'expense' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(activeCycle.endDate))
+                  .reduce((sum: number, f: any) => sum + f.amount, 0);
+
+                const netGeneratedAmount = totalRevenue - totalExpenses;
+                const distPercentage = db.shareholder_settings?.distributionPercentage || 2;
+                const distributionPool = Math.max(0, netGeneratedAmount * (distPercentage / 100));
+
+                activeCycle.metrics = {
+                  totalRevenue,
+                  totalExpenses,
+                  netGeneratedAmount,
+                  distributionPercentage: distPercentage,
+                  distributionPool,
+                  activeDrivers: db.drivers.filter((d: any) => d.status === 'approved' || d.status === 'active').length,
+                  totalFleetCount: db.vehicles.length
+                };
+
+                // Distribute proportionally to active shareholders
+                const totalInvestment = db.shareholders
+                  .filter((s: any) => s.status === 'active')
+                  .reduce((sum: number, s: any) => sum + s.investment_amount, 0);
+
+                db.shareholders.forEach((sh: any) => {
+                  if (sh.status === 'active' && totalInvestment > 0) {
+                    const shPercentage = sh.investment_amount / totalInvestment;
+                    const shEarnings = distributionPool * shPercentage;
+                    sh.earnings_to_date = (sh.earnings_to_date || 0) + shEarnings;
+
+                    // Log shareholder financial distribution record
+                    if (!db.financial_records) db.financial_records = [];
+                    db.financial_records.push({
+                      id: 'fin_' + Math.floor(Math.random() * 1000000),
+                      type: 'expense',
+                      category: 'dividend',
+                      amount: shEarnings,
+                      date: activeCycle.endDate,
+                      description: `Shareholder Proportionate Earnings Distribution - ${sh.full_name} (${(shPercentage * 100).toFixed(2)}%)`
+                    });
+                  }
+                });
+
+                if (!db.notifications) db.notifications = [];
+                db.notifications.unshift({
+                  id: 'notif_' + Math.floor(Math.random() * 1000000),
+                  title_en: 'Operating Cycle Automatically Concluded',
+                  title_ha: 'An Kammala Zagayen Sufuri',
+                  message_en: `Operating Cycle ${activeCycle.id} has automatically completed after 30 days. Net dividend pool distributed: ₦${distributionPool.toLocaleString()}`,
+                  message_ha: `Zagayen Gudanarwa ${activeCycle.id} ya kammala bayan kwanaki 30. An raba ribar ₦${distributionPool.toLocaleString()}`,
+                  type: 'success',
+                  read_status: 0,
+                  created_at: new Date().toISOString()
+                });
+
+                opsState.status = 'Setup Mode'; // Back to setup/awaiting next cycle start
+                opsState.currentCycle = '';
+                opsState.currentDay = 1;
+                db.company_operations_state = opsState;
+
+                dbChanged = true;
+                console.log(`[LAZY ENGINE] Auto-concluded operating cycle ${activeCycle.id} after 30 days.`);
+              }
+            }
+          }
+        }
       }
 
       if (dbChanged) {
