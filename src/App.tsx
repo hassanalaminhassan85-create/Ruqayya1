@@ -22,6 +22,7 @@ import { NotificationInbox } from './components/NotificationInbox';
 import { HelpCenter } from './components/HelpCenter';
 import { api } from './utils/api';
 import { registerPushSubscription } from './utils/notificationHelper';
+import { requestNotificationPermission, subscribeToPushNotifications } from './utils/notifications';
 import { CircularLogo } from './components/CircularLogo';
 import { PWAPanel } from './components/PWAPanel';
 import { AICopilotDrawer } from './components/AICopilotDrawer';
@@ -362,32 +363,21 @@ export default function App() {
       const initPush = async () => {
         try {
           console.log('RUQAYYA PWA: Automatically registering push notifications for logged in user...');
-          // Request notification permission and register subscription if granted
-          if ('Notification' in window) {
-            if (Notification.permission === 'default') {
-              // Ask gracefully after a short delay so the user is already settled in their dashboard!
-              setTimeout(async () => {
-                const granted = await Notification.requestPermission();
-                if (granted === 'granted') {
-                  const success = await registerPushSubscription();
-                  if (success) {
-                    console.log('RUQAYYA PWA: Web Push subscription successfully configured.');
-                  }
-                }
-              }, 2500);
-            } else if (Notification.permission === 'granted') {
-              // Already granted, register subscription
-              const success = await registerPushSubscription();
-              if (success) {
-                console.log('RUQAYYA PWA: Web Push subscription successfully refreshed.');
-              }
+          const granted = await requestNotificationPermission();
+          if (granted) {
+            const success = await subscribeToPushNotifications();
+            if (success) {
+              console.log('RUQAYYA PWA: Web Push subscription successfully configured and saved.');
             }
           }
         } catch (pushErr) {
           console.warn('RUQAYYA PWA: Automatic Web Push initialization skipped or failed:', pushErr);
         }
       };
-      initPush();
+      
+      // Delay slightly so the user is settled in their dashboard first
+      const timer = setTimeout(initPush, 2000);
+      return () => clearTimeout(timer);
     }
   }, [authToken, currentRole]);
 

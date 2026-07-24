@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, 
@@ -47,6 +47,22 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 }) => {
   // Tabs within Profile
   const [activeTab, setActiveTab] = useState<'info' | 'payments' | 'history' | 'docs'>('info');
+  const [installments, setInstallments] = useState<any[]>([]);
+  const [loadingInstallments, setLoadingInstallments] = useState(false);
+
+  useEffect(() => {
+    if (driver?.id) {
+      setLoadingInstallments(true);
+      api.request(`/api/drivers/${driver.id}/installments`)
+        .then((res: any) => {
+          if (res && res.success) {
+            setInstallments(res.installments || []);
+          }
+        })
+        .catch(err => console.error("Failed to fetch installments", err))
+        .finally(() => setLoadingInstallments(false));
+    }
+  }, [driver?.id, payments]);
   
   // Action Modals inside 360 View
   const [isLogAccidentOpen, setIsLogAccidentOpen] = useState(false);
@@ -516,6 +532,65 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
               <div className="flex justify-between items-center bg-bg-base/20 p-3 rounded-lg border border-border-main/50 font-mono text-[11px] font-bold">
                 <span>Contract Lease Ledger</span>
                 <span className="text-emerald-500">₦{totalPaid.toLocaleString()} paid</span>
+              </div>
+
+              {/* Installment Milestones Grid */}
+              <div className="flex flex-col gap-2">
+                <span className="font-extrabold uppercase text-[10px] text-text-muted tracking-wider">
+                  {lang === 'en' ? "30-Day Installment Cycles (6 x 5-Day Milestones)" : "Tsarin Raba Biyan Kwanaki 30 (Kashi 6 na kwanaki 5 kowanne)"}
+                </span>
+                
+                {loadingInstallments ? (
+                  <div className="py-4 text-center text-text-muted font-mono text-[11px]">Loading installment milestones...</div>
+                ) : installments.length === 0 ? (
+                  <div className="py-4 text-center text-text-muted font-mono text-[11px]">No active installment cycle found for this driver.</div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+                    {installments.map((inst: any) => {
+                      const isCompleted = inst.status === 'Completed';
+                      const isOverdue = inst.status === 'Overdue';
+                      const isPartial = inst.status === 'Partially Paid';
+                      
+                      let badgeBg = 'bg-slate-500/10 text-slate-400 border-white/5';
+                      if (isCompleted) badgeBg = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+                      if (isOverdue) badgeBg = 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+                      if (isPartial) badgeBg = 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+
+                      return (
+                        <div key={inst.installmentNumber} className="bg-bg-base/30 border border-border-main p-2.5 rounded-lg flex flex-col gap-1.5 hover:border-brand-gold/50 transition-colors">
+                          <div className="flex justify-between items-center">
+                            <span className="font-extrabold text-text-main font-mono text-[11px]">Milestone #{inst.installmentNumber}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold border uppercase ${badgeBg}`}>
+                              {inst.status === 'Completed' ? (lang === 'en' ? 'Paid' : 'An Biya') : inst.status}
+                            </span>
+                          </div>
+                          
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-text-muted">{lang === 'en' ? 'Due:' : 'Ya kamata:'}</span>
+                              <span className="font-extrabold text-text-main font-mono">₦{(inst.amountDue || inst.totalDue || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-text-muted">{lang === 'en' ? 'Paid:' : 'An biya:'}</span>
+                              <span className="font-extrabold text-emerald-500 font-mono">₦{(inst.amountPaid || inst.totalPaid || 0).toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between text-[10px] border-t border-border-main/50 pt-0.5 mt-0.5">
+                              <span className="text-text-muted">{lang === 'en' ? 'Bal:' : 'Sauran:'}</span>
+                              <span className="font-extrabold text-brand-gold font-mono">₦{Math.max(0, (inst.amountDue || inst.totalDue || 0) - (inst.amountPaid || inst.totalPaid || 0)).toLocaleString()}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-[8px] text-text-muted font-mono flex flex-col gap-0.5 border-t border-border-main/30 pt-1 mt-0.5">
+                            <div>Due: {inst.dueDate || inst.endDate}</div>
+                            {inst.paidDate && (
+                              <div className="text-emerald-500 font-semibold font-mono">Paid: {inst.paidDate}</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="overflow-x-auto border border-border-main rounded-xl">

@@ -4,6 +4,9 @@ pages_build_output_dir = "dist"
 compatibility_date = "2026-07-07"
 compatibility_flags = [ "nodejs_compat" ]
 
+[triggers]
+crons = [ "*/30 * * * *" ]
+
 [[kv_namespaces]]
 binding = "PUSH_SUBSCRIPTIONS"
 id = "e4dfd23b21c349c48f5c9fe0825970e0"

@@ -131,6 +131,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [regVehicleCapacity, setRegVehicleCapacity] = useState('30 Tons');
   const [regAgreedAmount, setRegAgreedAmount] = useState('300000');
   const [regVehiclePurchasePrice, setRegVehiclePurchasePrice] = useState('15000000');
+  const [regRemainingVehicleBalance, setRegRemainingVehicleBalance] = useState('15000000');
 
   // Get normalized pathname to customize form
   const cleanPath = normalizePath(pathname || '/');
@@ -375,7 +376,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         licenseExpiry: regLicenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         passportPhoto: regPassportPhoto,
         agreedAmount: regAgreedAmount,
-        vehiclePurchasePrice: regVehiclePurchasePrice
+        vehiclePurchasePrice: regVehiclePurchasePrice,
+        remainingVehicleBalance: regRemainingVehicleBalance
       },
       guarantor: {
         fullName: regGuarantorName,
@@ -433,6 +435,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       setRegVehicleCapacity('30 Tons');
       setRegAgreedAmount('300000');
       setRegVehiclePurchasePrice('15000000');
+      setRegRemainingVehicleBalance('15000000');
       
       setRegStep(1);
 
@@ -1390,7 +1393,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-white/5 pt-3 mt-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-white/5 pt-3 mt-1">
                             <div className="flex flex-col">
                               <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-1.5">
                                 {lang === 'en' ? 'Contract 30-Day Rate (₦)' : 'Yarjejeniyar Kwanaki 30 (₦)'} <span className="text-amber-500">*</span>
@@ -1410,7 +1413,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                             <div className="flex flex-col">
                               <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-1.5">
-                                {lang === 'en' ? 'Total Vehicle Purchase / Lease Price (₦)' : 'Kudin Mota gaba daya (₦)'} <span className="text-amber-500">*</span>
+                                {lang === 'en' ? 'Vehicle Purchase Price (₦)' : 'Kudin Siyan Mota (₦)'} <span className="text-amber-500">*</span>
                               </label>
                               <div className="relative flex items-center h-12 rounded-xl border bg-slate-950/30 border-white/10 focus-within:border-[#D4AF37]">
                                 <Wallet className="h-4 w-4 absolute left-3.5 text-slate-400" />
@@ -1419,6 +1422,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                   required 
                                   value={regVehiclePurchasePrice}
                                   onChange={(e) => setRegVehiclePurchasePrice(e.target.value)}
+                                  placeholder="15000000" 
+                                  className="w-full h-full pl-10 pr-3 bg-transparent border-0 text-white text-xs font-semibold focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col">
+                              <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-1.5">
+                                {lang === 'en' ? 'Remaining Balance (₦)' : 'Sauran Kudin Mota (₦)'} <span className="text-amber-500">*</span>
+                              </label>
+                              <div className="relative flex items-center h-12 rounded-xl border bg-slate-950/30 border-white/10 focus-within:border-[#D4AF37]">
+                                <Wallet className="h-4 w-4 absolute left-3.5 text-slate-400" />
+                                <input 
+                                  type="number" 
+                                  required 
+                                  value={regRemainingVehicleBalance}
+                                  onChange={(e) => setRegRemainingVehicleBalance(e.target.value)}
                                   placeholder="15000000" 
                                   className="w-full h-full pl-10 pr-3 bg-transparent border-0 text-white text-xs font-semibold focus:outline-none"
                                 />

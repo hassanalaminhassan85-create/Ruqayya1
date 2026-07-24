@@ -44,7 +44,9 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
   const [licenseNumber, setLicenseNumber] = useState('');
   const [licenseExpiry, setLicenseExpiry] = useState('');
   const [agreedAmount, setAgreedAmount] = useState('180000'); // Default 30-Day Rate (180,000 as per prompt)
+  const [vehiclePurchasePrice, setVehiclePurchasePrice] = useState('15000000'); // Default Vehicle Purchase Amount
   const [remainingVehicleBalance, setRemainingVehicleBalance] = useState('15000000'); // Default Rig Lease Cost (15,000,000 as per prompt)
+  const [companyDriverId, setCompanyDriverId] = useState(`RTL-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
 
   // Form States: Guarantor Profile
   const [gName, setGName] = useState('');
@@ -172,10 +174,14 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
     setError('');
     setSuccess('');
 
+    if (!companyDriverId) {
+      setError(lang === 'en' ? "RTL-ID Number is mandatory." : "Lambar RTL-ID ta zama dole.");
+      return;
+    }
+
     try {
       // Register standard driver via core API
       const mockEmail = `assisted_${phone.slice(-6).replace(/\s/g, '')}@ruqayyaerp.com`;
-      const generatedDriverId = `RTL-DRV-${Math.floor(100 + Math.random() * 900)}`;
 
       await api.registerDriver({
         personal: {
@@ -188,9 +194,10 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
           address,
           nin,
           agreedAmount: parseFloat(agreedAmount),
+          vehiclePurchasePrice: parseFloat(vehiclePurchasePrice),
           remainingVehicleBalance: parseFloat(remainingVehicleBalance),
           classification: 'Assisted',
-          companyDriverId: generatedDriverId,
+          companyDriverId: companyDriverId,
           passportPhoto: passportPhoto
         },
         guarantor: {
@@ -378,7 +385,7 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col gap-1">
                     <label className="font-bold text-text-main">{dict.license} *</label>
                     <input type="text" value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value.toUpperCase())} placeholder="e.g. KAN-99432" className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none font-mono text-text-main" />
@@ -387,15 +394,31 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
                     <label className="font-bold text-text-main">{dict.licenseExpiry} *</label>
                     <input type="date" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none text-text-main" />
                   </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="font-bold text-text-main">
+                      {lang === 'en' ? "RTL-ID Number *" : "Lambar RTL-ID *"}
+                    </label>
+                    <input type="text" value={companyDriverId} onChange={(e) => setCompanyDriverId(e.target.value.toUpperCase())} placeholder="e.g. RTL-2026-089" className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none font-mono text-text-main" />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="flex flex-col gap-1">
-                    <label className="font-bold text-text-main">{dict.leaseVal}</label>
+                    <label className="font-bold text-text-main">
+                      {lang === 'en' ? "Agreed 30-Day Cycle Amount (₦)" : "Yarjejeniyar Kwanaki 30 (₦)"}
+                    </label>
                     <input type="number" value={agreedAmount} onChange={(e) => setAgreedAmount(e.target.value)} className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none font-mono text-text-main" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="font-bold text-text-main">{dict.rigLease}</label>
+                    <label className="font-bold text-text-main">
+                      {lang === 'en' ? "Vehicle Purchase Amount (₦)" : "Kudin Siyan Mota (₦)"}
+                    </label>
+                    <input type="number" value={vehiclePurchasePrice} onChange={(e) => setVehiclePurchasePrice(e.target.value)} className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none font-mono text-text-main" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="font-bold text-text-main">
+                      {lang === 'en' ? "Remaining Vehicle Balance (₦)" : "Sauran Kudin Mota (₦)"}
+                    </label>
                     <input type="number" value={remainingVehicleBalance} onChange={(e) => setRemainingVehicleBalance(e.target.value)} className="px-3 py-2 bg-bg-base border border-border-main rounded-lg focus:outline-none font-mono text-text-main" />
                   </div>
                 </div>

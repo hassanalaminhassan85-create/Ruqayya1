@@ -408,6 +408,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           rating: profile.rating || 5.0,
           agreedAmount: profile.agreed_amount || (profile.classification === 'Smart' ? 1200000 : 1800000),
           remainingVehicleBalance: profile.remaining_vehicle_balance !== undefined ? profile.remaining_vehicle_balance : 24000000,
+          vehiclePurchasePrice: profile.vehicle_purchase_price !== undefined ? profile.vehicle_purchase_price : 15000000,
           address: profile.address || 'No 24 Airport Road, Kano',
           restStartDate: profile.rest_start_date || '2026-06-15',
           restEndDate: profile.rest_end_date || '2026-06-25',
@@ -1243,7 +1244,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
             <div className="flex flex-col gap-6">
               
               {/* Amortization Performance Banner */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-bg-surface border border-border-main p-5 rounded-xl">
                   <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block mb-1">{t.metrics.agreedAmount}</span>
                   <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-text-main tabular-nums leading-none mt-1">₦{agreedAmount.toLocaleString()}</p>
@@ -1256,6 +1257,12 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                   <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block mb-1">{t.metrics.outstanding}</span>
                   <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-brand-danger tabular-nums leading-none mt-1">₦{remainingAgreedBalance.toLocaleString()}</p>
                   <span className="text-[14px] text-brand-danger font-medium mt-2 block">{outstandingCount} {lang === 'en' ? "Installments Overdue" : "Rabe-raben Biyan da Suka Rage"}</span>
+                </div>
+                <div className="bg-bg-surface border border-border-main p-5 rounded-xl">
+                  <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block mb-1">
+                    {lang === 'en' ? 'Vehicle Purchase Price' : 'Kudin Siyan Mota'}
+                  </span>
+                  <p className="text-[30px] md:text-[36px] lg:text-[42px] font-extrabold tracking-tight text-indigo-600 tabular-nums leading-none mt-1">₦{(driver.vehiclePurchasePrice || 15000000).toLocaleString()}</p>
                 </div>
                 <div className="bg-bg-surface border border-border-main p-5 rounded-xl">
                   <span className="text-[14px] font-semibold text-text-muted uppercase tracking-wider block mb-1">{t.metrics.vehicleBalance}</span>

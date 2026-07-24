@@ -744,9 +744,9 @@ app.post('/api/auth/register-driver', (req, res) => {
       license_expiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       classification: 'Assisted', // Default classification, editable by admins
       rating: 5.0,
-      agreed_amount: parseFloat(personal.agreedAmount) || 300000,
-      vehicle_purchase_price: parseFloat(personal.vehiclePurchasePrice) || 15000000,
-      remaining_vehicle_balance: parseFloat(personal.vehiclePurchasePrice) || 15000000,
+      agreed_amount: parseFloat(personal.agreedAmount) !== undefined && !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 300000,
+      vehicle_purchase_price: parseFloat(personal.vehiclePurchasePrice) !== undefined && !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 15000000,
+      remaining_vehicle_balance: parseFloat(personal.remainingVehicleBalance) !== undefined && !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : (parseFloat(personal.vehiclePurchasePrice) || 15000000),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       status: 'pending' // Needs approval
@@ -4031,7 +4031,10 @@ export function getDriverFinancials(driver: any, db: any) {
     const countErpPaid = approvedPaymentsInERP.length;
     
     const totalAmountPaid = totalErpPaid;
-    const remainingVehicleBalance = Math.max(0, purchasePrice - totalErpPaid);
+    const initialRemaining = driver.remaining_vehicle_balance !== undefined && !isNaN(parseFloat(driver.remaining_vehicle_balance))
+      ? parseFloat(driver.remaining_vehicle_balance)
+      : purchasePrice;
+    const remainingVehicleBalance = Math.max(0, initialRemaining - totalErpPaid);
     
     return {
       vehiclePurchasePrice: purchasePrice,
@@ -4103,9 +4106,8 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
     const extendedStartDate = new Date(normalStartDate.getTime() + totalRestDays * 24 * 3600 * 1000);
 
     const dueAmount = installmentTarget + carryForward;
-    const paidAmount = payments
-      .filter((p: any) => p.installment_number === k)
-      .reduce((sum: number, p: any) => sum + p.amount, 0);
+    const installmentPayments = payments.filter((p: any) => p.installment_number === k);
+    const paidAmount = installmentPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
     const remaining = dueAmount - paidAmount;
     carryForward = remaining; // outstanding balance carries forward to the next installment
@@ -4119,15 +4121,26 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
       status = 'Overdue';
     }
 
+    let paidDate = null;
+    if (installmentPayments.length > 0) {
+      const dates = installmentPayments.map((p: any) => new Date(p.date));
+      const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+      paidDate = maxDate.toISOString().split('T')[0];
+    }
+
     installments.push({
       installmentNumber: k,
       startDate: extendedStartDate.toISOString().split('T')[0],
       endDate: extendedEndDate.toISOString().split('T')[0],
+      dueDate: extendedEndDate.toISOString().split('T')[0],
       targetAmount: installmentTarget,
       carriedForward: dueAmount - installmentTarget,
       totalDue: dueAmount,
+      amountDue: dueAmount,
       totalPaid: paidAmount,
+      amountPaid: paidAmount,
       remainingBalance: remaining,
+      paidDate,
       status
     });
   }
