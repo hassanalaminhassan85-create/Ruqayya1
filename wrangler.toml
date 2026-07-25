@@ -34,9 +34,3 @@ VAPID_PRIVATE_KEY = ""
 bindings = [
   { name = "LEDGER_DO", class_name = "LedgerLock", script_name = "ledger-lock-do" }
 ]
-
-# Durable Objects migrations (required for Pages + DOs). Bump the tag on subsequent
-# migrations when new classes are added or mappings change.
-[[migrations]]
-tag = "v1"
-new_classes = [ "LedgerLock" ]
