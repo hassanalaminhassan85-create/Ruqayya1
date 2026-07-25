@@ -234,7 +234,8 @@ async function sendPushNotification(
 
     const authHeader = await generateVapidHeader(env, endpoint);
 
-    const res = await fetch(endpoint, {
+    // Try sending with payload body first (unencrypted JSON)
+    let res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': authHeader,
@@ -243,6 +244,19 @@ async function sendPushNotification(
       },
       body: payload
     });
+
+    // If push service (like FCM/Mozilla) rejects unencrypted payload, fallback to a secure silent push
+    if (res.status === 400 || res.status === 401 || res.status === 411) {
+      console.warn(`CycleTimer Worker: Push service rejected unencrypted body (${res.status}). Retrying with silent push...`);
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'TTL': '2419200',
+          'Content-Length': '0'
+        }
+      });
+    }
 
     if (res.status === 200 || res.status === 201) {
       return { success: true };
@@ -261,18 +275,74 @@ async function sendPushNotification(
 async function sendPushNotificationToUserOrRole(
   env: Env,
   target: { userId?: string; role?: string; all?: boolean },
-  notification: { title: string; message: string; type?: string }
+  notification: { title: string; message: string; type?: string },
+  db?: any
 ) {
-  if (!env.PUSH_SUBSCRIPTIONS) {
-    return;
+  const subscriptionsToNotify: { userId: string; subscription: any; keyName?: string }[] = [];
+
+  // 1. Gather subscriptions from KV Store if available
+  if (env.PUSH_SUBSCRIPTIONS) {
+    try {
+      const listResult = await env.PUSH_SUBSCRIPTIONS.list();
+      const keys = listResult.keys || [];
+      for (const keyInfo of keys) {
+        const parts = keyInfo.name.split(':');
+        if (parts[0] !== 'sub') continue;
+        const subUserId = parts[1];
+        
+        let isRoleSub = parts[1] === 'role';
+        let subRole = isRoleSub ? parts[2] : '';
+
+        let shouldSend = false;
+        if (target.all) {
+          shouldSend = true;
+        } else if (target.userId && !isRoleSub && subUserId === target.userId) {
+          shouldSend = true;
+        } else if (target.role && isRoleSub && subRole === target.role) {
+          shouldSend = true;
+        }
+
+        if (shouldSend) {
+          const subscriptionJson = await env.PUSH_SUBSCRIPTIONS.get(keyInfo.name);
+          if (subscriptionJson) {
+            subscriptionsToNotify.push({
+              userId: isRoleSub ? 'role' : subUserId,
+              subscription: JSON.parse(subscriptionJson),
+              keyName: keyInfo.name
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("CycleTimer Worker: Failed to list KV subscriptions:", err);
+    }
   }
 
-  let keys: any[] = [];
-  try {
-    const listResult = await env.PUSH_SUBSCRIPTIONS.list();
-    keys = listResult.keys || [];
-  } catch (err) {
-    console.error("CycleTimer Worker: Failed to fetch subscriptions", err);
+  // 2. Gather subscriptions from D1 database (collections.push_subscriptions) if available
+  if (db && db.push_subscriptions && Array.isArray(db.push_subscriptions)) {
+    db.push_subscriptions.forEach((entry: any) => {
+      if (entry && entry.subscription && entry.subscription.endpoint) {
+        const alreadyExists = subscriptionsToNotify.some(item => item.subscription.endpoint === entry.subscription.endpoint);
+        if (!alreadyExists) {
+          let shouldSend = false;
+          if (target.all) {
+            shouldSend = true;
+          } else if (target.userId && entry.userId === target.userId) {
+            shouldSend = true;
+          }
+
+          if (shouldSend) {
+            subscriptionsToNotify.push({
+              userId: entry.userId || 'anonymous',
+              subscription: entry.subscription
+            });
+          }
+        }
+      }
+    });
+  }
+
+  if (subscriptionsToNotify.length === 0) {
     return;
   }
 
@@ -283,41 +353,39 @@ async function sendPushNotificationToUserOrRole(
     timestamp: Date.now()
   });
 
-  for (const keyInfo of keys) {
-    const parts = keyInfo.name.split(':');
-    if (parts[0] !== 'sub') continue;
+  let dbChanged = false;
 
-    let subUserId = parts[1];
-    let isRoleSub = false;
-    let subRole = '';
-
-    if (parts[1] === 'role') {
-      isRoleSub = true;
-      subRole = parts[2];
-    }
-
-    let shouldSend = false;
-    if (target.all) {
-      shouldSend = true;
-    } else if (target.userId && !isRoleSub && subUserId === target.userId) {
-      shouldSend = true;
-    } else if (target.role && isRoleSub && subRole === target.role) {
-      shouldSend = true;
-    }
-
-    if (shouldSend) {
-      try {
-        const subscriptionJson = await env.PUSH_SUBSCRIPTIONS.get(keyInfo.name);
-        if (subscriptionJson) {
-          const subscription = JSON.parse(subscriptionJson);
-          const pushRes = await sendPushNotification(env, subscription, payload);
-          if (pushRes && !pushRes.success && pushRes.expired) {
-            await env.PUSH_SUBSCRIPTIONS.delete(keyInfo.name);
+  for (const item of subscriptionsToNotify) {
+    try {
+      const pushRes = await sendPushNotification(env, item.subscription, payload);
+      if (pushRes && !pushRes.success && pushRes.expired) {
+        // Subscription has expired, delete it from KV
+        if (item.keyName && env.PUSH_SUBSCRIPTIONS) {
+          await env.PUSH_SUBSCRIPTIONS.delete(item.keyName).catch(() => {});
+          console.log(`CycleTimer Worker: Deleted expired subscription from KV: ${item.keyName}`);
+        }
+        // Delete it from D1
+        if (db && db.push_subscriptions) {
+          const beforeLen = db.push_subscriptions.length;
+          db.push_subscriptions = db.push_subscriptions.filter((s: any) => s && s.subscription && s.subscription.endpoint !== item.subscription.endpoint);
+          if (db.push_subscriptions.length !== beforeLen) {
+            dbChanged = true;
           }
         }
-      } catch (e) {
-        console.error(`CycleTimer Worker: Failed push for ${keyInfo.name}`, e);
       }
+    } catch (e) {
+      console.error(`CycleTimer Worker: Failed push for endpoint ${item.subscription.endpoint}`, e);
+    }
+  }
+
+  if (dbChanged && db && env.DB) {
+    try {
+      await env.DB.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
+        .bind('push_subscriptions', JSON.stringify(db.push_subscriptions))
+        .run();
+      console.log("CycleTimer Worker: Successfully updated and saved push_subscriptions collection in D1 after pruning.");
+    } catch (dbErr) {
+      console.error("CycleTimer Worker: Failed to save pruned subscriptions to D1:", dbErr);
     }
   }
 }
@@ -454,7 +522,7 @@ async function processCycleManagement(env: Env) {
         title: 'Operating Cycle Concluded',
         message: `Cycle ${activeCycle.id} has reached its 30-day limit and was automatically finalized.`,
         type: 'success'
-      });
+      }, db);
     }
 
     // Verify installments, trigger penalties and warnings
@@ -530,13 +598,13 @@ async function processCycleManagement(env: Env) {
                 title: 'Overdue Penalty Charge',
                 message: warningEn,
                 type: 'danger'
-              });
+              }, db);
             }
             await sendPushNotificationToUserOrRole(env, { role: 'admin' }, {
               title: 'Driver Penalty Logged',
               message: `Driver ${driver.fullName || driver.id} charged ₦5,000 for installment #${inst.installmentNumber}.`,
               type: 'warning'
-            });
+            }, db);
           }
         }
 
@@ -576,7 +644,7 @@ async function processCycleManagement(env: Env) {
                 title: 'Upcoming Payment Warning',
                 message: remindEn,
                 type: 'info'
-              });
+              }, db);
             }
           }
         }
@@ -633,7 +701,7 @@ async function processCycleManagement(env: Env) {
             title: `Document warning: ${vehicle.plate_number}`,
             message: msgEn,
             type: 'warning'
-          });
+          }, db);
         }
       }
     }
@@ -670,7 +738,7 @@ async function processCycleManagement(env: Env) {
           title: `Oil change required: ${vehicle.plate_number}`,
           message: oilEn,
           type: 'warning'
-        });
+        }, db);
       }
     }
   }

@@ -468,7 +468,7 @@ async function sendPushForNotification(env: Env, db: any, n: any) {
     }
 
     if (isBroadcast) {
-      await sendPushNotificationToUserOrRole(env, { all: true }, { title: enriched.titleEn, message: enriched.messageEn, type: n.type });
+      await sendPushNotificationToUserOrRole(env, { all: true }, { title: enriched.titleEn, message: enriched.messageEn, type: n.type }, db);
     } else {
       for (const uid of targetUserIds) {
         const prefs = db.user_preferences?.find((p: any) => p.user_id === uid);
@@ -476,7 +476,7 @@ async function sendPushForNotification(env: Env, db: any, n: any) {
           console.log(`PushService Worker: Skipping push for user ${uid} due to preference.`);
           continue;
         }
-        await sendPushNotificationToUserOrRole(env, { userId: uid }, { title: enriched.titleEn, message: enriched.messageEn, type: n.type });
+        await sendPushNotificationToUserOrRole(env, { userId: uid }, { title: enriched.titleEn, message: enriched.messageEn, type: n.type }, db);
       }
     }
   } catch (err) {
@@ -531,6 +531,10 @@ class D1Manager {
         } else {
           console.log(`[D1 SQL DB SEED] No collections found, preparing seed defaults...`);
           const seedState = await this.ensureDefaults({});
+          // Populate loaded IDs before first save to prevent seed push notifications
+          if (seedState && seedState.notifications) {
+            this.loadedNotificationIds = new Set(seedState.notifications.map((n: any) => n.id).filter(Boolean));
+          }
           await this.saveDB(seedState);
           db = seedState;
         }
@@ -540,6 +544,11 @@ class D1Manager {
           this.memoryDb = await this.ensureDefaults({});
         }
         db = this.memoryDb;
+      }
+
+      // Populate loadedNotificationIds with historical IDs to prevent push loops
+      if (db && db.notifications) {
+        this.loadedNotificationIds = new Set(db.notifications.map((n: any) => n.id).filter(Boolean));
       }
     } catch (dbError) {
       console.error(`[DB RESOLUTION ERROR] Query failed or database connection broken:`, dbError);
@@ -772,7 +781,19 @@ class D1Manager {
   async saveDB(state: any): Promise<void> {
     // Detect and dispatch new push notifications (non-blocking)
     if (state && state.notifications) {
-      const newNotifications = state.notifications.filter((n: any) => n && n.id && !this.loadedNotificationIds.has(n.id));
+      const nowMs = Date.now();
+      const newNotifications = state.notifications.filter((n: any) => {
+        if (!n || !n.id || this.loadedNotificationIds.has(n.id)) return false;
+        
+        // Secondary safety shield: only dispatch push if created within the last 30 seconds
+        const createdAt = n.created_at || n.timestamp;
+        if (!createdAt) return false;
+        const createdMs = new Date(createdAt).getTime();
+        if (isNaN(createdMs)) return false;
+        
+        return (nowMs - createdMs) < 30000;
+      });
+
       if (newNotifications.length > 0) {
         for (const n of newNotifications) {
           this.loadedNotificationIds.add(n.id);
@@ -1172,14 +1193,29 @@ async function sendPushNotification(
 
     const authHeader = await generateVapidHeader(env, endpoint);
 
-    const res = await fetch(endpoint, {
+    // Try sending with payload body first (unencrypted JSON)
+    let res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': authHeader,
         'TTL': '2419200',
-        'Content-Length': '0'
-      }
+        'Content-Type': 'application/json'
+      },
+      body: payload
     });
+
+    // If push service (like FCM/Mozilla) rejects unencrypted payload, fallback to a secure silent push
+    if (res.status === 400 || res.status === 401 || res.status === 411) {
+      console.warn(`Push service rejected unencrypted body (${res.status}). Retrying with silent push...`);
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'TTL': '2419200',
+          'Content-Length': '0'
+        }
+      });
+    }
 
     if (res.status === 200 || res.status === 201) {
       return { success: true };
@@ -1196,23 +1232,76 @@ async function sendPushNotification(
   }
 }
 
-// Helper to broadcast push notifications to users or roles based on subscriptions in KV
+// Helper to broadcast push notifications to users or roles based on subscriptions in KV and/or D1
 async function sendPushNotificationToUserOrRole(
   env: Env,
   target: { userId?: string; role?: string; all?: boolean },
-  notification: { title: string; message: string; type?: string }
+  notification: { title: string; message: string; type?: string },
+  db?: any
 ) {
-  if (!env.PUSH_SUBSCRIPTIONS) {
-    console.log("No PUSH_SUBSCRIPTIONS KV namespace bound. Skipping push notification.");
-    return;
+  const subscriptionsToNotify: { userId: string; subscription: any; keyName?: string }[] = [];
+
+  // 1. Gather subscriptions from KV Store if available
+  if (env.PUSH_SUBSCRIPTIONS) {
+    try {
+      const listResult = await env.PUSH_SUBSCRIPTIONS.list();
+      const keys = listResult.keys || [];
+      for (const keyInfo of keys) {
+        // Key format: sub:<userId>:<escaped_endpoint>
+        const parts = keyInfo.name.split(':');
+        if (parts[0] !== 'sub') continue;
+        const subUserId = parts[1];
+
+        let shouldSend = false;
+        if (target.all) {
+          shouldSend = true;
+        } else if (target.userId && subUserId === target.userId) {
+          shouldSend = true;
+        }
+
+        if (shouldSend) {
+          const subscriptionJson = await env.PUSH_SUBSCRIPTIONS.get(keyInfo.name);
+          if (subscriptionJson) {
+            subscriptionsToNotify.push({
+              userId: subUserId,
+              subscription: JSON.parse(subscriptionJson),
+              keyName: keyInfo.name
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to list push subscriptions from KV:", err);
+    }
   }
 
-  let keys: any[] = [];
-  try {
-    const listResult = await env.PUSH_SUBSCRIPTIONS.list();
-    keys = listResult.keys || [];
-  } catch (err) {
-    console.error("Failed to list push subscriptions from KV:", err);
+  // 2. Gather subscriptions from D1 database (collections.push_subscriptions) if available
+  if (db && db.push_subscriptions && Array.isArray(db.push_subscriptions)) {
+    db.push_subscriptions.forEach((entry: any) => {
+      if (entry && entry.subscription && entry.subscription.endpoint) {
+        // Avoid duplicate endpoints if already fetched from KV
+        const alreadyExists = subscriptionsToNotify.some(item => item.subscription.endpoint === entry.subscription.endpoint);
+        if (!alreadyExists) {
+          let shouldSend = false;
+          if (target.all) {
+            shouldSend = true;
+          } else if (target.userId && entry.userId === target.userId) {
+            shouldSend = true;
+          }
+
+          if (shouldSend) {
+            subscriptionsToNotify.push({
+              userId: entry.userId || 'anonymous',
+              subscription: entry.subscription
+            });
+          }
+        }
+      }
+    });
+  }
+
+  if (subscriptionsToNotify.length === 0) {
+    console.log("No registered push subscriptions matched this notification's target audience.");
     return;
   }
 
@@ -1223,35 +1312,34 @@ async function sendPushNotificationToUserOrRole(
     timestamp: Date.now()
   });
 
-  for (const keyInfo of keys) {
-    // Key format: sub:<userId>:<escaped_endpoint>
-    const parts = keyInfo.name.split(':');
-    if (parts[0] !== 'sub') continue;
-    const subUserId = parts[1];
+  let dbChanged = false;
 
-    let shouldSend = false;
-    if (target.all) {
-      shouldSend = true;
-    } else if (target.userId && subUserId === target.userId) {
-      shouldSend = true;
-    }
-
-    if (shouldSend) {
-      try {
-        const subscriptionJson = await env.PUSH_SUBSCRIPTIONS.get(keyInfo.name);
-        if (subscriptionJson) {
-          const subscription = JSON.parse(subscriptionJson);
-          const pushRes = await sendPushNotification(env, subscription, payload);
-          if (pushRes && !pushRes.success && pushRes.expired) {
-            // Subscription has expired, delete it from KV
-            await env.PUSH_SUBSCRIPTIONS.delete(keyInfo.name);
-            console.log(`Deleted expired subscription key: ${keyInfo.name}`);
+  for (const item of subscriptionsToNotify) {
+    try {
+      const pushRes = await sendPushNotification(env, item.subscription, payload);
+      if (pushRes && !pushRes.success && pushRes.expired) {
+        // Subscription has expired/unsubscribed. Prune it from KV
+        if (item.keyName && env.PUSH_SUBSCRIPTIONS) {
+          await env.PUSH_SUBSCRIPTIONS.delete(item.keyName).catch(() => {});
+          console.log(`Pruned expired subscription from KV: ${item.keyName}`);
+        }
+        // Prune it from D1
+        if (db && db.push_subscriptions) {
+          const beforeLen = db.push_subscriptions.length;
+          db.push_subscriptions = db.push_subscriptions.filter((s: any) => s && s.subscription && s.subscription.endpoint !== item.subscription.endpoint);
+          if (db.push_subscriptions.length !== beforeLen) {
+            dbChanged = true;
           }
         }
-      } catch (err) {
-        console.error(`Error processing subscription for key ${keyInfo.name}:`, err);
       }
+    } catch (err) {
+      console.error(`Error processing subscription dispatch for endpoint ${item.subscription.endpoint}:`, err);
     }
+  }
+
+  if (dbChanged && db) {
+    // Rely on caller or final controller request scope to save the DB update
+    console.log("D1 DB push_subscriptions collection pruned due to expired subscriptions.");
   }
 }
 
@@ -1500,15 +1588,29 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
       }
 
+      // 1. Persist inside D1 central storage (collections.push_subscriptions) as primary/fallback database
+      if (!db.push_subscriptions) {
+        db.push_subscriptions = [];
+      }
+      // Deduplicate endpoints
+      db.push_subscriptions = db.push_subscriptions.filter((s: any) => s && s.subscription && s.subscription.endpoint !== subscription.endpoint);
+      db.push_subscriptions.push({
+        userId,
+        subscription,
+        createdAt: new Date().toISOString()
+      });
+      await dbManager.saveDB(db);
+
+      // 2. Persist inside KV namespace if bound
       if (env.PUSH_SUBSCRIPTIONS) {
         const kvKey = `sub:${userId}:${encodeURIComponent(subscription.endpoint)}`;
         await env.PUSH_SUBSCRIPTIONS.put(kvKey, JSON.stringify(subscription));
-        return buildResponse({ success: true, message: 'Push subscription stored successfully.' });
+        return buildResponse({ success: true, message: 'Push subscription stored successfully in DB & KV.' });
       } else {
-        console.warn("PUSH_SUBSCRIPTIONS KV binding is missing.");
+        console.warn("PUSH_SUBSCRIPTIONS KV binding is missing. Persisted in D1 DB only.");
         return buildResponse({ 
           success: true, 
-          message: 'KV binding not configured, but payload parsed successfully (sandbox-mode).' 
+          message: 'Push subscription stored successfully in D1 DB.' 
         });
       }
     } catch (err: any) {
@@ -2745,13 +2847,27 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         return buildResponse({ error: 'Endpoint missing.' }, 400);
       }
 
+      // 1. Clean up from D1 central storage
+      let dbChanged = false;
+      if (db.push_subscriptions && Array.isArray(db.push_subscriptions)) {
+        const initialLen = db.push_subscriptions.length;
+        db.push_subscriptions = db.push_subscriptions.filter((s: any) => s && s.subscription && s.subscription.endpoint !== endpoint);
+        if (db.push_subscriptions.length !== initialLen) {
+          dbChanged = true;
+        }
+      }
+
+      // Write logs & save D1 DB
+      writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_UNSUBSCRIBE', null, `User unsubscribed endpoint: ${endpoint.substring(0, 50)}...`, db);
+      await dbManager.saveDB(db);
+
+      // 2. Clean up from KV
       if (env.PUSH_SUBSCRIPTIONS) {
         const kvKey = `sub:${user.id}:${encodeURIComponent(endpoint)}`;
         await env.PUSH_SUBSCRIPTIONS.delete(kvKey);
-        writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_UNSUBSCRIBE', null, `User unsubscribed endpoint: ${endpoint.substring(0, 50)}...`, db);
-        return buildResponse({ success: true });
+        return buildResponse({ success: true, message: 'Unsubscribed successfully from DB & KV.' });
       } else {
-        return buildResponse({ success: true, message: 'KV binding missing but unsubscribed locally.' });
+        return buildResponse({ success: true, message: 'Unsubscribed successfully from D1 DB.' });
       }
     } catch (err: any) {
       return buildResponse({ error: err.message }, 500);
@@ -2764,6 +2880,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     let devicesCount = 0;
     let subscribed = false;
 
+    // 1. Check KV Store if available
     if (env.PUSH_SUBSCRIPTIONS) {
       try {
         const listResult = await env.PUSH_SUBSCRIPTIONS.list();
@@ -2772,6 +2889,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         subscribed = devicesCount > 0;
       } catch (err) {
         console.error("Failed to fetch device subscriptions from KV:", err);
+      }
+    }
+
+    // 2. Fallback to/Merge with D1 DB subscriptions
+    if (db.push_subscriptions && Array.isArray(db.push_subscriptions)) {
+      const userD1Subs = db.push_subscriptions.filter((s: any) => s && s.userId === user.id);
+      if (userD1Subs.length > devicesCount) {
+        devicesCount = userD1Subs.length;
+        subscribed = true;
       }
     }
 

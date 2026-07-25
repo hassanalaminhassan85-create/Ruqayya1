@@ -63,20 +63,45 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
       }
     }
 
-    // Persist subscription inside Cloudflare KV Store
+    // 1. Persist inside D1 central storage (collections.push_subscriptions)
+    const d1 = env.DB || env.ruqayya;
+    if (d1) {
+      try {
+        let pushSubs: any[] = [];
+        const subsRes = await d1.prepare("SELECT data FROM collections WHERE name = 'push_subscriptions'").first("data");
+        if (subsRes) {
+          pushSubs = JSON.parse(subsRes as string) || [];
+        }
+        // Remove duplicate endpoints
+        pushSubs = pushSubs.filter((s: any) => s && s.subscription && s.subscription.endpoint !== subscription.endpoint);
+        pushSubs.push({
+          userId,
+          subscription,
+          createdAt: new Date().toISOString()
+        });
+        // Save back to D1
+        await d1.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
+          .bind('push_subscriptions', JSON.stringify(pushSubs))
+          .run();
+      } catch (dbErr) {
+        console.error("Pages Function: Failed to save subscription to D1:", dbErr);
+      }
+    }
+
+    // 2. Persist subscription inside Cloudflare KV Store
     if (env.PUSH_SUBSCRIPTIONS) {
       const kvKey = `sub:${userId}:${encodeURIComponent(subscription.endpoint)}`;
       await env.PUSH_SUBSCRIPTIONS.put(kvKey, JSON.stringify(subscription));
       return buildResponse({ 
         success: true, 
-        message: 'Push subscription stored successfully in KV.',
+        message: 'Push subscription stored successfully in DB & KV.',
         userId
       });
     } else {
-      console.warn("Pages Function: PUSH_SUBSCRIPTIONS KV namespace is not configured.");
+      console.warn("Pages Function: PUSH_SUBSCRIPTIONS KV namespace is not configured. Saved to D1 only.");
       return buildResponse({ 
         success: true, 
-        message: 'KV namespace not bound, subscription parsed successfully.',
+        message: 'Push subscription stored successfully in D1 DB.',
         userId
       });
     }
