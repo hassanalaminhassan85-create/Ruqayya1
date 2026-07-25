@@ -29,6 +29,14 @@ VAPID_PUBLIC_KEY = ""
 VAPID_PRIVATE_KEY = ""
 
 [durable_objects]
+# Specify the script_name that defines the Durable Object class. For Pages deployments
+# this must be the Worker script where the Durable Object is implemented.
 bindings = [
-  { name = "LEDGER_DO", class_name = "LedgerLock" }
+  { name = "LEDGER_DO", class_name = "LedgerLock", script_name = "ledger-lock-do" }
 ]
+
+# Durable Objects migrations (required for Pages + DOs). Bump the tag on subsequent
+# migrations when new classes are added or mappings change.
+[[migrations]]
+tag = "v1"
+new_classes = [ "LedgerLock" ]
