@@ -43,7 +43,15 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     if (activeCycle) {
       if (activeCycle.id !== lastCycleId) {
         setLastCycleId(activeCycle.id);
-        const startMs = new Date(activeCycle.created_at || activeCycle.startDate).getTime();
+        const rawStart = activeCycle.created_at || activeCycle.startDate;
+        let startMs = NaN;
+        if (rawStart) {
+          if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
+            startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
+          } else {
+            startMs = new Date(rawStart).getTime();
+          }
+        }
         const nowMs = Date.now();
         if (!isNaN(startMs) && startMs > nowMs) {
           setSkewOffset(startMs - nowMs);
@@ -62,7 +70,15 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     if (!cycle) return 0;
     
     // Fallback to startDate if created_at is missing
-    const startMs = new Date(cycle.created_at || cycle.startDate).getTime();
+    const rawStart = cycle.created_at || cycle.startDate;
+    let startMs = NaN;
+    if (rawStart) {
+      if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
+        startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
+      } else {
+        startMs = new Date(rawStart).getTime();
+      }
+    }
     if (isNaN(startMs)) return 0;
 
     let nowMs = Date.now() + skewOffset;
@@ -128,9 +144,14 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     const start = cycle.created_at || cycle.startDate;
     if (!start) return 'N/A';
     try {
-      const d = new Date(start);
+      let d: Date;
+      if (typeof start === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(start)) {
+        d = new Date(`${start}T00:00:00Z`);
+      } else {
+        d = new Date(start);
+      }
       if (isNaN(d.getTime())) return 'N/A';
-      d.setDate(d.getDate() + 30);
+      d.setUTCDate(d.getUTCDate() + 30);
       return d.toISOString().split('T')[0];
     } catch (e) {
       return 'N/A';

@@ -352,10 +352,143 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
   }
 }
 
+// Helper to enrich notifications dynamically for advanced metadata, priorities, categories, and actions
+function enrichNotification(n: any) {
+  const titleEn = n.title_en || n.titleEn || n.title || '';
+  const titleHa = n.title_ha || n.titleHa || '';
+  const messageEn = n.message_en || n.messageEn || n.message || n.body || '';
+  const messageHa = n.message_ha || n.messageHa || '';
+  
+  // Categorize based on keywords
+  let category = n.category || 'system';
+  const textEnLower = (titleEn + ' ' + messageEn).toLowerCase();
+  const textHaLower = (titleHa + ' ' + messageHa).toLowerCase();
+  
+  if (textEnLower.includes('payment') || textEnLower.includes('remittance') || textHaLower.includes('biya') || textHaLower.includes('kudi')) {
+    category = 'payments';
+  } else if (textEnLower.includes('voucher') || textEnLower.includes('fuel') || textHaLower.includes('man fetur')) {
+    category = 'finance';
+  } else if (textEnLower.includes('driver') || textHaLower.includes('direba')) {
+    category = 'drivers';
+  } else if (textEnLower.includes('shareholder') || textHaLower.includes('hannun jari')) {
+    category = 'shareholders';
+  } else if (textEnLower.includes('expense') || textEnLower.includes('ledger') || textEnLower.includes('payroll')) {
+    category = 'finance';
+  } else if (textEnLower.includes('accident') || textEnLower.includes('security') || textEnLower.includes('breach') || textHaLower.includes('lafiya')) {
+    category = 'security';
+  } else if (textEnLower.includes('report') || textEnLower.includes('audit')) {
+    category = 'reports';
+  } else if (textEnLower.includes('announcement') || textEnLower.includes('broadcast')) {
+    category = 'announcements';
+  } else if (textEnLower.includes('document')) {
+    category = 'documents';
+  }
+
+  // Determine priority based on type or urgency
+  let priority = n.priority || 'medium';
+  if (n.type === 'danger' || textEnLower.includes('accident') || textEnLower.includes('unauthorized') || textEnLower.includes('breach')) {
+    priority = 'critical';
+  } else if (n.type === 'warning' || textEnLower.includes('pending') || textEnLower.includes('reject') || textEnLower.includes('required')) {
+    priority = 'high';
+  } else if (n.type === 'success' || textEnLower.includes('complete') || textEnLower.includes('approve')) {
+    priority = 'medium';
+  } else {
+    priority = 'low';
+  }
+
+  // Add smart action buttons on the fly
+  let actions: any[] = [];
+  if (category === 'drivers' && (textEnLower.includes('approve') || textEnLower.includes('credentials') || textEnLower.includes('registration'))) {
+    actions = [
+      { labelEn: 'Verify Credentials', labelHa: 'Duba Takardu', action: 'view_drivers', path: '/drivers' }
+    ];
+  } else if (category === 'finance' && (textEnLower.includes('voucher') || textEnLower.includes('request'))) {
+    actions = [
+      { labelEn: 'Approve Allocation', labelHa: 'Amince da Bukatar', action: 'view_vouchers', path: '/vouchers' }
+    ];
+  } else if (category === 'payments' && textEnLower.includes('remittance')) {
+    actions = [
+      { labelEn: 'View Financials', labelHa: 'Duba Kudade', action: 'view_finance', path: '/finance' }
+    ];
+  } else {
+    actions = [
+      { labelEn: 'Dismiss', labelHa: 'Kau da shi', action: 'dismiss', path: '' }
+    ];
+  }
+
+  return {
+    ...n,
+    category,
+    priority,
+    actions,
+    status: n.status || (n.read_status === 1 ? 'read' : 'unread'),
+    read: n.read_status === 1 || n.status === 'read' || n.status === 'archived',
+    titleEn,
+    titleHa,
+    messageEn,
+    messageHa,
+    timestamp: n.created_at || n.timestamp || new Date().toISOString()
+  };
+}
+
+// Helper to dynamically dispatch push notifications to enrolled devices
+async function sendPushForNotification(env: Env, db: any, n: any) {
+  try {
+    const enriched = enrichNotification(n);
+    const payload = JSON.stringify({
+      id: n.id,
+      title: enriched.titleEn || enriched.title_en || n.title_en || n.title || 'RUQAYYA TRANSPORT',
+      body: enriched.messageEn || enriched.message_en || n.message_en || n.message || n.body || '',
+      titleEn: enriched.titleEn || enriched.title_en || n.title_en || '',
+      titleHa: enriched.titleHa || enriched.title_ha || n.title_ha || '',
+      messageEn: enriched.messageEn || enriched.message_en || n.message_en || '',
+      messageHa: enriched.messageHa || enriched.message_ha || n.message_ha || '',
+      type: n.type || 'info',
+      category: enriched.category || 'system',
+      priority: enriched.priority || 'medium',
+      actions: enriched.actions || [],
+      timestamp: n.created_at || new Date().toISOString()
+    });
+
+    let targetUserIds: string[] = [];
+    let isBroadcast = false;
+
+    if (n.user_id) {
+      targetUserIds = [n.user_id];
+    } else if (n.target_role) {
+      const roleName = n.target_role.toLowerCase();
+      const targetRoleObj = db.roles?.find((r: any) => r.name.toLowerCase() === roleName);
+      if (targetRoleObj) {
+        targetUserIds = (db.users || [])
+          .filter((u: any) => u.role_id === targetRoleObj.id)
+          .map((u: any) => u.id);
+      }
+    } else {
+      isBroadcast = true;
+    }
+
+    if (isBroadcast) {
+      await sendPushNotificationToUserOrRole(env, { all: true }, { title: enriched.titleEn, message: enriched.messageEn, type: n.type });
+    } else {
+      for (const uid of targetUserIds) {
+        const prefs = db.user_preferences?.find((p: any) => p.user_id === uid);
+        if (prefs && prefs.enablePush === false) {
+          console.log(`PushService Worker: Skipping push for user ${uid} due to preference.`);
+          continue;
+        }
+        await sendPushNotificationToUserOrRole(env, { userId: uid }, { title: enriched.titleEn, message: enriched.messageEn, type: n.type });
+      }
+    }
+  } catch (err) {
+    console.error("Worker push dispatch failure:", err);
+  }
+}
+
 // Database Manager Class with D1 persistent storage & memory fallback
 class D1Manager {
   private env: Env;
   private memoryDb: any = null;
+  private loadedNotificationIds: Set<string> = new Set();
 
   constructor(env: Env) {
     this.env = env;
@@ -493,7 +626,15 @@ class D1Manager {
           const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
           if (activeCycle) {
             // Calculate active seconds elapsed
-            const startMs = new Date(activeCycle.created_at || activeCycle.startDate).getTime();
+            const rawStart = activeCycle.created_at || activeCycle.startDate;
+            let startMs = NaN;
+            if (rawStart) {
+              if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
+                startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
+              } else {
+                startMs = new Date(rawStart).getTime();
+              }
+            }
             if (!isNaN(startMs)) {
               let nowMs = Date.now();
               if (activeCycle.status === 'paused' && activeCycle.pausedAt) {
@@ -621,10 +762,27 @@ class D1Manager {
       }
     }
 
+    if (db && db.notifications) {
+      this.loadedNotificationIds = new Set(db.notifications.map((n: any) => n.id).filter(Boolean));
+    }
+
     return db;
   }
 
   async saveDB(state: any): Promise<void> {
+    // Detect and dispatch new push notifications (non-blocking)
+    if (state && state.notifications) {
+      const newNotifications = state.notifications.filter((n: any) => n && n.id && !this.loadedNotificationIds.has(n.id));
+      if (newNotifications.length > 0) {
+        for (const n of newNotifications) {
+          this.loadedNotificationIds.add(n.id);
+          sendPushForNotification(this.env, state, n).catch((err: any) => {
+            console.error("Failed to dispatch push notification in saveDB:", err);
+          });
+        }
+      }
+    }
+
     const d1 = this.getD1();
     if (d1) {
       const statements = [];
@@ -1121,12 +1279,22 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // Helper to check authentication with stateless/ephemeral session rehydration matching server.ts
   const authenticate = async () => {
+    let token = '';
     const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
+    if (authHeader) {
+      token = authHeader.replace('Bearer ', '').trim();
+    } else {
+      // Fallback: Check token in query parameters (for EventSource/SSE)
+      const urlToken = url.searchParams.get('token');
+      if (urlToken) {
+        token = decodeURIComponent(urlToken).trim();
+      }
+    }
+
+    if (!token) {
       return { authenticated: false, error: 'Authentication required. Active session parameters not found.', status: 412 };
     }
 
-    const token = authHeader.replace('Bearer ', '').trim();
     let session = db.sessions.find((s: any) => s.token === token && s.status === 'active');
 
     if (!session) {
@@ -1629,14 +1797,57 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const guarantor = db.guarantors.find((g: any) => g.driver_id === dr.id) || null;
         const vehicle = db.vehicles.find((v: any) => v.driver_id === dr.id) || null;
         const financials = getDriverFinancials(dr, db);
+        const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === dr.id).map((doc: any) => ({
+          ...doc,
+          file_url: doc.file_url ? (doc.file_url.includes('token=') ? doc.file_url : `${doc.file_url}?token=${encodeURIComponent(token)}`) : ''
+        }));
+        const passportDoc = documents.find((doc: any) => doc.document_type === 'passport_photo');
+        const passport_photo_url = passportDoc ? passportDoc.file_url : '';
+
         profileDetails = {
           ...dr,
-          guarantor,
-          vehicle,
+          fullName: userRec.full_name || dr.fullName || dr.full_name || '',
+          email: userRec.email || '',
+          phone: userRec.phone || dr.phone || '',
+          licenseNumber: dr.license_number || dr.licenseNumber || '',
+          licenseExpiry: dr.license_expiry || dr.licenseExpiry || '',
+          companyDriverId: dr.company_driver_id || dr.companyDriverId || '',
+          company_driver_id: dr.company_driver_id || dr.companyDriverId || '',
+          guarantor: guarantor ? {
+            ...guarantor,
+            fullName: guarantor.fullName || guarantor.full_name || '',
+            phone: guarantor.phone || '',
+            address: guarantor.address || '',
+            relationship: guarantor.relationship || '',
+            nin: guarantor.nin || '',
+            passport: guarantor.passport || guarantor.passport_photo_url ? (guarantor.passport || guarantor.passport_photo_url).includes('token=') ? (guarantor.passport || guarantor.passport_photo_url) : `${guarantor.passport || guarantor.passport_photo_url}?token=${encodeURIComponent(token)}` : '',
+            passportPhotoUrl: guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport ? (guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport).includes('token=') ? (guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport) : `${guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport}?token=${encodeURIComponent(token)}` : '',
+            passport_photo_url: guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport ? (guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport).includes('token=') ? (guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport) : `${guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport}?token=${encodeURIComponent(token)}` : ''
+          } : null,
+          vehicle: vehicle ? {
+            ...vehicle,
+            brand: vehicle.brand || '',
+            model: vehicle.model || '',
+            year: vehicle.year || 2020,
+            colour: vehicle.colour || '',
+            plateNumber: vehicle.plate_number || vehicle.plateNumber || '',
+            plate_number: vehicle.plate_number || vehicle.plateNumber || '',
+            registrationNumber: vehicle.registration_number || vehicle.registrationNumber || '',
+            registration_number: vehicle.registration_number || vehicle.registrationNumber || '',
+            chassisNumber: vehicle.chassis_number || vehicle.chassisNumber || '',
+            chassis_number: vehicle.chassis_number || vehicle.chassisNumber || '',
+            engineNumber: vehicle.engine_number || vehicle.engineNumber || '',
+            engine_number: vehicle.engine_number || vehicle.engineNumber || '',
+            capacity: vehicle.capacity || ''
+          } : null,
           remaining_vehicle_balance: financials.remainingVehicleBalance,
           total_amount_paid: financials.totalAmountPaid,
           vehicle_purchase_price: financials.vehiclePurchasePrice,
-          total_payments_made: financials.totalPaymentsMade
+          total_payments_made: financials.totalPaymentsMade,
+          documents,
+          passport_photo_url,
+          passportPhoto: passport_photo_url,
+          passportPhotoUrl: passport_photo_url
         };
       }
     } else if (user.role === 'shareholder') {
@@ -1671,8 +1882,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // 7. GET AUDIT LOGS
   if (path === '/api/audit-logs' && method === 'GET') {
-    if (user.role !== 'director') {
-      return buildResponse({ error: 'Access Denied: Director role required for audit trails.' }, 403);
+    if (user.role !== 'director' && user.role !== 'admin') {
+      return buildResponse({ error: 'Access Denied: Director or Admin role required for audit trails.' }, 403);
     }
     return buildResponse(db.audit_logs || []);
   }
@@ -1695,17 +1906,49 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const g = db.guarantors.find((gua: any) => gua.driver_id === drv.id) || null;
         const v = db.vehicles.find((veh: any) => veh.driver_id === drv.id) || null;
         const financials = getDriverFinancials(drv, db);
-        const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === drv.id);
+        const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === drv.id).map((doc: any) => ({
+          ...doc,
+          file_url: doc.file_url ? (doc.file_url.includes('token=') ? doc.file_url : `${doc.file_url}?token=${encodeURIComponent(token)}`) : ''
+        }));
         const passportDoc = documents.find((doc: any) => doc.document_type === 'passport_photo');
         const passport_photo_url = passportDoc ? passportDoc.file_url : '';
 
         return {
           ...drv,
-          fullName: u.full_name || drv.fullName || '',
+          fullName: u.full_name || drv.fullName || drv.full_name || '',
           email: u.email || '',
           phone: u.phone || drv.phone || '',
-          guarantor: g,
-          vehicle: v,
+          licenseNumber: drv.license_number || drv.licenseNumber || '',
+          licenseExpiry: drv.license_expiry || drv.licenseExpiry || '',
+          companyDriverId: drv.company_driver_id || drv.companyDriverId || '',
+          company_driver_id: drv.company_driver_id || drv.companyDriverId || '',
+          guarantor: g ? {
+            ...g,
+            fullName: g.fullName || g.full_name || '',
+            phone: g.phone || '',
+            address: g.address || '',
+            relationship: g.relationship || '',
+            nin: g.nin || '',
+            passport: g.passport || g.passport_photo_url ? (g.passport || g.passport_photo_url).includes('token=') ? (g.passport || g.passport_photo_url) : `${g.passport || g.passport_photo_url}?token=${encodeURIComponent(token)}` : '',
+            passportPhotoUrl: g.passport_photo_url || g.passportPhotoUrl || g.passport ? (g.passport_photo_url || g.passportPhotoUrl || g.passport).includes('token=') ? (g.passport_photo_url || g.passportPhotoUrl || g.passport) : `${g.passport_photo_url || g.passportPhotoUrl || g.passport}?token=${encodeURIComponent(token)}` : '',
+            passport_photo_url: g.passport_photo_url || g.passportPhotoUrl || g.passport ? (g.passport_photo_url || g.passportPhotoUrl || g.passport).includes('token=') ? (g.passport_photo_url || g.passportPhotoUrl || g.passport) : `${g.passport_photo_url || g.passportPhotoUrl || g.passport}?token=${encodeURIComponent(token)}` : ''
+          } : null,
+          vehicle: v ? {
+            ...v,
+            brand: v.brand || '',
+            model: v.model || '',
+            year: v.year || 2020,
+            colour: v.colour || '',
+            plateNumber: v.plate_number || v.plateNumber || '',
+            plate_number: v.plate_number || v.plateNumber || '',
+            registrationNumber: v.registration_number || v.registrationNumber || '',
+            registration_number: v.registration_number || v.registrationNumber || '',
+            chassisNumber: v.chassis_number || v.chassisNumber || '',
+            chassis_number: v.chassis_number || v.chassisNumber || '',
+            engineNumber: v.engine_number || v.engineNumber || '',
+            engine_number: v.engine_number || v.engineNumber || '',
+            capacity: v.capacity || ''
+          } : null,
           financials,
           documents,
           passport_photo_url,
@@ -1856,17 +2099,49 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const g = db.guarantors.find((gua: any) => gua.driver_id === drv.id) || null;
         const v = db.vehicles.find((veh: any) => veh.driver_id === drv.id) || null;
         const financials = getDriverFinancials(drv, db);
-        const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === drv.id);
+        const documents = (db.driver_documents || []).filter((doc: any) => doc.driver_id === drv.id).map((doc: any) => ({
+          ...doc,
+          file_url: doc.file_url ? (doc.file_url.includes('token=') ? doc.file_url : `${doc.file_url}?token=${encodeURIComponent(token)}`) : ''
+        }));
         const passportDoc = documents.find((doc: any) => doc.document_type === 'passport_photo');
         const passport_photo_url = passportDoc ? passportDoc.file_url : '';
 
         return buildResponse({
           ...drv,
-          fullName: u.full_name || '',
+          fullName: u.full_name || drv.fullName || drv.full_name || '',
           email: u.email || '',
-          phone: u.phone || '',
-          guarantor: g,
-          vehicle: v,
+          phone: u.phone || drv.phone || '',
+          licenseNumber: drv.license_number || drv.licenseNumber || '',
+          licenseExpiry: drv.license_expiry || drv.licenseExpiry || '',
+          companyDriverId: drv.company_driver_id || drv.companyDriverId || '',
+          company_driver_id: drv.company_driver_id || drv.companyDriverId || '',
+          guarantor: g ? {
+            ...g,
+            fullName: g.fullName || g.full_name || '',
+            phone: g.phone || '',
+            address: g.address || '',
+            relationship: g.relationship || '',
+            nin: g.nin || '',
+            passport: g.passport || g.passport_photo_url ? (g.passport || g.passport_photo_url).includes('token=') ? (g.passport || g.passport_photo_url) : `${g.passport || g.passport_photo_url}?token=${encodeURIComponent(token)}` : '',
+            passportPhotoUrl: g.passport_photo_url || g.passportPhotoUrl || g.passport ? (g.passport_photo_url || g.passportPhotoUrl || g.passport).includes('token=') ? (g.passport_photo_url || g.passportPhotoUrl || g.passport) : `${g.passport_photo_url || g.passportPhotoUrl || g.passport}?token=${encodeURIComponent(token)}` : '',
+            passport_photo_url: g.passport_photo_url || g.passportPhotoUrl || g.passport ? (g.passport_photo_url || g.passportPhotoUrl || g.passport).includes('token=') ? (g.passport_photo_url || g.passportPhotoUrl || g.passport) : `${g.passport_photo_url || g.passportPhotoUrl || g.passport}?token=${encodeURIComponent(token)}` : ''
+          } : null,
+          vehicle: v ? {
+            ...v,
+            brand: v.brand || '',
+            model: v.model || '',
+            year: v.year || 2020,
+            colour: v.colour || '',
+            plateNumber: v.plate_number || v.plateNumber || '',
+            plate_number: v.plate_number || v.plateNumber || '',
+            registrationNumber: v.registration_number || v.registrationNumber || '',
+            registration_number: v.registration_number || v.registrationNumber || '',
+            chassisNumber: v.chassis_number || v.chassisNumber || '',
+            chassis_number: v.chassis_number || v.chassisNumber || '',
+            engineNumber: v.engine_number || v.engineNumber || '',
+            engine_number: v.engine_number || v.engineNumber || '',
+            capacity: v.capacity || ''
+          } : null,
           financials,
           documents,
           passport_photo_url,
@@ -2326,28 +2601,459 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   // 13. NOTIFICATIONS ENDPOINTS
+  
+  // A. GET /api/notifications - with filtering and enrichment
   if (path === '/api/notifications' && method === 'GET') {
     let list = db.notifications || [];
+    
+    // Filter base list based on user role/id
     if (user.role === 'driver') {
-      const activeDriver = db.drivers.find((d: any) => d.user_id === user.id);
       list = list.filter((n: any) => n.user_id === user.id || n.target_role === 'driver' || (!n.user_id && !n.target_role));
     } else if (user.role === 'shareholder') {
       list = list.filter((n: any) => n.user_id === user.id || n.target_role === 'shareholder' || (!n.user_id && !n.target_role));
+    } else if (user.role === 'admin') {
+      list = list.filter((n: any) => n.user_id === user.id || n.target_role === 'admin' || (!n.user_id && !n.target_role));
     }
-    return buildResponse(list);
+
+    // Enrich notifications
+    let enriched = list.map(enrichNotification);
+
+    // Filter by query parameters
+    const categoryParam = url.searchParams.get('category');
+    const priorityParam = url.searchParams.get('priority');
+    const statusParam = url.searchParams.get('status');
+    const searchParam = url.searchParams.get('search');
+
+    if (categoryParam) {
+      enriched = enriched.filter((n: any) => n.category === categoryParam);
+    }
+    if (priorityParam) {
+      enriched = enriched.filter((n: any) => n.priority === priorityParam);
+    }
+    if (statusParam) {
+      if (statusParam === 'unread') {
+        enriched = enriched.filter((n: any) => n.status === 'unread' || n.read_status === 0);
+      } else if (statusParam === 'read') {
+        enriched = enriched.filter((n: any) => n.status === 'read' || n.read_status === 1);
+      } else {
+        enriched = enriched.filter((n: any) => n.status === statusParam);
+      }
+    } else {
+      // Exclude deleted notifications by default
+      enriched = enriched.filter((n: any) => n.status !== 'deleted');
+    }
+
+    if (searchParam) {
+      const q = searchParam.toLowerCase();
+      enriched = enriched.filter((n: any) => 
+        (n.titleEn || '').toLowerCase().includes(q) || 
+        (n.titleHa || '').toLowerCase().includes(q) || 
+        (n.messageEn || '').toLowerCase().includes(q) || 
+        (n.messageHa || '').toLowerCase().includes(q)
+      );
+    }
+
+    return buildResponse(enriched);
   }
 
-  if (path === '/api/notifications/read' && method === 'POST') {
+  // B. GET /api/notifications/settings
+  if (path === '/api/notifications/settings' && method === 'GET') {
+    if (!db.user_preferences) db.user_preferences = [];
+    let prefs = db.user_preferences.find((p: any) => p.user_id === user.id);
+    if (!prefs) {
+      prefs = {
+        id: generateUUID(),
+        user_id: user.id,
+        enablePush: true,
+        enableSound: true,
+        enableVibration: true,
+        enableAnnouncement: true,
+        enableFinanceAlerts: true,
+        enableSecurityAlerts: true,
+        quietHoursStart: '22:00',
+        quietHoursEnd: '06:00',
+        preferredLanguage: 'en'
+      };
+      db.user_preferences.push(prefs);
+      await dbManager.saveDB(db);
+    }
+    return buildResponse(prefs);
+  }
+
+  // C. POST /api/notifications/settings
+  if (path === '/api/notifications/settings' && method === 'POST') {
+    try {
+      const body = await request.json() as any;
+      if (!db.user_preferences) db.user_preferences = [];
+      let prefsIdx = db.user_preferences.findIndex((p: any) => p.user_id === user.id);
+      
+      const updatedPrefs = {
+        id: prefsIdx >= 0 ? db.user_preferences[prefsIdx].id : generateUUID(),
+        user_id: user.id,
+        enablePush: body.enablePush !== undefined ? !!body.enablePush : true,
+        enableSound: body.enableSound !== undefined ? !!body.enableSound : true,
+        enableVibration: body.enableVibration !== undefined ? !!body.enableVibration : true,
+        enableAnnouncement: body.enableAnnouncement !== undefined ? !!body.enableAnnouncement : true,
+        enableFinanceAlerts: body.enableFinanceAlerts !== undefined ? !!body.enableFinanceAlerts : true,
+        enableSecurityAlerts: body.enableSecurityAlerts !== undefined ? !!body.enableSecurityAlerts : true,
+        quietHoursStart: body.quietHoursStart || '22:00',
+        quietHoursEnd: body.quietHoursEnd || '06:00',
+        preferredLanguage: body.preferredLanguage || 'en'
+      };
+
+      if (prefsIdx >= 0) {
+        db.user_preferences[prefsIdx] = updatedPrefs;
+      } else {
+        db.user_preferences.push(updatedPrefs);
+      }
+
+      await dbManager.saveDB(db);
+      writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_SETTINGS_UPDATE', null, 'User updated preferences', db);
+      return buildResponse({ success: true, settings: updatedPrefs });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // D. POST /api/notifications/subscribe
+  if (path === '/api/notifications/subscribe' && method === 'POST') {
+    try {
+      const { subscription } = await request.json() as any;
+      if (!subscription || !subscription.endpoint) {
+        return buildResponse({ error: 'Invalid push subscription payload.' }, 400);
+      }
+
+      if (env.PUSH_SUBSCRIPTIONS) {
+        const kvKey = `sub:${user.id}:${encodeURIComponent(subscription.endpoint)}`;
+        await env.PUSH_SUBSCRIPTIONS.put(kvKey, JSON.stringify(subscription));
+        writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_SUBSCRIBE', null, 'User subscribed to push', db);
+        return buildResponse({ success: true, message: 'Push subscription stored successfully.' });
+      } else {
+        console.warn("PUSH_SUBSCRIPTIONS KV binding is missing.");
+        return buildResponse({ success: true, message: 'KV binding missing but subscription parsed.' });
+      }
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // E. POST /api/notifications/unsubscribe
+  if (path === '/api/notifications/unsubscribe' && method === 'POST') {
+    try {
+      const { endpoint } = await request.json() as any;
+      if (!endpoint) {
+        return buildResponse({ error: 'Endpoint missing.' }, 400);
+      }
+
+      if (env.PUSH_SUBSCRIPTIONS) {
+        const kvKey = `sub:${user.id}:${encodeURIComponent(endpoint)}`;
+        await env.PUSH_SUBSCRIPTIONS.delete(kvKey);
+        writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_UNSUBSCRIBE', null, `User unsubscribed endpoint: ${endpoint.substring(0, 50)}...`, db);
+        return buildResponse({ success: true });
+      } else {
+        return buildResponse({ success: true, message: 'KV binding missing but unsubscribed locally.' });
+      }
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // F. GET /api/notifications/status
+  if (path === '/api/notifications/status' && method === 'GET') {
+    const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
+    let devicesCount = 0;
+    let subscribed = false;
+
+    if (env.PUSH_SUBSCRIPTIONS) {
+      try {
+        const listResult = await env.PUSH_SUBSCRIPTIONS.list();
+        const userSubs = (listResult.keys || []).filter((k: any) => k.name.startsWith(`sub:${user.id}:`));
+        devicesCount = userSubs.length;
+        subscribed = devicesCount > 0;
+      } catch (err) {
+        console.error("Failed to fetch device subscriptions from KV:", err);
+      }
+    }
+
+    return buildResponse({
+      success: true,
+      publicKey,
+      subscribed,
+      devicesCount,
+      devices: []
+    });
+  }
+
+  // G. POST /api/notifications/send
+  if (path === '/api/notifications/send' && method === 'POST') {
+    try {
+      if (user.role !== 'director' && user.role !== 'admin') {
+        return buildResponse({ error: 'Unauthorized. Admins or Directors only.' }, 403);
+      }
+
+      const { user_id, role, title, body, url: targetUrl } = await request.json() as any;
+      if (!title || !body) {
+        return buildResponse({ error: 'Notification title and body are required.' }, 400);
+      }
+
+      let targetUserIds: string[] = [];
+      if (user_id) {
+        targetUserIds = [user_id];
+      } else if (role) {
+        const targetRoleObj = db.roles?.find((r: any) => r.name.toLowerCase() === role.toLowerCase());
+        if (targetRoleObj) {
+          targetUserIds = (db.users || [])
+            .filter((u: any) => u.role_id === targetRoleObj.id)
+            .map((u: any) => u.id);
+        }
+      } else {
+        targetUserIds = (db.users || []).map((u: any) => u.id);
+      }
+
+      if (targetUserIds.length === 0) {
+        return buildResponse({ error: 'No recipients matched criteria.' }, 404);
+      }
+
+      if (!db.notifications) db.notifications = [];
+      
+      const newNotificationsList: any[] = [];
+      targetUserIds.forEach((uid) => {
+        const nId = `NOT-${Date.now()}-${generateUUID().substring(0, 6).toUpperCase()}`;
+        const notification = {
+          id: nId,
+          user_id: uid,
+          title,
+          body,
+          type: 'SYSTEM_ALERT',
+          status: 'unread',
+          read_status: 0,
+          url: targetUrl || '/notifications',
+          created_at: new Date().toISOString()
+        };
+        db.notifications.unshift(notification);
+        newNotificationsList.push(notification);
+      });
+
+      await dbManager.saveDB(db);
+      writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_MANUAL_SEND', null, `Manual send to ${targetUserIds.length} users`, db);
+
+      return buildResponse({
+        success: true,
+        message: 'Notification processed and dispatched.',
+        recipientsCount: targetUserIds.length
+      });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // H. PUT /api/notifications/read-all or POST /api/notifications/read
+  if ((path === '/api/notifications/read-all' || path === '/api/notifications/read') && (method === 'PUT' || method === 'POST')) {
+    let updatedCount = 0;
     const list = db.notifications || [];
     list.forEach((n: any) => {
-      if (user.role === 'driver') {
-        if (n.user_id === user.id) n.read_status = 1;
-      } else {
+      const isForUser = (n.user_id === user.id) || (n.target_role === user.role) || (!n.user_id && !n.target_role);
+      if (isForUser && n.read_status === 0) {
         n.read_status = 1;
+        n.status = 'read';
+        n.opened_at = new Date().toISOString();
+        updatedCount++;
       }
     });
-    await dbManager.saveDB(db);
+
+    if (updatedCount > 0) {
+      await dbManager.saveDB(db);
+      writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_READ_ALL', null, `Marked ${updatedCount} read`, db);
+    }
     return buildResponse({ success: true });
+  }
+
+  // I. PUT /api/notifications/:id/read - Mark single notification as read
+  const pathParts = path.split('/');
+  if (pathParts.length === 5 && pathParts[1] === 'api' && pathParts[2] === 'notifications' && pathParts[4] === 'read' && method === 'PUT') {
+    const id = pathParts[3];
+    const notification = db.notifications?.find((n: any) => n.id === id);
+    if (!notification) {
+      return buildResponse({ error: 'Notification not found.' }, 404);
+    }
+
+    notification.read_status = 1;
+    notification.status = 'read';
+    notification.opened_at = new Date().toISOString();
+    await dbManager.saveDB(db);
+
+    writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_READ', id, 'Marked single read', db);
+    return buildResponse({ success: true });
+  }
+
+  // J. POST /api/notifications/:id/pin - Toggle Pin
+  if (pathParts.length === 5 && pathParts[1] === 'api' && pathParts[2] === 'notifications' && pathParts[4] === 'pin' && method === 'POST') {
+    const id = pathParts[3];
+    const notification = db.notifications?.find((n: any) => n.id === id);
+    if (!notification) {
+      return buildResponse({ error: 'Notification not found.' }, 404);
+    }
+
+    const currentStatus = notification.status || 'unread';
+    notification.status = currentStatus === 'pinned' ? 'read' : 'pinned';
+    await dbManager.saveDB(db);
+
+    writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_PIN_TOGGLE', id, `Toggled pinned status to ${notification.status}`, db);
+    return buildResponse({ success: true, status: notification.status });
+  }
+
+  // K. POST /api/notifications/:id/archive - Toggle Archive
+  if (pathParts.length === 5 && pathParts[1] === 'api' && pathParts[2] === 'notifications' && pathParts[4] === 'archive' && method === 'POST') {
+    const id = pathParts[3];
+    const notification = db.notifications?.find((n: any) => n.id === id);
+    if (!notification) {
+      return buildResponse({ error: 'Notification not found.' }, 404);
+    }
+
+    const currentStatus = notification.status || 'unread';
+    notification.status = currentStatus === 'archived' ? 'read' : 'archived';
+    notification.read_status = 1;
+    await dbManager.saveDB(db);
+
+    writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_ARCHIVE_TOGGLE', id, `Toggled archive status to ${notification.status}`, db);
+    return buildResponse({ success: true, status: notification.status });
+  }
+
+  // L. DELETE /api/notifications/:id - Soft Delete
+  if (pathParts.length === 4 && pathParts[1] === 'api' && pathParts[2] === 'notifications' && method === 'DELETE') {
+    const id = pathParts[3];
+    const notification = db.notifications?.find((n: any) => n.id === id);
+    if (!notification) {
+      return buildResponse({ error: 'Notification not found.' }, 404);
+    }
+
+    notification.status = 'deleted';
+    notification.dismissed_at = new Date().toISOString();
+    await dbManager.saveDB(db);
+
+    writeAuditLog(user.id, user.email, user.role, 'NOTIFICATION_DELETE', id, 'Soft-deleted notification', db);
+    return buildResponse({ success: true });
+  }
+
+  // M. GET /api/notifications/history
+  if (path === '/api/notifications/history' && method === 'GET') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied.' }, 403);
+    }
+    const logsList = (db.audit_logs || []).filter((log: any) => log.action && log.action.startsWith('NOTIFICATION_'));
+    return buildResponse(logsList);
+  }
+
+  // N. POST /api/notifications/translate
+  if (path === '/api/notifications/translate' && method === 'POST') {
+    try {
+      const { text, to } = await request.json() as any;
+      if (!text || !to) {
+        return buildResponse({ error: 'Text and target language are required.' }, 400);
+      }
+
+      if (to !== 'en' && to !== 'ha') {
+        return buildResponse({ error: 'Target language must be en or ha.' }, 400);
+      }
+
+      const dict: Record<string, string> = {
+        'New Driver Self-Registration': 'Rijistar Sabon Direba',
+        'Candidate Driver MUSA completed driver self-registration. Action required: Approve credentials.': 'Driver MUSA ya kammala rajistar kansa. Ana bukatar amincewa daga Admin.',
+        'Rest Period Concluded': 'Lokacin Hutu Ya Cika',
+        'Vehicle Contract Completed!': 'Kwangilar Mota Ta Cika!',
+        'Fuel Voucher Request': 'Bukatar Takardar Man Fetur',
+        'Approved Allocation': 'Amince da Bukatar',
+        'Verify Credentials': 'Duba Takardu',
+        'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!': 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!'
+      };
+
+      let translated = dict[text] || text;
+      
+      if (env.GEMINI_API_KEY) {
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: `You are a professional Hausa/English translation engine. Translate the following text into ${to === 'ha' ? 'Hausa' : 'English'}. Return ONLY the translated string without quotes or explanations:\n\n${text}`
+                }]
+              }]
+            })
+          });
+          if (response.ok) {
+            const result = await response.json() as any;
+            const geminiText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (geminiText) {
+              translated = geminiText;
+            }
+          }
+        } catch (geminiErr) {
+          console.warn("Gemini translation error:", geminiErr);
+        }
+      }
+
+      return buildResponse({ success: true, translation: translated });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // O. POST /api/notifications/bulk
+  if (path === '/api/notifications/bulk' && method === 'POST') {
+    try {
+      const { ids, action } = await request.json() as any;
+      if (!Array.isArray(ids) || ids.length === 0 || !action) {
+        return buildResponse({ error: 'IDs array and action type are required.' }, 400);
+      }
+
+      let updatedCount = 0;
+      const list = db.notifications || [];
+
+      if (action === 'read') {
+        list.forEach((n: any) => {
+          if (ids.includes(n.id)) {
+            n.read_status = 1;
+            n.status = 'read';
+            n.opened_at = new Date().toISOString();
+            updatedCount++;
+          }
+        });
+      } else if (action === 'archive') {
+        list.forEach((n: any) => {
+          if (ids.includes(n.id)) {
+            n.read_status = 1;
+            n.status = 'archived';
+            updatedCount++;
+          }
+        });
+      } else if (action === 'pin') {
+        list.forEach((n: any) => {
+          if (ids.includes(n.id)) {
+            n.status = 'pinned';
+            updatedCount++;
+          }
+        });
+      } else if (action === 'delete') {
+        list.forEach((n: any) => {
+          if (ids.includes(n.id)) {
+            n.status = 'deleted';
+            n.dismissed_at = new Date().toISOString();
+            updatedCount++;
+          }
+        });
+      }
+
+      if (updatedCount > 0) {
+        await dbManager.saveDB(db);
+        writeAuditLog(user.id, user.email, user.role, `NOTIFICATION_BULK_${action.toUpperCase()}`, null, `Executed bulk action ${action} on ${updatedCount} items`, db);
+      }
+
+      return buildResponse({ success: true, count: updatedCount });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
   }
 
   // =====================================================================

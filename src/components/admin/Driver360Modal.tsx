@@ -45,6 +45,15 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   onClose,
   onSync
 }) => {
+  const token = api.getToken() || '';
+  const getAuthorizedUrl = (urlPath: string) => {
+    if (!urlPath) return '';
+    if (urlPath.startsWith('/api/documents/preview/') && !urlPath.includes('token=')) {
+      return `${urlPath}?token=${encodeURIComponent(token)}`;
+    }
+    return urlPath;
+  };
+
   // Tabs within Profile
   const [activeTab, setActiveTab] = useState<'info' | 'payments' | 'history' | 'docs'>('info');
   const [installments, setInstallments] = useState<any[]>([]);
@@ -161,7 +170,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const vehicleAssigned = vehicles.find(v => v.id === driver.assignedVehicleId) || (driver as any).vehicle;
 
   // Driver calculations
-  const driverPayments = payments.filter(p => p.driver_id === driver.id);
+  const driverPayments = payments.filter(p => p.driver_id === driver.id || p.driverId === driver.id);
   const totalPaid = driverPayments
     .filter(p => p.status === 'approved')
     .reduce((sum, p) => sum + p.amount, 0);
@@ -254,7 +263,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full border border-border-main overflow-hidden shrink-0">
               <img 
-                src={(driver as any).passport_photo_url || (driver as any).passportPhoto || (driver as any).passport_photo || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
+                src={getAuthorizedUrl((driver as any).passport_photo_url || (driver as any).passportPhoto || (driver as any).passport_photo || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300')} 
                 alt={driver.fullName} 
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"
@@ -332,9 +341,16 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 
         {/* Dynamic Inner Tab Content Area */}
         <div className="flex-1 p-5 overflow-y-auto max-h-[55vh]">
-          
-          {/* TAB 1: CORE DOSSIER */}
-          {activeTab === 'info' && (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+              {/* TAB 1: CORE DOSSIER */}
+              {activeTab === 'info' && (
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 text-xs text-text-muted">
               
               {/* Personal details */}
@@ -353,7 +369,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                     <div className="flex flex-col items-center shrink-0 mx-auto sm:mx-0">
                       <div className="relative group overflow-hidden rounded-lg border border-border-main h-28 w-24 bg-slate-900 flex items-center justify-center shadow-md">
                         <img 
-                          src={(driver as any).passport_photo_url || (driver as any).passportPhoto || (driver as any).passport_photo || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} 
+                          src={getAuthorizedUrl((driver as any).passport_photo_url || (driver as any).passportPhoto || (driver as any).passport_photo || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300')} 
                           alt={driver.fullName} 
                           className="h-full w-full object-cover"
                           referrerPolicy="no-referrer"
@@ -410,7 +426,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                         <div className="flex flex-col items-center shrink-0 mx-auto sm:mx-0">
                           <div className="relative group overflow-hidden rounded-lg border border-border-main h-24 w-20 bg-slate-900 flex items-center justify-center shadow-md">
                             <img 
-                              src={(driver.guarantor as any).passport_photo_url || (driver.guarantor as any).passportPhotoUrl || (driver.guarantor as any).passport} 
+                              src={getAuthorizedUrl((driver.guarantor as any).passport_photo_url || (driver.guarantor as any).passportPhotoUrl || (driver.guarantor as any).passport)} 
                               alt="Guarantor Passport" 
                               className="h-full w-full object-cover"
                               referrerPolicy="no-referrer"
@@ -735,6 +751,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
               </div>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
 
         </div>
 
@@ -914,7 +932,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
               </div>
               <div className="flex-1 flex items-center justify-center p-4">
                 <img 
-                  src={isFullscreenDocOpen} 
+                  src={getAuthorizedUrl(isFullscreenDocOpen)} 
                   alt="Document Preview" 
                   className="max-h-full max-w-full object-contain border border-border-main rounded-xl"
                   referrerPolicy="no-referrer"

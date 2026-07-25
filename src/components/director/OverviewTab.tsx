@@ -46,6 +46,7 @@ import {
 } from 'recharts';
 import { Card } from '../ui/Card';
 import { CycleTimer } from './CycleTimer';
+import { ActivityFeed } from '../admin/ActivityFeed';
 
 interface OverviewTabProps {
   lang: 'en' | 'ha';
@@ -883,61 +884,11 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         <div className="lg:col-span-4 flex flex-col gap-6">
           
           {/* Real-time SSE Live Activity feed */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5 flex flex-col justify-between">
-            <div>
-              <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
-                <Zap className="h-4 w-4 text-brand-gold fill-brand-gold/10" />
-                {lang === 'en' ? "Live System Activity" : "Ayyukan Tsarin na Yanzu"}
-              </h3>
-              <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Real-time telemetry streams audited audit logs.</p>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-4 max-h-[360px] overflow-y-auto pr-1">
-              {logs.length === 0 ? (
-                <div className="text-center py-12 text-xs text-slate-400 italic">
-                  Waiting for corridor events...
-                </div>
-              ) : (
-                logs.slice(0, 7).map((log, i) => (
-                  <div key={log.id || i} className="flex gap-3 text-xs relative group pl-1">
-                    {/* Visual left timeline thread line */}
-                    {i !== Math.min(logs.length - 1, 6) && (
-                      <div className="absolute left-[5px] top-4.5 bottom-0 w-[1.5px] bg-slate-100 group-hover:bg-slate-200 transition-colors" />
-                    )}
-                    
-                    {/* Circle icon marker */}
-                    <div className="h-2.5 w-2.5 rounded-full bg-slate-200 border border-slate-400 ring-4 ring-white shrink-0 mt-1 transition-colors group-hover:border-slate-800" />
-                    
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2.5">
-                        <span className="font-bold text-slate-800 leading-none">
-                          {log.action}
-                        </span>
-                        <span className="text-[9px] font-bold text-slate-400 font-mono">
-                          {log.created_at?.split('T')[1]?.substring(0, 5) || "Just Now"}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 leading-relaxed mt-1">{log.details}</p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className="px-1.5 py-0.5 rounded-md text-[8px] font-bold bg-slate-100 border border-slate-200/60 text-slate-500 font-mono uppercase tracking-wider">
-                          {log.operator_role?.toUpperCase() || "SYSTEM"}
-                        </span>
-                        <span className="text-[9px] text-slate-400">by {log.operator_name || "System Automated"}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <button 
-              onClick={() => setActiveTab('audit')}
-              className="w-full text-center py-2 border-t border-slate-100 mt-4 text-[10px] font-bold text-slate-400 hover:text-slate-900 flex items-center justify-center gap-1 transition-colors cursor-pointer"
-            >
-              <span>{lang === 'en' ? "Inspect Complete Audit Trail" : "Duba Dukkan Rikodin Tsaro"}</span>
-              <ArrowRight className="h-3 w-3" />
-            </button>
-          </div>
+          <ActivityFeed
+            lang={lang}
+            logs={logs}
+            onRefresh={onStateChange}
+          />
 
           {/* Corporate Database Backup & Recovery (Notion / Linear Inspired) */}
           <div id="database-backup-section" className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-5">

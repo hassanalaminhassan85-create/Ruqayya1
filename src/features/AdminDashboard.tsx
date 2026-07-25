@@ -46,8 +46,10 @@ import { CommunicationCenter } from '../components/admin/CommunicationCenter';
 import { PaymentWorkflow } from '../components/admin/PaymentWorkflow';
 import { CompanyOperationsCard } from '../components/admin/CompanyOperationsCard';
 import { CompanyWalletCard } from '../components/admin/CompanyWalletCard';
+import { SystemStatusCard } from '../components/admin/SystemStatusCard';
 import { PeopleManagement } from '../components/admin/PeopleManagement';
 import { CycleTimer } from '../components/director/CycleTimer';
+import { ActivityFeed } from '../components/admin/ActivityFeed';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -73,6 +75,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [activeCycle, setActiveCycle] = useState<any>(null);
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<any[]>([]);
 
   // Filter States
   const [driverFilter, setDriverFilter] = useState<'all' | 'pending' | 'approved' | 'correction_requested' | 'rejected'>('all');
@@ -164,7 +167,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       return;
     }
     try {
-      const [vList, dList, tList, fvList, fin, payList, shList, cyList] = await Promise.all([
+      const [vList, dList, tList, fvList, fin, payList, shList, cyList, logList] = await Promise.all([
         api.getVehicles(),
         api.getDrivers(),
         api.getTrips(),
@@ -172,7 +175,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         api.getFinance(),
         api.getPayments(),
         api.getShareholders(),
-        api.request('/api/director/cycles').catch(() => ({ cycles: [] }))
+        api.request('/api/director/cycles').catch(() => ({ cycles: [] })),
+        api.getAuditLogs().catch(() => [])
       ]);
       setVehicles(vList || []);
       setDrivers(dList || []);
@@ -181,6 +185,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       setFinance(fin || []);
       setPayments(payList || []);
       setShareholders(shList || []);
+      setLogs(logList || []);
       
       const revTotal = (fin || [])
         .filter((f: any) => f.type === 'revenue')
@@ -210,6 +215,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         if (detail.finance) setFinance(detail.finance);
         if (detail.driver_payments) setPayments(detail.driver_payments);
         if (detail.vehicles) setVehicles(detail.vehicles);
+        if (detail.audit_logs) setLogs(detail.audit_logs);
         if (detail.cycles) {
           const activeCyc = (detail.cycles || []).find((c: any) => c && (c.status === 'active' || c.status === 'paused'));
           setActiveCycle(activeCyc || null);
@@ -246,6 +252,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             setVouchers(data.vouchers || []);
             setFinance(data.financials || []);
             setPayments(data.driver_payments || []);
+            if (data.audit_logs) setLogs(data.audit_logs);
             
             const revTotal = (data.financials || [])
               .filter((f: any) => f.type === 'revenue')
@@ -498,6 +505,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 onStateChange={syncAllData}
               />
             </div>
+
+            {/* Dedicated, Customizable System Status and Live Telemetry */}
+            <div className="w-full">
+              <SystemStatusCard
+                lang={lang}
+                syncAllData={syncAllData}
+              />
+            </div>
           </div>
 
           {/* PRIORITY ACTION CARDS (moved below the core overview) */}
@@ -584,15 +599,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             </button>
           </div>
 
-          {/* Dashboard Summary Widgets */}
-          <AdminKPIs
-            lang={lang}
-            drivers={drivers}
-            vehicles={vehicles}
-            finance={finance}
-            payments={payments}
-            activeCycle={activeCycle}
-          />
+          {/* Dashboard Summary Widgets & Live Activity Feed Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 my-4 items-start">
+            <div className="lg:col-span-8 flex flex-col gap-4">
+              <AdminKPIs
+                lang={lang}
+                drivers={drivers}
+                vehicles={vehicles}
+                finance={finance}
+                payments={payments}
+                activeCycle={activeCycle}
+              />
+            </div>
+            <div className="lg:col-span-4 h-full">
+              <ActivityFeed
+                lang={lang}
+                logs={logs}
+                onRefresh={syncAllData}
+                isLoading={loading}
+              />
+            </div>
+          </div>
 
           {/* Module Tab Switchers */}
           <Tabs
