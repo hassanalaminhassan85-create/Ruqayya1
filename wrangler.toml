@@ -1,4 +1,3 @@
-# Configuration for Cloudflare Pages
 name = "ruqayya-transport-erp"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-07-07"
@@ -29,3 +28,7 @@ GEMINI_API_KEY = "your_gemini_api_key_here"
 VAPID_PUBLIC_KEY = ""
 VAPID_PRIVATE_KEY = ""
 
+[durable_objects]
+bindings = [
+  { name = "LEDGER_DO", class_name = "LedgerLock" }
+]
