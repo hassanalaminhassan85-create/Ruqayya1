@@ -1,3 +1,5 @@
+const fetch = globalThis.fetch;
+
 /**
  * Persistence Worker - exposes secure persistence endpoints and delegates
  * critical operations to a Durable Object for serialized execution.
@@ -43,7 +45,8 @@ export default {
         if (env.LEDGER_DO) {
           const id = env.LEDGER_DO.idFromName(`driver:${driver_id}`);
           const obj = env.LEDGER_DO.get(id);
-          const resp = await obj.fetch(new Request(`https://do/operate`, { method: 'POST', body: JSON.stringify({ op: 'driver_payment', payload: body }) }));
+          const idemKey = request.headers.get('x-idempotency-key') || body.idempotency_key || null;
+          const resp = await obj.fetch(new Request(`https://do/operate`, { method: 'POST', body: JSON.stringify({ op: 'driver_payment', payload: body, idempotency_key: idemKey }), headers: { 'Content-Type': 'application/json' } }));
           const text = await resp.text();
           return new Response(text, { status: resp.status, headers: { 'Content-Type': 'application/json' } });
         }
@@ -62,7 +65,8 @@ export default {
         if (env.LEDGER_DO) {
           const id = env.LEDGER_DO.idFromName(`global:expenses`);
           const obj = env.LEDGER_DO.get(id);
-          const resp = await obj.fetch(new Request(`https://do/operate`, { method: 'POST', body: JSON.stringify({ op: 'record_expense', payload: body }) }));
+          const idemKey = request.headers.get('x-idempotency-key') || body.idempotency_key || null;
+          const resp = await obj.fetch(new Request(`https://do/operate`, { method: 'POST', body: JSON.stringify({ op: 'record_expense', payload: body, idempotency_key: idemKey }), headers: { 'Content-Type': 'application/json' } }));
           const text = await resp.text();
           return new Response(text, { status: resp.status, headers: { 'Content-Type': 'application/json' } });
         }
@@ -82,7 +86,8 @@ export default {
         if (env.LEDGER_DO) {
           const id = env.LEDGER_DO.idFromName(`driver:${body.driver_id}`);
           const obj = env.LEDGER_DO.get(id);
-          const resp = await obj.fetch(new Request(`https://do/operate`, { method: 'POST', body: JSON.stringify({ op: 'generate_installments', payload: body }) }));
+          const idemKey = request.headers.get('x-idempotency-key') || body.idempotency_key || null;
+          const resp = await obj.fetch(new Request(`https://do/operate`, { method: 'POST', body: JSON.stringify({ op: 'generate_installments', payload: body, idempotency_key: idemKey }), headers: { 'Content-Type': 'application/json' } }));
           const text = await resp.text();
           return new Response(text, { status: resp.status, headers: { 'Content-Type': 'application/json' } });
         }
@@ -181,7 +186,7 @@ function generateSixInstallments(driver_id: string, cycle_id: string, agreed_amo
     const startDay = (k-1)*5+1; const endDay = k*5;
     const installmentStart = new Date(start.getTime() + (startDay-1)*24*3600*1000);
     const installmentEnd = new Date(start.getTime() + (endDay-1)*24*3600*1000);
-    out.push({ id:`INST-${cycle_id}-${driver_id}-${k}`, cycle_id, driver_id, installment_number:k, start_date:installmentStart.toISOString().split('T')[0], end_date:installmentEnd.toISOString().split('T')[0], due_date:installmentEnd.toISOString().split('T')[0], amount_due:per, amount_paid:0, remaining:per, status:'DUE', payment_history:[] });
+    out.push({ id:`INST-${cycle_id}-${driver_id}-${k}`, cycle_id, driver_id, installment_number:k, start_date:installmentStart.toISOString().split('T')[0], end_date:installmentEnd.toISOString().s[...]
   }
   return out;
 }
@@ -189,7 +194,7 @@ function generateSixInstallments(driver_id: string, cycle_id: string, agreed_amo
 async function handleRecordExpenseDirect(DB: any, body: any) {
   const expenses = (await getCollection(DB, 'expenses')) || [];
   const id = `EXP-${Date.now()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-  const rec = { id, category: body.category || 'other', amount: body.amount || 0, date: body.date || new Date().toISOString().split('T')[0], description: body.description || '', driver_id: body.driver_id || null, vehicle_id: body.vehicle_id || null, created_by: body.created_by || 'system', approved: !!body.approved, created_at: new Date().toISOString() };
+  const rec = { id, category: body.category || 'other', amount: body.amount || 0, date: body.date || new Date().toISOString().split('T')[0], description: body.description || '', driver_id: body.d[...]
   expenses.unshift(rec);
   await upsertCollection(DB, 'expenses', expenses);
 
