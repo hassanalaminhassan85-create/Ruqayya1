@@ -1,0 +1,13 @@
+name = "ledger-lock-do"
+main = "index.ts"
+compatibility_date = "2026-07-07"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ruqayya"
+database_id = "2e4092ba-4766-45d4-bb5d-934d6bbac2e6"
+
+[[kv_namespaces]]
+binding = "PUSH_SUBSCRIPTIONS"
+id = "e4dfd23b21c349c48f5c9fe0825970e0"
