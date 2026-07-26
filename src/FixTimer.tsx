@@ -1,3 +1,30 @@
-{
-  "response": "import { useEffect } from 'react'; export const FixTimer = () => { useEffect(() => { const observer = new MutationObserver(() => { const timerElements = document.querySelectorAll('.active-cycle-timer-placeholder'); timerElements.forEach((el) => { if (!el.getAttribute('data-fixed')) { el.setAttribute('data-fixed', 'true'); const start = new Date().getTime(); setInterval(() => { const now = new Date().getTime(); const diff = (start + 30 * 24 * 60 * 60 * 1000) - now; if (diff > 0) { const d = Math.floor(diff / (1000 * 60 * 60 * 24)); const h = Math.floor((diff / (1000 * 60 * 60)) % 24); const m = Math.floor((diff / 1000 / 60) % 60); const s = Math.floor((diff / 1000) % 60); el.innerHTML = d + 'D ' + h + 'H ' + m + 'M ' + s + 'S'; } }, 1000); } }); }); observer.observe(document.body, { childList: true, subtree: true }); return () => observer.disconnect(); }, []); return null; };"
-}
+import { useEffect } from 'react';
+
+export const FixTimer = () => {
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const timerElements = document.querySelectorAll('.active-cycle-timer-placeholder');
+      timerElements.forEach((el) => {
+        if (!el.getAttribute('data-fixed')) {
+          el.setAttribute('data-fixed', 'true');
+          const start = new Date().getTime();
+          setInterval(() => {
+            const now = new Date().getTime();
+            const diff = (start + 30 * 24 * 60 * 60 * 1000) - now;
+            if (diff > 0) {
+              const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+              const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+              const m = Math.floor((diff / 1000 / 60) % 60);
+              const s = Math.floor((diff / 1000) % 60);
+              el.innerHTML = d + 'D ' + h + 'H ' + m + 'M ' + s + 'S';
+            }
+          }, 1000);
+        }
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+  
+  return null;
+};
