@@ -1427,7 +1427,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 username: 'MMR',
                 email: 'director@ruqayyatransport.com',
                 phone: '+234 803 111 0001',
-                password_hash: await hashPassword('director123'),
+                password_hash: '', // updated asynchronously
                 full_name: 'Executive Director MMR',
                 role_id: roleId,
                 created_at: new Date().toISOString(),
@@ -1443,13 +1443,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 created_at: new Date().toISOString(),
                 status: 'active'
               });
+              hashPassword('director123').then(async (h) => {
+                user.password_hash = h;
+                await dbManager.saveDB(db);
+              });
             } else if (userKey === 'ADAM' || userKey === 'ABAKAKA') {
               user = {
                 id: userId,
                 username: userKey,
                 email: `${userKey.toLowerCase()}@ruqayyatransport.com`,
                 phone: '+234 803 222 0002',
-                password_hash: await hashPassword('admin123'),
+                password_hash: '', // updated asynchronously
                 full_name: userKey === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
                 role_id: roleId,
                 created_at: new Date().toISOString(),
@@ -1465,13 +1469,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 created_at: new Date().toISOString(),
                 status: 'active'
               });
+              hashPassword('admin123').then(async (h) => {
+                user.password_hash = h;
+                await dbManager.saveDB(db);
+              });
             } else if (userKey === 'KABIR' || userKey === 'AMINA') {
               user = {
                 id: userId,
                 username: userKey,
                 email: `${userKey.toLowerCase()}.shareholder@ruqayyatransport.com`,
                 phone: '+234 803 333 0003',
-                password_hash: await hashPassword('shareholder123'),
+                password_hash: '', // updated asynchronously
                 full_name: userKey === 'KABIR' ? 'Shareholder KABIR' : 'Shareholder AMINA',
                 role_id: roleId,
                 created_at: new Date().toISOString(),
@@ -1487,6 +1495,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 created_at: new Date().toISOString(),
                 status: 'active'
               });
+              hashPassword('shareholder123').then(async (h) => {
+                user.password_hash = h;
+                await dbManager.saveDB(db);
+              });
             } else {
               // Default Driver fallback
               user = {
@@ -1494,7 +1506,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 username: 'MUSA',
                 email: 'musa.driver@ruqayyatransport.com',
                 phone: '+234 803 444 0004',
-                password_hash: await hashPassword('driver123'),
+                password_hash: '', // updated asynchronously
                 full_name: 'Driver MUSA',
                 role_id: roleId,
                 created_at: new Date().toISOString(),
@@ -1510,22 +1522,30 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 status: 'approved',
                 created_at: new Date().toISOString()
               });
+              hashPassword('driver123').then(async (h) => {
+                user.password_hash = h;
+                await dbManager.saveDB(db);
+              });
             }
           }
 
-          // Dynamically recreate the active session record
-          session = {
-            id: generateUUID(),
-            user_id: user.id,
-            token,
-            expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            user_ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '127.0.0.1',
-            user_agent: request.headers.get('user-agent') || 'Corporate API Consumer',
-            created_at: new Date().toISOString(),
-            status: 'active'
-          };
-          db.sessions.push(session);
-          await dbManager.saveDB(db);
+          // Check if session already exists for this token in db.sessions
+          session = db.sessions.find((s: any) => s.token === token);
+          if (!session) {
+            // Dynamically recreate the active session record
+            session = {
+              id: generateUUID(),
+              user_id: user.id,
+              token,
+              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              user_ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '127.0.0.1',
+              user_agent: request.headers.get('user-agent') || 'Corporate API Consumer',
+              created_at: new Date().toISOString(),
+              status: 'active'
+            };
+            db.sessions.push(session);
+            dbManager.saveDB(db); // non-blocking or concurrently handled save
+          }
         }
       }
     }
@@ -1772,30 +1792,140 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // 3. PUBLIC: General Corporate Login
   if (path === '/api/auth/login' && method === 'POST') {
     try {
-      const { email, password, rememberMe } = await request.json() as any;
-      if (!email || !password) {
-        return buildResponse({ error: 'Please enter both corporate email and security password.' }, 400);
-      }
+      const body = await request.json() as any;
+      const { email, password, username, rememberMe } = body;
+      
+      let user: any = null;
+      let roleName = 'public';
 
-      const user = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase() && u.status === 'active');
-      if (!user) {
-        return buildResponse({ error: 'Access Denied: Non-existent active user profile.' }, 401);
-      }
+      if (username) {
+        // Passwordless enterprise gateway login
+        const userKey = username.trim().toUpperCase();
+        user = db.users.find((u: any) => 
+          u.username === userKey || 
+          u.email?.toLowerCase().startsWith(userKey.toLowerCase())
+        );
 
-      if (user.status === 'pending' && user.role_id === 'role-driver') {
-        return buildResponse({ error: 'Roster approval pending. Please wait for an administrator to authorize your profile.' }, 403);
-      }
+        // Auto-seed enterprise user if missing in the db
+        if (!user && (userKey === 'MMR' || userKey === 'ADAM' || userKey === 'ABAKAKA' || userKey === 'KABIR' || userKey === 'AMINA')) {
+          const userId = generateUUID();
+          let roleId = 'role-driver';
+          if (userKey === 'MMR') roleId = 'role-director';
+          else if (userKey === 'ADAM' || userKey === 'ABAKAKA') roleId = 'role-admin';
+          else if (userKey === 'KABIR' || userKey === 'AMINA') roleId = 'role-shareholder';
 
-      if (!await verifyPassword(password, user.password_hash)) {
-        writeAuditLog(user.id, email, 'public', 'AUTH_FAILURE', 'Invalid password submission', null, db);
-        await dbManager.saveDB(db);
-        return buildResponse({ error: 'Access Denied: Invalid credentials.' }, 401);
+          if (userKey === 'MMR') {
+            user = {
+              id: userId,
+              username: 'MMR',
+              email: 'director@ruqayyatransport.com',
+              phone: '+234 803 111 0001',
+              password_hash: '', // updated asynchronously
+              full_name: 'Executive Director MMR',
+              role_id: roleId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              status: 'active'
+            };
+            db.users.push(user);
+            db.directors.push({
+              id: generateUUID(),
+              user_id: userId,
+              company_id: 'DIR-2026-MMR',
+              passport_photo_url: '',
+              created_at: new Date().toISOString(),
+              status: 'active'
+            });
+            hashPassword('director123').then(async (h) => {
+              user.password_hash = h;
+              await dbManager.saveDB(db);
+            });
+          } else if (userKey === 'ADAM' || userKey === 'ABAKAKA') {
+            user = {
+              id: userId,
+              username: userKey,
+              email: `${userKey.toLowerCase()}@ruqayyatransport.com`,
+              phone: '+234 803 222 0002',
+              password_hash: '', // updated asynchronously
+              full_name: userKey === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
+              role_id: roleId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              status: 'active'
+            };
+            db.users.push(user);
+            db.admins.push({
+              id: generateUUID(),
+              user_id: userId,
+              company_id: `ADM-2026-${userKey}`,
+              passport_photo_url: '',
+              created_at: new Date().toISOString(),
+              status: 'active'
+            });
+            hashPassword('admin123').then(async (h) => {
+              user.password_hash = h;
+              await dbManager.saveDB(db);
+            });
+          } else if (userKey === 'KABIR' || userKey === 'AMINA') {
+            user = {
+              id: userId,
+              username: userKey,
+              email: `${userKey.toLowerCase()}.shareholder@ruqayyatransport.com`,
+              phone: '+234 803 333 0003',
+              password_hash: '', // updated asynchronously
+              full_name: userKey === 'KABIR' ? 'Shareholder KABIR' : 'Shareholder AMINA',
+              role_id: roleId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              status: 'active'
+            };
+            db.users.push(user);
+            db.shareholders.push({
+              id: generateUUID(),
+              user_id: userId,
+              investment_amount: userKey === 'KABIR' ? 12000000 : 8000000,
+              ownership_percentage: userKey === 'KABIR' ? 60 : 40,
+              created_at: new Date().toISOString(),
+              status: 'active'
+            });
+            hashPassword('shareholder123').then(async (h) => {
+              user.password_hash = h;
+              await dbManager.saveDB(db);
+            });
+          }
+        }
+
+        if (!user) {
+          return buildResponse({ error: 'Access Denied: Invalid enterprise username.' }, 401);
+        }
+
+        roleName = db.roles.find((r: any) => r.id === user.role_id)?.name || 'public';
+      } else {
+        if (!email || !password) {
+          return buildResponse({ error: 'Please enter both corporate email and security password.' }, 400);
+        }
+
+        user = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase() && u.status === 'active');
+        if (!user) {
+          return buildResponse({ error: 'Access Denied: Non-existent active user profile.' }, 401);
+        }
+
+        if (user.status === 'pending' && user.role_id === 'role-driver') {
+          return buildResponse({ error: 'Roster approval pending. Please wait for an administrator to authorize your profile.' }, 403);
+        }
+
+        if (!await verifyPassword(password, user.password_hash)) {
+          writeAuditLog(user.id, email, 'public', 'AUTH_FAILURE', 'Invalid password submission', null, db);
+          await dbManager.saveDB(db);
+          return buildResponse({ error: 'Access Denied: Invalid credentials.' }, 401);
+        }
+
+        roleName = db.roles.find((r: any) => r.id === user.role_id)?.name || 'public';
       }
 
       const durationHours = rememberMe ? 24 * 30 : 2;
       const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
       
-      const roleName = db.roles.find((r: any) => r.id === user.role_id)?.name || 'public';
       const userKey = user.username ? user.username.toUpperCase() : user.email.split('@')[0].toUpperCase();
       const token = `tok_${roleName.toLowerCase()}_${userKey}_${generateUUID().replace(/-/g, '')}`;
 
