@@ -51,7 +51,7 @@ export interface DBState {
   roles: any[];
   permissions: any[];
   fuel_vouchers: any[];
-  financial_records: any[]; // legacy and current primary ledger source used across the app
+  financial_records: any[];
   trip_manifests: any[];
   cycles: any[];
   driver_payments: any[];
@@ -62,13 +62,6 @@ export interface DBState {
   company_settings: any;
   shareholder_settings: any;
   company_operations_state?: any;
-
-  // New structured financial primitives (added for clearer accounting)
-  financial_ledger?: any[]; // canonical ledger (future authoritative source)
-  installments?: any[]; // structured installments for active cycles (per-driver, per-cycle, 6 items)
-  expenses?: any[]; // categorized expenses
-  payroll_runs?: any[]; // payroll run records
-  payroll_items?: any[]; // items under payroll runs
 }
 
 const INITIAL_DB_STATE: DBState = {
@@ -119,14 +112,7 @@ const INITIAL_DB_STATE: DBState = {
     startedAt: null,
     pauseHistory: [],
     auditLog: []
-  },
-
-  // initialize new collections
-  financial_ledger: [],
-  installments: [],
-  expenses: [],
-  payroll_runs: [],
-  payroll_items: []
+  }
 };
 
 // Global DB Load and Save
@@ -162,13 +148,6 @@ export function loadDB(): DBState {
       if (!parsed.push_subscriptions) { parsed.push_subscriptions = []; changed = true; }
       if (parsed.vapid_keys === undefined) { parsed.vapid_keys = null; changed = true; }
 
-      // New structured financial primitives initialization
-      if (!parsed.financial_ledger) { parsed.financial_ledger = []; changed = true; }
-      if (!parsed.installments) { parsed.installments = []; changed = true; }
-      if (!parsed.expenses) { parsed.expenses = []; changed = true; }
-      if (!parsed.payroll_runs) { parsed.payroll_runs = []; changed = true; }
-      if (!parsed.payroll_items) { parsed.payroll_items = []; changed = true; }
-
       if (changed) {
         saveDB(parsed);
       }
@@ -177,7 +156,7 @@ export function loadDB(): DBState {
   } catch (error) {
     console.error('Error loading database file, reinitializing:', error);
   }
-
+  
   const state = { ...INITIAL_DB_STATE };
   saveDB(state);
   return state;
@@ -193,15 +172,12 @@ export function saveDB(state: DBState): void {
   try {
     // Automatically recalculate Company Wallet balance
     if (state) {
-      if (!state.company_settings) state.company_settings = {} as any;
+      if (!state.company_settings) state.company_settings = {};
       if (state.company_settings.wallet_initial_amount === undefined) {
         state.company_settings.wallet_initial_amount = state.company_settings.wallet_balance !== undefined ? state.company_settings.wallet_balance : 0;
       }
-
-      // Primary canonical computation remains the financial_records array (backwards compatible).
-      // New ledger entries should also push mirror entries into financial_records via helper createLedgerEntry to maintain consistency.
-      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
-      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
       state.company_settings.wallet_balance = (state.company_settings.wallet_initial_amount || 0) + totalRev - totalExp;
     }
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf8');
@@ -217,235 +193,14 @@ export function saveDB(state: DBState): void {
   }
 }
 
-// --- New helper functions for financial operations ---
-
-/**
- * Create a ledger transaction in the structured financial_ledger and mirror
- * the essential fields into financial_records for backward compatibility.
- */
-export function createLedgerEntry(state: DBState, entry: {
-  type: 'revenue' | 'expense' | 'transfer' | 'payroll' | 'dividend' | 'other';
-  subtype?: string;
-  amount: number;
-  currency?: string;
-  description?: string;
-  related_entity_type?: string;
-  related_entity_id?: string;
-  driver_id?: string;
-  vehicle_id?: string;
-  reference_id?: string; // payment/expense id
-  created_by?: string;
-  metadata?: any;
-}) {
-  const ledgerEntry = {
-    id: `LEDGER-${Date.now()}-${generateUUID().substring(0, 6).toUpperCase()}`,
-    type: entry.type,
-    subtype: entry.subtype || 'generic',
-    amount: parseFloat((entry.amount || 0).toString()),
-    currency: entry.currency || (state.company_settings && state.company_settings.currency) || 'NGN',
-    description: entry.description || '',
-    related_entity_type: entry.related_entity_type || null,
-    related_entity_id: entry.related_entity_id || null,
-    driver_id: entry.driver_id || null,
-    vehicle_id: entry.vehicle_id || null,
-    reference_id: entry.reference_id || null,
-    created_by: entry.created_by || 'system',
-    metadata: entry.metadata || null,
-    created_at: new Date().toISOString()
-  };
-
-  if (!state.financial_ledger) state.financial_ledger = [];
-  state.financial_ledger.unshift(ledgerEntry);
-
-  // Mirror into financial_records for legacy compatibility. Keep shape similar to existing records.
-  const record = {
-    id: ledgerEntry.id,
-    type: entry.type,
-    category: entry.subtype || 'other',
-    amount: ledgerEntry.amount,
-    date: new Date().toISOString().split('T')[0],
-    description: ledgerEntry.description,
-    approvedBy: ledgerEntry.created_by,
-    related_entity_type: ledgerEntry.related_entity_type,
-    related_entity_id: ledgerEntry.related_entity_id
-  };
-
-  state.financial_records.unshift(record);
-  saveDB(state);
-
-  return ledgerEntry;
-}
-
-/**
- * Generate 6 installments for a given driver and cycle according to the 30-day rule.
- * installments are 6 buckets covering days 1-5,6-10,...26-30 of the cycle.
- */
-export function createInstallmentsForCycle(state: DBState, params: {
-  cycle_id: string;
-  driver_id: string;
-  agreed_amount_30: number;
-  cycle_start_date?: string; // ISO date string representing cycle start
-}) {
-  if (!state.installments) state.installments = [];
-
-  const { cycle_id, driver_id, agreed_amount_30, cycle_start_date } = params;
-  const baseAmount = parseFloat((agreed_amount_30 || 0).toString());
-  const perInstallment = baseAmount / 6.0;
-
-  // If installments for this driver and cycle already exist, return them
-  const existing = state.installments.filter((i: any) => i.cycle_id === cycle_id && i.driver_id === driver_id);
-  if (existing && existing.length === 6) return existing;
-
-  // Generate installments
-  const start = cycle_start_date ? new Date(cycle_start_date) : new Date();
-  const installments: any[] = [];
-  for (let k = 1; k <= 6; k++) {
-    const startDay = (k - 1) * 5 + 1;
-    const endDay = k * 5;
-    const installmentStart = new Date(start.getTime() + (startDay - 1) * 24 * 3600 * 1000);
-    const installmentEnd = new Date(start.getTime() + (endDay - 1) * 24 * 3600 * 1000);
-
-    const inst = {
-      id: `INST-${cycle_id}-${driver_id}-${k}`,
-      cycle_id,
-      driver_id,
-      installment_number: k,
-      start_date: installmentStart.toISOString().split('T')[0],
-      end_date: installmentEnd.toISOString().split('T')[0],
-      due_date: installmentEnd.toISOString().split('T')[0],
-      amount_due: parseFloat(perInstallment.toFixed(2)),
-      amount_paid: 0,
-      remaining: parseFloat(perInstallment.toFixed(2)),
-      status: 'DUE', // DUE | PARTIALLY_PAID | PAID | OVERDUE
-      payment_history: [] as string[]
-    };
-    installments.push(inst);
-    state.installments.unshift(inst);
-  }
-
-  saveDB(state);
-  return installments;
-}
-
-/**
- * Apply a payment (driver payment record) to installments in chronological order.
- * This function mutates installments and records linkage to payment id.
- */
-export function applyPaymentToInstallments(state: DBState, payment: {
-  id: string;
-  driver_id: string;
-  amount: number;
-  date?: string;
-}) {
-  if (!state.installments) state.installments = [];
-  const amount = parseFloat((payment.amount || 0).toString());
-  let remaining = amount;
-
-  // Find installments for the active cycle(s) for this driver ordered by installment_number
-  const driverInsts = (state.installments || [])
-    .filter((i: any) => i.driver_id === payment.driver_id)
-    .sort((a: any, b: any) => a.installment_number - b.installment_number);
-
-  for (const inst of driverInsts) {
-    if (remaining <= 0) break;
-    const toPay = Math.min(inst.remaining || inst.amount_due - (inst.amount_paid || 0), remaining);
-    if (toPay <= 0) continue;
-
-    inst.amount_paid = (inst.amount_paid || 0) + toPay;
-    inst.remaining = parseFloat(((inst.amount_due || 0) - inst.amount_paid).toFixed(2));
-    inst.payment_history = inst.payment_history || [];
-    inst.payment_history.push(payment.id);
-
-    // Set status
-    if (inst.remaining <= 0) inst.status = 'PAID';
-    else if (inst.amount_paid > 0) inst.status = 'PARTIALLY_PAID';
-
-    remaining = parseFloat((remaining - toPay).toString());
-  }
-
-  // If there's any leftover (overpayment), create a ledger entry as general revenue and leave it as credit
-  if (remaining > 0) {
-    createLedgerEntry(state, {
-      type: 'revenue',
-      subtype: 'overpayment_credit',
-      amount: remaining,
-      description: `Overpayment credit for driver ${payment.driver_id} (payment ${payment.id})`,
-      driver_id: payment.driver_id,
-      reference_id: payment.id,
-      created_by: 'system'
-    });
-  }
-
-  // Mirror payment into ledger as revenue
-  createLedgerEntry(state, {
-    type: 'revenue',
-    subtype: 'driver_payment',
-    amount: amount,
-    description: `Driver payment recorded: ${payment.id}`,
-    driver_id: payment.driver_id,
-    reference_id: payment.id,
-    created_by: 'system'
-  });
-
-  saveDB(state);
-}
-
-/**
- * Record a categorized expense and create ledger entry.
- */
-export function recordExpense(state: DBState, expense: {
-  id?: string;
-  category: string;
-  amount: number;
-  date?: string;
-  description?: string;
-  driver_id?: string;
-  vehicle_id?: string;
-  created_by?: string;
-  approved?: boolean;
-}) {
-  if (!state.expenses) state.expenses = [];
-  const rec = {
-    id: expense.id || `EXP-${Date.now()}-${generateUUID().substring(0,6).toUpperCase()}`,
-    category: expense.category,
-    amount: parseFloat((expense.amount || 0).toString()),
-    date: expense.date || new Date().toISOString().split('T')[0],
-    description: expense.description || '',
-    driver_id: expense.driver_id || null,
-    vehicle_id: expense.vehicle_id || null,
-    created_by: expense.created_by || 'system',
-    approved: expense.approved || false,
-    created_at: new Date().toISOString()
-  };
-
-  state.expenses.unshift(rec);
-
-  // When recording an expense that is to be paid by the company, create an OUT ledger entry
-  createLedgerEntry(state, {
-    type: 'expense',
-    subtype: expense.category || 'other',
-    amount: rec.amount,
-    description: rec.description || `Expense ${rec.id}`,
-    related_entity_type: expense.vehicle_id ? 'vehicle' : expense.driver_id ? 'driver' : null,
-    related_entity_id: expense.vehicle_id || expense.driver_id || null,
-    driver_id: expense.driver_id || null,
-    vehicle_id: expense.vehicle_id || null,
-    reference_id: rec.id,
-    created_by: rec.created_by
-  });
-
-  saveDB(state);
-  return rec;
-}
-
 // Seed Initial Corporate Data if empty
 export function seedDBIfEmpty() {
   const db = loadDB();
   let modified = false;
 
   // Check if there is existing demo data that needs to be wiped for a clean slate
-  const hasDemoData = db.users.some(u =>
-    u.email === 'musa.garba@ruqayyatransport.com' ||
+  const hasDemoData = db.users.some(u => 
+    u.email === 'musa.garba@ruqayyatransport.com' || 
     u.email === 'kabir.m@ruqayyatransport.com' ||
     u.email === 'amina.g@ruqayyatransport.com' ||
     u.full_name === 'Alhaji Musa Garba' ||
@@ -477,11 +232,6 @@ export function seedDBIfEmpty() {
     db.messages = [];
     db.announcements = [];
     db.push_subscriptions = [];
-    db.financial_ledger = [];
-    db.installments = [];
-    db.expenses = [];
-    db.payroll_runs = [];
-    db.payroll_items = [];
     modified = true;
   }
 
@@ -617,11 +367,11 @@ export function saveR2File(fileName: string, base64Content: string): string {
     const extension = path.extname(fileName) || '.png';
     const savedName = `${fileId}${extension}`;
     const filePath = path.join(R2_DIR, savedName);
-
+    
     // Parse base64
     const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
     fs.writeFileSync(filePath, Buffer.from(cleanBase64, 'base64'));
-
+    
     // Return relative preview path
     return `/api/documents/preview/${savedName}`;
   } catch (err) {

@@ -1,7 +1,6 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
+import {StrictMode} from 'react';
+import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
-import { FixTimer } from './FixTimer.tsx'; // Import added here
 import './index.css';
 
 // Register the Service Worker for offline PWA capabilities and lock screen push notifications
@@ -35,7 +34,6 @@ if ('serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <FixTimer /> {/* FixTimer component added here */}
     <App />
   </StrictMode>,
 );

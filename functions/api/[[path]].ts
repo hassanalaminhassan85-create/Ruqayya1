@@ -206,6 +206,7 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
     type: 'db_update',
     role: role,
     company_settings: db.company_settings || {},
+    company_operations_state: db.company_operations_state || { status: 'Setup Mode' },
     announcements: db.announcements || [],
     timestamp: Date.now()
   };
