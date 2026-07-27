@@ -877,6 +877,7 @@ class D1Manager {
       parsed.users = [
         {
           id: directorId,
+          username: 'MMR',
           email: 'director@ruqayyatransport.com',
           phone: '+234 803 111 0001',
           password_hash: await hashPassword('director123'),
@@ -888,6 +889,7 @@ class D1Manager {
         },
         {
           id: adminId,
+          username: 'ADAM',
           email: 'admin@ruqayyatransport.com',
           phone: '+234 803 222 0002',
           password_hash: await hashPassword('admin123'),
@@ -899,6 +901,7 @@ class D1Manager {
         },
         {
           id: driverUserId,
+          username: 'MUSA',
           email: 'musa.garba@ruqayyatransport.com',
           phone: '+234 803 123 4567',
           password_hash: await hashPassword('driver123'),
@@ -910,6 +913,7 @@ class D1Manager {
         },
         {
           id: shareholderId1,
+          username: 'KABIR',
           email: 'kabir.m@ruqayyatransport.com',
           phone: '+234 803 777 0001',
           password_hash: await hashPassword('shareholder123'),
@@ -921,6 +925,7 @@ class D1Manager {
         },
         {
           id: shareholderId2,
+          username: 'AMINA',
           email: 'amina.g@ruqayyatransport.com',
           phone: '+234 806 444 1111',
           password_hash: await hashPassword('shareholder123'),
@@ -1789,7 +1794,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
       const durationHours = rememberMe ? 24 * 30 : 2;
       const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
-      const token = `tok_${generateUUID().replace(/-/g, '')}${generateUUID().substring(0, 10)}`;
+      
+      const roleName = db.roles.find((r: any) => r.id === user.role_id)?.name || 'public';
+      const userKey = user.username ? user.username.toUpperCase() : user.email.split('@')[0].toUpperCase();
+      const token = `tok_${roleName.toLowerCase()}_${userKey}_${generateUUID().replace(/-/g, '')}`;
 
       const session = {
         id: generateUUID(),
@@ -1803,7 +1811,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       };
 
       db.sessions.push(session);
-      const roleName = db.roles.find((r: any) => r.id === user.role_id)?.name || 'public';
       
       writeAuditLog(user.id, user.email, roleName, 'SESSION_CREATED', null, `Authorized login session valid until ${expiresAt}`, db);
       await dbManager.saveDB(db);
@@ -1840,7 +1847,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       }
 
       const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-      const token = `tok_${generateUUID().replace(/-/g, '')}${generateUUID().substring(0, 10)}`;
+      
+      const userKey = targetUser.username ? targetUser.username.toUpperCase() : targetUser.email.split('@')[0].toUpperCase();
+      const token = `tok_${role.toLowerCase()}_${userKey}_${generateUUID().replace(/-/g, '')}`;
 
       db.sessions.push({
         id: generateUUID(),
