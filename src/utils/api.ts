@@ -104,6 +104,7 @@ export const api = {
       });
 
       if (res.status === 412 || res.status === 401) {
+        console.error(`[AUTH_FAILURE] Request to "${path}" returned status ${res.status}. Token: "${token}"`);
         // Missing or expired token
         api.clearToken();
         if (typeof window !== 'undefined') {
