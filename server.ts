@@ -6188,7 +6188,7 @@ app.put('/api/payments/:id/status', authenticateSession, (req, res) => {
     const payment = db.driver_payments.find(p => p.id === req.params.id);
     if (!payment) return res.status(404).json({ error: 'Payment record not found.' });
 
-    if (payment.status !== 'pending') {
+    if (payment.status !== 'pending' && payment.status !== 'submitted') {
       return res.status(400).json({ error: 'Payment has already been reviewed.' });
     }
 

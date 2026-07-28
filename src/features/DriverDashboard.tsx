@@ -316,6 +316,22 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
   // Selected document preview url
   const [previewDoc, setPreviewDoc] = useState<{ title: string; url: string } | null>(null);
 
+  // Advanced Pay Installment Modal states
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [payModalCycleId, setPayModalCycleId] = useState('');
+  const [payModalInstallmentNum, setPayModalInstallmentNum] = useState(1);
+  const [payModalAmount, setPayModalAmount] = useState('');
+  const [payModalExpenseAmount, setPayModalExpenseAmount] = useState('');
+  const [payModalExpenseDesc, setPayModalExpenseDesc] = useState('');
+  const [payModalReceiptNo, setPayModalReceiptNo] = useState('');
+  const [payModalMethod, setPayModalMethod] = useState('bank_transfer');
+  const [payModalRemarks, setPayModalRemarks] = useState('');
+  const [payModalFileBase64, setPayModalFileBase64] = useState('');
+  const [payModalFileName, setPayModalFileName] = useState('');
+  const [payModalError, setPayModalError] = useState('');
+  const [payModalSuccess, setPayModalSuccess] = useState('');
+  const [payModalSubmitting, setPayModalSubmitting] = useState(false);
+
   const t = localDict[lang];
 
   const syncDriverData = async (dataPayload?: any) => {
@@ -437,7 +453,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           restStartDate: profile.rest_start_date || '2026-06-15',
           restEndDate: profile.rest_end_date || '2026-06-25',
           restReason: profile.rest_reason || 'Fatigue rehabilitation',
-          restHistory: profile.restHistory || []
+          restHistory: profile.restHistory || [],
+          passportPhoto: profile.passport_photo_url || profile.passportPhoto || profile.passportPhotoUrl || ''
         };
 
         setDriver(updatedDriver);
@@ -605,6 +622,117 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
       setPaymentSubmitError(err.message || 'Submission error');
     } finally {
       setSubmittingPayment(false);
+    }
+  };
+
+  const handleModalPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPayModalError('');
+    setPayModalSuccess('');
+
+    const amt = parseFloat(payModalAmount);
+    if (isNaN(amt) || amt <= 0) {
+      setPayModalError(lang === 'en' ? "Please specify a valid payment amount." : "Da fatan za a shigar da adadin kuɗi mai kyau.");
+      return;
+    }
+
+    if (!payModalReceiptNo) {
+      setPayModalError(lang === 'en' ? "Please provide a receipt/reference number." : "Da fatan za a samar da lambar rasit.");
+      return;
+    }
+
+    try {
+      setPayModalSubmitting(true);
+      const token = localStorage.getItem('ruqayya_token') || '';
+      let remoteReceiptUrl = '';
+
+      // If driver uploaded a file receipt, push to secure DMS simulation first
+      if (payModalFileBase64) {
+        const uploadRes = await fetch('/api/documents/upload-company', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: `driver_payment_${Date.now()}_${payModalFileName.replace(/\s+/g, '_')}`,
+            docType: 'general',
+            fileBase64: payModalFileBase64
+          })
+        });
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          remoteReceiptUrl = uploadData.fileUrl;
+        }
+      }
+
+      // Live computation allocation
+      const currentAgreed = driver?.agreedAmount || 180000;
+      const currentInstallmentCost = Math.round(currentAgreed / 6);
+      const targetCard = installmentCards[payModalInstallmentNum - 1];
+      const targetInstallmentDue = targetCard ? targetCard.amount : currentInstallmentCost;
+      const expenseVal = parseFloat(payModalExpenseAmount) || 0;
+      const netNeeded = Math.max(0, targetInstallmentDue - expenseVal);
+
+      // Record any logged expense in the database too if any exists!
+      if (expenseVal > 0) {
+        await fetch('/api/financials', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            type: 'expense',
+            category: 'maintenance',
+            amount: expenseVal,
+            description: `Driver ${driver.fullName} reported expense during Installment ${payModalInstallmentNum} payment: ${payModalExpenseDesc || 'Unspecified operational repairs'}`
+          })
+        }).catch(err => console.warn("Optional expense logging bypassed:", err));
+      }
+
+      // Submit actual payment
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: amt,
+          installmentNumber: payModalInstallmentNum,
+          outstandingAmount: Math.max(0, netNeeded - amt),
+          receiptNumber: payModalReceiptNo,
+          paymentMethod: payModalMethod,
+          remarks: `${payModalRemarks}${payModalExpenseDesc ? ` [Expenses: ₦${expenseVal} - ${payModalExpenseDesc}]` : ''}${remoteReceiptUrl ? ` [Receipt: ${remoteReceiptUrl}]` : ''}`
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit payment receipt');
+
+      setPayModalSuccess(lang === 'en' ? "Payment receipt successfully submitted for Admin verification!" : "An riga an aika da rasit ga jami'an kula!");
+      
+      // Clear inputs
+      setPayModalReceiptNo('');
+      setPayModalAmount('');
+      setPayModalExpenseAmount('');
+      setPayModalExpenseDesc('');
+      setPayModalRemarks('');
+      setPayModalFileBase64('');
+      setPayModalFileName('');
+
+      setTimeout(() => {
+        setIsPayModalOpen(false);
+        setPayModalSuccess('');
+        syncDriverData();
+      }, 1500);
+
+    } catch (err: any) {
+      setPayModalError(err.message || 'Submission error');
+    } finally {
+      setPayModalSubmitting(false);
     }
   };
 
@@ -864,18 +992,37 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
       )}
 
       {/* Corporate Operator Profile Header Welcome Card */}
-      <div className="bg-bg-surface border border-border-main p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-xs relative overflow-hidden">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 180, damping: 18 }}
+        className="bg-bg-surface border border-border-main p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-md relative overflow-hidden"
+      >
         <div className="absolute right-0 top-0 h-full w-1/3 bg-linear-to-r from-transparent to-brand-gold/[0.02] pointer-events-none"></div>
         <div className="flex items-center gap-4.5 z-10">
           {/* Driver Passport Photo */}
-          <div className="relative group">
-            <div className="h-16 w-16 md:h-20 md:w-20 rounded-xl bg-slate-900 border-2 border-brand-gold overflow-hidden flex items-center justify-center">
-              <User className="h-10 w-10 text-brand-gold/60" />
+          <motion.div 
+            className="relative group cursor-pointer"
+            whileHover={{ scale: 1.12, rotate: 2 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 350, damping: 15 }}
+          >
+            <div className="h-16 w-16 md:h-20 md:w-20 rounded-xl bg-slate-900 border-2 border-brand-gold overflow-hidden flex items-center justify-center shadow-md">
+              {driver.passportPhoto ? (
+                <img 
+                  src={driver.passportPhoto} 
+                  alt={driver.fullName} 
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <User className="h-10 w-10 text-brand-gold/60" />
+              )}
             </div>
-            <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
+            <div className="absolute -bottom-1.5 -right-1.5 h-6 w-6 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center shadow-sm">
               <Check className="h-3.5 w-3.5 text-white" />
             </div>
-          </div>
+          </motion.div>
 
           <div>
             <span className="text-[12px] font-black tracking-widest text-brand-gold uppercase block">
@@ -911,19 +1058,37 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           </div>
         </div>
 
-        <div className="flex flex-row md:flex-col items-end gap-3.5 w-full md:w-auto border-t md:border-t-0 border-border-main/50 pt-4 md:pt-0 z-10 justify-between">
-          <div className="text-right">
-            <span className="text-xs font-bold text-text-muted block uppercase mb-1">{t.welcome.rating}</span>
-            <span className="text-sm font-black text-text-main tabular-nums">⭐ {driver.rating} / 5.0</span>
+        <div className="flex flex-col sm:flex-row md:flex-col items-start sm:items-center md:items-end gap-4 w-full md:w-auto border-t md:border-t-0 border-border-main/50 pt-4 md:pt-0 z-10 justify-between">
+          <div className="flex gap-4 md:gap-3 items-center md:items-end w-full sm:w-auto justify-between sm:justify-start">
+            <div className="text-left md:text-right">
+              <span className="text-xs font-bold text-text-muted block uppercase mb-1">{t.welcome.rating}</span>
+              <span className="text-sm font-black text-text-main tabular-nums">⭐ {driver.rating} / 5.0</span>
+            </div>
+            <div className="text-left md:text-right">
+              <span className="text-xs font-bold text-text-muted block uppercase mb-1">{t.welcome.status}</span>
+              <Badge variant={driver.status === 'on-trip' ? 'warning' : driver.status === 'rest' ? 'orange' : 'success'}>
+                {(driver.status || '').toUpperCase()}
+              </Badge>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="text-xs font-bold text-text-muted block uppercase mb-1">{t.welcome.status}</span>
-            <Badge variant={driver.status === 'on-trip' ? 'warning' : driver.status === 'rest' ? 'orange' : 'success'}>
-              {(driver.status || '').toUpperCase()}
-            </Badge>
-          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 450, damping: 12 }}
+            onClick={() => {
+              if (cycles && cycles.length > 0) {
+                const activeC = cycles.find(c => c && c.status === 'active');
+                if (activeC) setPayModalCycleId(activeC.id);
+              }
+              setIsPayModalOpen(true);
+            }}
+            className="w-full sm:w-auto px-5 py-2.5 bg-brand-gold text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 border border-brand-gold hover:bg-transparent hover:text-brand-gold transition-all"
+          >
+            <CreditCard className="h-4 w-4" />
+            {lang === 'en' ? "Pay Installment" : "Biya Kudin Rabo"}
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
       {/* PRIORITY ACTION CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1606,6 +1771,335 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                   </table>
                 </div>
               </Card>
+
+              <AnimatePresence>
+                {isPayModalOpen && (
+                  <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+                    <motion.div 
+                      initial={{ scale: 0.9, opacity: 0, y: 30 }}
+                      animate={{ scale: 1, opacity: 1, y: 0 }}
+                      exit={{ scale: 0.9, opacity: 0, y: 30 }}
+                      transition={{ type: "spring", stiffness: 260, damping: 25 }}
+                      className="bg-bg-surface border border-border-main rounded-2xl max-w-lg w-full p-6 md:p-8 shadow-2xl relative font-sans my-8 text-text-main"
+                    >
+                      <button 
+                        onClick={() => setIsPayModalOpen(false)}
+                        className="absolute right-4 top-4 text-text-muted hover:text-text-main p-1.5 hover:bg-bg-base rounded-full cursor-pointer transition-colors"
+                        type="button"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+
+                      <div className="flex items-center gap-3.5 border-b border-border-main pb-4 mb-6">
+                        <div className="p-3 bg-brand-gold/15 rounded-xl text-brand-gold shadow-xs">
+                          <CreditCard className="h-6 w-6 animate-pulse" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-extrabold text-text-main">
+                            {lang === 'en' ? "Pay Installment Ledger" : "Biya Kudin Rabo na Kwangila"}
+                          </h3>
+                          <p className="text-xs text-text-muted mt-0.5">
+                            {lang === 'en' ? "Log a self-remittance payment with overpayment carry-forwards & operational expense deductions." : "Shigar da rahoton biyan kudi tare da ragi na kashe kudi da kudaden rabi."}
+                          </p>
+                        </div>
+                      </div>
+
+                      {payModalError && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-brand-danger rounded-xl text-xs font-bold mb-4">
+                          ⚠️ {payModalError}
+                        </div>
+                      )}
+                      {payModalSuccess && (
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 rounded-xl text-xs font-bold mb-4">
+                          ✅ {payModalSuccess}
+                        </div>
+                      )}
+
+                      <form onSubmit={handleModalPaymentSubmit} className="flex flex-col gap-5 text-left">
+                        
+                        {/* SELECT CYCLE & INSTALLMENT INTERVAL */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                              {lang === 'en' ? "Operating Cycle" : "Kewayen Aiki"}
+                            </label>
+                            <select
+                              value={payModalCycleId}
+                              onChange={(e) => setPayModalCycleId(e.target.value)}
+                              className="p-2.5 bg-bg-base border border-border-main rounded-xl text-xs font-bold text-text-main focus:outline-hidden focus:ring-1 focus:ring-brand-gold cursor-pointer"
+                            >
+                              {cycles && cycles.length > 0 ? (
+                                cycles.map(c => (
+                                  <option key={c.id} value={c.id}>
+                                    {lang === 'en' ? `Cycle: ${c.name}` : `Kewaye: ${c.name}`} ({c.status.toUpperCase()})
+                                  </option>
+                                ))
+                              ) : (
+                                <option value="">{lang === 'en' ? "Default Active Cycle" : "Kewayen Aiki Na Yanzu"}</option>
+                              )}
+                            </select>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                              {lang === 'en' ? "Select Installment No" : "Kashi na Nawa"}
+                            </label>
+                            <select
+                              value={payModalInstallmentNum}
+                              onChange={(e) => setPayModalInstallmentNum(parseInt(e.target.value))}
+                              className="p-2.5 bg-bg-base border border-border-main rounded-xl text-xs font-bold text-text-main focus:outline-hidden focus:ring-1 focus:ring-brand-gold cursor-pointer"
+                            >
+                              {[1, 2, 3, 4, 5, 6].map(num => (
+                                <option key={num} value={num}>
+                                  {lang === 'en' ? `Installment #${num}` : `Kashi na #${num}`} (₦{((driver?.agreedAmount || 180000) / 6).toLocaleString()})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* EXPENDITURES DEDUCTIONS */}
+                        <div className="p-4 bg-bg-base/40 border border-border-main rounded-xl flex flex-col gap-3">
+                          <span className="text-xs font-extrabold text-brand-gold uppercase tracking-wider flex items-center gap-1.5">
+                            🔧 {lang === 'en' ? "Operational Expenses Deductions (Optional)" : "Kashe Kudin Gyara ko Mai (Zabi ne)"}
+                          </span>
+                          <p className="text-[10.5px] text-text-muted leading-relaxed">
+                            {lang === 'en' 
+                              ? "Enter any emergency repairs, spare parts or diesel expenditures to subtract from your required remittance."
+                              : "Shigar da kudin gyaran gaggawa ko kudin mai da ka kashe don a rage daga kudin rabo na mako."}
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Expense Amount (₦)" : "Kudin da aka Kashe (₦)"}</span>
+                              <input
+                                type="number"
+                                value={payModalExpenseAmount}
+                                onChange={(e) => setPayModalExpenseAmount(e.target.value)}
+                                placeholder="0"
+                                className="p-2 bg-bg-base border border-border-main rounded-lg text-xs font-mono focus:outline-hidden"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] font-bold text-text-muted uppercase">{lang === 'en' ? "Expense Description / Reason" : "Bayani ko Dalili"}</span>
+                              <input
+                                type="text"
+                                value={payModalExpenseDesc}
+                                onChange={(e) => setPayModalExpenseDesc(e.target.value)}
+                                placeholder={lang === 'en' ? "e.g. Spare tire fix" : "Gyarawa ko Siyan Mai"}
+                                className="p-2 bg-bg-base border border-border-main rounded-lg text-xs focus:outline-hidden"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ENTER PAYMENT AMOUNT & RECEIPT NUMBER */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                              {lang === 'en' ? "Remittance Payment (₦)" : "Adadin Kudin da Zaka Biya (₦)"}
+                            </label>
+                            <input
+                              type="number"
+                              required
+                              value={payModalAmount}
+                              onChange={(e) => setPayModalAmount(e.target.value)}
+                              placeholder={(() => {
+                                const targetCard = installmentCards[payModalInstallmentNum - 1];
+                                const currentAgreed = driver?.agreedAmount || 180000;
+                                const currentInstallmentCost = Math.round(currentAgreed / 6);
+                                return targetCard ? targetCard.amount.toString() : currentInstallmentCost.toString();
+                              })()}
+                              className="p-2.5 bg-bg-base border border-border-main rounded-xl text-xs font-mono font-bold text-text-main focus:outline-hidden focus:ring-1 focus:ring-brand-gold"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                              {lang === 'en' ? "Receipt/Ref Reference Number" : "Lambar Rasit/Ref"}
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={payModalReceiptNo}
+                              onChange={(e) => setPayModalReceiptNo(e.target.value)}
+                              placeholder="e.g. BANK-TRF-983"
+                              className="p-2.5 bg-bg-base border border-border-main rounded-xl text-xs font-mono focus:outline-hidden focus:ring-1 focus:ring-brand-gold"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                              {lang === 'en' ? "Payment Method" : "Hanyar Biya"}
+                            </label>
+                            <select
+                              value={payModalMethod}
+                              onChange={(e) => setPayModalMethod(e.target.value)}
+                              className="p-2.5 bg-bg-base border border-border-main rounded-xl text-xs font-bold text-text-main focus:outline-hidden focus:ring-1 focus:ring-brand-gold cursor-pointer"
+                            >
+                              <option value="bank_transfer">{lang === 'en' ? "Bank Transfer" : "Tura Kudin Banki"}</option>
+                              <option value="cash">{lang === 'en' ? "Cash" : "Kudi Hannu"}</option>
+                              <option value="pos">{lang === 'en' ? "POS Terminal" : "Injin POS"}</option>
+                              <option value="mobile_app">{lang === 'en' ? "Mobile App Remit" : "Aika ta Wayar Hannu"}</option>
+                            </select>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                              {lang === 'en' ? "Attach Receipt Image/PDF" : "Aura Rasit (Hoto/PDF)"}
+                            </label>
+                            <div className="relative border border-dashed border-border-main hover:border-brand-gold rounded-xl p-2.5 text-center cursor-pointer flex flex-col items-center justify-center gap-1 transition-colors bg-bg-base/30">
+                              <span className="text-[10px] text-text-muted font-bold block truncate max-w-xs">
+                                {payModalFileName || (lang === 'en' ? "Drop or Click to upload" : "Danna don ajiye rasit")}
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    setPayModalFileName(file.name);
+                                    const r = new FileReader();
+                                    r.onloadend = () => setPayModalFileBase64(r.result as string);
+                                    r.readAsDataURL(file);
+                                  }
+                                }}
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* LIVE CALCULATIONS ENGINE PANEL */}
+                        <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl font-mono text-xs text-white shadow-inner flex flex-col gap-2.5">
+                          <span className="text-[10px] font-black text-brand-gold uppercase tracking-wider block border-b border-slate-800 pb-1.5">
+                            📊 {lang === 'en' ? "LIVE REMITTANCE COMPUTATION BREAKDOWN" : "KIDIDIGAR BIYAR KUDI NA HALIN YANZU"}
+                          </span>
+                          <div className="flex justify-between text-slate-300">
+                            <span>{lang === 'en' ? "Installment Original Due:" : "Asalin Kudin Kashi:"}</span>
+                            <span>
+                              ₦{(() => {
+                                const targetCard = installmentCards[payModalInstallmentNum - 1];
+                                const currentAgreed = driver?.agreedAmount || 180000;
+                                const currentInstallmentCost = Math.round(currentAgreed / 6);
+                                return (targetCard ? targetCard.amount : currentInstallmentCost).toLocaleString();
+                              })()}
+                            </span>
+                          </div>
+                          {parseFloat(payModalExpenseAmount) > 0 && (
+                            <div className="flex justify-between text-orange-400">
+                              <span>{lang === 'en' ? "Operational Repairs Expense Deductions:" : "Ragi na Kudin Aikin Gyara:"}</span>
+                              <span>- ₦{(parseFloat(payModalExpenseAmount) || 0).toLocaleString()}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between font-extrabold text-white border-t border-slate-800/60 pt-2 text-[13px]">
+                            <span>{lang === 'en' ? "Adjusted Total Needed:" : "Adadin da Yake Dole a Biya:"}</span>
+                            <span className="text-brand-gold">
+                              ₦{(() => {
+                                const targetCard = installmentCards[payModalInstallmentNum - 1];
+                                const currentAgreed = driver?.agreedAmount || 180000;
+                                const currentInstallmentCost = Math.round(currentAgreed / 6);
+                                const targetInstallmentDue = targetCard ? targetCard.amount : currentInstallmentCost;
+                                const expenseVal = parseFloat(payModalExpenseAmount) || 0;
+                                return Math.max(0, targetInstallmentDue - expenseVal).toLocaleString();
+                              })()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-emerald-400 font-extrabold">
+                            <span>{lang === 'en' ? "Amount Input Entered:" : "Kudin da Ka Sanya:"}</span>
+                            <span>₦{(parseFloat(payModalAmount) || 0).toLocaleString()}</span>
+                          </div>
+
+                          <div className="border-t border-slate-800 pt-2.5 mt-1 flex flex-col gap-1.5 text-[11px]">
+                            {(() => {
+                              const targetCard = installmentCards[payModalInstallmentNum - 1];
+                              const currentAgreed = driver?.agreedAmount || 180000;
+                              const currentInstallmentCost = Math.round(currentAgreed / 6);
+                              const targetInstallmentDue = targetCard ? targetCard.amount : currentInstallmentCost;
+                              const expenseVal = parseFloat(payModalExpenseAmount) || 0;
+                              const netNeeded = Math.max(0, targetInstallmentDue - expenseVal);
+                              const enteredPayment = parseFloat(payModalAmount) || 0;
+
+                              const rolloverCredit = enteredPayment > netNeeded ? enteredPayment - netNeeded : 0;
+                              const remainingInstallmentOutstanding = enteredPayment < netNeeded ? netNeeded - enteredPayment : 0;
+
+                              if (rolloverCredit > 0) {
+                                return (
+                                  <>
+                                    <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded-lg font-bold flex items-center justify-between">
+                                      <span>🎉 {lang === 'en' ? "EXCESS PAYMENT ROLLOVER:" : "KUDIN DA YA FE RE (ROLLOVER):"}</span>
+                                      <span>+ ₦{rolloverCredit.toLocaleString()}</span>
+                                    </div>
+                                    <span className="text-[10px] text-emerald-400 block leading-tight font-sans mt-1">
+                                      * {lang === 'en' 
+                                        ? "The excess amount will automatically roll-over and count towards your next scheduled installments." 
+                                        : "Za a tura kudin da ya rage zuwa gaba don rage kudin rabo na mako mai zuwa."}
+                                    </span>
+                                  </>
+                                );
+                              } else if (remainingInstallmentOutstanding > 0) {
+                                return (
+                                  <div className="p-2.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 rounded-lg font-bold flex items-center justify-between">
+                                    <span>⚠️ {lang === 'en' ? "PARTIAL REMAINING OUTSTANDING:" : "KUDIN DA YA RAGE MAKA:"}</span>
+                                    <span>₦{remainingInstallmentOutstanding.toLocaleString()}</span>
+                                  </div>
+                                );
+                              } else if (enteredPayment === netNeeded && enteredPayment > 0) {
+                                return (
+                                  <div className="p-2.5 bg-emerald-500/20 text-emerald-200 rounded-lg text-center font-bold">
+                                    👍 {lang === 'en' ? "INSTALLMENT FULLY SETTLED!" : "AN BIYA KUDIN KASHI DUKA LAFIYA!"}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* REMARKS INPUT */}
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                            {lang === 'en' ? "Optional Payment Remarks / Notes" : "Karin Bayani game da Biyan"}
+                          </label>
+                          <textarea
+                            value={payModalRemarks}
+                            onChange={(e) => setPayModalRemarks(e.target.value)}
+                            placeholder={lang === 'en' ? "e.g. Remitted from my first passenger trip of the day" : "Gyara da kudin rabo..."}
+                            className="p-2.5 bg-bg-base border border-border-main rounded-xl text-xs focus:outline-hidden focus:ring-1 focus:ring-brand-gold h-16 resize-none"
+                          />
+                        </div>
+
+                        {/* ACTIONS BUTTONS */}
+                        <div className="grid grid-cols-2 gap-3 border-t border-border-main pt-4 mt-2">
+                          <Button
+                            variant="secondary"
+                            type="button"
+                            onClick={() => setIsPayModalOpen(false)}
+                            className="w-full font-bold cursor-pointer"
+                          >
+                            {lang === 'en' ? "Cancel" : "Soke"}
+                          </Button>
+                          <Button
+                            variant="primary"
+                            type="submit"
+                            disabled={payModalSubmitting}
+                            className="w-full font-black flex items-center justify-center gap-1.5 cursor-pointer bg-brand-gold text-slate-950 border-brand-gold hover:opacity-90"
+                          >
+                            {payModalSubmitting ? (
+                              <span className="h-4 w-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <CreditCard className="h-4 w-4" />
+                            )}
+                            {lang === 'en' ? "Authorize Payment" : "Yarda & Biya"}
+                          </Button>
+                        </div>
+
+                      </form>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
 
               <AnimatePresence>
                 {selectedReceipt && (
