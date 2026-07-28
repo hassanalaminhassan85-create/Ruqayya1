@@ -1680,7 +1680,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     { name: "Admin Abakaka (Logistics Manager)", rate: 1000, computed: abakakaSal, percent: totalPayroll_liability > 0 ? (abakakaSal / totalPayroll_liability) * 100 : 25 }
                   ].map((role, index) => (
                     <motion.tr 
-                      key={index} 
+                      key={`payroll-${index}`} 
                       className="hover:bg-slate-50/50"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}

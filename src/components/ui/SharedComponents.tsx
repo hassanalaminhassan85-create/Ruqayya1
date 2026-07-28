@@ -374,7 +374,7 @@ export const Breadcrumbs: React.FC<{ items: { label: string; active?: boolean }[
   return (
     <nav className="flex text-[14px] font-semibold text-text-muted gap-1.5 items-center">
       {items.map((item, idx) => (
-        <React.Fragment key={idx}>
+        <React.Fragment key={`crumb-${idx}`}>
           <span className={`${item.active ? 'text-text-main font-semibold' : 'hover:text-text-main transition-colors cursor-pointer'}`}>
             {item.label}
           </span>

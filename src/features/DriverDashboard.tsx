@@ -8,13 +8,12 @@ import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/C
 import { Button } from '../components/ui/Button';
 import { Badge, Alert, ProgressBar } from '../components/ui/SharedComponents';
 import { api } from '../utils/api';
-import { Vehicle, Driver, DailyRemittance, FuelVoucher, Dictionary, Language } from '../types';
+import { Vehicle, Driver, DailyRemittance, Dictionary, Language } from "../types";
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Bike, 
   MapPin, 
   ClipboardList, 
-  Fuel, 
   CheckCircle, 
   Clock, 
   Navigation, 
@@ -120,7 +119,6 @@ const localDict = {
       printTitle: "OFFICIAL TRANSACTION RECEIPT",
       downloadPdf: "Download PDF",
       print: "Print Receipt",
-      paymentVoucher: "PAYMENT VOUCHER"
     },
     vehicle: {
       title: "Tricycle Lease Asset Specifications",
@@ -128,7 +126,6 @@ const localDict = {
       odometer: "Odometer Reading",
       tonnage: "Tonnage Capacity",
       service: "Last Service Date",
-      fuel: "Fuel Class",
       rigImages: "Asset Visual Registry"
     },
     docs: {
@@ -225,7 +222,6 @@ const localDict = {
       printTitle: "RASIT NA BIYAN KUDI NA SAMU",
       downloadPdf: "Zazzage PDF",
       print: "Buga Rasit",
-      paymentVoucher: "TAKARDAR BIYA (VOUCHER)"
     },
     vehicle: {
       title: "Bayanan Motar Sufuri",
@@ -233,7 +229,6 @@ const localDict = {
       odometer: "Nisan Tafiya",
       tonnage: "Nauyin Kaya da Ke Dauka",
       service: "Ranar Gyara na Gaba",
-      fuel: "Irin Mai",
       rigImages: "Hotunan Motar"
     },
     docs: {
@@ -270,7 +265,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
   const [driver, setDriver] = useState<any | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [activeTrip, setActiveTrip] = useState<DailyRemittance | null>(null);
-  const [vouchers, setVouchers] = useState<FuelVoucher[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [cycles, setCycles] = useState<any[]>([]);
@@ -285,10 +279,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
   const [profileSuccess, setProfileSuccess] = useState('');
   const [profileError, setProfileError] = useState('');
 
-  // Fuel Request state
   const [liters, setLiters] = useState(250);
-  const [fuelError, setFuelError] = useState('');
-  const [fuelSuccess, setFuelSuccess] = useState(false);
   const DIESEL_RATE = 1450; // Nigerian Diesel rate in Naira per Liter
 
   // Inspection Checklist state
@@ -337,7 +328,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
     try {
       let me;
       let tripsList = [];
-      let vouchersList = [];
       let paymentsList = [];
 
       console.log(`[DriverDashboard Query] Sync triggered. SSE update: ${!!dataPayload}`);
@@ -346,7 +336,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
         console.log("[DriverDashboard SSE] Processing real-time data payload...", dataPayload);
         const dbDrivers = dataPayload.drivers || [];
         const dbVehicles = dataPayload.vehicles || [];
-        const dbVouchers = dataPayload.vouchers || [];
         const dbTrips = dataPayload.trip_manifests || [];
         const dbPayments = dataPayload.driver_payments || [];
 
@@ -389,7 +378,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
         };
 
         tripsList = dbTrips;
-        vouchersList = dbVouchers;
         paymentsList = dbPayments;
         const dbCycles = dataPayload.cycles || [];
         setCycles(dbCycles);
@@ -402,12 +390,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
         console.log("[DriverDashboard Query] Executing GET /api/trips...");
         tripsList = await api.getTrips().catch((err) => {
           console.error("[DriverDashboard Query Rejection] Failed to load trips from API:", err);
-          return [];
-        });
-
-        console.log("[DriverDashboard Query] Executing GET /api/vouchers...");
-        vouchersList = await api.getVouchers().catch((err) => {
-          console.error("[DriverDashboard Query Rejection] Failed to load vouchers from API:", err);
           return [];
         });
 
@@ -476,7 +458,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
             plateNumber: profile.vehicle.plate_number,
             model: profile.vehicle.model,
             status: profile.vehicle.status,
-            fuelType: profile.vehicle.fuel_type || 'diesel',
             capacity: profile.vehicle.capacity || '30 Tons',
             driverId: profile.id,
             lastServiceDate: profile.vehicle.last_service_date || new Date().toISOString().split('T')[0],
@@ -494,17 +475,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
         const trip = tripsList.find((t: any) => t.driverId === profile.id && t.status !== 'delivered');
         setActiveTrip(trip || null);
 
-        const myVouchers = vouchersList.filter((v: any) => v.driverId === profile.id);
-        setVouchers(myVouchers.map((v: any) => ({
-          id: v.id,
-          voucherNumber: v.voucherNumber,
-          vehicleId: v.vehicleId,
-          driverId: v.driverId,
-          litersRequested: v.litersRequested,
-          estimatedCost: v.estimatedCost,
-          status: v.status,
-          requestDate: v.requestDate
-        })));
 
         const myPayments = paymentsList.filter((p: any) => p.driver_id === profile.id);
         setPayments(myPayments);
@@ -645,36 +615,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
       syncDriverData();
     } catch (err: any) {
       console.error("Failed to mark daily remittance collection complete:", err);
-    }
-  };
-
-  const handleFuelRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFuelError('');
-    setFuelSuccess(false);
-
-    if (liters < 50 || liters > 1000) {
-      setFuelError(lang === 'en' ? "Please request between 50 and 1000 liters." : "Da fatan za a nemi lita tsakanin 50 zuwa 1000.");
-      return;
-    }
-
-    if (!driver || !vehicle) {
-      setFuelError(lang === 'en' ? "No assigned vehicle profile found." : "Ba a sami lambar motar ka ba.");
-      return;
-    }
-
-    try {
-      const estimatedCost = liters * DIESEL_RATE;
-      await api.requestVoucher({
-        vehicleId: vehicle.id,
-        litersRequested: liters,
-        estimatedCost
-      });
-      setFuelSuccess(true);
-      setLiters(250);
-      syncDriverData();
-    } catch (err: any) {
-      setFuelError(err.message || "Failed to submit fuel request.");
     }
   };
 
@@ -1022,15 +962,12 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           onClick={() => {
             setActiveTab('overview');
             setTimeout(() => {
-              const el = document.getElementById('fuel-voucher-form-container');
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
           }}
           className="text-left bg-bg-surface border border-border-main p-4 rounded-2xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-32 group"
         >
           <div className="flex justify-between items-start w-full">
             <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-600 group-hover:scale-110 transition-transform">
-              <Fuel className="h-5 w-5" />
             </div>
             <ArrowRight className="h-4 w-4 text-text-muted group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
           </div>
@@ -1039,10 +976,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
               {lang === 'en' ? "DISPATCH OUTLAYS" : "RABON MAI"}
             </span>
             <h4 className="text-sm font-extrabold text-text-main leading-tight mt-0.5">
-              {lang === 'en' ? "Raise Fuel Voucher" : "Nemi Rasit na Mai"}
             </h4>
             <p className="text-[11px] text-text-muted mt-0.5 leading-none">
-              {lang === 'en' ? "Request approved fuel gallons directly" : "Aiko da buƙatar man fetur"}
             </p>
           </div>
         </button>
@@ -1222,55 +1157,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
 
               {/* Right Column */}
               <div className="lg:col-span-4 flex flex-col gap-6">
-                
-                {/* Fuel Voucher Request card */}
-                <Card id="fuel-voucher-form-container">
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <Fuel className="h-4 w-4 text-brand-gold animate-bounce" />
-                      <CardTitle>{lang === 'en' ? "Raise Fuel Voucher" : "Nemi Rasit Din Mai"}</CardTitle>
-                    </div>
-                  </CardHeader>
-
-                  <form onSubmit={handleFuelRequest} className="flex flex-col gap-4">
-                    {fuelError && <Alert type="danger">{fuelError}</Alert>}
-                    {fuelSuccess && <Alert type="success">{lang === 'en' ? "Fuel request successfully submitted to supervisor review." : "An tura buƙatarka ta mai don amincewa."}</Alert>}
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-text-main">
-                        {lang === 'en' ? "Requested Tonnage Liters (L)" : "Lita Na Mai Da Kake Nema (L)"}
-                      </label>
-                      <input
-                        type="number"
-                        value={liters}
-                        onChange={(e) => setLiters(parseInt(e.target.value) || 0)}
-                        placeholder="e.g. 350"
-                        className="w-full px-3 py-2 text-xs bg-bg-surface border border-border-main rounded-lg text-text-main focus:outline-none focus:ring-1 focus:ring-slate-400"
-                      />
-                    </div>
-
-                    <div className="p-3 bg-bg-base rounded-lg border border-border-main/50 text-xs flex flex-col gap-1 font-mono">
-                      <div className="flex justify-between">
-                        <span className="text-text-muted">{lang === 'en' ? "Diesel Base Rate:" : "Farashin Lita Daya:"}</span>
-                        <span className="font-bold">₦{DIESEL_RATE}/Liter</span>
-                      </div>
-                      <div className="flex justify-between border-t border-border-main/40 pt-1.5 mt-1 font-bold">
-                        <span className="text-text-main">{lang === 'en' ? "Estimated Ledger Value:" : "Kimanin Kudin Mai:"}</span>
-                        <span className="text-brand-gold">₦{(liters * DIESEL_RATE).toLocaleString()}</span>
-                      </div>
-                    </div>
-
-                    <Button
-                      variant="secondary"
-                      type="submit"
-                      size="sm"
-                      className="w-full font-bold cursor-pointer"
-                      disabled={!vehicle}
-                    >
-                      {lang === 'en' ? "Authorize Request" : "Tura Bukatar Mai"}
-                    </Button>
-                  </form>
-                </Card>
 
                 {/* Pre-Trip Inspection Checklist */}
                 <Card>
@@ -1721,7 +1607,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                 </div>
               </Card>
 
-              {/* Printable receipt Voucher overlay modal */}
               <AnimatePresence>
                 {selectedReceipt && (
                   <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
@@ -1739,7 +1624,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                       </button>
 
                       {/* Printable Area Wrapper */}
-                      <div id="printable-invoice-voucher" className="flex flex-col gap-6">
+                      <div id="printable-invoice" className="flex flex-col gap-6">
                         
                         {/* Receipt Header */}
                         <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
@@ -1749,7 +1634,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                             <p className="text-[10px] text-slate-500 font-mono">info@ruqayyatransport.com | +234 803 123 4567</p>
                           </div>
                           <div className="text-right">
-                            <span className="text-xs font-black tracking-widest text-slate-950 bg-slate-100 px-2.5 py-1 rounded block uppercase">{t.history.paymentVoucher}</span>
                             <span className="text-[11px] font-mono text-slate-500 mt-1 block">ORIGINAL COPY</span>
                           </div>
                         </div>
@@ -1903,8 +1787,6 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                           <span className="text-xl font-black text-text-main font-mono">{vehicle.lastServiceDate}</span>
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] text-text-muted font-bold uppercase">{t.vehicle.fuel}</span>
-                          <span className="text-xl font-black text-brand-gold font-mono">{(vehicle.fuelType || '').toUpperCase()}</span>
                         </div>
                       </div>
                     </div>

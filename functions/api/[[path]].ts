@@ -274,7 +274,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       ...common,
       drivers: mappedDrivers,
       vehicles: mappedVehicles,
-      vouchers: db.fuel_vouchers || [],
       financials: db.financial_records || [],
       notifications: db.notifications || [],
       audit_logs: db.audit_logs || [],
@@ -295,7 +294,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       ...common,
       drivers: mappedDrivers,
       vehicles: mappedVehicles,
-      vouchers: db.fuel_vouchers || [],
       financials: db.financial_records || [],
       notifications: db.notifications || [],
       users: db.users || [],
@@ -326,7 +324,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
     };
   } else if (role === 'driver') {
     const activeDriver = mappedDrivers.find((d: any) => d.id === driverProfileId) || {};
-    const driverVouchers = (db.fuel_vouchers || []).filter((v: any) => v.driver_id === driverProfileId);
     const driverPayments = (db.driver_payments || []).filter((p: any) => p.driver_id === driverProfileId);
     const driverDocuments = (db.driver_documents || []).filter((doc: any) => doc.driver_id === driverProfileId);
     const driverTrips = mappedTrips.filter((t: any) => t.driverId === driverProfileId);
@@ -337,7 +334,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       ...common,
       drivers: [activeDriver],
       vehicles: mappedVehicles.filter((v: any) => v.driverId === driverProfileId),
-      vouchers: driverVouchers,
       driver_payments: driverPayments,
       driver_documents: driverDocuments,
       trip_manifests: driverTrips,
@@ -1053,7 +1049,6 @@ class D1Manager {
         }
       ];
 
-      parsed.fuel_vouchers = [];
       parsed.financial_records = [];
       parsed.trip_manifests = [];
       parsed.audit_logs = [];
@@ -1084,7 +1079,6 @@ class D1Manager {
     if (!parsed.notifications) { parsed.notifications = []; changed = true; }
     if (!parsed.messages) { parsed.messages = []; changed = true; }
     if (!parsed.announcements) { parsed.announcements = []; changed = true; }
-    if (!parsed.fuel_vouchers) { parsed.fuel_vouchers = []; changed = true; }
     if (!parsed.financial_records) { parsed.financial_records = []; changed = true; }
     if (!parsed.trip_manifests) { parsed.trip_manifests = []; changed = true; }
     if (!parsed.cycles) { parsed.cycles = []; changed = true; }
@@ -3682,70 +3676,6 @@ ${JSON.stringify(cleanedContext, null, 2)}
     }
   }
 
-  // 15. FUEL VOUCHERS ENDPOINTS
-  if (path.startsWith('/api/vouchers')) {
-    const parts = path.replace(/^\/api\/vouchers/, '').split('/').filter(Boolean);
-
-    if (parts.length === 0) {
-      if (method === 'GET') {
-        return buildResponse(db.fuel_vouchers || []);
-      }
-      if (method === 'POST') {
-        try {
-          const { vehicleId, litersRequested, estimatedCost } = await request.json() as any;
-          const activeDriver = db.drivers.find((d: any) => d.user_id === user.id);
-          
-          const newVoucher = {
-            id: generateUUID(),
-            voucher_number: `FL-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-            vehicle_id: vehicleId,
-            driver_id: activeDriver ? activeDriver.id : null,
-            liters_requested: parseFloat(litersRequested),
-            estimated_cost: parseFloat(estimatedCost),
-            status: 'pending',
-            request_date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-            created_at: new Date().toISOString()
-          };
-
-          db.fuel_vouchers.push(newVoucher);
-          writeAuditLog(user.id, user.email, user.role, 'FUEL_VOUCHER_REQUESTED', null, `Voucher fuel liters requested: ${litersRequested}`, db);
-          await dbManager.saveDB(db);
-
-          return buildResponse(newVoucher);
-        } catch (err: any) {
-          return buildResponse({ error: err.message }, 500);
-        }
-      }
-    }
-
-    if (parts.length === 2 && parts[1] === 'approve' && method === 'PUT') {
-      if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
-      try {
-        const vouch = db.fuel_vouchers.find((v: any) => v.id === parts[0]);
-        if (!vouch) return buildResponse({ error: 'Fuel voucher not found.' }, 404);
-
-        vouch.status = 'approved';
-        vouch.approval_date = new Date().toISOString().replace('T', ' ').substring(0, 16);
-
-        // Record direct corporate maintenance expense automatically
-        db.financial_records.push({
-          id: generateUUID(),
-          type: 'expense',
-          category: 'fuel',
-          amount: vouch.estimated_cost,
-          date: new Date().toISOString().split('T')[0],
-          description: `Disbursement: Approved Fuel Allocation Voucher ${vouch.voucher_number}`
-        });
-
-        writeAuditLog(user.id, user.email, user.role, 'FUEL_VOUCHER_AUTHORIZED', null, `Authorized voucher ${vouch.voucher_number}`, db);
-        await dbManager.saveDB(db);
-
-        return buildResponse({ success: true });
-      } catch (err: any) {
-        return buildResponse({ error: err.message }, 500);
-      }
-    }
-  }
 
   // 16. TRIP MANIFESTS ENDPOINTS
   if (path.startsWith('/api/trips')) {

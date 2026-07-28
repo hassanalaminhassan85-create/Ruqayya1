@@ -62,7 +62,6 @@ interface OverviewTabProps {
   shareholderSettings: any;
   tripManifests: any[];
   notifications: any[];
-  vouchers: any[];
   users: any[];
   sseConnected: boolean;
   onStartCycle: (e: React.FormEvent) => void;
@@ -98,7 +97,6 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   shareholderSettings,
   tripManifests,
   notifications,
-  vouchers,
   users,
   sseConnected,
   onStartCycle,
@@ -491,183 +489,201 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
       </div>
 
-      {/* 4. EXECUTIVE TOP KPI GRID (Stripe / Ramp Style) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* 4. EXECUTIVE TOP KPI HORIZONTAL RECTANGULAR CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         
         {/* Drivers Card */}
-        <div 
+        <motion.div 
+          whileHover={{ scale: 1.02, y: -3 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
           onMouseEnter={() => setHoveredCard('drivers')}
           onMouseLeave={() => setHoveredCard(null)}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:border-slate-300 hover:shadow-lg hover:-translate-y-0.5 shadow-xs relative"
+          className="bg-white border border-slate-200/90 p-5 rounded-2xl flex items-center justify-between shadow-xs hover:shadow-xl hover:border-brand-gold/60 transition-all group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{lang === 'en' ? "Drivers" : "Direbobi"}</span>
-            <div className="h-7 w-7 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-              <Users className="h-4 w-4 text-slate-600" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-gold" />
+          <div className="flex items-center gap-4 pl-2">
+            <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-brand-gold group-hover:scale-110 transition-transform">
+              <Users className="h-6 w-6 text-amber-600" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">{lang === 'en' ? "Drivers" : "Direbobi"}</span>
+              <div className="text-2xl font-extrabold text-slate-900 tabular-nums mt-0.5">{totalDrivers}</div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">{activeDrivers} active on transit corridors</p>
             </div>
           </div>
-          <div className="mt-4">
-            <span className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 block tabular-nums leading-none">
-              {totalDrivers}
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-bold text-emerald-600 flex items-center gap-0.5 bg-emerald-50 px-2 py-0.5 rounded-full">
+              <ArrowUpRight className="h-3.5 w-3.5" /> +4%
             </span>
-            <div className="flex items-center justify-between mt-2.5">
-              <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
-                <ArrowUpRight className="h-3 w-3 shrink-0" />
-                +4%
-              </span>
-              {/* Mini Sparkline SVG */}
-              <svg className="h-4 w-12 text-emerald-500" viewBox="0 0 100 30">
-                <path d="M0,25 Q15,10 30,20 T60,8 T90,15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium mt-2">{activeDrivers} active on corridors</p>
+            <svg className="h-6 w-16 text-emerald-500 mt-2" viewBox="0 0 100 30">
+              <path d="M0,25 Q15,10 30,20 T60,8 T90,15" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
           </div>
-        </div>
+        </motion.div>
 
         {/* Fleet Assets Card */}
-        <div 
+        <motion.div 
+          whileHover={{ scale: 1.02, y: -3 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.05 }}
           onMouseEnter={() => setHoveredCard('fleet')}
           onMouseLeave={() => setHoveredCard(null)}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:border-slate-300 hover:shadow-lg hover:-translate-y-0.5 shadow-xs relative"
+          className="bg-white border border-slate-200/90 p-5 rounded-2xl flex items-center justify-between shadow-xs hover:shadow-xl hover:border-blue-500/60 transition-all group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{lang === 'en' ? "Fleet Assets" : "Motoci"}</span>
-            <div className="h-7 w-7 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-              <Truck className="h-4 w-4 text-slate-600" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500" />
+          <div className="flex items-center gap-4 pl-2">
+            <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 text-blue-600 group-hover:scale-110 transition-transform">
+              <Truck className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">{lang === 'en' ? "Fleet Assets" : "Motoci"}</span>
+              <div className="text-2xl font-extrabold text-slate-900 tabular-nums mt-0.5">{totalVehicles}</div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">{activeVehiclesCount} on road (92% active utilization)</p>
             </div>
           </div>
-          <div className="mt-4">
-            <span className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 block tabular-nums leading-none">
-              {totalVehicles}
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-bold text-blue-600 flex items-center gap-0.5 bg-blue-50 px-2 py-0.5 rounded-full">
+              Active
             </span>
-            <div className="flex items-center justify-between mt-2.5">
-              <span className="text-[10px] text-slate-500 font-bold flex items-center gap-0.5">
-                {activeVehiclesCount} on road
-              </span>
-              <svg className="h-4 w-12 text-slate-400" viewBox="0 0 100 30">
-                <path d="M0,15 Q20,15 40,20 T80,10 T100,15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium mt-2">92% active asset utilization</p>
+            <svg className="h-6 w-16 text-blue-500 mt-2" viewBox="0 0 100 30">
+              <path d="M0,15 Q20,15 40,20 T80,10 T100,15" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
           </div>
-        </div>
+        </motion.div>
 
         {/* Gross Revenue Card */}
-        <div 
+        <motion.div 
+          whileHover={{ scale: 1.02, y: -3 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.1 }}
           onMouseEnter={() => setHoveredCard('revenue')}
           onMouseLeave={() => setHoveredCard(null)}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:border-slate-300 hover:shadow-lg hover:-translate-y-0.5 shadow-xs relative"
+          className="bg-white border border-slate-200/90 p-5 rounded-2xl flex items-center justify-between shadow-xs hover:shadow-xl hover:border-emerald-500/60 transition-all group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{lang === 'en' ? "Revenue" : "Kudin Shiga"}</span>
-            <div className="h-7 w-7 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-              <TrendingUp className="h-4 w-4 text-emerald-500" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500" />
+          <div className="flex items-center gap-4 pl-2">
+            <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-600 group-hover:scale-110 transition-transform">
+              <TrendingUp className="h-6 w-6 text-emerald-600" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">{lang === 'en' ? "Total Revenue" : "Kudin Shiga"}</span>
+              <div className="text-xl md:text-2xl font-extrabold text-slate-900 tabular-nums mt-0.5">{formatNaira(totalRevenue)}</div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">100% audited daily collection invoices</p>
             </div>
           </div>
-          <div className="mt-4">
-            <span className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 block truncate tabular-nums leading-none">
-              {formatNaira(totalRevenue)}
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-bold text-emerald-600 flex items-center gap-0.5 bg-emerald-50 px-2 py-0.5 rounded-full">
+              <ArrowUpRight className="h-3.5 w-3.5" /> +12.4%
             </span>
-            <div className="flex items-center justify-between mt-2.5">
-              <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
-                <ArrowUpRight className="h-3 w-3 shrink-0" />
-                +12.4%
-              </span>
-              <svg className="h-4 w-12 text-emerald-500" viewBox="0 0 100 30">
-                <path d="M0,25 Q10,15 25,5 T50,15 T75,8 T100,2" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium mt-2">100% audited daily collection invoices</p>
+            <svg className="h-6 w-16 text-emerald-500 mt-2" viewBox="0 0 100 30">
+              <path d="M0,25 Q10,15 25,5 T50,15 T75,8 T100,2" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
           </div>
-        </div>
+        </motion.div>
 
         {/* Payments Card */}
-        <div 
+        <motion.div 
+          whileHover={{ scale: 1.02, y: -3 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.15 }}
           onMouseEnter={() => setHoveredCard('payments')}
           onMouseLeave={() => setHoveredCard(null)}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:border-slate-300 hover:shadow-lg hover:-translate-y-0.5 shadow-xs relative"
+          className="bg-white border border-slate-200/90 p-5 rounded-2xl flex items-center justify-between shadow-xs hover:shadow-xl hover:border-rose-500/60 transition-all group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{lang === 'en' ? "Payments" : "Kudin Kashewa"}</span>
-            <div className="h-7 w-7 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-              <TrendingDown className="h-4 w-4 text-rose-500" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500" />
+          <div className="flex items-center gap-4 pl-2">
+            <div className="h-12 w-12 rounded-xl bg-rose-500/10 flex items-center justify-center border border-rose-500/20 text-rose-600 group-hover:scale-110 transition-transform">
+              <TrendingDown className="h-6 w-6 text-rose-600" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">{lang === 'en' ? "Payments & Outflows" : "Kudin Kashewa"}</span>
+              <div className="text-xl md:text-2xl font-extrabold text-slate-900 tabular-nums mt-0.5">{formatNaira(totalExpenses)}</div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">Verified fuel & maintenance dispatches</p>
             </div>
           </div>
-          <div className="mt-4">
-            <span className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 block truncate tabular-nums leading-none">
-              {formatNaira(totalExpenses)}
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-bold text-rose-600 flex items-center gap-0.5 bg-rose-50 px-2 py-0.5 rounded-full">
+              <ArrowDownRight className="h-3.5 w-3.5" /> -1.5%
             </span>
-            <div className="flex items-center justify-between mt-2.5">
-              <span className="text-[10px] text-rose-600 font-bold flex items-center gap-0.5">
-                <ArrowDownRight className="h-3 w-3 shrink-0" />
-                -1.5%
-              </span>
-              <svg className="h-4 w-12 text-rose-500" viewBox="0 0 100 30">
-                <path d="M0,5 Q20,15 40,8 T80,25 T100,22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium mt-2">Fuel dispatches & active vouchers</p>
+            <svg className="h-6 w-16 text-rose-500 mt-2" viewBox="0 0 100 30">
+              <path d="M0,5 Q20,15 40,8 T80,25 T100,22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
           </div>
-        </div>
+        </motion.div>
 
         {/* Shareholders Card */}
-        <div 
+        <motion.div 
+          whileHover={{ scale: 1.02, y: -3 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.2 }}
           onMouseEnter={() => setHoveredCard('shareholders')}
           onMouseLeave={() => setHoveredCard(null)}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:border-slate-300 hover:shadow-lg hover:-translate-y-0.5 shadow-xs relative"
+          className="bg-white border border-slate-200/90 p-5 rounded-2xl flex items-center justify-between shadow-xs hover:shadow-xl hover:border-amber-500/60 transition-all group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{lang === 'en' ? "Shareholders" : "Gudunmawar Jari"}</span>
-            <div className="h-7 w-7 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-              <Coins className="h-4 w-4 text-slate-600" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500" />
+          <div className="flex items-center gap-4 pl-2">
+            <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-600 group-hover:scale-110 transition-transform">
+              <Coins className="h-6 w-6 text-amber-600" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">{lang === 'en' ? "Shareholders Pool" : "Gudunmawar Jari"}</span>
+              <div className="text-xl md:text-2xl font-extrabold text-slate-900 tabular-nums mt-0.5">{formatNaira(totalInvestments)}</div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">{totalShareholders} board nodes ({sharePct}% pool margin)</p>
             </div>
           </div>
-          <div className="mt-4">
-            <span className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900 block truncate tabular-nums leading-none">
-              {formatNaira(totalInvestments)}
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
+              Secured
             </span>
-            <div className="flex items-center justify-between mt-2.5">
-              <span className="text-[10px] text-slate-500 font-bold">
-                {totalShareholders} board nodes
-              </span>
-              <svg className="h-4 w-12 text-slate-300" viewBox="0 0 100 30">
-                <path d="M0,15 L25,15 L50,15 L100,15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" />
-              </svg>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium mt-2">Pool configured at {sharePct}% margin</p>
+            <svg className="h-6 w-16 text-amber-400 mt-2" viewBox="0 0 100 30">
+              <path d="M0,15 L25,15 L50,15 L100,15" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+            </svg>
           </div>
-        </div>
+        </motion.div>
 
         {/* Operating Cycle Card */}
-        <div 
+        <motion.div 
           id="active-cycle-hud"
+          whileHover={{ scale: 1.02, y: -3 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.25 }}
           onMouseEnter={() => setHoveredCard('cycle')}
           onMouseLeave={() => setHoveredCard(null)}
-          className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:border-slate-300 hover:shadow-lg hover:-translate-y-0.5 shadow-xs relative"
+          className="bg-white border border-slate-200/90 p-5 rounded-2xl flex items-center justify-between shadow-xs hover:shadow-xl hover:border-purple-500/60 transition-all group relative overflow-hidden"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">{lang === 'en' ? "Operating Cycle" : "Zagayen Aiki"}</span>
-            <div className="h-7 w-7 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-              <Clock className="h-4 w-4 text-slate-600" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-purple-500" />
+          <div className="flex items-center gap-4 pl-2">
+            <div className="h-12 w-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 text-purple-600 group-hover:scale-110 transition-transform">
+              <Clock className="h-6 w-6 text-purple-600" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">{lang === 'en' ? "Operating Cycle" : "Zagayen Aiki"}</span>
+              <div className="text-2xl font-extrabold text-slate-900 tabular-nums mt-0.5">{completionPercentage}% Completed</div>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">{currentTons}T / {targetTons}T freight tonnage</p>
             </div>
           </div>
-          <div className="mt-4">
-            <span className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 block tabular-nums leading-none">
-              {completionPercentage}%
+          <div className="flex flex-col items-end">
+            <div className="w-16 bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
+              <div className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full" style={{ width: `${completionPercentage}%` }} />
+            </div>
+            <span className="text-[10px] font-bold text-slate-500 mt-2">
+              {activeCycle ? getRemainingDays(activeCycle) : (lang === 'en' ? 'No Active' : 'Babu')}
             </span>
-            <div className="flex items-center justify-between mt-2.5">
-              <span className="text-[10px] text-slate-500 font-bold">
-                {currentTons}T / {targetTons}T
-              </span>
-              <div className="w-12 bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div className="bg-brand-gold h-full rounded-full" style={{ width: `${completionPercentage}%` }} />
-              </div>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium mt-2">
-              {lang === 'en' ? 'Expected Settlement:' : 'Ranar Biyan Kudi:'} {activeCycle ? getRemainingDays(activeCycle) : (lang === 'en' ? 'No Active Cycle' : 'Babu Zagayen Aiki')}
-            </p>
           </div>
-        </div>
+        </motion.div>
 
       </div>
 
@@ -686,7 +702,6 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/50 flex flex-col gap-1 hover:bg-white hover:border-slate-300/80 transition-all cursor-pointer">
             <span className="text-[9px] text-slate-400 font-extrabold uppercase">{lang === 'en' ? "Payments Today" : "Biyan Kudade Yau"}</span>
-            <span className="text-lg font-extrabold text-slate-900 font-mono">{vouchers.length}</span>
             <span className="text-[9px] text-slate-500">{formatNaira(totalExpenses)} distributed</span>
           </div>
 
@@ -750,7 +765,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   <p className="text-base font-extrabold text-slate-900 font-mono mt-0.5">{formatNaira(totalRevenue)}</p>
                 </div>
                 <div>
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Expenses & Vouchers</span>
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase block">Expenses</span>
                   <p className="text-base font-extrabold text-rose-600 font-mono mt-0.5">- {formatNaira(totalExpenses)}</p>
                 </div>
                 <div>
@@ -793,7 +808,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                         formatter={(value: any) => [`₦${value.toLocaleString()}`]} 
                       />
                       <Area type="monotone" dataKey="revenue" name="Invoiced Revenue" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
-                      <Area type="monotone" dataKey="expense" name="Fuel / Vouchers" stroke="#EF4444" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
+                      <Area type="monotone" dataKey="expense" name="Fuel" stroke="#EF4444" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}

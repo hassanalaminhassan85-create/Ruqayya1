@@ -264,7 +264,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
               { label: lang === 'en' ? "MINS" : "MINTOCI", val: time.minutes },
               { label: lang === 'en' ? "SECS" : "DAKIKU", val: time.seconds }
             ].map((unit, idx) => (
-              <div key={idx} className="flex flex-col items-center p-1 sm:p-2 bg-slate-950 border border-slate-800 rounded-lg shadow-sm relative overflow-hidden">
+              <div key={`time-${idx}`} className="flex flex-col items-center p-1 sm:p-2 bg-slate-950 border border-slate-800 rounded-lg shadow-sm relative overflow-hidden">
                 <div className="absolute inset-0 bg-radial-gradient from-slate-900 via-transparent to-transparent opacity-40 pointer-events-none" />
                 <span className="text-base sm:text-lg font-black font-mono text-brand-gold tracking-tight select-none leading-none">
                   {unit.val}

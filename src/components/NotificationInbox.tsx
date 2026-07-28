@@ -709,7 +709,7 @@ export const NotificationInbox: React.FC<NotificationInboxProps> = ({ lang }) =>
                                 if (act.action === 'dismiss') return null;
                                 return (
                                   <button
-                                    key={index}
+                                    key={`act-${index}`}
                                     onClick={(e) => handleActionClick(act.path, act.action, e)}
                                     className="px-3 py-1 bg-brand-navy text-white hover:bg-slate-800 dark:bg-brand-gold dark:text-slate-950 dark:hover:bg-amber-400 text-[10px] font-black uppercase tracking-wider rounded flex items-center gap-1 transition-all duration-150 cursor-pointer border border-transparent shadow-2xs"
                                   >

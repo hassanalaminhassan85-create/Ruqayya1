@@ -1,16 +1,15 @@
+import { Vehicle, Driver, DailyRemittance, FinancialRecord, AppNotification, Role } from "../types";
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Vehicle, Driver, DailyRemittance, FuelVoucher, FinancialRecord, AppNotification, Role } from '../types';
 import { logAuditEvent, systemLogger } from './security';
 
 // Keys for LocalStorage
 const VEHICLES_KEY = 'ruqayya_vehicles';
 const DRIVERS_KEY = 'ruqayya_drivers';
 const TRIPS_KEY = 'ruqayya_trips';
-const VOUCHERS_KEY = 'ruqayya_vouchers';
 const FINANCE_KEY = 'ruqayya_finance';
 const NOTIFICATIONS_KEY = 'ruqayya_notifications';
 
@@ -35,11 +34,6 @@ const DEFAULT_TRIPS: DailyRemittance[] = [
   { id: 'T-1003', remittanceNumber: 'REM-2026-0089', vehicleId: 'V-003', driverId: 'D-003', origin: 'Kaduna Central Terminal', destination: 'Kawo Hub', departureTime: '2026-06-28 05:00', expectedArrivalTime: '2026-06-30 14:00', status: 'delivered', tricycleType: 'Utility Tricycle', remittanceCount: 1, remittanceAmount: 18000 }
 ];
 
-const DEFAULT_VOUCHERS: FuelVoucher[] = [
-  { id: 'FV-501', voucherNumber: 'FL-2026-7781', vehicleId: 'V-001', driverId: 'D-001', litersRequested: 15, estimatedCost: 15000, status: 'approved', requestDate: '2026-07-05 14:00', approvalDate: '2026-07-05 15:30' },
-  { id: 'FV-502', voucherNumber: 'FL-2026-7782', vehicleId: 'V-002', driverId: 'D-002', litersRequested: 20, estimatedCost: 20000, status: 'approved', requestDate: '2026-07-05 16:15', approvalDate: '2026-07-05 16:45' },
-  { id: 'FV-503', voucherNumber: 'FL-2026-7783', vehicleId: 'V-001', driverId: 'D-001', litersRequested: 10, estimatedCost: 10000, status: 'pending', requestDate: '2026-07-07 09:00' }
-];
 
 const DEFAULT_FINANCE: FinancialRecord[] = [
   { id: 'FIN-001', type: 'revenue', category: 'remittance', amount: 18000, date: '2026-06-30', referenceId: 'T-1003', description: 'Remittance processed for daily collection REM-2026-0089' },
@@ -157,100 +151,11 @@ export const dbStore = {
     dbStore.updateVehicle(trip.vehicleId, { status: 'idle' });
     dbStore.updateDriver(trip.driverId, { status: 'available' });
 
-    // Add financial revenue record
-    dbStore.addFinancialRecord({
-      type: 'revenue',
-      category: 'remittance',
-      amount: trip.remittanceAmount,
-      date: new Date().toISOString().split('T')[0],
-      referenceId: trip.id,
-      description: `Revenue collected for Daily Remittance ${trip.remittanceNumber}`
-    }, responderId, "admin");
-
     logAuditEvent(responderId, responderRole, "COMPLETE_REMITTANCE", `Daily remittance ${trip.remittanceNumber} completed. Revenue collected: ₦${trip.remittanceAmount.toLocaleString()}`);
     return true;
   },
-
-  // Fuel Vouchers / Driver Wallets
-  getVouchers: (): FuelVoucher[] => getStoreItem(VOUCHERS_KEY, DEFAULT_VOUCHERS),
-  saveVouchers: (data: FuelVoucher[]) => saveStoreItem(VOUCHERS_KEY, data),
-  addVoucher: (voucher: Omit<FuelVoucher, 'id' | 'voucherNumber' | 'status' | 'requestDate'>): FuelVoucher => {
-    const vouchers = dbStore.getVouchers();
-    const id = `FV-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const voucherNumber = `FL-2026-${(vouchers.length + 1).toString().padStart(4, '0')}`;
-    const newVoucher: FuelVoucher = {
-      id,
-      voucherNumber,
-      ...voucher,
-      status: 'pending',
-      requestDate: new Date().toISOString().replace('T', ' ').substring(0, 16)
-    };
-    vouchers.unshift(newVoucher); // Add at top for pending reviews
-    dbStore.saveVouchers(vouchers);
-
-    // Notify admins
-    dbStore.addNotification({
-      titleEn: 'New Driver Wallet Request Raised',
-      titleHa: 'Sabuwar Bukatar Asusun Direba',
-      messageEn: `Driver has raised a wallet request for ₦${voucher.estimatedCost.toLocaleString()}.`,
-      messageHa: `Direba ya tura buƙatar asusu na ₦${voucher.estimatedCost.toLocaleString()}.`,
-      type: 'warning'
-    });
-
-    logAuditEvent(voucher.driverId, "driver", "WALLET_REQUEST", `Driver requested wallet voucher, value: ₦${voucher.estimatedCost.toLocaleString()}`);
-    return newVoucher;
-  },
-  approveVoucher: (voucherId: string, approverId: string): boolean => {
-    const vouchers = dbStore.getVouchers();
-    const idx = vouchers.findIndex(v => v.id === voucherId);
-    if (idx === -1) return false;
-
-    const voucher = vouchers[idx];
-    if (voucher.status !== 'pending') return true;
-
-    voucher.status = 'approved';
-    voucher.approvalDate = new Date().toISOString().replace('T', ' ').substring(0, 16);
-    dbStore.saveVouchers(vouchers);
-
-    // Commit expense to ledger
-    dbStore.addFinancialRecord({
-      type: 'expense',
-      category: 'fuel',
-      amount: voucher.estimatedCost,
-      date: new Date().toISOString().split('T')[0],
-      referenceId: voucher.id,
-      description: `Driver wallet funding authorization - Voucher ${voucher.voucherNumber}`,
-      approvedBy: approverId
-    }, approverId, "admin");
-
-    // Add success notification
-    dbStore.addNotification({
-      titleEn: 'Driver Wallet Request Approved',
-      titleHa: 'An Amince Da Bukatar Asusun Direba',
-      messageEn: `Wallet request ${voucher.voucherNumber} approved for ₦${voucher.estimatedCost.toLocaleString()}.`,
-      messageHa: `An amince da takardar kudi ${voucher.voucherNumber} na ₦${voucher.estimatedCost.toLocaleString()}.`,
-      type: 'success'
-    });
-
-    logAuditEvent(approverId, "admin", "APPROVE_WALLET_REQUEST", `Approved driver wallet voucher ${voucher.voucherNumber} for ₦${voucher.estimatedCost.toLocaleString()}`);
-    return true;
-  },
-
-  // Financial Ledger
-  getFinance: (): FinancialRecord[] => getStoreItem(FINANCE_KEY, DEFAULT_FINANCE),
-  saveFinance: (data: FinancialRecord[]) => saveStoreItem(FINANCE_KEY, data),
-  addFinancialRecord: (record: Omit<FinancialRecord, 'id'>, actorId: string, actorRole: Role): FinancialRecord => {
-    const ledger = dbStore.getFinance();
-    const id = `FIN-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const newRecord: FinancialRecord = { id, ...record };
-    ledger.unshift(newRecord);
-    dbStore.saveFinance(ledger);
-    logAuditEvent(actorId, actorRole, "LEDGER_WRITE", `Logged ${record.type} under category ${record.category}: ₦${record.amount.toLocaleString()}`);
-    return newRecord;
-  },
-
-  // Notifications
   getNotifications: (): AppNotification[] => getStoreItem(NOTIFICATIONS_KEY, DEFAULT_NOTIFICATIONS),
+
   saveNotifications: (data: AppNotification[]) => saveStoreItem(NOTIFICATIONS_KEY, data),
   addNotification: (notification: Omit<AppNotification, 'id' | 'timestamp' | 'read'>): AppNotification => {
     const list = dbStore.getNotifications();

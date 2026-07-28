@@ -111,7 +111,7 @@ export default function App() {
 
   // Tab states for active roles to link hamburger sidebar & dashboards
   const [driverTab, setDriverTab] = useState<'overview' | 'payments' | 'history' | 'vehicle' | 'documents' | 'profile'>('overview');
-  const [adminTab, setAdminTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('fleet');
+  const [adminTab, setAdminTab] = useState<any>("fleet");
   const [directorTab, setDirectorTab] = useState<'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory'>('overview');
   const [shareholderTab, setShareholderTab] = useState<'overview' | 'cycles' | 'ledger' | 'settings'>('overview');
 
@@ -459,7 +459,6 @@ export default function App() {
       { id: 'ai-assistant', label: lang === 'en' ? "Ruqayya AI" : "Mataimakin AI", icon: <Sparkles className="h-4 w-4 shrink-0 text-brand-gold" />, active: activeSection === 'ai-assistant' },
       { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
       { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
-      { id: 'vouchers', label: lang === 'en' ? "Fuel Vouchers" : "Rasit na Mai", icon: <Fuel className="h-4 w-4 shrink-0" />, active: activeSection === 'vouchers' },
       { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Coins className="h-4 w-4 shrink-0" />, active: activeSection === 'finance' },
       { id: 'shareholders', label: lang === 'en' ? "Shareholders" : "Masu Hannun Jari", icon: <TrendingUp className="h-4 w-4 shrink-0" />, active: activeSection === 'shareholders' },
       { id: 'trips', label: lang === 'en' ? "Trips" : "Takardun Tafiya", icon: <MapPin className="h-4 w-4 shrink-0" />, active: activeSection === 'trips' },
@@ -479,9 +478,7 @@ export default function App() {
       );
     }
     if (currentRole === 'admin') {
-      return items.filter(item => 
-        ['dashboard', 'ai-assistant', 'drivers', 'fleet', 'vouchers', 'finance', 'trips', 'people', 'communications', 'documents', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
-      );
+      return items.filter(item => ["dashboard", "fleet", "drivers", "finance", "ai-assistant", "notifications", "settings", "help"].includes(item.id));
     }
     if (currentRole === 'shareholder') {
       return items.filter(item => 
@@ -567,7 +564,7 @@ export default function App() {
     }
 
     if (currentRole === 'admin') {
-      let adminTabValue: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings' = 'fleet';
+      let adminTabValue = adminTab;
       if (activeSection === 'dashboard') {
         adminTabValue = 'fleet'; // Shows active fleet dashboard stats
       }
@@ -577,7 +574,6 @@ export default function App() {
       else if (activeSection === 'trips') adminTabValue = 'trips';
       else if (activeSection === 'communications') adminTabValue = 'communications';
       else if (activeSection === 'documents') adminTabValue = 'documents';
-      else if (activeSection === 'vouchers') adminTabValue = 'vouchers';
       else if (activeSection === 'finance') adminTabValue = 'finance';
       else if (activeSection === 'directory') adminTabValue = 'directory';
       else if (activeSection === 'people') adminTabValue = 'people';
@@ -610,7 +606,6 @@ export default function App() {
             else if (tab === 'payments') setActiveSection('payments');
             else if (tab === 'documents') setActiveSection('documents');
             else if (tab === 'communications') setActiveSection('communications');
-            else if (tab === 'vouchers') setActiveSection('vouchers');
             else if (tab === 'finance') setActiveSection('finance');
             else if (tab === 'directory') setActiveSection('directory');
             else if (tab === 'people') setActiveSection('people');

@@ -472,8 +472,8 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Highly dense, visual, compact grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-3">
+      {/* Highly dense, visual, horizontal rectangular motion cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {activeWidgets.map((widget, idx) => {
           const kpi = rawKpis.find(r => r.id === widget.id);
           if (!kpi) return null;
@@ -482,45 +482,46 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
             <motion.div
               key={widget.id}
               layoutId={`kpi-card-${widget.id}`}
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.25 }}
+              whileHover={{ scale: 1.02, y: -3 }}
+              whileTap={{ scale: 0.98 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20, delay: idx * 0.03 }}
               className={`${
-                widget.size === 'wide' ? 'col-span-2' : 'col-span-1'
+                widget.size === 'wide' ? 'md:col-span-2' : 'col-span-1'
               } h-full relative group`}
             >
-              <Card className={`flex flex-col justify-between p-3.5 h-full bg-bg-surface border-t-2 ${kpi.color} shadow-xs hover:shadow-md border-x border-b border-border-main/50 rounded-xl transition-all duration-200 relative overflow-hidden`}>
-                
-                {/* Accent Background subtle circle */}
-                <div className={`absolute -right-6 -bottom-6 w-20 h-20 rounded-full ${kpi.accentBg} blur-xl opacity-40 pointer-events-none group-hover:scale-125 transition-transform duration-300`} />
-
-                <div className="flex items-center justify-between gap-1 mb-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider block truncate">
-                      {kpi.title}
-                    </span>
-                    {widget.pinned && (
-                      <Pin className="h-2.5 w-2.5 text-blue-500 fill-blue-500 shrink-0" title="Pinned to top" />
-                    )}
-                    {widget.favorite && (
-                      <Star className="h-2.5 w-2.5 text-amber-500 fill-amber-500 shrink-0" title="Favorite Metric" />
-                    )}
-                  </div>
-                  <div className="shrink-0 p-1 rounded-md bg-bg-base border border-border-main/40">
+              <div className="bg-white border border-slate-200/90 p-5 rounded-2xl flex items-center justify-between shadow-xs hover:shadow-xl hover:border-brand-gold/60 transition-all group relative overflow-hidden h-full">
+                <div className={`absolute top-0 left-0 w-1.5 h-full ${kpi.id === 'revenue' ? 'bg-emerald-500' : kpi.id === 'expenses' ? 'bg-rose-500' : kpi.id === 'payments' ? 'bg-sky-500' : 'bg-brand-gold'}`} />
+                <div className="flex items-center gap-4 pl-2">
+                  <div className={`h-12 w-12 rounded-xl ${kpi.accentBg} flex items-center justify-center border border-slate-200/60 group-hover:scale-110 transition-transform shrink-0`}>
                     {kpi.icon}
                   </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                        {kpi.title}
+                      </span>
+                      {widget.pinned && <Pin className="h-3 w-3 text-blue-500 fill-blue-500 shrink-0" />}
+                      {widget.favorite && <Star className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />}
+                    </div>
+                    <div className={`text-xl md:text-2xl font-extrabold tracking-tight tabular-nums mt-0.5 text-slate-900 ${kpi.valueColor || ''}`}>
+                      {kpi.value}
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5 line-clamp-1">
+                      {kpi.subtitle}
+                    </p>
+                  </div>
                 </div>
-
-                <div>
-                  <p className={`text-base sm:text-lg md:text-xl font-extrabold tracking-tight tabular-nums leading-tight text-text-main ${kpi.valueColor || ''}`}>
-                    {kpi.value}
-                  </p>
-                  <span className="text-[10px] font-semibold text-text-muted mt-1 block truncate leading-none">
-                    {kpi.subtitle}
+                <div className="flex flex-col items-end shrink-0 pl-3">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                    Live
                   </span>
+                  <div className="w-12 h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
+                    <div className="h-full bg-brand-gold rounded-full w-3/4 animate-pulse" />
+                  </div>
                 </div>
-              </Card>
+              </div>
             </motion.div>
           );
         })}

@@ -330,7 +330,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       ...common,
       drivers: mappedDrivers,
       vehicles: mappedVehicles,
-      vouchers: db.fuel_vouchers || [],
       financials: db.financial_records || [],
       notifications: db.notifications || [],
       audit_logs: db.audit_logs || [],
@@ -352,7 +351,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       ...common,
       drivers: mappedDrivers,
       vehicles: mappedVehicles,
-      vouchers: db.fuel_vouchers || [],
       financials: db.financial_records || [],
       notifications: db.notifications || [],
       users: db.users || [],
@@ -385,7 +383,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
   } else if (role === 'driver') {
     // Drivers cannot receive other drivers' private events. They only get their own profile data, payments, etc.
     const activeDriver = mappedDrivers.find((d: any) => d.id === driverProfileId) || {};
-    const driverVouchers = (db.fuel_vouchers || []).filter((v: any) => v.driver_id === driverProfileId);
     const driverPayments = (db.driver_payments || []).filter((p: any) => p.driver_id === driverProfileId);
     const driverDocuments = (db.driver_documents || []).filter((doc: any) => doc.driver_id === driverProfileId);
     const driverTrips = mappedTrips.filter((t: any) => t.driverId === driverProfileId);
@@ -396,7 +393,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       ...common,
       drivers: [activeDriver],
       vehicles: mappedVehicles.filter((v: any) => v.driverId === driverProfileId),
-      vouchers: driverVouchers,
       driver_payments: driverPayments,
       driver_documents: driverDocuments,
       trip_manifests: driverTrips,
@@ -1600,19 +1596,6 @@ app.put('/api/drivers/:id/status', authenticateSession, (req, res) => {
       drv.vehicle_purchase_price = terms.purchasePrice;
       drv.remaining_vehicle_balance = terms.purchasePrice;
 
-      // Automatically register 350L fuel vouchers as welcome
-      db.fuel_vouchers.unshift({
-        id: generateUUID(),
-        voucher_number: `FL-WELCOME-${Math.floor(1000 + Math.random() * 9000)}`,
-        vehicle_id: vehicle ? vehicle.id : 'N/A',
-        driver_id: drv.id,
-        liters_requested: 350,
-        estimated_cost: 507500,
-        status: 'approved',
-        request_date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-        approval_date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-        created_at: new Date().toISOString()
-      });
     }
 
     // Notify Driver via notifications
@@ -3560,131 +3543,6 @@ app.post('/api/auth/login-as-role', (req, res) => {
   }
 });
 
-// 18. AUTHENTICATED: Get/Create Fuel Vouchers
-app.get('/api/vouchers', authenticateSession, (req, res) => {
-  const db = loadDB();
-  res.json(db.fuel_vouchers);
-});
-
-app.post('/api/vouchers', authenticateSession, (req, res) => {
-  try {
-    const actor = (req as any).user;
-    const db = loadDB();
-    const opsState = db.company_operations_state || { status: 'Setup Mode' };
-    if (opsState.status === 'Setup Mode') {
-      return res.status(400).json({ error: 'Company is currently in Setup Mode. Financial operations are disabled until operations officially start.' });
-    }
-    const { vehicleId, litersRequested, estimatedCost } = req.body;
-
-    if (!vehicleId || !litersRequested || !estimatedCost) {
-      return res.status(400).json({ error: 'Missing voucher payload parameters.' });
-    }
-
-    const newVoucher = {
-      id: generateUUID(),
-      voucher_number: `FL-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      vehicle_id: vehicleId,
-      driver_id: actor.id,
-      liters_requested: parseFloat(litersRequested),
-      estimated_cost: parseFloat(estimatedCost),
-      status: 'pending',
-      request_date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      created_at: new Date().toISOString()
-    };
-
-    db.fuel_vouchers.unshift(newVoucher);
-    db.notifications.unshift({
-      id: generateUUID(),
-      title_en: 'New Fuel Voucher Request Raised',
-      title_ha: 'Sabuwar Bukatar Takardar Mai',
-      message_en: `Driver ${actor.fullName} submitted a voucher request for ${litersRequested} Liters.`,
-      message_ha: `Direba ${actor.fullName} ya nemi takardar mai lita ${litersRequested}.`,
-      type: 'warning',
-      read_status: 0,
-      created_at: new Date().toISOString()
-    });
-
-    saveDB(db);
-
-    writeServerAuditLog(
-      actor.id,
-      actor.email,
-      actor.role,
-      'FUEL_VOUCHER_REQUEST',
-      null,
-      `Driver requested ${litersRequested}L (₦${parseFloat(estimatedCost).toLocaleString()})`,
-      req
-    );
-
-    res.json({ success: true, voucher: newVoucher });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.put('/api/vouchers/:id/approve', authenticateSession, (req, res) => {
-  try {
-    const actor = (req as any).user;
-    if (actor.role !== 'admin' && actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied.' });
-    }
-
-    const db = loadDB();
-    const voucher = db.fuel_vouchers.find(v => v.id === req.params.id);
-    if (!voucher) return res.status(404).json({ error: 'Voucher not found.' });
-
-    if (voucher.status !== 'pending') {
-      return res.status(400).json({ error: 'Voucher has already been reviewed.' });
-    }
-
-    voucher.status = 'approved';
-    voucher.approval_date = new Date().toISOString().replace('T', ' ').substring(0, 16);
-    voucher.updated_at = new Date().toISOString();
-    voucher.updated_by = actor.fullName;
-
-    const targetDriver = db.drivers.find(d => d.id === voucher.driver_id);
-
-    // Post to financial ledger as fuel expense
-    db.financial_records.unshift({
-      id: generateUUID(),
-      type: 'expense',
-      category: 'fuel',
-      amount: voucher.estimated_cost,
-      date: new Date().toISOString().split('T')[0],
-      description: `Fuel disbursement - Voucher ${voucher.voucher_number}`,
-      approvedBy: actor.fullName
-    });
-
-    // Notify Driver
-    db.notifications.unshift({
-      id: generateUUID(),
-      user_id: targetDriver ? targetDriver.user_id : voucher.driver_id,
-      title_en: 'Fuel Voucher Approved',
-      title_ha: 'An Amince Da Takardar Mai',
-      message_en: `Your voucher ${voucher.voucher_number} for ${voucher.liters_requested}L (Est. Cost: ₦${(voucher.estimated_cost || 0).toLocaleString()}) has been approved at ${voucher.station_name || 'the designated station'}.`,
-      message_ha: `An amince da takardar mai ${voucher.voucher_number} na lita ${voucher.liters_requested} (Kudi: ₦${(voucher.estimated_cost || 0).toLocaleString()}) a gidan mai na ${voucher.station_name || 'da aka ayyana'}.`,
-      type: 'success',
-      read_status: 0,
-      created_at: new Date().toISOString()
-    });
-
-    saveDB(db);
-
-    writeServerAuditLog(
-      actor.id,
-      actor.email,
-      actor.role,
-      'FUEL_VOUCHER_APPROVAL',
-      'pending',
-      `Approved voucher ${voucher.voucher_number} of ₦${voucher.estimated_cost.toLocaleString()}`,
-      req
-    );
-
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Note: The /api/notifications and /api/notifications/read routes are handled centrally by the Notification Engine above.
 
@@ -6800,7 +6658,6 @@ app.post('/api/admin/reset-test-data', authenticateSession, (req, res) => {
     db.vehicle_documents = [];
     db.driver_documents = [];
     db.company_documents = [];
-    db.fuel_vouchers = [];
     db.financial_records = [];
     db.trip_manifests = [];
     db.cycles = [];

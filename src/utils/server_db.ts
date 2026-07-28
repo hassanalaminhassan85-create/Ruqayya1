@@ -50,7 +50,6 @@ export interface DBState {
   user_preferences: any[];
   roles: any[];
   permissions: any[];
-  fuel_vouchers: any[];
   financial_records: any[];
   trip_manifests: any[];
   cycles: any[];
@@ -81,7 +80,6 @@ const INITIAL_DB_STATE: DBState = {
   user_preferences: [],
   roles: [],
   permissions: [],
-  fuel_vouchers: [],
   financial_records: [],
   trip_manifests: [],
   cycles: [],
@@ -137,7 +135,6 @@ export function loadDB(): DBState {
       if (!parsed.vehicles) { parsed.vehicles = []; changed = true; }
       if (!parsed.audit_logs) { parsed.audit_logs = []; changed = true; }
       if (!parsed.notifications) { parsed.notifications = []; changed = true; }
-      if (!parsed.fuel_vouchers) { parsed.fuel_vouchers = []; changed = true; }
       if (!parsed.financial_records) { parsed.financial_records = []; changed = true; }
       if (!parsed.driver_payments) { parsed.driver_payments = []; changed = true; }
       if (!parsed.messages) { parsed.messages = []; changed = true; }
@@ -224,7 +221,6 @@ export function seedDBIfEmpty() {
     db.sessions = [];
     db.audit_logs = [];
     db.notifications = [];
-    db.fuel_vouchers = [];
     db.financial_records = [];
     db.trip_manifests = [];
     db.cycles = [];
@@ -252,9 +248,7 @@ export function seedDBIfEmpty() {
       { id: 'p1', name: 'view_director_dashboard', description: 'View executive metrics' },
       { id: 'p2', name: 'approve_drivers', description: 'Approve or reject new driver registrations' },
       { id: 'p3', name: 'manage_financials', description: 'Access and modify general ledger records' },
-      { id: 'p4', name: 'approve_vouchers', description: 'Approve driver fuel allocation vouchers' },
       { id: 'p5', name: 'view_audit_logs', description: 'Inspect corporate security records' },
-      { id: 'p6', name: 'request_vouchers', description: 'Submit fuel purchase requests' }
     ];
     modified = true;
   }

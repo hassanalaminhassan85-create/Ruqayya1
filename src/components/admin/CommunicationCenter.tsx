@@ -769,7 +769,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
                         }
                       ].map((tmpl, idx) => (
                         <button
-                          key={idx}
+                          key={`tmpl-${idx}`}
                           type="button"
                           onClick={() => setChatText(tmpl.text)}
                           className="px-2.5 py-1 text-[10px] font-bold rounded bg-bg-surface hover:bg-brand-navy hover:text-brand-gold border border-border-main text-text-main transition-colors cursor-pointer whitespace-nowrap"

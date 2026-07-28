@@ -34,12 +34,6 @@ export const api = {
           ha: `Rikodin Biyan Kudin Direba na ₦${Number(bodyObj.amount || 0).toLocaleString()}` 
         };
       }
-      if (path.includes('/api/vouchers')) {
-        return { 
-          en: `Requesting Fuel Wallet Voucher: ₦${Number(bodyObj.estimatedCost || 0).toLocaleString()}`, 
-          ha: `Neman Takardar Kudin Man Fetur na ₦${Number(bodyObj.estimatedCost || 0).toLocaleString()}` 
-        };
-      }
       if (path.includes('/api/trips') && path.includes('/complete')) {
         return { 
           en: 'Completing Active Trip Remittance & Ledger Closing', 
@@ -104,7 +98,7 @@ export const api = {
       });
 
       if (res.status === 412 || res.status === 401) {
-        console.error(`[AUTH_FAILURE] Request to "${path}" returned status ${res.status}. Token: "${token}"`);
+        console.error(`[AUTH_FAILURE] Request to "${endpoint}" returned status ${res.status}. Token: "${token}"`);
         // Missing or expired token
         api.clearToken();
         if (typeof window !== 'undefined') {
@@ -280,23 +274,6 @@ export const api = {
     });
   },
 
-  // Vouchers
-  getVouchers: async () => {
-    return api.request('/api/vouchers');
-  },
-
-  requestVoucher: async (payload: { vehicleId: string; litersRequested: number; estimatedCost: number }) => {
-    return api.request('/api/vouchers', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-  },
-
-  approveVoucher: async (id: string) => {
-    return api.request(`/api/vouchers/${id}/approve`, {
-      method: 'PUT'
-    });
-  },
 
   // Finance Ledger
   getFinance: async () => {

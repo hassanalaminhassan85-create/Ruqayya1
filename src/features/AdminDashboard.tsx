@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/C
 import { Button } from '../components/ui/Button';
 import { Badge, Alert, Tabs, Modal, ProgressBar } from '../components/ui/SharedComponents';
 import { api } from '../utils/api';
-import { Vehicle, Driver, DailyRemittance, FuelVoucher, Dictionary, Language, FinancialRecord, Shareholder } from '../types';
+import { Vehicle, Driver, DailyRemittance, Dictionary, Language, FinancialRecord, Shareholder } from '../types';
 import { 
   Truck, 
   Users, 
@@ -54,13 +54,13 @@ import { ActivityFeed } from '../components/admin/ActivityFeed';
 interface AdminDashboardProps {
   lang: Language;
   dictionary: Dictionary;
-  activeTab?: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings';
-  setActiveTab?: (tab: 'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings') => void;
+  activeTab?: 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings';
+  setActiveTab?: (tab: 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings') => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
   // Tabs & Views
-  const [localActiveTab, setLocalActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'vouchers' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('fleet');
+  const [localActiveTab, setLocalActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('fleet');
   const activeTab = propActiveTab || localActiveTab;
   const setActiveTab = propSetActiveTab || setLocalActiveTab;
   
@@ -68,7 +68,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [trips, setTrips] = useState<DailyRemittance[]>([]);
-  const [vouchers, setVouchers] = useState<FuelVoucher[]>([]);
   const [finance, setFinance] = useState<FinancialRecord[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [shareholders, setShareholders] = useState<Shareholder[]>([]);
@@ -167,11 +166,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       return;
     }
     try {
-      const [vList, dList, tList, fvList, fin, payList, shList, cyList, logList] = await Promise.all([
+      const [vList, dList, tList, fin, payList, shList, cyList, logList] = await Promise.all([
         api.getVehicles(),
         api.getDrivers(),
         api.getTrips(),
-        api.getVouchers(),
         api.getFinance(),
         api.getPayments(),
         api.getShareholders(),
@@ -181,7 +179,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       setVehicles(vList || []);
       setDrivers(dList || []);
       setTrips(tList || []);
-      setVouchers(fvList || []);
       setFinance(fin || []);
       setPayments(payList || []);
       setShareholders(shList || []);
@@ -249,7 +246,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             setVehicles(data.vehicles || []);
             setDrivers(data.drivers || []);
             setTrips(data.trip_manifests || []);
-            setVouchers(data.vouchers || []);
             setFinance(data.financials || []);
             setPayments(data.driver_payments || []);
             if (data.audit_logs) setLogs(data.audit_logs);
@@ -339,14 +335,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     }
   };
 
-  const handleApproveVoucher = async (voucherId: string) => {
-    try {
-      await api.approveVoucher(voucherId);
-      syncAllData();
-    } catch (err) {
-      console.error("Voucher approval failed:", err);
-    }
-  };
 
   const handleCompleteTrip = async (tripId: string) => {
     try {
@@ -425,7 +413,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
 
   const totalRigs = vehicles.length;
   const activeTripsCount = trips.filter(t => t.status === 'in-transit').length;
-  const pendingVouchers = vouchers.filter(v => v.status === 'pending');
 
   return (
     <div className="flex flex-col gap-3 w-full flex-1 max-w-7xl mx-auto p-2 md:p-4 bg-bg-base">
@@ -629,7 +616,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               { id: 'fleet', label: lang === 'en' ? "Tricycle Fleet" : "Rukunin Kekuna", icon: <Truck className="h-3.5 w-3.5" /> },
               { id: 'drivers', label: `${lang === 'en' ? "Driver Registry" : "Direbobi"} (${drivers.filter(d => d.status === 'pending').length} pending)`, icon: <Users className="h-3.5 w-3.5" /> },
               { id: 'trips', label: lang === 'en' ? "Daily Remittances" : "Kudaden Remittance", icon: <MapPin className="h-3.5 w-3.5" /> },
-              { id: 'vouchers', label: `${lang === 'en' ? "Fuel Vouchers" : "Rasit na Mai"} (${pendingVouchers.length})`, icon: <Fuel className="h-3.5 w-3.5" /> },
               { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Wallet className="h-3.5 w-3.5" /> },
               { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
               { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
@@ -968,64 +954,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               </div>
             )}
 
-            {/* TAB 4: FUEL VOUCHERS */}
-            {activeTab === 'vouchers' && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-bg-base border-b border-border-main text-[10px] uppercase font-bold text-text-muted">
-                      <th className="p-3">Voucher Code</th>
-                      <th className="p-3">Allocated Driver</th>
-                      <th className="p-3">Associated Rig</th>
-                      <th className="p-3">Disbursement Class</th>
-                      <th className="p-3">Estimated Cost</th>
-                      <th className="p-3">Request Date</th>
-                      <th className="p-3 text-center font-bold">Ledger Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-main/50 text-text-main">
-                    {vouchers.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="p-4 text-center text-text-muted">
-                          {lang === 'en' ? "No fuel vouchers requested yet." : "Babu buƙatar takardar mai tukuna."}
-                        </td>
-                      </tr>
-                    ) : (
-                      vouchers.map((v, idx) => {
-                        const driverObj = drivers.find(d => d.id === v.driverId);
-                        const vehicleObj = vehicles.find(vh => vh.id === v.vehicleId);
-                        return (
-                          <tr key={`${v.id || 'voucher'}-${idx}`} className="hover:bg-bg-base/20">
-                            <td className="p-3 font-bold font-mono text-[11px]">{v.voucherNumber}</td>
-                            <td className="p-3 font-bold">{driverObj?.fullName || "Driver"}</td>
-                            <td className="p-3 font-semibold text-brand-gold">{vehicleObj?.plateNumber || "Vehicle"}</td>
-                            <td className="p-3 font-extrabold">{v.litersRequested} Liters</td>
-                            <td className="p-3 font-extrabold text-emerald-600">₦{v.estimatedCost.toLocaleString()}</td>
-                            <td className="p-3 text-text-muted text-[10px]">{v.requestDate}</td>
-                            <td className="p-3 text-center">
-                              {v.status === 'pending' ? (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => handleApproveVoucher(v.id)}
-                                  className="px-3 py-1 font-bold text-[10px] cursor-pointer animate-pulse"
-                                >
-                                  Approve Fuel Purchase
-                                </Button>
-                              ) : (
-                                <Badge variant={v.status === 'approved' ? 'success' : 'danger'}>
-                                  {(v.status || '').toUpperCase()}
-                                </Badge>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
 
             {/* TAB 5: FINANCIAL COMMAND CENTER */}
             {activeTab === 'finance' && (
@@ -1137,10 +1065,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                       <div className="bg-bg-base border border-border-main/30 rounded-xl p-3">
                         <span className="text-[10px] text-text-muted uppercase block leading-none">{lang === 'en' ? "Drivers" : "Direbobi"}</span>
                         <span className="text-lg font-black text-text-main mt-1 block">{drivers.length}</span>
-                      </div>
-                      <div className="bg-bg-base border border-border-main/30 rounded-xl p-3">
-                        <span className="text-[10px] text-text-muted uppercase block leading-none">{lang === 'en' ? "Vouchers" : "Rasit"}</span>
-                        <span className="text-lg font-black text-text-main mt-1 block">{vouchers.length}</span>
                       </div>
                       <div className="bg-bg-base border border-border-main/30 rounded-xl p-3">
                         <span className="text-[10px] text-text-muted uppercase block leading-none">{lang === 'en' ? "Remittances" : "Kudaden shiga"}</span>

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, Info, AlertTriangle, ShieldCheck, CheckCircle2, Trash2, Smartphone, BellOff, Loader2 } from 'lucide-react';
+import { Bell, Check, Info, AlertTriangle, ShieldCheck, CheckCircle2, Trash2, Smartphone, BellOff, Loader2, Terminal } from 'lucide-react';
 import { AppNotification } from '../types';
 import { dbStore } from '../utils/dbStore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -40,6 +40,65 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
   const [pushDevicesCount, setPushDevicesCount] = useState(0);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
+
+  // Diagnostics state
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagnosticLogs, setDiagnosticLogs] = useState<string[]>([]);
+
+  const addDiagnosticLog = (message: string) => {
+    setDiagnosticLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
+    console.log(`[Push Diagnostics] ${message}`);
+  };
+
+  const runDiagnostics = async () => {
+    setShowDiagnostics(true);
+    setDiagnosticLogs([]);
+    addDiagnosticLog('Starting Web Push Diagnostics...');
+    
+    if (!('serviceWorker' in navigator)) {
+      addDiagnosticLog('❌ Error: Service Worker not supported.');
+      return;
+    }
+    addDiagnosticLog('✅ Service Worker is supported.');
+
+    if (!('PushManager' in window)) {
+      addDiagnosticLog('❌ Error: PushManager not supported.');
+      return;
+    }
+    addDiagnosticLog('✅ PushManager is supported.');
+
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      addDiagnosticLog('✅ Service Worker is ready.');
+      
+      let vapidKey = '';
+      try {
+        const res = await api.request('/api/notifications/vapid-public-key');
+        if (res && res.publicKey) {
+          vapidKey = res.publicKey;
+          addDiagnosticLog(`✅ Successfully fetched VAPID key from backend: ${vapidKey.substring(0, 15)}...`);
+        } else {
+          addDiagnosticLog('⚠️ Backend returned empty or invalid VAPID key.');
+        }
+      } catch (err) {
+        addDiagnosticLog(`⚠️ Failed to fetch dynamic VAPID key: ${err}`);
+        vapidKey = 'BFb_V6P8N9B3yXfMMyrWv9Z3Y9x4bL6xKjG7W3a7qA_k6hY6O7N8q3V7G3m7_k3B7e9O4q3V8hY7r3M8v9bL6qA';
+        addDiagnosticLog(`ℹ️ Using fallback VAPID key: ${vapidKey.substring(0, 15)}...`);
+      }
+
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        addDiagnosticLog('✅ Existing Push Subscription found.');
+        addDiagnosticLog(`ℹ️ Endpoint: ${sub.endpoint.substring(0, 50)}...`);
+      } else {
+        addDiagnosticLog('ℹ️ No active Push Subscription found.');
+      }
+
+    } catch (err) {
+      addDiagnosticLog(`❌ Error during diagnostics: ${err}`);
+    }
+    addDiagnosticLog('Diagnostics complete.');
+  };
 
   const checkPushStatus = async () => {
     const isSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -351,6 +410,28 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
                       </>
                     )}
                   </button>
+
+                  <button
+                    onClick={showDiagnostics ? () => setShowDiagnostics(false) : runDiagnostics}
+                    className="w-full py-1.5 px-3 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 mt-1"
+                  >
+                    <Terminal className="h-3 w-3" />
+                    {showDiagnostics ? 'Close Diagnostics' : 'Run Push Diagnostics'}
+                  </button>
+
+                  {showDiagnostics && (
+                    <div className="mt-2 p-2 bg-black border border-slate-700 rounded-md max-h-32 overflow-y-auto">
+                      {diagnosticLogs.length === 0 ? (
+                        <p className="text-[9px] text-slate-500 font-mono">Waiting for logs...</p>
+                      ) : (
+                        diagnosticLogs.map((log, i) => (
+                          <div key={i} className="text-[9px] text-emerald-400 font-mono whitespace-pre-wrap break-all border-b border-slate-800 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">
+                            {log}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -793,7 +793,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
               <div className="flex flex-col gap-2 mt-2">
                 <span className="text-[10px] font-extrabold text-text-muted uppercase tracking-wider">{lang === 'en' ? "Historic Archived Versions" : "Tsofaffin Sigogi a R2"}</span>
                 {viewingHistoryDoc.versions?.map((history, idx) => (
-                  <div key={idx} className="p-3 bg-bg-base/50 rounded-lg border border-border-main/40 flex justify-between items-center">
+                  <div key={`history-${idx}`} className="p-3 bg-bg-base/50 rounded-lg border border-border-main/40 flex justify-between items-center">
                     <div>
                       <span className="text-xs font-bold text-text-main block">Version V{history.version}</span>
                       <span className="text-[9px] text-text-muted font-mono block">
