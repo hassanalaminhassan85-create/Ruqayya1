@@ -863,8 +863,8 @@ export const NotificationInbox: React.FC<NotificationInboxProps> = ({ lang }) =>
                             {log.action.replace('NOTIFICATION_', '')}
                           </span>
                         </td>
-                        <td className="p-3 max-w-xs truncate text-[11px] text-text-main font-semibold" title={log.new_value}>
-                          {log.new_value}
+                        <td className="p-3 max-w-xs truncate text-[11px] text-text-main font-semibold" title={typeof log.new_value === 'object' ? JSON.stringify(log.new_value) : log.new_value}>
+                          {typeof log.new_value === 'object' ? JSON.stringify(log.new_value) : log.new_value}
                         </td>
                         <td className="p-3 text-[10px] text-text-muted leading-tight font-mono max-w-xxs truncate" title={log.device}>
                           <span className="block font-bold">IP: {log.ip_address}</span>

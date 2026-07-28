@@ -125,9 +125,9 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
   // Classify audit log entry
   const getLogCategory = (log: AuditLog): 'drivers' | 'expenses' | 'status' | 'other' => {
     if (!log) return 'other';
-    const act = (log.action || '').toUpperCase();
-    const prev = (log.previous_value || log.previousValue || '').toUpperCase();
-    const next = (log.new_value || log.newValue || '').toUpperCase();
+    const act = String(log.action || '').toUpperCase();
+    const prev = String(log.previous_value || log.previousValue || '').toUpperCase();
+    const next = String(log.new_value || log.newValue || '').toUpperCase();
 
     if (
       act.includes('REGISTER') || 
@@ -319,7 +319,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                           {log.action}
                         </h4>
                         <p className="text-[10px] text-text-muted leading-relaxed font-sans max-w-md">
-                          {log.new_value || log.previous_value || 'No payload parameters committed.'}
+                          {(typeof log.new_value === 'object' ? JSON.stringify(log.new_value) : log.new_value) || (typeof log.previous_value === 'object' ? JSON.stringify(log.previous_value) : log.previous_value) || 'No payload parameters committed.'}
                         </p>
                         
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -372,14 +372,14 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                         {log.previous_value && (
                           <div className="bg-bg-surface p-1.5 rounded border border-border-main text-red-500/90 whitespace-pre-wrap break-all leading-tight">
                             <span className="block text-[8px] font-sans font-black uppercase tracking-wider text-text-muted mb-0.5">{labels.previous}</span>
-                            {log.previous_value}
+                            {typeof log.previous_value === 'object' ? JSON.stringify(log.previous_value) : log.previous_value}
                           </div>
                         )}
 
                         {log.new_value && (
                           <div className="bg-[#D4AF37]/5 p-1.5 rounded border border-[#D4AF37]/10 text-emerald-600 dark:text-emerald-500 whitespace-pre-wrap break-all leading-tight">
                             <span className="block text-[8px] font-sans font-black uppercase tracking-wider text-[#D4AF37] mb-0.5">{labels.newValue}</span>
-                            {log.new_value}
+                            {typeof log.new_value === 'object' ? JSON.stringify(log.new_value) : log.new_value}
                           </div>
                         )}
                       </motion.div>

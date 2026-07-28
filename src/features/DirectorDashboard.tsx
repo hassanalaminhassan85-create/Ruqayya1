@@ -2525,13 +2525,13 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
                             <td className="p-3 font-sans text-xs font-extrabold">{log.user_email || log.userId}</td>
                             <td className="p-3">
                               <Badge variant={log.user_role === 'director' || log.userRole === 'director' ? 'gold' : 'info'}>
-                                {(log.user_role || log.userRole || 'SYSTEM').toUpperCase()}
+                                {String(log.user_role || log.userRole || 'SYSTEM').toUpperCase()}
                               </Badge>
                             </td>
                             <td className="p-3 font-extrabold text-text-main">{log.action}</td>
-                            <td className="p-3 text-text-muted font-sans text-xs leading-relaxed">{log.new_value || log.details}</td>
-                            <td className="p-3 text-rose-600 font-bold max-w-[120px] overflow-hidden text-ellipsis">{log.previous_value || 'None'}</td>
-                            <td className="p-3 text-emerald-600 font-bold max-w-[120px] overflow-hidden text-ellipsis">{log.new_value || log.details}</td>
+                            <td className="p-3 text-text-muted font-sans text-xs leading-relaxed">{typeof log.new_value === 'object' ? JSON.stringify(log.new_value) : log.new_value || log.details}</td>
+                            <td className="p-3 text-rose-600 font-bold max-w-[120px] overflow-hidden text-ellipsis">{typeof log.previous_value === 'object' ? JSON.stringify(log.previous_value) : log.previous_value || 'None'}</td>
+                            <td className="p-3 text-emerald-600 font-bold max-w-[120px] overflow-hidden text-ellipsis">{typeof log.new_value === 'object' ? JSON.stringify(log.new_value) : log.new_value || log.details}</td>
                           </tr>
                         ))}
                       </tbody>
