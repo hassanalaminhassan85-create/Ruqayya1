@@ -47,6 +47,7 @@ import { PaymentWorkflow } from '../components/admin/PaymentWorkflow';
 import { CompanyOperationsCard } from '../components/admin/CompanyOperationsCard';
 import { CompanyWalletCard } from '../components/admin/CompanyWalletCard';
 import { SystemStatusCard } from '../components/admin/SystemStatusCard';
+import { CycleStatusSummary } from '../components/admin/CycleStatusSummary';
 import { PeopleManagement } from '../components/admin/PeopleManagement';
 import { CycleTimer } from '../components/director/CycleTimer';
 import { ActivityFeed } from '../components/admin/ActivityFeed';
@@ -479,7 +480,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             </div>
 
             {/* Enterprise Treasury & Active Cycle Timer side-by-side underneath */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 w-full">
               <CompanyWalletCard
                 lang={lang}
                 finance={finance}
@@ -490,6 +491,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 lang={lang}
                 activeCycle={activeCycle}
                 onStateChange={syncAllData}
+              />
+              <CycleStatusSummary
+                lang={lang}
+                activeCycle={activeCycle}
               />
             </div>
 

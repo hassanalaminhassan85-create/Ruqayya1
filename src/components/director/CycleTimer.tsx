@@ -16,6 +16,7 @@ import {
   Activity, 
   CheckCircle2 
 } from 'lucide-react';
+import { ProgressBar } from '../ui/SharedComponents';
 
 interface CycleTimerProps {
   lang: 'en' | 'ha';
@@ -178,6 +179,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
   const totalCycleSeconds = 30 * 24 * 3600;
   const remainingSeconds = Math.max(0, totalCycleSeconds - secondsElapsed);
   const time = formatDuration(remainingSeconds);
+  const progressPercent = Math.min(100, Math.max(0, (secondsElapsed / totalCycleSeconds) * 100));
 
   const handlePause = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -274,6 +276,10 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
                 </span>
               </div>
             ))}
+          </div>
+
+          <div className="px-1">
+            <ProgressBar value={progressPercent} variant="gold" />
           </div>
 
           {/* Time Trackers Block */}
