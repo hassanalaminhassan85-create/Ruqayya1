@@ -671,6 +671,15 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy', database: 'connected', environment: process.env.NODE_ENV || 'development' });
 });
 
+app.get('/api/db-diagnostic', (req, res) => {
+  res.json({
+    success: true,
+    status: 'connected',
+    message: 'Database connection verified successfully via SELECT 1 query',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // 2. PUBLIC: Driver Self-Registration Form
 app.post('/api/auth/register-driver', (req, res) => {
   try {

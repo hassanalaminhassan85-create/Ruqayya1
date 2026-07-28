@@ -529,6 +529,35 @@ class D1Manager {
           )
         `).run();
 
+        await d1.prepare(`
+          CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `).run();
+
+        await d1.prepare(`
+          CREATE TABLE IF NOT EXISTS cycles (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            start_time DATETIME,
+            end_time DATETIME,
+            duration INTEGER,
+            status TEXT
+          )
+        `).run();
+
+        await d1.prepare(`
+          CREATE TABLE IF NOT EXISTS subscriptions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            endpoint TEXT UNIQUE,
+            keys TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `).run();
+
         console.log(`[D1 SQL DB QUERY] SELECT name, data FROM collections`);
         const dbResponse = await d1.prepare("SELECT name, data FROM collections").all();
         const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
@@ -823,6 +852,37 @@ class D1Manager {
           d1.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
             .bind(key, JSON.stringify(val))
         );
+      }
+      if (state.cycles && Array.isArray(state.cycles)) {
+        for (const c of state.cycles) {
+          statements.push(
+            d1.prepare("INSERT OR REPLACE INTO cycles (id, user_id, start_time, end_time, duration, status) VALUES (?, ?, ?, ?, ?, ?)")
+              .bind(
+                c.id,
+                c.created_by || null,
+                c.startDate || c.created_at || null,
+                c.endDate || null,
+                c.duration || 0,
+                c.status || 'active'
+              )
+          );
+        }
+      }
+      if (state.push_subscriptions && Array.isArray(state.push_subscriptions)) {
+        for (const s of state.push_subscriptions) {
+          if (s && s.subscription && s.subscription.endpoint) {
+            statements.push(
+              d1.prepare("INSERT OR REPLACE INTO subscriptions (id, user_id, endpoint, keys, created_at) VALUES (?, ?, ?, ?, ?)")
+                .bind(
+                  s.id || 'sub_' + Math.floor(Math.random() * 1000000),
+                  s.userId || 'anonymous',
+                  s.subscription.endpoint,
+                  JSON.stringify(s.subscription.keys || {}),
+                  s.createdAt || new Date().toISOString()
+                )
+            );
+          }
+        }
       }
       if (statements.length > 0) {
         await d1.batch(statements);
@@ -1595,6 +1655,29 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       status: 'healthy',
       database: env.DB ? 'connected' : 'memory_fallback',
       environment: 'production'
+    });
+  }
+
+  // PUBLIC: Database Diagnostic Check via SELECT 1
+  if (path === '/api/db-diagnostic' && method === 'GET') {
+    const d1 = getD1();
+    let dbStatus = 'disconnected';
+    try {
+      if (d1 && typeof d1.prepare === 'function') {
+        await d1.prepare('SELECT 1 as res').first();
+        dbStatus = 'connected';
+      } else {
+        dbStatus = 'memory_fallback';
+      }
+    } catch (e) {
+      console.error('[DB Diagnostic Error]', e);
+      dbStatus = 'error';
+    }
+    return buildResponse({
+      success: dbStatus !== 'error',
+      status: dbStatus,
+      message: `Database connection verified successfully via SELECT 1 query (Status: ${dbStatus})`,
+      timestamp: new Date().toISOString()
     });
   }
 

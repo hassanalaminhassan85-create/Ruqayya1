@@ -80,27 +80,53 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const title = payload.title || 'RUQAYYA TRANSPORT LIMITED';
-  const options = {
-    body: payload.body || 'New secure ERP transmission received.',
-    icon: payload.icon || '/logo.png', // Fallback to logo
-    badge: payload.badge || '/logo.png',
-    vibrate: payload.vibrate || [200, 100, 200],
-    tag: payload.tag || 'ruqayya-notification',
-    renotify: true,
-    data: {
-      url: payload.url || '/notifications',
-      id: payload.id
-    },
-    actions: payload.actions || [
-      { action: 'open', title: 'Open ERP' },
-      { action: 'dismiss', title: 'Dismiss' }
-    ]
-  };
+  const showNotificationPromise = (async () => {
+    let title = payload.title;
+    let body = payload.body;
+    let url = payload.url || '/notifications';
 
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+    if (!title || !body) {
+      try {
+        const res = await fetch('/api/notifications');
+        if (res.ok) {
+          const data = await res.json();
+          const list = data.notifications || data || [];
+          const unread = list.find((n) => !n.read_status && !n.read);
+          if (unread) {
+            title = unread.title_en || unread.title || 'RUQAYYA TRANSPORT LIMITED';
+            body = unread.message_en || unread.body || 'New operational update received.';
+            url = '/notifications';
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch fallback notification in SW:', err);
+      }
+    }
+
+    title = title || 'RUQAYYA TRANSPORT LIMITED';
+    body = body || 'New secure ERP transmission received.';
+
+    const options = {
+      body,
+      icon: payload.icon || '/logo.png',
+      badge: payload.badge || '/logo.png',
+      vibrate: payload.vibrate || [200, 100, 200],
+      tag: payload.tag || 'ruqayya-notification',
+      renotify: true,
+      data: {
+        url,
+        id: payload.id
+      },
+      actions: payload.actions || [
+        { action: 'open', title: 'Open ERP' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
+    };
+
+    return self.registration.showNotification(title, options);
+  })();
+
+  event.waitUntil(showNotificationPromise);
 });
 
 // Notification Click Event: navigate to deep link

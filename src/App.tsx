@@ -29,6 +29,7 @@ import { PWAPanel } from './components/PWAPanel';
 import { AICopilotDrawer } from './components/AICopilotDrawer';
 import { ChatDashboard } from './components/ChatDashboard';
 import { offlineSync } from './utils/offlineSync';
+import { checkDatabaseConnection } from './utils/dbDiagnostic';
 import { 
   Truck, 
   Users, 
@@ -141,6 +142,13 @@ export default function App() {
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Run D1 DB diagnostic check on component mount
+  useEffect(() => {
+    checkDatabaseConnection().then(res => {
+      console.log('Ruqayya ERP DB Diagnostic:', res);
+    });
   }, []);
 
   // Reset tabs on role transitions
