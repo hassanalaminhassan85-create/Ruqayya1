@@ -6084,7 +6084,7 @@ app.post('/api/payments', authenticateSession, (req, res) => {
     const actor = (req as any).user;
     const db = loadDB();
     const opsState = db.company_operations_state || { status: 'Setup Mode' };
-    if (opsState.status === 'Setup Mode') {
+    if (opsState.status === 'Setup Mode' && actor.role !== 'driver') {
       return res.status(400).json({ error: 'Company is currently in Setup Mode. Financial operations are disabled until operations officially start.' });
     }
     

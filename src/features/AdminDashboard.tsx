@@ -167,12 +167,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     }
     try {
       const [vList, dList, tList, fin, payList, shList, cyList, logList] = await Promise.all([
-        api.getVehicles(),
-        api.getDrivers(),
-        api.getTrips(),
-        api.getFinance(),
-        api.getPayments(),
-        api.getShareholders(),
+        api.getVehicles().catch(() => []),
+        api.getDrivers().catch(() => []),
+        api.getTrips().catch(() => []),
+        api.getFinance().catch(() => []),
+        api.getPayments().catch(() => []),
+        api.getShareholders().catch(() => []),
         api.request('/api/director/cycles').catch(() => ({ cycles: [] })),
         api.getAuditLogs().catch(() => [])
       ]);

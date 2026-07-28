@@ -454,7 +454,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
           restEndDate: profile.rest_end_date || '2026-06-25',
           restReason: profile.rest_reason || 'Fatigue rehabilitation',
           restHistory: profile.restHistory || [],
-          passportPhoto: profile.passport_photo_url || profile.passportPhoto || profile.passportPhotoUrl || ''
+          passportPhoto: profile.passport_photo_url || profile.passportPhoto || profile.passportPhotoUrl || profile.passport_photo || profile.passport || profile.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || (driver && driver.passportPhoto) || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
         };
 
         setDriver(updatedDriver);

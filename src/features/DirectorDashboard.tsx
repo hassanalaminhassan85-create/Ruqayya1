@@ -289,13 +289,13 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
     }
     try {
       const [lgList, finList, vhList, drList, shList, cyList, ntList] = await Promise.all([
-        api.getAuditLogs(),
-        api.getFinance(),
-        api.getVehicles(),
-        api.getDrivers(),
-        api.getShareholders(),
+        api.getAuditLogs().catch(() => []),
+        api.getFinance().catch(() => []),
+        api.getVehicles().catch(() => []),
+        api.getDrivers().catch(() => []),
+        api.getShareholders().catch(() => []),
         api.request('/api/director/cycles').catch(() => ({ cycles: [] })), // safety fallback
-        api.getNotifications()
+        api.getNotifications().catch(() => [])
       ]);
       setLogs(lgList || []);
       setFinancials(finList || []);
