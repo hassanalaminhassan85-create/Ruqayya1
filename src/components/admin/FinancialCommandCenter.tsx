@@ -385,7 +385,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     if (fallbackList.length > 0) return fallbackList;
 
     // Last resort fallback: list some vehicles from vehicles state
-    return vehicles.slice(0, 5).map(v => ({
+    return vehicles.slice(0, 5).map((v, idx) => ({
       id: v.id,
       plateNumber: v.plateNumber || 'N/A',
       model: v.model || 'Utility Keke',
@@ -948,11 +948,11 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             <div className="flex flex-col gap-1.5 max-h-[460px] overflow-y-auto pr-1">
               {drivers
                 .filter(d => d.fullName.toLowerCase().includes(searchQuery.toLowerCase()) || (d.company_driver_id && d.company_driver_id.toLowerCase().includes(searchQuery.toLowerCase())))
-                .map(d => {
+                .map((d, idx) => {
                   const isSelected = selectedDriverId === d.id;
                   return (
                     <button
-                      key={d.id}
+                      key={`${d.id}-${idx}`}
                       onClick={() => {
                         setSelectedDriverId(d.id);
                         setPayAmountInput('');
@@ -1365,8 +1365,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs focus:outline-none"
                 >
                   <option value="">-- No Association --</option>
-                  {drivers.map(d => (
-                    <option key={d.id} value={d.id}>{d.fullName}</option>
+                  {drivers.map((d, idx) => (
+                    <option key={`${d.id}-${idx}`} value={d.id}>{d.fullName}</option>
                   ))}
                 </select>
               </div>
@@ -1631,7 +1631,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                 ) : (
                   activeTricyclesList.map((v, idx) => (
                     <motion.div
-                      key={v.id}
+                      key={`${v.id}-${idx}`}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.05 }}

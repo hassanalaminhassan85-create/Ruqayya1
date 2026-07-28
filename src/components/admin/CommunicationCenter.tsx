@@ -553,13 +553,13 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
                   No contacts found matching search.
                 </div>
               ) : (
-                filteredUsers.map((u) => {
+                filteredUsers.map((u, idx) => {
                   const unreadCount = messages.filter(m => m.sender_id === u.id && m.receiver_id === currentUser?.id && m.read_status === 0).length;
                   const isSelected = selectedUser?.id === u.id;
 
                   return (
                     <div
-                      key={u.id}
+                      key={`${u.id}-${idx}`}
                       onClick={() => {
                         setSelectedUser(u);
                         // Trigger read acknowledgement
@@ -679,11 +679,11 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
                       <span className="text-[10px] text-text-muted block mt-1">Start the workspace discussion below.</span>
                     </div>
                   ) : (
-                    activeConversation.map((m) => {
+                    activeConversation.map((m, idx) => {
                       const isMe = m.sender_id === currentUser.id;
 
                       return (
-                        <div key={m.id} className={`flex flex-col max-w-[75%] gap-1 ${isMe ? 'self-end items-end' : 'self-start items-start'}`}>
+                        <div key={`${m.id}-${idx}`} className={`flex flex-col max-w-[75%] gap-1 ${isMe ? 'self-end items-end' : 'self-start items-start'}`}>
                           
                           {/* Chat bubble */}
                           <div className={`p-3 rounded-2xl text-xs leading-relaxed ${
@@ -856,13 +856,13 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {announcements.map((ann) => {
+              {announcements.map((ann, idx) => {
                 const token = localStorage.getItem('ruqayya_token') || '';
                 const imageUrl = ann.image_url ? `${ann.image_url}?token=${token}` : '';
                 const attachmentUrl = ann.attachment_url ? `${ann.attachment_url}?token=${token}` : '';
 
                 return (
-                  <Card key={ann.id} className="bg-bg-surface border-border-main/50 p-5 flex flex-col gap-3 hover:shadow-xs transition-shadow">
+                  <Card key={`${ann.id}-${idx}`} className="bg-bg-surface border-border-main/50 p-5 flex flex-col gap-3 hover:shadow-xs transition-shadow">
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">

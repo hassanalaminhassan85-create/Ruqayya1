@@ -793,10 +793,10 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  filteredDriversList.map(d => {
+                  filteredDriversList.map((d, idx) => {
                     const linkedRig = vehicles.find(v => v.driver_id === d.id);
                     return (
-                      <tr key={d.id} className="hover:bg-bg-base/20 transition-all">
+                      <tr key={`${d.id}-${idx}`} className="hover:bg-bg-base/20 transition-all">
                         <td className="p-4 font-black font-mono text-[11px] text-brand-navy">
                           {d.companyDriverId || `PEND-${d.id.substring(0, 5).toUpperCase()}`}
                         </td>
@@ -1296,7 +1296,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                     filteredShareholdersList.map((s, idx) => {
                       const weight = totalShareholderCapital > 0 ? (s.investment_amount / totalShareholderCapital) * 100 : 0;
                       return (
-                        <tr key={s.id} className="hover:bg-bg-base/20 transition-all">
+                        <tr key={`${s.id}-${idx}`} className="hover:bg-bg-base/20 transition-all">
                           <td className="p-4 font-black font-mono text-[11px] text-brand-navy">
                             RTL-SH-{(idx + 1).toString().padStart(2, '0')}
                           </td>
@@ -1521,10 +1521,10 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    pendingReviewDrivers.map((d) => {
+                    pendingReviewDrivers.map((d, idx) => {
                       const linkedRig = vehicles.find(v => v.driver_id === d.id);
                       return (
-                        <tr key={d.id} className="hover:bg-bg-base/20 transition-all">
+                        <tr key={`${d.id}-${idx}`} className="hover:bg-bg-base/20 transition-all">
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <img
@@ -1588,7 +1588,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
           <div className="flex flex-col gap-4 p-2 max-w-2xl">
             {/* Step indicators */}
             <div className="flex items-center justify-between border-b border-border-main/40 pb-3 mb-2 flex-wrap gap-2">
-              {[1, 2, 3, 4, 5].map((s) => (
+              {[1, 2, 3, 4, 5].map((s, idx) => (
                 <span
                   key={s}
                   className={`px-2.5 py-1 text-[10px] font-black rounded-lg transition-all ${
@@ -1817,8 +1817,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                     className="w-full bg-bg-base border border-border-main text-text-main px-3 py-2 text-xs rounded-lg focus:outline-none"
                   >
                     <option value="">-- No Rig Assignment (Register Profile Only) --</option>
-                    {vehicles.filter(v => v.status === 'idle').map((v) => (
-                      <option key={v.id} value={v.id}>
+                    {vehicles.filter(v => v.status === 'idle').map((v, idx) => (
+                      <option key={`${v.id}-${idx}`} value={v.id}>
                         {v.plateNumber} - {v.brand} {v.model} ({v.colour})
                       </option>
                     ))}
@@ -2124,8 +2124,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                   className="w-full bg-bg-base border border-border-main text-text-main px-3 py-2 text-xs rounded-lg focus:outline-none"
                 >
                   <option value="">-- No Driver Link (Corporate Resolution) --</option>
-                  {drivers.map(d => (
-                    <option key={d.id} value={d.id}>{d.fullName}</option>
+                  {drivers.map((d, idx) => (
+                    <option key={`${d.id}-${idx}`} value={d.id}>{d.fullName}</option>
                   ))}
                 </select>
               </div>
@@ -2138,8 +2138,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                   className="w-full bg-bg-base border border-border-main text-text-main px-3 py-2 text-xs rounded-lg focus:outline-none"
                 >
                   <option value="">-- No Rig Link (General Archive) --</option>
-                  {vehicles.map(v => (
-                    <option key={v.id} value={v.id}>{v.plateNumber} ({v.brand})</option>
+                  {vehicles.map((v, idx) => (
+                    <option key={`${v.id}-${idx}`} value={v.id}>{v.plateNumber} ({v.brand})</option>
                   ))}
                 </select>
               </div>

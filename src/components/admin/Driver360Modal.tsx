@@ -629,8 +629,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                         </td>
                       </tr>
                     ) : (
-                      driverPayments.map((p: any) => (
-                        <tr key={p.id} className="hover:bg-bg-base/20 font-mono text-[11px]">
+                      driverPayments.map((p: any, idx: number) => (
+                        <tr key={`${p.id}-${idx}`} className="hover:bg-bg-base/20 font-mono text-[11px]">
                           <td className="p-3 font-bold text-brand-gold">{p.receipt_number}</td>
                           <td className="p-3 font-sans font-bold text-text-muted">Milestone #{p.installment_number}</td>
                           <td className="p-3 font-extrabold text-emerald-500">₦{p.amount.toLocaleString()}</td>
@@ -664,8 +664,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                   {(!driver.accidentHistory || driver.accidentHistory.length === 0) ? (
                     <div className="text-center py-6 text-text-muted italic">{lang === 'en' ? "Clean record: No active accidents logged." : "Lafiya kalau: Babu hatsarin da aka yi."}</div>
                   ) : (
-                    driver.accidentHistory.map((acc: any) => (
-                      <div key={acc.id} className="p-2.5 bg-bg-surface border border-border-main rounded-lg flex flex-col gap-1.5 font-mono text-[10px]">
+                    driver.accidentHistory.map((acc: any, idx: number) => (
+                      <div key={`${acc.id}-${idx}`} className="p-2.5 bg-bg-surface border border-border-main rounded-lg flex flex-col gap-1.5 font-mono text-[10px]">
                         <div className="flex justify-between items-center font-sans font-bold text-text-main">
                           <span className="text-[11px] text-rose-500">Claim Code: #{acc.id}</span>
                           <span>{acc.date}</span>
@@ -691,8 +691,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                   {(!driver.restHistory || driver.restHistory.length === 0) ? (
                     <div className="text-center py-6 text-text-muted italic">{lang === 'en' ? "Roster: Active duty cycle, no logged rest." : "Yana aiki: Babu hutun da aka nema a halin yanzu."}</div>
                   ) : (
-                    driver.restHistory.map((rst: any) => (
-                      <div key={rst.id} className="p-2.5 bg-bg-surface border border-border-main rounded-lg flex flex-col gap-1 font-mono text-[10px]">
+                    driver.restHistory.map((rst: any, idx: number) => (
+                      <div key={`${rst.id}-${idx}`} className="p-2.5 bg-bg-surface border border-border-main rounded-lg flex flex-col gap-1 font-mono text-[10px]">
                         <div className="flex justify-between items-center font-sans font-bold text-text-main">
                           <span className="text-purple-400">Rest ID: #{rst.id}</span>
                           <span className="text-text-muted font-bold">{rst.startDate} to {rst.endDate}</span>

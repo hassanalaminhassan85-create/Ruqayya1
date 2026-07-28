@@ -445,6 +445,8 @@ export default function App() {
     setAuthToken(token);
     setCurrentRole(role);
     setDriverName('');
+    setActiveSection('dashboard');
+    setAdminTab('overview');
     const nextPath = role === 'admin' ? '/admin' : role === 'director' ? '/director' : role === 'shareholder' ? '/shareholder' : '/';
     window.history.pushState({}, '', nextPath);
     setPathname(nextPath);

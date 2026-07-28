@@ -8,7 +8,7 @@ import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { 
   loadDB, 
   saveDB, 
@@ -2753,6 +2753,339 @@ ${JSON.stringify(cleanedContext, null, 2)}
 `;
 }
 
+// =====================================================================
+// AI COPILOT FUNCTION CALLING TOOLS, HELPERS & SERVICE ENDPOINT
+// =====================================================================
+
+function getDriverLiveFinancialSummary(driver: any, db: any) {
+  const financials = getDriverFinancials(driver, db);
+  const activeCycle = db.cycles?.find((c: any) => c.status === 'active' || c.status === 'paused') || db.cycles?.[0];
+  const installments = calculateInstallmentsForDriver(driver, db, activeCycle);
+  
+  const user = db.users.find((u: any) => u.id === driver.user_id);
+  const vehicle = db.vehicles?.find((v: any) => v.driver_id === driver.id);
+
+  return {
+    driverId: driver.id,
+    companyDriverId: driver.company_driver_id || 'PENDING',
+    fullName: user?.full_name || driver.fullName || 'Unknown Driver',
+    vehiclePlateNumber: vehicle?.plate_number || 'No Vehicle Assigned',
+    vehicleModel: vehicle?.model || 'N/A',
+    vehiclePurchasePrice: financials.vehiclePurchasePrice,
+    totalAmountPaid: financials.totalAmountPaid,
+    remainingVehicleBalance: financials.remainingVehicleBalance,
+    totalPaymentsMade: financials.totalPaymentsMade,
+    installmentAgreedAmount: financials.agreedAmount,
+    activeCycleId: activeCycle ? activeCycle.id : 'N/A',
+    installments: installments.map((i: any) => ({
+      installmentNumber: i.installmentNumber,
+      dueDate: i.dueDate,
+      totalDue: i.totalDue,
+      totalPaid: i.totalPaid,
+      remainingBalance: i.remainingBalance,
+      status: i.status
+    }))
+  };
+}
+
+function executeRecordPayment(args: any, actor: any, req: express.Request) {
+  const { driverQuery, amount, installmentNumber, remarks, paymentMethod, cycleQuery } = args;
+  const db = loadDB();
+
+  // Find the driver matching query
+  const drv = db.drivers.find((d: any) => 
+    d.id === driverQuery || 
+    d.company_driver_id?.toUpperCase() === driverQuery.toUpperCase() ||
+    db.users.find((u: any) => u.id === d.user_id)?.full_name?.toLowerCase().includes(driverQuery.toLowerCase())
+  );
+
+  if (!drv) {
+    return { success: false, error: `Driver matching query '${driverQuery}' was not found in the roster.` };
+  }
+
+  // Find cycle if cycleQuery is specified
+  let targetCycle = null;
+  if (cycleQuery) {
+    const cqStr = String(cycleQuery).trim();
+    targetCycle = db.cycles?.find((c: any) => 
+      String(c.id) === cqStr || 
+      String(c.id) === `CYCLE-${cqStr}` || 
+      String(c.id).includes(cqStr) ||
+      (c.name && c.name.toLowerCase().includes(cqStr.toLowerCase()))
+    );
+  }
+  if (!targetCycle) {
+    // Fallback to active/paused cycle or first cycle
+    targetCycle = db.cycles?.find((c: any) => c.status === 'active' || c.status === 'paused') || db.cycles?.[0];
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  let paymentDate = todayStr;
+  if (targetCycle) {
+    const cStart = new Date(targetCycle.startDate);
+    const cEnd = targetCycle.endDate ? new Date(targetCycle.endDate) : new Date();
+    const today = new Date();
+    if (today >= cStart && today <= cEnd) {
+      paymentDate = todayStr;
+    } else {
+      paymentDate = targetCycle.startDate.split('T')[0];
+    }
+  }
+
+  // Create payment record
+  const rNumber = `RCP-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`;
+  const newPayment = {
+    id: `PAY-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+    driver_id: drv.id,
+    amount: parseFloat(amount),
+    installment_number: parseInt(installmentNumber),
+    outstanding_amount: 0,
+    date: paymentDate,
+    receipt_number: rNumber,
+    payment_method: paymentMethod || 'bank_transfer',
+    reference_number: rNumber,
+    status: 'approved', // Auto-approved as authorized Admin is executing via AI
+    recorded_by: actor.fullName || actor.username || 'System AI',
+    approved_by: actor.fullName || actor.username || 'System AI',
+    remarks: remarks || 'Recorded via AI Copilot',
+    created_at: new Date().toISOString()
+  };
+
+  if (!db.driver_payments) db.driver_payments = [];
+  db.driver_payments.unshift(newPayment);
+
+  // Post to financial ledger
+  if (!db.financial_records) db.financial_records = [];
+  db.financial_records.unshift({
+    id: generateUUID(),
+    type: 'revenue',
+    category: 'freight',
+    amount: newPayment.amount,
+    date: newPayment.date,
+    description: `Installment Payment Approved via AI - Driver ${drv.company_driver_id || 'unassigned'} (Receipt: ${newPayment.receipt_number})`,
+    approvedBy: actor.fullName || actor.username || 'System AI',
+    created_at: new Date().toISOString()
+  });
+
+  // Update remaining vehicle balance on driver profile
+  if (drv.remaining_vehicle_balance !== undefined) {
+    drv.remaining_vehicle_balance = Math.max(0, parseFloat(drv.remaining_vehicle_balance) - newPayment.amount);
+  } else {
+    const purchasePrice = parseFloat(drv.vehicle_purchase_price) || 15000000;
+    drv.remaining_vehicle_balance = Math.max(0, purchasePrice - newPayment.amount);
+  }
+
+  // Send driver a push/in-app notification
+  if (!db.notifications) db.notifications = [];
+  db.notifications.unshift({
+    id: generateUUID(),
+    user_id: drv.user_id,
+    title_en: 'Payment Approved (AI)',
+    title_ha: 'An Amince da Biyan Kudi (AI)',
+    message_en: `Your installment payment of ₦${newPayment.amount.toLocaleString()} has been approved.`,
+    message_ha: `An amince da biyan kudin ku na kashi na ₦${newPayment.amount.toLocaleString()}.`,
+    type: 'success',
+    read_status: 0,
+    created_at: new Date().toISOString()
+  });
+
+  saveDB(db);
+
+  writeServerAuditLog(
+    actor.id,
+    actor.email || 'system',
+    actor.role,
+    'DRIVER_PAYMENT_APPROVED_AI',
+    null,
+    `Payment ₦${newPayment.amount.toLocaleString()} recorded and approved via AI for driver ${drv.id}`,
+    req
+  );
+
+  return {
+    success: true,
+    message: `Payment of ₦${parseFloat(amount).toLocaleString()} successfully recorded and approved for driver ${drv.company_driver_id || drv.id} (Installment ${installmentNumber}).`,
+    financialSummary: getDriverLiveFinancialSummary(drv, db)
+  };
+}
+
+function executeRecordExpense(args: any, actor: any, req: express.Request) {
+  const { category, amount, description, driverQuery, cycleQuery } = args;
+  const db = loadDB();
+
+  let drv = null;
+  if (driverQuery) {
+    drv = db.drivers.find((d: any) => 
+      d.id === driverQuery || 
+      d.company_driver_id?.toUpperCase() === driverQuery.toUpperCase() ||
+      db.users.find((u: any) => u.id === d.user_id)?.full_name?.toLowerCase().includes(driverQuery.toLowerCase())
+    );
+  }
+
+  // Find cycle if cycleQuery is specified
+  let targetCycle = null;
+  if (cycleQuery) {
+    const cqStr = String(cycleQuery).trim();
+    targetCycle = db.cycles?.find((c: any) => 
+      String(c.id) === cqStr || 
+      String(c.id) === `CYCLE-${cqStr}` || 
+      String(c.id).includes(cqStr) ||
+      (c.name && c.name.toLowerCase().includes(cqStr.toLowerCase()))
+    );
+  }
+  if (!targetCycle) {
+    targetCycle = db.cycles?.find((c: any) => c.status === 'active' || c.status === 'paused') || db.cycles?.[0];
+  }
+
+  const newRecord = {
+    id: generateUUID(),
+    type: 'expense',
+    category: category || 'other',
+    amount: parseFloat(amount),
+    date: new Date().toISOString().split('T')[0],
+    description: description + (drv ? ` (Applied to Driver ${drv.company_driver_id || drv.id})` : ''),
+    driver_id: drv ? drv.id : undefined,
+    cycle_id: targetCycle ? targetCycle.id : undefined,
+    approvedBy: actor.fullName || actor.username || 'System AI',
+    created_at: new Date().toISOString()
+  };
+
+  if (!db.financial_records) db.financial_records = [];
+  db.financial_records.unshift(newRecord);
+
+  // If maintenance category and associated driver, log to driver accident/maintenance history
+  if (drv && category === 'maintenance') {
+    if (!drv.accidentHistory) drv.accidentHistory = [];
+    drv.accidentHistory.unshift({
+      id: generateUUID().substring(0, 8).toUpperCase(),
+      date: newRecord.date,
+      description: `Logged via AI: ${description}`,
+      damageEstimate: parseFloat(amount),
+      severity: 'minor',
+      created_at: new Date().toISOString()
+    });
+  }
+
+  saveDB(db);
+
+  writeServerAuditLog(
+    actor.id,
+    actor.email || 'system',
+    actor.role,
+    'LEDGER_POST_AI',
+    null,
+    `Posted Expense ₦${parseFloat(amount).toLocaleString()} (${category}) via AI`,
+    req
+  );
+
+  return {
+    success: true,
+    message: `Expense of ₦${parseFloat(amount).toLocaleString()} successfully recorded in category '${category}'.`,
+    record: newRecord,
+    driverFinancialSummary: drv ? getDriverLiveFinancialSummary(drv, db) : null
+  };
+}
+
+function executeQueryDriverFinancials(args: any, actor: any, req: express.Request) {
+  const { driverQuery } = args;
+  const db = loadDB();
+
+  const drv = db.drivers.find((d: any) => 
+    d.id === driverQuery || 
+    d.company_driver_id?.toUpperCase() === driverQuery.toUpperCase() ||
+    db.users.find((u: any) => u.id === d.user_id)?.full_name?.toLowerCase().includes(driverQuery.toLowerCase())
+  );
+
+  if (!drv) {
+    return { success: false, error: `Driver matching query '${driverQuery}' was not found in the roster.` };
+  }
+
+  return {
+    success: true,
+    financialSummary: getDriverLiveFinancialSummary(drv, db)
+  };
+}
+
+const recordPaymentTool = {
+  name: 'recordPayment',
+  description: 'Records an installment payment made by a driver. This updates their remaining vehicle balance, adds a ledger revenue entry, and registers a success notification. Allowed only for admins and directors.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      driverQuery: {
+        type: Type.STRING,
+        description: 'The query to identify the driver. Can be the driver company ID (e.g. DRV-2026-102), driver name, or internal UUID.'
+      },
+      amount: {
+        type: Type.NUMBER,
+        description: 'The installment payment amount in Naira (e.g. 50000).'
+      },
+      installmentNumber: {
+        type: Type.INTEGER,
+        description: 'The installment index number being paid, from 1 to 6.'
+      },
+      remarks: {
+        type: Type.STRING,
+        description: 'Optional remarks or comments.'
+      },
+      paymentMethod: {
+        type: Type.STRING,
+        description: "Optional payment method (e.g., 'bank_transfer', 'cash', 'pos')."
+      },
+      cycleQuery: {
+        type: Type.STRING,
+        description: 'Optional. The cycle identifier (e.g. "CYCLE-001" or "1") for which this payment is recorded.'
+      }
+    },
+    required: ['driverQuery', 'amount', 'installmentNumber']
+  }
+};
+
+const recordExpenseTool = {
+  name: 'recordExpense',
+  description: 'Records a company operational or maintenance expense. This adds an expense entry to the financial ledger. Allowed only for admins and directors.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      category: {
+        type: Type.STRING,
+        description: "The expense category. Must be one of: 'maintenance', 'fuel', 'salary', 'tax', 'other'."
+      },
+      amount: {
+        type: Type.NUMBER,
+        description: 'The expense amount in Naira (e.g. 15000).'
+      },
+      description: {
+        type: Type.STRING,
+        description: 'A clear description of what the expense was spent on (e.g., "Replacing brake pads for plate number TR-09").'
+      },
+      driverQuery: {
+        type: Type.STRING,
+        description: 'Optional. The driver company ID (e.g., DRV-2026-102) or driver name to associate this expense with a specific driver.'
+      },
+      cycleQuery: {
+        type: Type.STRING,
+        description: 'Optional. The cycle identifier (e.g. "CYCLE-001" or "1") to associate this expense with a specific cycle.'
+      }
+    },
+    required: ['category', 'amount', 'description']
+  }
+};
+
+const queryDriverFinancialsTool = {
+  name: 'queryDriverFinancials',
+  description: 'Queries the detailed live financial summary of a driver, including their total purchase price, remaining vehicle balance, total amount paid, and full installment status for the current operating cycle. Allowed for admins and directors.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      driverQuery: {
+        type: Type.STRING,
+        description: 'The query to identify the driver. Can be the driver company ID (e.g. DRV-2026-102), driver name, or internal UUID.'
+      }
+    },
+    required: ['driverQuery']
+  }
+};
+
 // 1. AI CHAT
 app.post('/api/ai/chat', authenticateSession, async (req, res) => {
   try {
@@ -2773,22 +3106,161 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
       { role: 'user' as const, content: prompt }
     ];
 
-    const aiService = new WorkersAIService();
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
 
-    if (stream) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
+      // Prepare contents
+      const contents: any[] = [];
+      history.forEach((h: any) => {
+        contents.push({
+          role: h.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: h.content || '' }]
+        });
+      });
+      contents.push({
+        role: 'user',
+        parts: [{ text: prompt }]
+      });
 
-      const chunkStream = aiService.generateStream(messages);
-      for await (const chunk of chunkStream) {
-        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      // Declare tools ONLY if role is admin or director
+      const isAuthorized = actor.role === 'admin' || actor.role === 'director';
+      const tools = isAuthorized ? [{
+        functionDeclarations: [recordPaymentTool, recordExpenseTool, queryDriverFinancialsTool]
+      }] : [];
+
+      // Make the initial request
+      let response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents,
+        config: {
+          systemInstruction: systemPrompt,
+          tools,
+          temperature: 0.2
+        }
+      });
+
+      // Check for function calls
+      const functionCalls = response.functionCalls;
+      if (functionCalls && functionCalls.length > 0) {
+        const toolResponseParts: any[] = [];
+        
+        for (const call of functionCalls) {
+          let toolResult: any;
+          if (call.name === 'recordPayment') {
+            toolResult = executeRecordPayment(call.args, actor, req);
+          } else if (call.name === 'recordExpense') {
+            toolResult = executeRecordExpense(call.args, actor, req);
+          } else if (call.name === 'queryDriverFinancials') {
+            toolResult = executeQueryDriverFinancials(call.args, actor, req);
+          } else {
+            toolResult = { error: `Tool ${call.name} is not supported.` };
+          }
+
+          toolResponseParts.push({
+            functionResponse: {
+              name: call.name,
+              response: toolResult
+            }
+          });
+        }
+
+        const nextContents = [
+          ...contents,
+          {
+            role: 'model',
+            parts: functionCalls.map((call: any) => ({
+              functionCall: {
+                name: call.name,
+                args: call.args,
+                id: call.id
+              }
+            }))
+          },
+          {
+            role: 'user',
+            parts: toolResponseParts
+          }
+        ];
+
+        if (stream) {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+
+          const streamResponse = await ai.models.generateContentStream({
+            model: 'gemini-3.6-flash',
+            contents: nextContents,
+            config: {
+              systemInstruction: systemPrompt,
+              tools,
+              temperature: 0.2
+            }
+          });
+
+          for await (const chunk of streamResponse) {
+            res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+          }
+          res.write('data: [DONE]\n\n');
+          return res.end();
+        } else {
+          const finalResponse = await ai.models.generateContent({
+            model: 'gemini-3.6-flash',
+            contents: nextContents,
+            config: {
+              systemInstruction: systemPrompt,
+              tools,
+              temperature: 0.2
+            }
+          });
+          return res.json({ success: true, response: finalResponse.text });
+        }
+      } else {
+        // No function calls, handle standard response
+        if (stream) {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+
+          const streamResponse = await ai.models.generateContentStream({
+            model: 'gemini-3.6-flash',
+            contents,
+            config: {
+              systemInstruction: systemPrompt,
+              temperature: 0.2
+            }
+          });
+
+          for await (const chunk of streamResponse) {
+            res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+          }
+          res.write('data: [DONE]\n\n');
+          return res.end();
+        } else {
+          return res.json({ success: true, response: response.text });
+        }
       }
-      res.write('data: [DONE]\n\n');
-      return res.end();
     } else {
-      const response = await aiService.generate(messages);
-      return res.json({ success: true, response });
+      // Fallback if no GEMINI_API_KEY
+      const aiService = new WorkersAIService();
+      if (stream) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        const chunkStream = aiService.generateStream(messages);
+        for await (const chunk of chunkStream) {
+          res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        }
+        res.write('data: [DONE]\n\n');
+        return res.end();
+      } else {
+        const response = await aiService.generate(messages);
+        return res.json({ success: true, response });
+      }
     }
   } catch (error: any) {
     return res.status(500).json({ error: error.message });

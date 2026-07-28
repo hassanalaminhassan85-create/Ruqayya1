@@ -1185,7 +1185,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
             const isUser = msg.role === 'user';
             return (
               <motion.div 
-                key={msg.id ? `workspace-msg-${msg.id}` : `workspace-idx-${idx}`}
+                key={`workspace-msg-${msg.id || "none"}-${idx}`}
                 initial={{ opacity: 0, y: 12, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ type: 'spring', stiffness: 260, damping: 20 }}

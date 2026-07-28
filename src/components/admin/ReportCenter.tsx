@@ -438,7 +438,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
   const exportCSV = () => {
     let headers = "ID,Type,Category,Amount,Date,Description,ApprovedBy\n";
-    let rows = filteredFinance.map(f => {
+    let rows = filteredFinance.map((f, index) => {
       return `"${f.id}","${f.type}","${f.category}",${f.amount},"${f.date}","${f.description.replace(/"/g, '""')}","${f.approvedBy || ''}"`;
     }).join("\n");
     
@@ -487,7 +487,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
   // DOCK REVISION IF LOCKED
   const generateRevision = (oldRep: SavedReport) => {
-    const updated = savedReports.map(r => {
+    const updated = savedReports.map((r, index) => {
       if (r.id === oldRep.id) {
         return {
           ...r,
@@ -576,8 +576,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
               className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
             >
               <option value="all">All Drivers</option>
-              {drivers.map(d => (
-                <option key={d.id} value={d.id}>{d.fullName}</option>
+              {drivers.map((d, index) => (
+                <option key={`${d.id}-${index}`} value={d.id}>{d.fullName}</option>
               ))}
             </select>
           </div>
@@ -591,8 +591,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
               className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
             >
               <option value="all">All Shareholders</option>
-              {shareholders.map(s => (
-                <option key={s.id} value={s.id}>{s.full_name}</option>
+              {shareholders.map((s, idx) => (
+                <option key={`${s.id}-${idx}`} value={s.id}>{s.full_name}</option>
               ))}
             </select>
           </div>
@@ -804,7 +804,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
                 <div className="flex flex-col gap-6">
                   {drivers.map((d, index) => (
-                    <div key={d.id} className="border border-slate-200 rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-start bg-slate-50/50">
+                    <div key={`${d.id}-${index}`} className="border border-slate-200 rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-start bg-slate-50/50">
                       {/* Driver passport image (High fidelity portrait) */}
                       <div className="h-16 w-16 bg-slate-200 rounded-lg overflow-hidden shrink-0 border border-slate-300">
                         <img 
@@ -868,7 +868,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {shareholders.map((s, idx) => (
-                        <tr key={s.id} className="hover:bg-slate-50">
+                        <tr key={`${s.id}-${idx}`} className="hover:bg-slate-50">
                           <td className="p-2.5 flex items-center gap-2">
                             <div className="h-6 w-6 rounded-full overflow-hidden shrink-0 border">
                               <img src={s.passport_photo_url || s.passportPhoto || s.passport_photo || s.passport || shareholderPortraits[idx % shareholderPortraits.length]} alt="" className="h-full w-full object-cover" />
@@ -962,8 +962,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredFinance.filter(f => f.type === 'expense').map(f => (
-                        <tr key={f.id} className="hover:bg-slate-50">
+                      {filteredFinance.filter(f => f.type === 'expense').map((f, index) => (
+                        <tr key={`${f.id}-${index}`} className="hover:bg-slate-50">
                           <td className="p-2.5 text-slate-500">{f.date?.slice(0, 10)}</td>
                           <td className="p-2.5 uppercase font-bold text-slate-900">{f.category}</td>
                           <td className="p-2.5 font-sans text-xs text-slate-600">{f.description}</td>
@@ -1000,8 +1000,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredPayments.map(p => (
-                        <tr key={p.id} className="hover:bg-slate-50">
+                      {filteredPayments.map((p, index) => (
+                        <tr key={`${p.id}-${index}`} className="hover:bg-slate-50">
                           <td className="p-2.5 font-bold text-slate-900">{p.receipt_number || p.id.slice(0, 8).toUpperCase()}</td>
                           <td className="p-2.5 text-slate-500">{p.date?.slice(0, 10)}</td>
                           <td className="p-2.5">{p.driver_id || 'System'}</td>
@@ -1039,8 +1039,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredFinance.map(f => (
-                        <tr key={f.id} className="hover:bg-slate-50">
+                      {filteredFinance.map((f, index) => (
+                        <tr key={`${f.id}-${index}`} className="hover:bg-slate-50">
                           <td className="p-2.5 text-brand-gold font-bold">{f.id.slice(0, 8).toUpperCase()}</td>
                           <td className="p-2.5 text-slate-500">{f.date?.slice(0, 10)}</td>
                           <td className="p-2.5">
@@ -1108,8 +1108,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {savedReports.map(r => (
-                        <tr key={r.id} className="hover:bg-slate-50">
+                      {savedReports.map((r, index) => (
+                        <tr key={`${r.id}-${index}`} className="hover:bg-slate-50">
                           <td className="p-2.5 font-bold text-slate-900">{r.reportNumber}</td>
                           <td className="p-2.5 text-slate-500">{r.generatedDate}</td>
                           <td className="p-2.5 font-sans">{r.preparedByName}</td>
@@ -1289,9 +1289,9 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
             </div>
 
             <div className="flex flex-col gap-2 max-h-[360px] overflow-y-auto">
-              {filteredHistory.map((r) => (
+              {filteredHistory.map((r, index) => (
                 <div
-                  key={r.id}
+                  key={`${r.id}-${index}`}
                   onClick={() => {
                     setActiveHistoryReport(r);
                     setActiveReportHash(r.hash);

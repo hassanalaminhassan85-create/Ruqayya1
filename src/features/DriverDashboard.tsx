@@ -1577,8 +1577,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                           </td>
                         </tr>
                       ) : (
-                        filteredPayments.map((p) => (
-                          <tr key={p.id} className="hover:bg-bg-base/20 font-mono">
+                        filteredPayments.map((p, idx) => (
+                          <tr key={`${p.id}-${idx}`} className="hover:bg-bg-base/20 font-mono">
                             <td className="p-3 font-bold text-brand-gold">{p.receipt_number}</td>
                             <td className="p-3 font-semibold text-text-main"># {p.installment_number}</td>
                             <td className="p-3 font-black text-text-main">₦{p.amount.toLocaleString()}</td>

@@ -1250,8 +1250,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 className="w-full px-3 py-2 text-xs bg-bg-surface border border-border-main rounded-lg focus:outline-none"
               >
                 <option value="">-- Choose Vehicle --</option>
-                {vehicles.filter(v => v.status === 'idle').map(v => (
-                  <option key={v.id} value={v.id}>{v.plateNumber} ({v.model})</option>
+                {vehicles.filter(v => v.status === 'idle').map((v, idx) => (
+                  <option key={`${v.id}-${idx}`} value={v.id}>{v.plateNumber} ({v.model})</option>
                 ))}
               </select>
               <span className="text-[9px] text-text-muted">Showing idle fleet tricycles</span>
@@ -1265,8 +1265,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 className="w-full px-3 py-2 text-xs bg-bg-surface border border-border-main rounded-lg focus:outline-none"
               >
                 <option value="">-- Choose Driver --</option>
-                {drivers.filter(d => d.status === 'available').map(d => (
-                  <option key={d.id} value={d.id}>{d.fullName}</option>
+                {drivers.filter(d => d.status === 'available').map((d, idx) => (
+                  <option key={`${d.id}-${idx}`} value={d.id}>{d.fullName}</option>
                 ))}
               </select>
               <span className="text-[9px] text-text-muted">Showing available certified drivers</span>

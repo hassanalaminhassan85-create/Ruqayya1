@@ -310,7 +310,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ lang }) 
               ) : (
                 notifications.map((n, idx) => (
                   <div
-                    key={n.id ? `notif-id-${n.id}` : `notif-idx-${idx}`}
+                    key={`notif-${n.id || "none"}-${idx}`}
                     className={`p-3.5 flex gap-3 transition-colors relative group ${
                       n.read ? 'opacity-70 hover:bg-bg-base/20' : 'bg-brand-gold/5 hover:bg-brand-gold/10'
                     }`}

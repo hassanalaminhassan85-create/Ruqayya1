@@ -884,7 +884,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ lang, dict
             ) : (
               globalResults.map((res, i) => (
                 <button
-                  key={res.id ? `${res.sType}-${res.id}` : `search-res-${i}`}
+                  key={`search-res-${res.id || "none"}-${i}`}
                   className="w-full text-left p-3 hover:bg-brand-gold/10 flex items-center justify-between text-xs transition-colors"
                   onClick={() => navigateToSearchResult(res)}
                 >

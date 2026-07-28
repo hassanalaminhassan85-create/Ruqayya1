@@ -751,7 +751,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
                       {t.cycles.noCycles}
                     </div>
                   ) : (
-                    calculations.completedCycles.map((cycle: any) => {
+                    calculations.completedCycles.map((cycle: any, idx: number) => {
                       const cycleRevenues = cycle.metrics?.totalRevenue || 0;
                       const cycleExpenses = cycle.metrics?.totalExpenses || 0;
                       const cycleProfit = cycle.metrics?.netGeneratedAmount || 0;
@@ -760,7 +760,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
 
                       return (
                         <div 
-                          key={cycle.id} 
+                          key={`${cycle.id}-${idx}`} 
                           className="border border-border-main/60 rounded-xl p-5 hover:bg-bg-base/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6"
                         >
                           <div className="flex items-start gap-3.5">
@@ -961,8 +961,8 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
                           </td>
                         </tr>
                       ) : (
-                        financials.map(fn => (
-                          <tr key={fn.id} className="hover:bg-bg-base/20 font-mono">
+                        financials.map((fn, idx) => (
+                          <tr key={`${fn.id}-${idx}`} className="hover:bg-bg-base/20 font-mono">
                             <td className="p-3 font-bold text-[11px] text-text-muted">{fn.id.substring(0, 8).toUpperCase()}</td>
                             <td className="p-3">
                               <Badge variant={fn.type === 'revenue' ? 'success' : 'danger'}>
