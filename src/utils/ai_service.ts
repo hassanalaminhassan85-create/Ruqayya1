@@ -143,7 +143,7 @@ export class WorkersAIService {
             parts: [{ text: m.content }]
           }));
 
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
           const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -299,7 +299,7 @@ export class WorkersAIService {
           parts: [{ text: m.content }]
         }));
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse&key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:streamGenerateContent?alt=sse&key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: {

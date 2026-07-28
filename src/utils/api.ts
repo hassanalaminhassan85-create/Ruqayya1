@@ -14,7 +14,8 @@ export const api = {
   },
   
   getToken: () => {
-    return localStorage.getItem(TOKEN_KEY);
+    const token = localStorage.getItem(TOKEN_KEY);
+    return token === 'null' ? null : token;
   },
   
   clearToken: () => {

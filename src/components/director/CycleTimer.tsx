@@ -36,35 +36,6 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
   const [resumeReason, setResumeReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [skewOffset, setSkewOffset] = useState<number>(0);
-  const [lastCycleId, setLastCycleId] = useState<string | null>(null);
-
-  // Monitor activeCycle to calculate static clock skew offset
-  useEffect(() => {
-    if (activeCycle) {
-      if (activeCycle.id !== lastCycleId) {
-        setLastCycleId(activeCycle.id);
-        const rawStart = activeCycle.created_at || activeCycle.startDate;
-        let startMs = NaN;
-        if (rawStart) {
-          if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
-            startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
-          } else {
-            startMs = new Date(rawStart).getTime();
-          }
-        }
-        const nowMs = Date.now();
-        if (!isNaN(startMs) && startMs > nowMs) {
-          setSkewOffset(startMs - nowMs);
-        } else {
-          setSkewOffset(0);
-        }
-      }
-    } else {
-      setLastCycleId(null);
-      setSkewOffset(0);
-    }
-  }, [activeCycle, lastCycleId]);
 
   // Compute active duration elapsed in seconds, deducting paused intervals
   const computeActiveDuration = (cycle: any) => {
@@ -82,7 +53,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     }
     if (isNaN(startMs)) return 0;
 
-    let nowMs = Date.now() + skewOffset;
+    let nowMs = Date.now();
     if (cycle.status === 'paused' && cycle.pausedAt) {
       const pausedMs = new Date(cycle.pausedAt).getTime();
       if (!isNaN(pausedMs)) {
@@ -114,21 +85,32 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     return Math.floor(activeMs / 1000);
   };
 
-  // Keep duration synchronized in real-time
+  // Keep duration synchronized in real-time and refresh data periodically
   useEffect(() => {
     if (!activeCycle) {
       setSecondsElapsed(0);
       return;
     }
 
-    setSecondsElapsed(computeActiveDuration(activeCycle));
-
-    const interval = setInterval(() => {
+    const updateTimer = () => {
       setSecondsElapsed(computeActiveDuration(activeCycle));
-    }, 1000);
+    };
 
-    return () => clearInterval(interval);
-  }, [activeCycle, skewOffset]);
+    updateTimer();
+
+    // Refresh data every 30s to stay in sync with server
+    const dataRefreshInterval = setInterval(() => {
+      onStateChange();
+    }, 30000);
+
+    // Update timer every second
+    const timerInterval = setInterval(updateTimer, 1000);
+
+    return () => {
+      clearInterval(dataRefreshInterval);
+      clearInterval(timerInterval);
+    };
+  }, [activeCycle, onStateChange]);
 
   const formatDateOnly = (dateStr: string | null | undefined) => {
     if (!dateStr) return 'N/A';

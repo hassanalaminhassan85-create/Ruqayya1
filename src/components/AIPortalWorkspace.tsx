@@ -368,7 +368,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ ...payload, stream: true })
       });

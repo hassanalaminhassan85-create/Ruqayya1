@@ -1196,7 +1196,7 @@ export default function App() {
         </main>
       </div>
 
-      {currentRole !== 'public' && activeSection !== 'ai-assistant' && (
+      {currentRole === 'public' && (
         <Footer lang={lang} />
       )}
 

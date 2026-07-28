@@ -1136,6 +1136,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                     <div className="flex items-center gap-3 mt-2">
                       <button
                         type="button"
+                        onClick={() => {
+                          window.location.href = '/api/admin/backup-data';
+                        }}
+                        className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider border border-brand-gold text-brand-gold hover:bg-brand-gold/10 transition-all"
+                      >
+                        {lang === 'en' ? "Download Backup" : "Zazzage Bayanan Ajiyar"}
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={handleExecuteSystemReset}
                         disabled={resetConfirmText !== 'RESET RUQAYYA ERP' || resetLoading}
                         className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 border transition-all cursor-pointer ${

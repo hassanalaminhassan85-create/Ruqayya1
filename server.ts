@@ -2893,7 +2893,7 @@ app.post('/api/notifications/translate', authenticateSession, async (req, res) =
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.1-flash-lite',
       contents: `You are a professional Hausa/English translation engine for an enterprise logistics software. Translate the following text into ${to === 'ha' ? 'Hausa' : 'English'}. Match the exact context of driver fleet remittances and financial reports. Return ONLY the translated string without quotes, explanations or conversational fillers:\n\n${text}`,
     });
 
@@ -3341,7 +3341,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
 
       // Make the initial request
       let response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.1-flash-lite',
         contents,
         config: {
           systemInstruction: systemPrompt,
@@ -3399,7 +3399,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           res.setHeader('Connection', 'keep-alive');
 
           const streamResponse = await ai.models.generateContentStream({
-            model: 'gemini-3.6-flash',
+            model: 'gemini-3.1-flash-lite',
             contents: nextContents,
             config: {
               systemInstruction: systemPrompt,
@@ -3415,7 +3415,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           return res.end();
         } else {
           const finalResponse = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
+            model: 'gemini-3.1-flash-lite',
             contents: nextContents,
             config: {
               systemInstruction: systemPrompt,
@@ -3433,7 +3433,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           res.setHeader('Connection', 'keep-alive');
 
           const streamResponse = await ai.models.generateContentStream({
-            model: 'gemini-3.6-flash',
+            model: 'gemini-3.1-flash-lite',
             contents,
             config: {
               systemInstruction: systemPrompt,
@@ -7298,6 +7298,24 @@ app.post('/api/admin/reset-test-data', authenticateSession, (req, res) => {
     res.json({ success: true, message: 'All operational test data has been successfully reset.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/backup-data', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
+    }
+
+    const db = loadDB();
+    const backup = JSON.stringify(db, null, 2);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="ruqayya-erp-backup.json"');
+    res.send(backup);
+  } catch (err) {
+    console.error('Backup failed:', err);
+    res.status(500).json({ error: 'Failed to generate backup.' });
   }
 });
 
