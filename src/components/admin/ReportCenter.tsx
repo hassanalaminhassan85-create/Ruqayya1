@@ -705,7 +705,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                 <div>
                   <h1 className="text-md font-black tracking-tight text-slate-950 uppercase">RUQAYYA TRANSPORT LIMITED</h1>
                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Enterprise Resource Planning (ERP)</p>
-                  <p className="text-[9px] text-slate-400 font-mono">Bypass Corporate Area, Kano State, Nigeria • compliance@ruqayyatransport.com</p>
+                  <p className="text-[9px] text-slate-400 font-mono">No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria • muhdadam573@gmail.com</p>
                 </div>
               </div>
 

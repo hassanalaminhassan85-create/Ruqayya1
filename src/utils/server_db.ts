@@ -91,9 +91,9 @@ const INITIAL_DB_STATE: DBState = {
   company_settings: {
     companyName: "Ruqayya Transport Limited",
     companyLogo: "",
-    companyAddress: "No 14 Zaria Road, Kano, Nigeria",
-    phone: "+234 803 123 4567",
-    email: "info@ruqayyatransport.com",
+    companyAddress: "No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria",
+    phone: "0701 020 4110 / 0706 963 0662",
+    email: "muhdadam573@gmail.com",
     currency: "₦",
     timeZone: "Africa/Lagos",
     languageDefault: "en",

@@ -2124,8 +2124,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({ driverName, la
                         <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
                           <div>
                             <h2 className="text-lg font-black tracking-tight text-slate-950">RUQAYYA TRANSPORT LIMITED</h2>
-                            <p className="text-[10px] text-slate-500 font-mono">No 14 Zaria Road, Kano, Nigeria</p>
-                            <p className="text-[10px] text-slate-500 font-mono">info@ruqayyatransport.com | +234 803 123 4567</p>
+                            <p className="text-[10px] text-slate-500 font-mono">No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria</p>
+                            <p className="text-[10px] text-slate-500 font-mono">muhdadam573@gmail.com | 0701 020 4110 / 0706 963 0662</p>
                           </div>
                           <div className="text-right">
                             <span className="text-[11px] font-mono text-slate-500 mt-1 block">ORIGINAL COPY</span>

@@ -25,6 +25,7 @@ import { api } from './utils/api';
 import { registerPushSubscription } from './utils/notificationHelper';
 import { requestNotificationPermission, subscribeToPushNotifications } from './utils/notifications';
 import { CircularLogo } from './components/CircularLogo';
+import { Footer } from './components/Footer';
 import { PWAPanel } from './components/PWAPanel';
 import { AICopilotDrawer } from './components/AICopilotDrawer';
 import { ChatDashboard } from './components/ChatDashboard';
@@ -1194,6 +1195,10 @@ export default function App() {
           </AnimatePresence>
         </main>
       </div>
+
+      {currentRole !== 'public' && activeSection !== 'ai-assistant' && (
+        <Footer lang={lang} />
+      )}
 
       {/* PWA UPDATE AVAILABLE BANNER */}
       <AnimatePresence>

@@ -1130,7 +1130,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
                       <div className="flex justify-between items-start border-b border-slate-800 pb-4">
                         <div>
                           <h2 className="text-base font-black text-brand-gold uppercase tracking-wider">Ruqayya Transport Limited</h2>
-                          <p className="text-[10px] text-slate-400">No 14 Zaria Road, Kano, Nigeria | info@ruqayyatransport.com</p>
+                          <p className="text-[10px] text-slate-400">No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria | muhdadam573@gmail.com</p>
                         </div>
                         <div className="text-right">
                           <span className="text-[10px] font-extrabold uppercase bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded">CONFIDENTIAL</span>

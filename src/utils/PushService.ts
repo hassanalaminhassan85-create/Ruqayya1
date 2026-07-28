@@ -28,7 +28,7 @@ export class PushService {
     }
 
     webpush.setVapidDetails(
-      'mailto:info@ruqayyatransport.com',
+      'mailto:muhdadam573@gmail.com',
       db.vapid_keys.publicKey,
       db.vapid_keys.privateKey
     );

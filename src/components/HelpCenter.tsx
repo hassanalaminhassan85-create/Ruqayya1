@@ -92,56 +92,92 @@ export const HelpCenter: React.FC<HelpCenterProps> = ({ lang }) => {
 
       {/* Emergency Hotline / Stats Bar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="flex items-start gap-4">
-          <div className="p-3 rounded-xl bg-brand-gold/10 text-brand-gold">
-            <Phone className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="text-xs text-text-muted font-bold block uppercase tracking-wider">
-              {lang === 'en' ? "Operations Hotlines" : "Lambar Gaggawa"}
-            </span>
-            <span className="text-lg font-bold text-text-main block mt-1 font-mono">
-              +234 (0) 803 123 4567
-            </span>
-            <span className="text-xs text-text-muted mt-0.5 block">
-              {lang === 'en' ? "Available 24/7 for fleet dispatches" : "Ana samunmu 24/7 don taimako"}
-            </span>
-          </div>
-        </Card>
+        <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+          <Card className="flex flex-col gap-3 h-full border-brand-gold/20 hover:border-brand-gold/50 transition-all shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-brand-gold/10 text-brand-gold">
+                <Phone className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-xs text-text-muted font-bold block uppercase tracking-wider">
+                  {lang === 'en' ? "Support Hotlines" : "Lambobin Gaggawa"}
+                </span>
+                <span className="text-xs text-text-muted mt-0.5 block">
+                  {lang === 'en' ? "Tap to call or copy" : "Danna don kiranta"}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 mt-1 font-mono">
+              <a 
+                href="tel:07010204110" 
+                className="text-base font-bold text-text-main hover:text-brand-gold transition-colors flex items-center justify-between p-2 rounded-lg bg-bg-base border border-border-main/50"
+              >
+                <span>0701 020 4110</span>
+                <Phone className="h-4 w-4 text-brand-gold" />
+              </a>
+              <a 
+                href="tel:07069630662" 
+                className="text-base font-bold text-text-main hover:text-brand-gold transition-colors flex items-center justify-between p-2 rounded-lg bg-bg-base border border-border-main/50"
+              >
+                <span>0706 963 0662</span>
+                <Phone className="h-4 w-4 text-brand-gold" />
+              </a>
+            </div>
+          </Card>
+        </motion.div>
 
-        <Card className="flex items-start gap-4">
-          <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600">
-            <Mail className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="text-xs text-text-muted font-bold block uppercase tracking-wider">
-              {lang === 'en' ? "Corporate Enquiries" : "Adireshin Imel"}
-            </span>
-            <span className="text-lg font-bold text-text-main block mt-1 font-mono">
-              ops@ruqayyatransport.com
-            </span>
-            <span className="text-xs text-text-muted mt-0.5 block">
-              {lang === 'en' ? "Corporate response within 2 hours" : "Amsa cikin sa'o'i biyu"}
-            </span>
-          </div>
-        </Card>
+        <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+          <Card className="flex flex-col gap-3 h-full border-blue-500/20 hover:border-blue-500/50 transition-all shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600">
+                <Mail className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-xs text-text-muted font-bold block uppercase tracking-wider">
+                  {lang === 'en' ? "Corporate Enquiries" : "Adireshin Imel"}
+                </span>
+                <span className="text-xs text-text-muted mt-0.5 block">
+                  {lang === 'en' ? "Official correspondence" : "Imel din kamfani"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-1">
+              <a 
+                href="mailto:muhdadam573@gmail.com" 
+                className="text-sm font-bold text-text-main hover:text-blue-600 transition-colors flex items-center justify-between p-3 rounded-lg bg-bg-base border border-border-main/50 font-mono break-all"
+              >
+                <span>muhdadam573@gmail.com</span>
+                <Mail className="h-4 w-4 text-blue-500 shrink-0 ml-2" />
+              </a>
+              <span className="text-[11px] text-text-muted mt-2 block">
+                {lang === 'en' ? "Response within 2 hours" : "Amsa cikin sa'o'i biyu"}
+              </span>
+            </div>
+          </Card>
+        </motion.div>
 
-        <Card className="flex items-start gap-4">
-          <div className="p-3 rounded-xl bg-brand-success/10 text-brand-success">
-            <BookOpen className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="text-xs text-text-muted font-bold block uppercase tracking-wider">
-              {lang === 'en' ? "HQ Physical Terminal" : "Babban Ofishi"}
-            </span>
-            <span className="text-md font-bold text-text-main block mt-1">
-              {lang === 'en' ? "Kano Operations Hub, Nigeria" : "Babban Ofishin Kano, Najeriya"}
-            </span>
-            <span className="text-xs text-text-muted mt-0.5 block">
-              {lang === 'en' ? "Operational yard and service bays" : "Ofishin gudanarwa da gyaran motoci"}
-            </span>
-          </div>
-        </Card>
+        <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+          <Card className="flex flex-col gap-3 h-full border-brand-success/20 hover:border-brand-success/50 transition-all shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-brand-success/10 text-brand-success">
+                <BookOpen className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-xs text-text-muted font-bold block uppercase tracking-wider">
+                  {lang === 'en' ? "HQ Physical Terminal" : "Babban Ofishi"}
+                </span>
+                <span className="text-xs text-text-muted mt-0.5 block">
+                  {lang === 'en' ? "Headquarters address" : "Adireshin babban ofishi"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-1 p-3 rounded-lg bg-bg-base border border-border-main/50">
+              <span className="text-xs font-semibold text-text-main leading-relaxed block">
+                No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria
+              </span>
+            </div>
+          </Card>
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

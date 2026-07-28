@@ -94,7 +94,7 @@ const localDict = {
     statement: {
       title: "DIVIDEND DISTRIBUTION STATEMENT",
       company: "RUQAYYA TRANSPORT LIMITED",
-      address: "No 14 Zaria Road, Kano, Nigeria",
+      address: "No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria",
       docType: "OFFICIAL EQUITY VOUCHER",
       investorName: "Shareholder Name",
       investorWeight: "Share Weight",
@@ -169,7 +169,7 @@ const localDict = {
     statement: {
       title: "TAKARDA TA RABON RIBA NA MASU JARI",
       company: "RUQAYYA TRANSPORT LIMITED",
-      address: "No 14 Zaria Road, Kano, Nigeria",
+      address: "No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria",
       docType: "TAKARDAR SHAIDAR JARI",
       investorName: "Sunan Mai Hannun Jari",
       investorWeight: "Kason Jari",
@@ -835,7 +835,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({ lang
                           <div>
                             <h2 className="text-lg font-black tracking-tight text-slate-950">{t.statement.company}</h2>
                             <p className="text-[10px] text-slate-500 font-mono">{t.statement.address}</p>
-                            <p className="text-[10px] text-slate-500 font-mono">info@ruqayyatransport.com | +234 803 123 4567</p>
+                            <p className="text-[10px] text-slate-500 font-mono">muhdadam573@gmail.com | 0701 020 4110 / 0706 963 0662</p>
                           </div>
                           <div className="text-right">
                             <span className="text-xs font-black tracking-widest text-slate-950 bg-slate-100 px-2.5 py-1 rounded block uppercase">{t.statement.docType}</span>
