@@ -440,21 +440,242 @@ setInterval(() => {
   });
 }, 15000);
 
+// Helper: Compute active cycle duration
+function computeActiveDuration(cycle: any): number {
+  if (!cycle) return 0;
+  const start = new Date(cycle.startDate).getTime();
+  const now = cycle.status === 'paused' && cycle.pausedAt 
+    ? new Date(cycle.pausedAt).getTime() 
+    : Date.now();
+  
+  let totalElapsed = now - start;
+  
+  let totalPausedMs = 0;
+  const history = cycle.pauseHistory || [];
+  history.forEach((pause: any) => {
+    if (pause.pausedAt && pause.resumedAt) {
+      totalPausedMs += new Date(pause.resumedAt).getTime() - new Date(pause.pausedAt).getTime();
+    } else if (pause.pausedAt && !pause.resumedAt && cycle.status === 'active') {
+      totalPausedMs += Date.now() - new Date(pause.pausedAt).getTime();
+    }
+  });
+  
+  totalElapsed = Math.max(0, totalElapsed - totalPausedMs);
+  return Math.floor(totalElapsed / 1000);
+}
+
+// Helper: Calculate installments for a driver
+export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
+  const agreedAmount = driver.agreed_amount || 300000;
+  const installmentTarget = Math.round(agreedAmount / 6);
+  
+  // Find all approved payments for this driver during the active cycle
+  let startDate = activeCycle ? new Date(activeCycle.startDate) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  let endDate = activeCycle && activeCycle.endDate ? new Date(activeCycle.endDate) : new Date();
+  
+  const payments = (db.driver_payments || []).filter((p: any) => {
+    return p.driver_id === driver.id && p.status === 'approved' &&
+      new Date(p.date) >= startDate &&
+      (activeCycle && activeCycle.endDate ? new Date(p.date) <= endDate : true);
+  });
+
+  // Calculate total rest days during this active cycle to extend installments
+  let totalRestDays = 0;
+  const restHistory = driver.restHistory || [];
+  if (activeCycle) {
+    restHistory.forEach((rest: any) => {
+      const restStart = new Date(rest.startDate);
+      const restEnd = new Date(rest.endDate);
+      const cycleStart = new Date(activeCycle.startDate);
+      
+      if (restEnd >= cycleStart) {
+        const overlapStart = restStart < cycleStart ? cycleStart : restStart;
+        const overlapEnd = restEnd;
+        const diffTime = overlapEnd.getTime() - overlapStart.getTime();
+        const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        if (days > 0) {
+          totalRestDays += days;
+        }
+      }
+    });
+  }
+
+  const today = new Date();
+  const isCurrentlyOnRest = driver.status === 'off-duty' || restHistory.some((rest: any) => {
+    const start = new Date(rest.startDate);
+    const end = new Date(rest.endDate);
+    return today >= start && today <= end;
+  });
+
+  const installments = [];
+  let carryForward = 0;
+
+  for (let k = 1; k <= 6; k++) {
+    const startDay = (k - 1) * 5 + 1;
+    const endDay = k * 5;
+
+    const normalEndDate = new Date(startDate.getTime() + (endDay - 1) * 24 * 3600 * 1000);
+    const extendedEndDate = new Date(normalEndDate.getTime() + totalRestDays * 24 * 3600 * 1000);
+    
+    const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
+    const extendedStartDate = new Date(normalStartDate.getTime() + totalRestDays * 24 * 3600 * 1000);
+
+    const dueAmount = installmentTarget + carryForward;
+    const paidAmount = payments
+      .filter((p: any) => p.installment_number === k)
+      .reduce((sum: number, p: any) => sum + p.amount, 0);
+
+    const remaining = dueAmount - paidAmount;
+    carryForward = remaining;
+
+    let status = 'Pending';
+    if (remaining <= 0) {
+      status = 'Completed';
+    } else if (paidAmount > 0) {
+      status = 'Partially Paid';
+    } else if (!isCurrentlyOnRest && today > extendedEndDate) {
+      status = 'Overdue';
+    }
+
+    installments.push({
+      installmentNumber: k,
+      dueAmount,
+      paidAmount,
+      remainingAmount: Math.max(0, remaining),
+      startDate: extendedStartDate.toISOString().split('T')[0],
+      endDate: extendedEndDate.toISOString().split('T')[0],
+      status
+    });
+  }
+
+  return installments;
+}
+
 // Background automated engine for status checks, overdue alerts and progress updates
 setInterval(() => {
   try {
     const db = loadDB();
     const opsState = db.company_operations_state || { status: 'Setup Mode' };
     if (opsState.status === 'Setup Mode') {
-      return; // Skip automation checks in Setup Mode
+      // Still run the non-cycle-dependent checks
     }
     let dbChanged = false;
     const now = new Date();
 
-    // Scan for vehicle purchase contract completions
+    // 1. CYCLE MANAGEMENT
+    const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+    
+    if (activeCycle) {
+      const secondsElapsed = computeActiveDuration(activeCycle);
+      const daysElapsed = Math.floor(secondsElapsed / (24 * 3600)) + 1;
+      const currentDayInDB = db.company_operations_state.currentDay || 1;
+
+      if (daysElapsed !== currentDayInDB && daysElapsed <= 30) {
+        db.company_operations_state.currentDay = daysElapsed;
+        dbChanged = true;
+      }
+
+      // End-of-cycle distribution trigger (30-day countdown expiration)
+      if (daysElapsed > 30) {
+        const endDate = new Date().toISOString();
+        activeCycle.status = 'completed';
+        activeCycle.endDate = endDate;
+        activeCycle.locked = true;
+
+        const totalRevenue = (db.financial_records || [])
+          .filter((f: any) => f.type === 'revenue' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
+          .reduce((sum: number, f: any) => sum + f.amount, 0);
+
+        const totalExpenses = (db.financial_records || [])
+          .filter((f: any) => f.type === 'expense' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
+          .reduce((sum: number, f: any) => sum + f.amount, 0);
+
+        const netGeneratedAmount = totalRevenue - totalExpenses;
+        const distPercentage = db.shareholder_settings?.distributionPercentage || 2;
+        const distributionPool = Math.max(0, netGeneratedAmount * (distPercentage / 100));
+
+        activeCycle.metrics = {
+          totalRevenue,
+          totalExpenses,
+          netGeneratedAmount,
+          distributionPercentage: distPercentage,
+          distributionPool,
+          activeDrivers: db.drivers.filter((d: any) => d.status === 'approved' || d.status === 'active').length,
+          totalFleetCount: db.vehicles.length
+        };
+
+        const totalInvestment = db.shareholders
+          .filter((s: any) => s.status === 'active')
+          .reduce((sum: number, s: any) => sum + s.investment_amount, 0);
+
+        db.shareholders.forEach((sh: any) => {
+          if (sh.status === 'active' && totalInvestment > 0) {
+            const shPercentage = sh.investment_amount / totalInvestment;
+            const shEarnings = distributionPool * shPercentage;
+            sh.earnings_to_date = (sh.earnings_to_date || 0) + shEarnings;
+
+            db.financial_records.push({
+              id: generateUUID(),
+              type: 'expense',
+              category: 'dividend',
+              amount: shEarnings,
+              date: endDate,
+              description: `Auto dividend distribution: ${sh.full_name} (${(shPercentage * 100).toFixed(1)}%)`
+            });
+          }
+        });
+
+        db.company_operations_state.status = 'Setup Mode';
+        db.company_operations_state.currentCycle = '';
+        db.company_operations_state.currentDay = 1;
+
+        db.notifications.unshift({
+          id: generateUUID(),
+          title_en: 'Operating Cycle Concluded',
+          title_ha: 'Zagayen Aiki Ya Kammala',
+          message_en: `Operations Cycle ${activeCycle.id} reached its 30-day limit.`,
+          message_ha: `Zagayen aiki ${activeCycle.id} ya kai haddi.`,
+          type: 'success',
+          read_status: 0,
+          created_at: endDate
+        });
+        dbChanged = true;
+      }
+
+      // Verify installments, trigger penalties and warnings
+      for (const driver of db.drivers) {
+        if (driver.status !== 'approved' && driver.status !== 'active') continue;
+
+        const installments = calculateInstallmentsForDriver(driver, db, activeCycle);
+
+        for (const inst of installments) {
+          const today = new Date();
+          const instEndDate = new Date(inst.endDate);
+          const hoursRemaining = (instEndDate.getTime() - today.getTime()) / (1000 * 60 * 60);
+
+          if (inst.status === 'Overdue') {
+            if (!driver.penalties_history) driver.penalties_history = [];
+            const hasPenalty = driver.penalties_history.some((p: any) => p.installmentNumber === inst.installmentNumber && p.cycleId === activeCycle.id);
+
+            if (!hasPenalty) {
+              const overdueCharge = 5000;
+              driver.total_penalty_amount = (driver.total_penalty_amount || 0) + overdueCharge;
+              driver.debt_amount = (driver.debt_amount || 0) + overdueCharge;
+              driver.penalties_history.push({ id: generateUUID(), installmentNumber: inst.installmentNumber, cycleId: activeCycle.id, amount: overdueCharge, appliedAt: new Date().toISOString() });
+              db.financial_records.push({ id: generateUUID(), type: 'revenue', category: 'penalty', amount: overdueCharge, date: new Date().toISOString(), description: `Overdue Charge Penalty: Driver ${driver.fullName || 'Candidate'}` });
+              db.notifications.unshift({ id: generateUUID(), driver_id: driver.id, title_en: 'Installment Overdue', message_en: 'A ₦5,000 penalty has been applied.', type: 'overdue', read_status: 0, created_at: new Date().toISOString() });
+              dbChanged = true;
+            }
+          }
+        }
+      }
+    }
+
+    // 2. VEHICLE CONTRACT COMPLETION
     const activeDrivers = (db.drivers || []).filter((d: any) => d.status === 'active');
     activeDrivers.forEach((drv: any) => {
-      if (drv.remaining_vehicle_balance !== undefined && drv.remaining_vehicle_balance <= 0 && drv.status !== 'completed') {
+      const financials = getDriverFinancials(drv, db);
+      if (financials.remainingVehicleBalance <= 0 && drv.status !== 'completed') {
         drv.status = 'completed';
         dbChanged = true;
         
@@ -462,9 +683,7 @@ setInterval(() => {
           id: generateUUID(),
           user_id: drv.user_id,
           title_en: 'Vehicle Contract Completed!',
-          title_ha: 'Kwangilar Mota Ta Cika!',
           message_en: 'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!',
-          message_ha: 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!',
           type: 'success',
           read_status: 0,
           created_at: now.toISOString()
@@ -472,7 +691,7 @@ setInterval(() => {
       }
     });
 
-    // Automated rest mode tracking and recovery release
+    // 3. REST MODE TRACKING
     const restDrivers = (db.drivers || []).filter((d: any) => d.status === 'rest_mode');
     restDrivers.forEach((drv: any) => {
       if (drv.rest_release_date && new Date(drv.rest_release_date) <= now) {
@@ -484,32 +703,8 @@ setInterval(() => {
           id: generateUUID(),
           user_id: drv.user_id,
           title_en: 'Rest Period Concluded',
-          title_ha: 'Lokacin Hutu Ya Cika',
-          message_en: 'Your medical rest period has completed. Your status is now reverted to Active duty.',
-          message_ha: 'Lokacin hutun lafiyar ku ya cika. An mayar da ku a matsayin mai aiki mai karshe.',
+          message_en: 'Your medical rest period has completed.',
           type: 'info',
-          read_status: 0,
-          created_at: now.toISOString()
-        });
-      }
-    });
-
-    // Check for vehicle purchase contract completions using dynamic financials
-    const activeDriversList = (db.drivers || []).filter((d: any) => d.status === 'active' || d.status === 'approved' || d.status === 'available');
-    activeDriversList.forEach((drv: any) => {
-      const financials = getDriverFinancials(drv, db);
-      if (financials.remainingVehicleBalance <= 0 && drv.status !== 'completed') {
-        drv.status = 'completed';
-        dbChanged = true;
-        
-        db.notifications.unshift({
-          id: generateUUID(),
-          user_id: drv.user_id,
-          title_en: 'Vehicle Contract Completed!',
-          title_ha: 'Kwangilar Mota Ta Cika!',
-          message_en: 'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!',
-          message_ha: 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!',
-          type: 'success',
           read_status: 0,
           created_at: now.toISOString()
         });
@@ -523,6 +718,7 @@ setInterval(() => {
     console.error("Background automation task error:", err);
   }
 }, 30000);
+
 
 app.get('/api/sse', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -4388,106 +4584,7 @@ export function getDriverFinancials(driver: any, db: any) {
   }
 }
 
-export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
-  const agreedAmount = driver.agreed_amount || 300000;
-  const installmentTarget = Math.round(agreedAmount / 6);
-  
-  // Find all approved payments for this driver during the active cycle
-  let startDate = activeCycle ? new Date(activeCycle.startDate) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
-  let endDate = activeCycle && activeCycle.endDate ? new Date(activeCycle.endDate) : new Date();
-  
-  const payments = (db.driver_payments || []).filter((p: any) => {
-    return p.driver_id === driver.id && p.status === 'approved' &&
-      new Date(p.date) >= startDate &&
-      (activeCycle && activeCycle.endDate ? new Date(p.date) <= endDate : true);
-  });
 
-  // Calculate total rest days during this active cycle to extend installments
-  let totalRestDays = 0;
-  const restHistory = driver.restHistory || [];
-  if (activeCycle) {
-    restHistory.forEach((rest: any) => {
-      const restStart = new Date(rest.startDate);
-      const restEnd = new Date(rest.endDate);
-      const cycleStart = new Date(activeCycle.startDate);
-      
-      // If rest period overlaps with cycle
-      if (restEnd >= cycleStart) {
-        const overlapStart = restStart < cycleStart ? cycleStart : restStart;
-        const overlapEnd = restEnd;
-        const diffTime = overlapEnd.getTime() - overlapStart.getTime();
-        const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        if (days > 0) {
-          totalRestDays += days;
-        }
-      }
-    });
-  }
-
-  // Check if driver is currently on rest
-  const today = new Date();
-  const isCurrentlyOnRest = driver.status === 'off-duty' || restHistory.some((rest: any) => {
-    const start = new Date(rest.startDate);
-    const end = new Date(rest.endDate);
-    return today >= start && today <= end;
-  });
-
-  const installments = [];
-  let carryForward = 0;
-
-  for (let k = 1; k <= 6; k++) {
-    const startDay = (k - 1) * 5 + 1;
-    const endDay = k * 5;
-
-    // Shift dates by rest days
-    const normalEndDate = new Date(startDate.getTime() + (endDay - 1) * 24 * 3600 * 1000);
-    const extendedEndDate = new Date(normalEndDate.getTime() + totalRestDays * 24 * 3600 * 1000);
-    
-    const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
-    const extendedStartDate = new Date(normalStartDate.getTime() + totalRestDays * 24 * 3600 * 1000);
-
-    const dueAmount = installmentTarget + carryForward;
-    const installmentPayments = payments.filter((p: any) => p.installment_number === k);
-    const paidAmount = installmentPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
-
-    const remaining = dueAmount - paidAmount;
-    carryForward = remaining; // outstanding balance carries forward to the next installment
-
-    let status = 'Pending';
-    if (remaining <= 0) {
-      status = 'Completed';
-    } else if (paidAmount > 0) {
-      status = 'Partially Paid';
-    } else if (!isCurrentlyOnRest && today > extendedEndDate) {
-      status = 'Overdue';
-    }
-
-    let paidDate = null;
-    if (installmentPayments.length > 0) {
-      const dates = installmentPayments.map((p: any) => new Date(p.date));
-      const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-      paidDate = maxDate.toISOString().split('T')[0];
-    }
-
-    installments.push({
-      installmentNumber: k,
-      startDate: extendedStartDate.toISOString().split('T')[0],
-      endDate: extendedEndDate.toISOString().split('T')[0],
-      dueDate: extendedEndDate.toISOString().split('T')[0],
-      targetAmount: installmentTarget,
-      carriedForward: dueAmount - installmentTarget,
-      totalDue: dueAmount,
-      amountDue: dueAmount,
-      totalPaid: paidAmount,
-      amountPaid: paidAmount,
-      remainingBalance: remaining,
-      paidDate,
-      status
-    });
-  }
-
-  return installments;
-}
 
 // GET dynamic driver installments list
 app.get('/api/drivers/:id/installments', authenticateSession, (req, res) => {
