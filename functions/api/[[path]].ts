@@ -3353,11 +3353,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     let systemPrompt = '';
     let messages: any[] = [];
     let prompt = '';
+    let history: any[] = [];
 
     if (path === '/api/ai/chat') {
-      const { prompt: reqPrompt, history = [], page = '', feature = '' } = body;
+      const { prompt: reqPrompt, history: reqHistory = [], page = '', feature = '' } = body;
       if (!reqPrompt) return buildResponse({ error: 'Prompt is required.' }, 400);
       prompt = reqPrompt;
+      history = reqHistory;
       systemPrompt = `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
 Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
 
