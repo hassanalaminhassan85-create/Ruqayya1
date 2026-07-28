@@ -1,5 +1,19 @@
 import { WorkersAIService } from '../../src/utils/ai_service';
 
+declare global {
+  type PagesFunction<Env = any, Params extends string = any, Data = any> = (
+    context: {
+      request: Request;
+      functionPath: string;
+      waitUntil: (promise: Promise<any>) => void;
+      next: (input?: Request | string, init?: RequestInit) => Promise<Response>;
+      env: Env;
+      params: Record<Params, string | string[]>;
+      data: Data;
+    }
+  ) => Response | Promise<Response>;
+}
+
 interface Env {
   DB?: any;
   R2_BUCKET?: any;

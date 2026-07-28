@@ -18,6 +18,7 @@ import { DriverDashboard } from './features/DriverDashboard';
 import { AdminDashboard } from './features/AdminDashboard';
 import { DirectorDashboard } from './features/DirectorDashboard';
 import { ShareholderDashboard } from './features/ShareholderDashboard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotificationInbox } from './components/NotificationInbox';
 import { HelpCenter } from './components/HelpCenter';
 import { api } from './utils/api';
@@ -748,9 +749,10 @@ export default function App() {
   }
 
   return (
-    <div className={`w-full max-w-full bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30 ${
-      activeSection === 'ai-assistant' ? 'h-screen overflow-hidden' : 'min-h-screen overflow-x-hidden'
-    }`}>
+    <ErrorBoundary>
+      <div className={`w-full max-w-full bg-bg-base text-text-main font-sans flex flex-col selection:bg-brand-gold/30 ${
+        activeSection === 'ai-assistant' ? 'h-screen overflow-hidden' : 'min-h-screen overflow-x-hidden'
+      }`}>
       
       <NotificationToastContainer lang={lang} currentRole={currentRole} />
       
@@ -1334,5 +1336,6 @@ export default function App() {
         userName={currentRole === 'driver' ? driverName : currentRole === 'admin' ? "Operator Ibrahim" : "Director Kabir"}
       />
     </div>
+    </ErrorBoundary>
   );
 }

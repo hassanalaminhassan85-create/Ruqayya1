@@ -124,9 +124,10 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
 
   // Classify audit log entry
   const getLogCategory = (log: AuditLog): 'drivers' | 'expenses' | 'status' | 'other' => {
-    const act = log.action.toUpperCase();
-    const prev = (log.previous_value || '').toUpperCase();
-    const next = (log.new_value || '').toUpperCase();
+    if (!log) return 'other';
+    const act = (log.action || '').toUpperCase();
+    const prev = (log.previous_value || log.previousValue || '').toUpperCase();
+    const next = (log.new_value || log.newValue || '').toUpperCase();
 
     if (
       act.includes('REGISTER') || 

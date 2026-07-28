@@ -568,7 +568,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
   });
 
   // Calculate dynamic investment stats
-  const totalShareholderCapital = shareholders.reduce((sum, s) => sum + s.investment_amount, 0);
+  const totalShareholderCapital = shareholders.reduce((sum, s) => sum + (s.investment_amount || 0), 0);
 
   // Pending items in registry
   const pendingReviewDrivers = drivers.filter(d => d.status === 'pending');
@@ -1294,7 +1294,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                     </tr>
                   ) : (
                     filteredShareholdersList.map((s, idx) => {
-                      const weight = totalShareholderCapital > 0 ? (s.investment_amount / totalShareholderCapital) * 100 : 0;
+                      const weight = totalShareholderCapital > 0 ? ((s.investment_amount || 0) / totalShareholderCapital) * 100 : 0;
                       return (
                         <tr key={`${s.id}-${idx}`} className="hover:bg-bg-base/20 transition-all">
                           <td className="p-4 font-black font-mono text-[11px] text-brand-navy">
@@ -1321,7 +1321,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                             </div>
                           </td>
                           <td className="p-4 text-right font-bold font-mono text-brand-navy">
-                            ₦{s.investment_amount.toLocaleString()}
+                            ₦{(s.investment_amount || 0).toLocaleString()}
                           </td>
                           <td className="p-4 text-center">
                             <span className="font-black font-mono text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded text-[11px] border border-emerald-100">

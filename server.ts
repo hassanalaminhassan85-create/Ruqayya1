@@ -346,17 +346,19 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       company_documents: db.company_documents || []
     };
   } else if (role === 'admin') {
-    // Admins receive operational events, excluding sensitive audit logs & shareholder details (except basic list)
+    // Admins receive operational events
     return {
       ...common,
       drivers: mappedDrivers,
       vehicles: mappedVehicles,
       financials: db.financial_records || [],
       notifications: db.notifications || [],
+      audit_logs: db.audit_logs || [],
       users: db.users || [],
       admins: db.admins || [],
-      shareholders: (db.shareholders || []).map((s: any) => ({ id: s.id, full_name: s.full_name, status: s.status })),
+      shareholders: db.shareholders || [],
       cycles: db.cycles || [],
+      shareholder_settings: db.shareholder_settings || {},
       trip_manifests: mappedTrips,
       driver_payments: db.driver_payments || [],
       messages: db.messages || [],

@@ -1478,7 +1478,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-mono">
                   {localShareholders.map((sh, idx) => {
-                    const weightStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+                    const weightStake = totalInvestmentsSum > 0 ? (((sh.investment_amount || 0) / totalInvestmentsSum) * 100) : 0;
                     const estimatedEarnings = continuousDividendPool * (weightStake / 100);
                     const shTotalWithdrawn = sh.total_withdrawn || 0;
                     const availableWithdrawable = Math.max(0, estimatedEarnings - shTotalWithdrawn);
@@ -1499,13 +1499,13 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                             </div>
                             <div>
                               <p className="font-extrabold text-slate-900 text-xs">{sh.full_name}</p>
-                              <p className="text-[10px] text-text-muted">{sh.email}</p>
+                              <p className="text-[10px] text-text-muted">{sh.email || ''}</p>
                             </div>
                           </div>
                         </td>
 
                         {/* INVESTMENT */}
-                        <td className="p-3 font-bold text-slate-800">₦{sh.investment_amount.toLocaleString()}</td>
+                        <td className="p-3 font-bold text-slate-800">₦{(sh.investment_amount || 0).toLocaleString()}</td>
                         
                         {/* WEIGHT */}
                         <td className="p-3 text-slate-700 font-extrabold">{weightStake.toFixed(2)}%</td>
