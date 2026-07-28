@@ -3719,18 +3719,12 @@ ${JSON.stringify(cleanedContext, null, 2)}
             const textResponse = response.text || '';
             const chunks = textResponse.match(/.{1,15}/g) || [];
             for (const chunk of chunks) {
-              await writer.write(encoder.encode('data: ' + JSON.stringify({ text: chunk }) + '
-
-'));
+              await writer.write(encoder.encode('data: ' + JSON.stringify({ text: chunk }) + '\n\n'));
               await new Promise(res => setTimeout(res, 20));
             }
-            await writer.write(encoder.encode('data: [DONE]
-
-'));
+            await writer.write(encoder.encode('data: [DONE]\n\n'));
           } catch (e: any) {
-            await writer.write(encoder.encode('data: ' + JSON.stringify({ error: e.message }) + '
-
-'));
+            await writer.write(encoder.encode('data: ' + JSON.stringify({ error: e.message }) + '\n\n'));
           } finally {
             await writer.close();
           }
