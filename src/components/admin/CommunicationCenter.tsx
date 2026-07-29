@@ -19,7 +19,8 @@ import {
   Building
 } from 'lucide-react';
 import { Language, Driver } from '../../types';
-import { saveR2File } from '../../utils/server_db'; // client side helper is built inside API proxy, let's mock local uploads inside component
+// Client-side code should not import from server_db.ts directly as it contains Node-only modules like fs, path
+// import { saveR2File } from '../../utils/server_db'; 
 
 interface CommunicationCenterProps {
   lang: Language;

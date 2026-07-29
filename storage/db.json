@@ -72,6 +72,16 @@
       "user_agent": "curl/7.88.1",
       "created_at": "2026-07-20T12:21:25.867Z",
       "status": "active"
+    },
+    {
+      "id": "5b3ed410-cd4a-4102-b827-ac9340a705d7",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "token": "tok_admin_ADAM_aed10d60e06c4f69a000d54668275237",
+      "expires_at": "2026-08-28T07:37:26.664Z",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "created_at": "2026-07-29T07:37:26.664Z",
+      "status": "active"
     }
   ],
   "audit_logs": [
@@ -158,7 +168,20 @@
   "driver_payments": [],
   "messages": [],
   "announcements": [],
-  "push_subscriptions": [],
+  "push_subscriptions": [
+    {
+      "id": "fallback-sub-admin",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "subscription": {
+        "endpoint": "http://localhost:3000/api/notifications/fallback-push-endpoint",
+        "keys": {
+          "p256dh": "placeholder-p256dh",
+          "auth": "placeholder-auth"
+        }
+      },
+      "created_at": "2026-07-29T07:36:15.971Z"
+    }
+  ],
   "vapid_keys": null,
   "company_settings": {
     "companyName": "Ruqayya Transport Limited",
@@ -169,7 +192,9 @@
     "currency": "₦",
     "timeZone": "Africa/Lagos",
     "languageDefault": "en",
-    "themeDefault": "light"
+    "themeDefault": "light",
+    "wallet_initial_amount": 0,
+    "wallet_balance": 0
   },
   "shareholder_settings": {
     "distributionPercentage": 2

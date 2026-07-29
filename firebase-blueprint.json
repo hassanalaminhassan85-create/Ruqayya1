@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "DBState": {
+      "title": "Database State",
+      "description": "The entire application state serialized into a single document.",
+      "type": "object",
+      "properties": {
+        "users": { "type": "array" },
+        "directors": { "type": "array" },
+        "admins": { "type": "array" },
+        "drivers": { "type": "array" },
+        "shareholders": { "type": "array" },
+        "guarantors": { "type": "array" },
+        "vehicles": { "type": "array" },
+        "vehicle_documents": { "type": "array" },
+        "driver_documents": { "type": "array" },
+        "company_documents": { "type": "array" },
+        "sessions": { "type": "array" },
+        "audit_logs": { "type": "array" },
+        "notifications": { "type": "array" },
+        "user_preferences": { "type": "array" },
+        "roles": { "type": "array" },
+        "permissions": { "type": "array" },
+        "financial_records": { "type": "array" },
+        "trip_manifests": { "type": "array" },
+        "cycles": { "type": "array" },
+        "driver_payments": { "type": "array" },
+        "messages": { "type": "array" },
+        "announcements": { "type": "array" },
+        "push_subscriptions": { "type": "array" },
+        "company_settings": { "type": "object" },
+        "shareholder_settings": { "type": "object" },
+        "company_operations_state": { "type": "object" }
+      }
+    }
+  },
+  "firestore": {
+    "/system_state/main_database": {
+      "schema": "DBState",
+      "description": "The master document containing all ERP data."
+    }
+  }
+}

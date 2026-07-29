@@ -6,6 +6,43 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
+
+// Initialize Firebase Admin for persistent storage
+let firestore: any = null;
+try {
+  const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
+  
+  if (getApps().length === 0) {
+    // In AI Studio Cloud Run environment, initializeApp() without arguments 
+    // uses the default service account credentials and correct project ID.
+    // Specifying a project ID from a config file might lead to PERMISSION_DENIED 
+    // if the config is stale or from a different project.
+    initializeApp();
+  }
+
+  // Use (default) if no ID is provided, or if the provided one looks like a placeholder
+  if (!dbId || dbId === '(default)') {
+    firestore = getFirestore();
+  } else {
+    try {
+      // Correct signature for getFirestore with databaseId in firebase-admin is getFirestore(app?, databaseId?)
+      // Passing undefined as the first argument uses the default app.
+      firestore = getFirestore(undefined, dbId);
+      console.log(`Initialized with named database: ${dbId}`);
+    } catch (err) {
+      console.warn(`Failed to initialize named database ${dbId}, falling back to default:`, err);
+      firestore = getFirestore();
+    }
+  }
+} catch (e) {
+  console.error("Firebase Admin initialization failed:", e);
+}
+
+const CLOUD_DB_COLLECTION = 'system_state';
+const CLOUD_DB_DOC = 'main_database';
 
 // Password hashing helpers
 export function hashPassword(password: string): string {
@@ -114,7 +151,32 @@ const INITIAL_DB_STATE: DBState = {
 };
 
 // Global DB Load and Save
+let cachedDB: DBState | null = null;
+
+export async function initCloudPersistence() {
+  if (!firestore) return;
+  try {
+    const docRef = firestore.collection(CLOUD_DB_COLLECTION).doc(CLOUD_DB_DOC);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+      const cloudData = docSnap.data() as DBState;
+      console.log('Successfully loaded database state from Firestore.');
+      // Update local file and cache
+      fs.writeFileSync(DB_FILE, JSON.stringify(cloudData, null, 2), 'utf8');
+      cachedDB = cloudData;
+    } else {
+      console.log('No existing database state found in Firestore. Starting fresh.');
+      // Save initial state to cloud
+      const initialState = loadDB();
+      await docRef.set(initialState);
+    }
+  } catch (err) {
+    console.error('Failed to initialize cloud persistence:', err);
+  }
+}
+
 export function loadDB(): DBState {
+  if (cachedDB) return cachedDB;
   try {
     if (fs.existsSync(DB_FILE)) {
       const data = fs.readFileSync(DB_FILE, 'utf8');
@@ -177,7 +239,33 @@ export function saveDB(state: DBState): void {
       const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
       state.company_settings.wallet_balance = (state.company_settings.wallet_initial_amount || 0) + totalRev - totalExp;
     }
+    
+    cachedDB = state;
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf8');
+    
+    // Fire-and-forget sync to cloud
+    if (firestore) {
+      firestore.collection(CLOUD_DB_COLLECTION).doc(CLOUD_DB_DOC).set(state).then(() => {
+        console.log('Successfully synced database to Firestore.');
+      }).catch((err: any) => {
+        console.error('Failed to sync database to Firestore:', err.message, 'Code:', err.code);
+        
+        // If we get a permission error on a named database, it might be because the database 
+        // doesn't exist or isn't accessible. Try to fallback to default database for future attempts.
+        if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
+          const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
+          if (dbId && dbId !== '(default)') {
+            console.warn('PERMISSION_DENIED on named database. Falling back to default database for future syncs.');
+            try {
+              firestore = getFirestore();
+            } catch (fallbackErr) {
+              console.error('Failed to fallback to default database:', fallbackErr);
+            }
+          }
+        }
+      });
+    }
+
     dbChangeListeners.forEach(listener => {
       try {
         listener();

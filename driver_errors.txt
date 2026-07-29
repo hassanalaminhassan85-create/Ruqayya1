@@ -1,0 +1,28 @@
+src/features/DriverDashboard.tsx(996,7): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1023,13): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1206,13): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1293,17): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1533,29): error TS2657: JSX expressions must have one parent element.
+src/features/DriverDashboard.tsx(1549,29): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1555,29): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1570,27): error TS1005: '}' expected.
+src/features/DriverDashboard.tsx(1685,15): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1689,11): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1770,29): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1774,21): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1816,23): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1817,25): error TS2657: JSX expressions must have one parent element.
+src/features/DriverDashboard.tsx(1844,29): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(1995,29): error TS2657: JSX expressions must have one parent element.
+src/features/DriverDashboard.tsx(2034,37): error TS2657: JSX expressions must have one parent element.
+src/features/DriverDashboard.tsx(2062,25): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2098,29): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2103,21): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2106,15): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2228,15): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2232,11): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2296,17): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2325,11): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2424,15): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2428,11): error TS1005: ')' expected.
+src/features/DriverDashboard.tsx(2534,9): error TS1005: ')' expected.

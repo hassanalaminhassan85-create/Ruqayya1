@@ -57,6 +57,7 @@ import {
   Zap,
   Bell,
   CreditCard,
+  ClipboardCheck,
   Upload,
   Building,
   TrendingDown,
@@ -471,6 +472,7 @@ export default function App() {
       { id: 'ai-assistant', label: lang === 'en' ? "Ruqayya AI" : "Mataimakin AI", icon: <Sparkles className="h-4 w-4 shrink-0 text-brand-gold" />, active: activeSection === 'ai-assistant' },
       { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
       { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
+      { id: 'payments', label: lang === 'en' ? "Payment Approvals" : "Tabbatar Biyan Kudi", icon: <ClipboardCheck className="h-4 w-4 shrink-0 text-emerald-500" />, active: activeSection === 'payments' },
       { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Coins className="h-4 w-4 shrink-0" />, active: activeSection === 'finance' },
       { id: 'shareholders', label: lang === 'en' ? "Shareholders" : "Masu Hannun Jari", icon: <TrendingUp className="h-4 w-4 shrink-0" />, active: activeSection === 'shareholders' },
       { id: 'trips', label: lang === 'en' ? "Trips" : "Takardun Tafiya", icon: <MapPin className="h-4 w-4 shrink-0" />, active: activeSection === 'trips' },
@@ -490,7 +492,7 @@ export default function App() {
       );
     }
     if (currentRole === 'admin') {
-      return items.filter(item => ["dashboard", "fleet", "drivers", "finance", "ai-assistant", "notifications", "settings", "help"].includes(item.id));
+      return items.filter(item => ["dashboard", "fleet", "drivers", "trips", "payments", "finance", "people", "communications", "documents", "directory", "ai-assistant", "notifications", "settings", "help"].includes(item.id));
     }
     if (currentRole === 'shareholder') {
       return items.filter(item => 
@@ -502,17 +504,62 @@ export default function App() {
 
   const handleSidebarClick = (id: string) => {
     setActiveSection(id);
+    
+    // Explicitly synchronize role-specific dashboard tabs when sidebar items are clicked
+    // This ensures that when we switch back to 'dashboard' section, we land on the correct tab
+    if (currentRole === 'admin') {
+      const adminTabs: any[] = ['dashboard', 'fleet', 'drivers', 'payments', 'finance', 'trips', 'documents', 'communications', 'directory', 'people', 'settings'];
+      if (adminTabs.includes(id)) {
+        setAdminTab(id);
+      }
+    } else if (currentRole === 'director') {
+      const directorTabs: any[] = ['dashboard', 'drivers', 'fleet', 'payments', 'shareholders', 'trips', 'reports', 'communications', 'documents', 'settings'];
+      if (directorTabs.includes(id)) {
+        // Map sidebar ID to the specific tabs director dashboard expects
+        let tab: any = id;
+        if (id === 'dashboard') tab = 'overview';
+        else if (id === 'fleet') tab = 'directory';
+        else if (id === 'payments') tab = 'analytics';
+        else if (id === 'trips') tab = 'monitoring';
+        else if (id === 'settings') tab = 'company';
+        setDirectorTab(tab);
+      }
+    } else if (currentRole === 'driver') {
+      const driverTabs: any[] = ['dashboard', 'fleet', 'payments', 'trips', 'documents', 'settings'];
+      if (driverTabs.includes(id)) {
+        let tab: any = id;
+        if (id === 'dashboard') tab = 'overview';
+        else if (id === 'fleet') tab = 'vehicle';
+        else if (id === 'trips') tab = 'history';
+        else if (id === 'settings') tab = 'profile';
+        setDriverTab(tab);
+      }
+    } else if (currentRole === 'shareholder') {
+      const shareholderTabs: any[] = ['dashboard', 'payments', 'trips', 'settings'];
+      if (shareholderTabs.includes(id)) {
+        let tab: any = id;
+        if (id === 'dashboard') tab = 'overview';
+        else if (id === 'payments') tab = 'ledger';
+        else if (id === 'trips') tab = 'cycles';
+        setShareholderTab(tab);
+      }
+    }
+
     if (window.innerWidth < 768) {
       setSidebarOpen(false); // Auto close mobile drawer on click
     }
   };
 
   const renderMainContent = () => {
-    if (activeSection === 'notifications') {
-      return <NotificationInbox lang={lang} />;
-    }
-    if (activeSection === 'help') {
-      return <HelpCenter lang={lang} />;
+    // Global views (accessible by any logged-in role)
+    if (activeSection === 'notifications') return <NotificationInbox lang={lang} />;
+    if (activeSection === 'help') return <HelpCenter lang={lang} />;
+    if (activeSection === 'pwa') {
+      return (
+        <div className="bg-bg-surface border border-border-main rounded-[20px] p-6 shadow-xs">
+          <PWAPanel lang={lang} />
+        </div>
+      );
     }
     if (activeSection === 'ai-assistant') {
       return (
@@ -524,26 +571,20 @@ export default function App() {
         />
       );
     }
-    if (activeSection === 'pwa') {
-      return (
-        <div className="bg-bg-surface border border-border-main rounded-[20px] p-6 shadow-xs">
-          <PWAPanel lang={lang} />
-        </div>
-      );
-    }
 
-    // Role-specific routing
+    // Role-specific routing and state mapping
     if (currentRole === 'driver') {
-      let driverTabValue: 'overview' | 'payments' | 'history' | 'vehicle' | 'documents' | 'profile' = 'overview';
+      let driverTabValue = driverTab;
+      // Force tab based on section if they were navigated via sidebar or quick action
       if (activeSection === 'dashboard') driverTabValue = 'overview';
-      else if (activeSection === 'drivers') driverTabValue = 'profile'; // self
       else if (activeSection === 'fleet') driverTabValue = 'vehicle';
       else if (activeSection === 'payments') driverTabValue = 'payments';
       else if (activeSection === 'trips') driverTabValue = 'history';
       else if (activeSection === 'documents') driverTabValue = 'documents';
       else if (activeSection === 'settings') driverTabValue = 'profile';
-      else {
-        // Restricted / unsupported sections for drivers
+      
+      const allowedDriverSections = ['dashboard', 'drivers', 'fleet', 'payments', 'trips', 'documents', 'settings'];
+      if (!allowedDriverSections.includes(activeSection)) {
         return (
           <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
             <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
@@ -554,16 +595,16 @@ export default function App() {
           </div>
         );
       }
+
       return (
         <DriverDashboard
-          key={currentRole + '-' + (authToken || 'no-token')}
+          key={currentRole + '-dashboard'}
           driverName={driverName}
           lang={lang}
           dictionary={dictionary}
           activeTab={driverTabValue}
           setActiveTab={(tab) => {
             setDriverTab(tab);
-            // sync section
             if (tab === 'overview') setActiveSection('dashboard');
             else if (tab === 'vehicle') setActiveSection('fleet');
             else if (tab === 'payments') setActiveSection('payments');
@@ -577,9 +618,7 @@ export default function App() {
 
     if (currentRole === 'admin') {
       let adminTabValue = adminTab;
-      if (activeSection === 'dashboard') {
-        adminTabValue = 'fleet'; // Shows active fleet dashboard stats
-      }
+      if (activeSection === 'dashboard') adminTabValue = 'dashboard';
       else if (activeSection === 'drivers') adminTabValue = 'drivers';
       else if (activeSection === 'fleet') adminTabValue = 'fleet';
       else if (activeSection === 'payments') adminTabValue = 'payments';
@@ -589,11 +628,10 @@ export default function App() {
       else if (activeSection === 'finance') adminTabValue = 'finance';
       else if (activeSection === 'directory') adminTabValue = 'directory';
       else if (activeSection === 'people') adminTabValue = 'people';
-      else if (activeSection === 'reports') {
-        adminTabValue = 'directory';
-      }
       else if (activeSection === 'settings') adminTabValue = 'settings';
-      else {
+      
+      const allowedAdminSections = ["dashboard", "fleet", "drivers", "payments", "finance", "trips", "communications", "documents", "directory", "people", "settings"];
+      if (!allowedAdminSections.includes(activeSection)) {
         return (
           <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
             <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
@@ -604,15 +642,17 @@ export default function App() {
           </div>
         );
       }
+
       return (
         <AdminDashboard
-          key={currentRole + '-' + (authToken || 'no-token')}
+          key={currentRole + '-dashboard'}
           lang={lang}
           dictionary={dictionary}
           activeTab={adminTabValue}
           setActiveTab={(tab) => {
             setAdminTab(tab);
-            if (tab === 'fleet') setActiveSection('fleet');
+            if (tab === 'dashboard') setActiveSection('dashboard');
+            else if (tab === 'fleet') setActiveSection('fleet');
             else if (tab === 'drivers') setActiveSection('drivers');
             else if (tab === 'trips') setActiveSection('trips');
             else if (tab === 'payments') setActiveSection('payments');
@@ -628,24 +668,21 @@ export default function App() {
     }
 
     if (currentRole === 'director') {
-      let directorTabValue: 'overview' | 'analytics' | 'cycles' | 'admins' | 'drivers' | 'shareholders' | 'company' | 'reports' | 'audit' | 'monitoring' | 'directory' = 'overview';
+      let directorTabValue = directorTab;
       if (activeSection === 'dashboard') directorTabValue = 'overview';
-      else if (activeSection === 'drivers') directorTabValue = 'drivers';
+      else if (activeSection === 'drivers') directorTabValue = 'directory';
       else if (activeSection === 'fleet') directorTabValue = 'directory';
       else if (activeSection === 'payments') directorTabValue = 'analytics';
       else if (activeSection === 'shareholders') directorTabValue = 'shareholders';
       else if (activeSection === 'trips') directorTabValue = 'monitoring';
       else if (activeSection === 'reports') directorTabValue = 'reports';
-      else if (activeSection === 'communications') {
-        directorTabValue = 'directory';
-      }
-      else if (activeSection === 'documents') {
-        directorTabValue = 'reports';
-      }
+      else if (activeSection === 'communications') directorTabValue = 'communications';
+      else if (activeSection === 'documents') directorTabValue = 'documents';
       else if (activeSection === 'settings') directorTabValue = 'company';
+
       return (
         <DirectorDashboard
-          key={currentRole + '-' + (authToken || 'no-token')}
+          key={currentRole + '-dashboard'}
           lang={lang}
           dictionary={dictionary}
           activeTab={directorTabValue}
@@ -653,9 +690,13 @@ export default function App() {
             setDirectorTab(tab);
             if (tab === 'overview') setActiveSection('dashboard');
             else if (tab === 'drivers') setActiveSection('drivers');
+            else if (tab === 'directory') setActiveSection('fleet');
             else if (tab === 'analytics') setActiveSection('payments');
             else if (tab === 'shareholders') setActiveSection('shareholders');
+            else if (tab === 'monitoring') setActiveSection('trips');
             else if (tab === 'reports') setActiveSection('reports');
+            else if (tab === 'communications') setActiveSection('communications');
+            else if (tab === 'documents') setActiveSection('documents');
             else if (tab === 'company') setActiveSection('settings');
           }}
         />
@@ -663,35 +704,15 @@ export default function App() {
     }
 
     if (currentRole === 'shareholder') {
-      let shareholderTabValue: 'overview' | 'cycles' | 'ledger' | 'settings' = 'overview';
+      let shareholderTabValue = shareholderTab;
       if (activeSection === 'dashboard') shareholderTabValue = 'overview';
-      else if (activeSection === 'drivers') {
-        return (
-          <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
-            <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
-            <h3 className="text-xl font-bold text-text-main">Operational Operations Restricted</h3>
-            <p className="text-sm text-text-muted mt-2 leading-relaxed">
-              Operational directories are restricted for Shareholders. Please refer to executive financial ledgers.
-            </p>
-          </div>
-        );
-      }
-      else if (activeSection === 'fleet') {
-        return (
-          <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
-            <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
-            <h3 className="text-xl font-bold text-text-main">Operational Operations Restricted</h3>
-            <p className="text-sm text-text-muted mt-2 leading-relaxed">
-              Physical fleet inventories are restricted for Shareholders. Please refer to financial asset registers.
-            </p>
-          </div>
-        );
-      }
       else if (activeSection === 'payments') shareholderTabValue = 'ledger';
       else if (activeSection === 'shareholders') shareholderTabValue = 'overview';
       else if (activeSection === 'trips') shareholderTabValue = 'cycles';
       else if (activeSection === 'settings') shareholderTabValue = 'settings';
-      else {
+      
+      const allowedShareholderSections = ['dashboard', 'payments', 'shareholders', 'trips', 'settings'];
+      if (!allowedShareholderSections.includes(activeSection)) {
         return (
           <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
             <Lock className="h-12 w-12 text-brand-gold animate-bounce mb-4" />
@@ -702,9 +723,10 @@ export default function App() {
           </div>
         );
       }
+
       return (
         <ShareholderDashboard
-          key={currentRole + '-' + (authToken || 'no-token')}
+          key={currentRole + '-dashboard'}
           lang={lang}
           dictionary={dictionary}
           activeTab={shareholderTabValue}
@@ -712,13 +734,23 @@ export default function App() {
             setShareholderTab(tab);
             if (tab === 'overview') setActiveSection('dashboard');
             else if (tab === 'ledger') setActiveSection('payments');
+            else if (tab === 'cycles') setActiveSection('trips');
             else if (tab === 'settings') setActiveSection('settings');
           }}
         />
       );
     }
 
-    return null;
+    // Fallback if role is not recognized or something went wrong
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
+        <Info className="h-12 w-12 text-brand-gold mb-4" />
+        <h3 className="text-xl font-bold text-text-main">Welcome to Ruqayya ERP</h3>
+        <p className="text-sm text-text-muted mt-2 leading-relaxed">
+          Please select a module from the sidebar to begin your operations.
+        </p>
+      </div>
+    );
   };
 
   if (authLoading) {
@@ -1168,7 +1200,7 @@ export default function App() {
         <main className={`flex-1 ${(currentRole === 'public' || activeSection === 'ai-assistant') ? 'p-0 flex flex-col' : 'p-4 md:p-6 grid grid-cols-1'} w-full max-w-full overflow-x-hidden`}>
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentRole + '-' + activeSection}
+              key={currentRole}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}

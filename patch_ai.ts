@@ -55,7 +55,7 @@ const replacementStr = `    if (stream) {
             chatHistory.push({ role: 'user', parts: [{ text: prompt }] });
             
             const chat = ai.chats.create({
-              model: 'gemini-3.6-flash',
+              model: 'gemini-2.5-flash',
               config: {
                 systemInstruction,
                 temperature: 0.2,

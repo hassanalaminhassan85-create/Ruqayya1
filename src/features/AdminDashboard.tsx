@@ -27,6 +27,7 @@ import {
   FileText,
   User,
   Activity,
+  Layers,
   AlertTriangle,
   UserCheck,
   UserX,
@@ -55,13 +56,13 @@ import { ActivityFeed } from '../components/admin/ActivityFeed';
 interface AdminDashboardProps {
   lang: Language;
   dictionary: Dictionary;
-  activeTab?: 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings';
-  setActiveTab?: (tab: 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings') => void;
+  activeTab?: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings';
+  setActiveTab?: (tab: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings') => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
   // Tabs & Views
-  const [localActiveTab, setLocalActiveTab] = useState<'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('fleet');
+  const [localActiveTab, setLocalActiveTab] = useState<'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('dashboard');
   const activeTab = propActiveTab || localActiveTab;
   const setActiveTab = propSetActiveTab || setLocalActiveTab;
   
@@ -418,10 +419,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   return (
     <div className="flex flex-col gap-3 w-full flex-1 max-w-7xl mx-auto p-2 md:p-4 bg-bg-base">
       
-      {/* Header with quick indicators */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-border-main/50 pb-2 mb-1">
-        <div>
-          <span className="text-[10px] font-black tracking-widest text-brand-gold uppercase block">
+      {activeTab === 'dashboard' && (
+        <>
+          {/* Header with quick indicators */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-border-main/50 pb-2 mb-1">
+            <div>
+              <span className="text-[10px] font-black tracking-widest text-brand-gold uppercase block">
             {(() => {
               const hours = new Date().getHours();
               let greeting = "Good Morning";
@@ -568,7 +571,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
 
             <button
               type="button"
-              onClick={() => setActiveTab('vouchers')}
+              onClick={() => setActiveTab('finance')}
               className="text-left bg-bg-surface border border-border-main p-3.5 rounded-xl cursor-pointer hover:scale-[1.01] transition-all hover:shadow-md flex flex-col justify-between h-24 group"
             >
               <div className="flex justify-between items-start w-full">
@@ -612,15 +615,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               />
             </div>
           </div>
+        </>
+      )}
+    </>
+  )}
 
           {/* Module Tab Switchers */}
           <Tabs
-            activeTab={activeTab === 'payments' ? 'finance' : activeTab}
+            activeTab={activeTab}
             onChange={(id) => { setActiveTab(id as any); setFleetPage(1); }}
             tabs={[
+              { id: 'dashboard', label: lang === 'en' ? "Overview" : "Bayanai", icon: <Layers className="h-3.5 w-3.5" /> },
               { id: 'fleet', label: lang === 'en' ? "Tricycle Fleet" : "Rukunin Kekuna", icon: <Truck className="h-3.5 w-3.5" /> },
               { id: 'drivers', label: `${lang === 'en' ? "Driver Registry" : "Direbobi"} (${drivers.filter(d => d.status === 'pending').length} pending)`, icon: <Users className="h-3.5 w-3.5" /> },
               { id: 'trips', label: lang === 'en' ? "Daily Remittances" : "Kudaden Remittance", icon: <MapPin className="h-3.5 w-3.5" /> },
+              { id: 'payments', label: lang === 'en' ? "Payment Approvals" : "Tabbatar Biyan Kudi", icon: <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" /> },
               { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Wallet className="h-3.5 w-3.5" /> },
               { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
               { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
@@ -1182,8 +1191,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               </div>
             )}
           </div>
-        </>
-      )}
 
       {/* MODAL: ADD VEHICLE ASSET */}
       <Modal isOpen={isAddVehicleOpen} onClose={() => setIsAddVehicleOpen(false)} title={lang === 'en' ? "Register New Fleet Asset" : "Rijistar Sabuwar Mota"}>

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   DollarSign, 
   Plus, 
@@ -36,7 +36,10 @@ import {
   ArrowDownRight,
   History,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  ShieldCheck,
+  Receipt,
+  Trello
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -108,6 +111,11 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
   // Shareholder Action Modals
   const [activeShareholder, setActiveShareholder] = useState<Shareholder | null>(null);
+  const [shSubView, setShSubView] = useState<'roster' | 'history'>('roster');
+  const [payrollSubView, setPayrollSubView] = useState<'analytics' | 'history'>('analytics');
+  const [driverView, setDriverView] = useState<'remit' | 'history' | 'compliance'>('remit');
+  const [selectedCycle, setSelectedCycle] = useState('1');
+  const [selectedInstallment, setSelectedInstallment] = useState('1');
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isReinvestOpen, setIsReinvestOpen] = useState(false);
   const [shActionAmount, setShActionAmount] = useState('');
@@ -124,8 +132,22 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
 
+  // Identify drivers missing payments for selected period
+  const pendingDrivers = drivers.filter(d => {
+    const hasPayment = localAuditLogs.some(log => 
+      log.userId === d.id && 
+      log.action === 'DRIVER_REMITTANCE' && 
+      log.description?.includes(`Cycle #${selectedCycle}`) &&
+      log.description?.includes(`Inst. #${selectedInstallment}`)
+    );
+    return !hasPayment;
+  });
+
   // Auto-fetch additional records
   const fetchAuxRecords = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
     setIsFetching(true);
     try {
       const [pList, sList, aList] = await Promise.all([
@@ -468,11 +490,11 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
       await api.addPayment({
         driverId: selectedDriverId,
         amount: parseFloat(payAmountInput),
-        installmentNumber: currentInstallmentNumber,
+        installmentNumber: parseInt(selectedInstallment),
         outstandingAmount: remainingInstallmentAfterPay,
         date: new Date().toISOString().split('T')[0],
         receiptNumber: payReceiptInput,
-        remarks: payRemarksInput || `Auto-processed real-time payment.`
+        remarks: payRemarksInput || `Remittance for Cycle #${selectedCycle}, Inst. #${selectedInstallment}`
       });
 
       // Reset
@@ -587,6 +609,12 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
   // Process Automated Payroll Disbursal
   const handleProcessPayroll = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setPayrollError("Authentication required to process payroll.");
+      return;
+    }
+    
     setPayrollLoading(true);
     setPayrollError('');
     setPayrollSuccess('');
@@ -929,11 +957,69 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+          className="flex flex-col gap-6"
         >
-          {/* LEFT PANEL: DRIVER LIST SELECT */}
-          <Card className="lg:col-span-4 p-4 flex flex-col gap-3">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Select Lease Driver</h3>
+          {/* HEADER & NAV */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                <div className="h-4 w-1 bg-emerald-500 rounded-full" />
+                Driver Remittance Engine
+              </h3>
+              <p className="text-[11px] text-slate-500 font-medium mt-1">Manage operational lease payments and compliance across cycles.</p>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl self-end">
+              <button
+                onClick={() => setDriverView('remit')}
+                className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all flex items-center gap-2 ${
+                  driverView === 'remit' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Remittance
+              </button>
+              <button
+                onClick={() => setDriverView('compliance')}
+                className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all flex items-center gap-2 ${
+                  driverView === 'compliance' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Compliance <Badge variant="danger" className="h-4 px-1 text-[8px] border-none ml-1">{pendingDrivers.length}</Badge>
+              </button>
+              <button
+                onClick={() => setDriverView('history')}
+                className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all flex items-center gap-2 ${
+                  driverView === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                History
+              </button>
+            </div>
+          </div>
+
+          <AnimatePresence mode="wait">
+            {driverView === 'remit' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* LEFT PANEL: DRIVER LIST SELECT */}
+                <Card className="lg:col-span-4 p-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Select Lease Driver</h3>
+                    <div className="flex gap-1.5">
+                      <select 
+                        value={selectedCycle}
+                        onChange={(e) => setSelectedCycle(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-black focus:outline-none"
+                      >
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => <option key={num} value={num}>C#{num}</option>)}
+                      </select>
+                      <select 
+                        value={selectedInstallment}
+                        onChange={(e) => setSelectedInstallment(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-black focus:outline-none"
+                      >
+                        {[1,2,3,4,5,6].map(num => <option key={num} value={num}>I#{num}</option>)}
+                      </select>
+                    </div>
+                  </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
               <input
@@ -1164,7 +1250,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                             <div className="flex justify-between">
                               <span className="text-slate-400">Expected status:</span>
                               <Badge variant={expectedInstallmentStatus === 'paid' ? 'success' : 'warning'}>
-                                {expectedInstallmentStatus.toUpperCase()}
+                                {expectedInstallmentStatus?.toUpperCase()}
                               </Badge>
                             </div>
                           </div>
@@ -1180,6 +1266,134 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
               </div>
             )}
           </Card>
+        </div>
+      ) : driverView === 'compliance' ? (
+              <motion.div
+                key="compliance-view"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                className="space-y-4"
+              >
+                <div className="bg-amber-50 border border-amber-100 p-5 rounded-2xl flex items-start gap-3">
+                  <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-black text-amber-900 uppercase tracking-widest">Incomplete Remittance Cycle</h4>
+                    <p className="text-[11px] text-amber-700 font-medium mt-1 leading-relaxed">
+                      The following drivers have <span className="font-black underline decoration-amber-300">not recorded</span> any payments for 
+                      <span className="font-black"> Cycle #{selectedCycle}, Installment #{selectedInstallment}</span>. Automated alerts can be dispatched via the driver portal.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {pendingDrivers.map((d, index) => (
+                    <motion.div
+                      key={d.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="p-4 bg-white border border-slate-100 rounded-2xl flex items-center justify-between group hover:border-amber-200 hover:shadow-lg transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
+                          {d.fullName?.charAt(0) || 'D'}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-slate-900 leading-tight">{d.fullName}</h4>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{d.company_driver_id || d.id}</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-8 text-[9px] font-black uppercase border-slate-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 px-4 rounded-xl"
+                        onClick={() => {
+                          setSelectedDriverId(d.id);
+                          setDriverView('remit');
+                        }}
+                      >
+                        Action
+                      </Button>
+                    </motion.div>
+                  ))}
+                  {pendingDrivers.length === 0 && (
+                    <div className="col-span-full py-20 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                      <div className="h-16 w-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Check className="h-8 w-8 stroke-[3]" />
+                      </div>
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Full Compliance</h4>
+                      <p className="text-[10px] text-slate-500 font-medium mt-1">All active drivers have fulfilled obligations for the selected period.</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="history-view"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm"
+              >
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100">
+                        <th className="p-5">Driver Identity</th>
+                        <th className="p-5">Ledger Context</th>
+                        <th className="p-5 text-right">Amount Paid</th>
+                        <th className="p-5">System Date</th>
+                        <th className="p-5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {localAuditLogs
+                        .filter(l => l.action === 'DRIVER_REMITTANCE')
+                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                        .map((log, index) => (
+                          <tr key={log.id || index} className="hover:bg-slate-50/50 transition-colors group">
+                            <td className="p-5">
+                              <div className="flex flex-col">
+                                <span className="font-black text-slate-900">{log.description.split(' from ')[1]?.split(' (')[0] || 'Driver Asset'}</span>
+                                <span className="text-[9px] text-slate-400 font-mono uppercase tracking-tighter mt-0.5">{log.userId}</span>
+                              </div>
+                            </td>
+                            <td className="p-5">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="primary" className="text-[8px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border-none">CYC {log.description.match(/Cycle #(\d+)/)?.[1] || '?'}</Badge>
+                                <Badge variant="neutral" className="text-[8px] px-2 py-0.5 bg-slate-100 text-slate-600 border-none uppercase">INST {log.description.match(/Inst. #(\d+)/)?.[1] || '?'}</Badge>
+                              </div>
+                            </td>
+                            <td className="p-5 text-right font-black font-mono text-emerald-600 text-sm">
+                              ₦{log.amount?.toLocaleString() || '0'}
+                            </td>
+                            <td className="p-5 text-slate-500 font-bold text-[10px]">
+                              {new Date(log.timestamp).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td className="p-5">
+                              <div className="flex items-center gap-1.5 text-emerald-600 font-black text-[9px] uppercase tracking-widest">
+                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Verified
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      {localAuditLogs.filter(l => l.action === 'DRIVER_REMITTANCE').length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="p-20 text-center text-slate-400 bg-slate-50/50">
+                            <History className="h-10 w-10 mx-auto mb-4 opacity-20" />
+                            <h4 className="text-[10px] font-black uppercase tracking-widest">No Remittance History Found</h4>
+                            <p className="text-[10px] font-medium mt-1">Begin posting driver payments to populate the ledger history.</p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
 
@@ -1277,7 +1491,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                           <td className="p-3 text-slate-600">{item.date}</td>
                           <td className="p-3">
                             <Badge variant={item.category === 'remittance' ? 'success' : item.category === 'salary' ? 'primary' : 'warning'}>
-                              {item.category.toUpperCase()}
+                              {item.category?.toUpperCase()}
                             </Badge>
                           </td>
                           <td className={`p-3 text-right font-bold font-mono text-sm ${isRev ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -1413,7 +1627,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                         <tr key={f.id || index} className="hover:bg-slate-50/50">
                           <td className="p-3 font-bold text-slate-900">{f.id}</td>
                           <td className="p-3">
-                            <Badge variant="danger">{f.category.toUpperCase()}</Badge>
+                            <Badge variant="danger">{f.category?.toUpperCase()}</Badge>
                           </td>
                           <td className="p-3 font-sans font-medium text-slate-800">{f.description}</td>
                           <td className="p-3 text-right font-bold font-mono text-rose-600">
@@ -1440,56 +1654,106 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         >
           {/* GENERAL SHAREHOLDER POOL CARD */}
           <div className="bg-slate-900 text-slate-100 p-6 rounded-2xl shadow-xl border border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+            >
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">{t.dividendsPool}</span>
               <p className="text-3xl font-black text-brand-gold font-mono mt-0.5">₦{continuousDividendPool.toLocaleString()}</p>
               <span className="text-[10px] text-slate-400 mt-1 block">Accrued automatically on real-time net generated income.</span>
-            </div>
+            </motion.div>
 
-            <div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+            >
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Total Equities Registered</span>
               <p className="text-3xl font-black text-slate-200 font-mono mt-0.5">₦{totalInvestmentsSum.toLocaleString()}</p>
               <span className="text-[10px] text-slate-400 mt-1 block">Paid-up capital seed reserves.</span>
-            </div>
+            </motion.div>
 
-            <div>
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+            >
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Shareholders Registered</span>
               <p className="text-3xl font-black text-slate-200 font-mono mt-0.5">{localShareholders.length}</p>
               <span className="text-[10px] text-slate-400 mt-1 block">Bylaw validated board directors.</span>
+            </motion.div>
+          </div>
+
+          {/* VIEW TOGGLE AND INSIGHTS */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+              <button
+                onClick={() => setShSubView('roster')}
+                className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  shSubView === 'roster' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                Investment Roster
+              </button>
+              <button
+                onClick={() => setShSubView('history')}
+                className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  shSubView === 'history' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <History className="h-3.5 w-3.5" />
+                Action History
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl border border-emerald-100 w-full sm:w-auto overflow-hidden relative group">
+              <div className="absolute inset-0 bg-emerald-100/50 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500" />
+              <TrendingUp className="h-4 w-4 relative z-10" />
+              <span className="text-xs font-black relative z-10">Active Equity Yielding: {distributionPercentage}% Growth</span>
             </div>
           </div>
 
-          {/* SHAREHOLDER STAKES LEDGER TABLE */}
-          <Card className="p-5">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">{t.shareholdersTitle}</h3>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
-                    <th className="p-3">Shareholder Details</th>
-                    <th className="p-3">Paid Capital Stock</th>
-                    <th className="p-3">{t.shareholderStake}</th>
-                    <th className="p-3">{t.earnings}</th>
-                    <th className="p-3">{t.withdrawable}</th>
-                    <th className="p-3">{t.totalReinvested}</th>
-                    <th className="p-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-mono">
-                  {localShareholders.map((sh, idx) => {
-                    const weightStake = totalInvestmentsSum > 0 ? (((sh.investment_amount || 0) / totalInvestmentsSum) * 100) : 0;
-                    const estimatedEarnings = continuousDividendPool * (weightStake / 100);
-                    const shTotalWithdrawn = sh.total_withdrawn || 0;
-                    const availableWithdrawable = Math.max(0, estimatedEarnings - shTotalWithdrawn);
-                    const shTotalReinvested = sh.total_reinvested || 0;
+          <AnimatePresence mode="wait">
+            {shSubView === 'roster' ? (
+              <motion.div
+                key="roster"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              >
+                {localShareholders.map((sh, idx) => {
+                  const weightStake = totalInvestmentsSum > 0 ? (((sh.investment_amount || 0) / totalInvestmentsSum) * 100) : 0;
+                  const estimatedEarnings = continuousDividendPool * (weightStake / 100);
+                  const shTotalWithdrawn = sh.total_withdrawn || 0;
+                  const availableWithdrawable = Math.max(0, estimatedEarnings - shTotalWithdrawn);
+                  const shTotalReinvested = sh.total_reinvested || 0;
 
-                    return (
-                      <tr key={sh.id || idx} className="hover:bg-slate-50/50">
-                        {/* NAME AND DETAILS */}
-                        <td className="p-3 font-sans">
-                          <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 rounded-full border border-slate-200 overflow-hidden shrink-0 bg-slate-900 flex items-center justify-center">
+                  return (
+                    <motion.div
+                      key={sh.id || idx}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="group"
+                    >
+                      <Card className="p-0 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 border-slate-200/60 h-full flex flex-col">
+                        {/* Header Section */}
+                        <div className="p-5 bg-gradient-to-br from-slate-50 to-white border-b border-slate-100 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 p-3">
+                            <Badge variant={availableWithdrawable > 0 ? 'success' : 'neutral'} className="font-mono text-[9px] font-black uppercase">
+                              {weightStake.toFixed(2)}% Stake
+                            </Badge>
+                          </div>
+                          
+                          <div className="flex items-center gap-4">
+                            <div className="h-14 w-14 rounded-2xl border-2 border-white shadow-lg overflow-hidden shrink-0 bg-slate-900 group-hover:rotate-3 transition-transform duration-500">
                               <img 
                                 src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
                                 alt={sh.full_name} 
@@ -1498,64 +1762,148 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                               />
                             </div>
                             <div>
-                              <p className="font-extrabold text-slate-900 text-xs">{sh.full_name}</p>
-                              <p className="text-[10px] text-text-muted">{sh.email || ''}</p>
+                              <h4 className="font-black text-slate-900 text-sm tracking-tight">{sh.full_name}</h4>
+                              <p className="text-[10px] text-slate-500 font-medium truncate max-w-[140px]">{sh.email}</p>
                             </div>
                           </div>
-                        </td>
+                        </div>
 
-                        {/* INVESTMENT */}
-                        <td className="p-3 font-bold text-slate-800">₦{(sh.investment_amount || 0).toLocaleString()}</td>
-                        
-                        {/* WEIGHT */}
-                        <td className="p-3 text-slate-700 font-extrabold">{weightStake.toFixed(2)}%</td>
-                        
-                        {/* ESTIMATED EARNINGS */}
-                        <td className="p-3 text-emerald-600 font-bold">₦{estimatedEarnings.toLocaleString()}</td>
-                        
-                        {/* WITHDRAWABLE */}
-                        <td className="p-3 text-brand-gold font-black">₦{availableWithdrawable.toLocaleString()}</td>
-                        
-                        {/* TOTAL REINVESTED */}
-                        <td className="p-3 text-slate-600">₦{shTotalReinvested.toLocaleString()}</td>
-
-                        {/* ACTIONS BUTTONS */}
-                        <td className="p-3 text-right font-sans">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="xs"
-                              disabled={availableWithdrawable <= 0}
-                              onClick={() => {
-                                setActiveShareholder(sh);
-                                setIsWithdrawOpen(true);
-                              }}
-                              className="font-bold border-brand-gold text-brand-gold hover:bg-brand-gold/10 text-[10px] h-7 px-2"
-                            >
-                              Withdraw
-                            </Button>
-
-                            <Button
-                              variant="outline"
-                              size="xs"
-                              disabled={availableWithdrawable <= 0}
-                              onClick={() => {
-                                setActiveShareholder(sh);
-                                setIsReinvestOpen(true);
-                              }}
-                              className="font-bold border-slate-900 text-slate-900 hover:bg-slate-100 text-[10px] h-7 px-2"
-                            >
-                              Reinvest
-                            </Button>
+                        {/* Metrics Section */}
+                        <div className="p-5 flex-1 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Capital Stock</label>
+                              <p className="text-sm font-bold text-slate-900 font-mono">₦{(sh.investment_amount || 0).toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Accumulated</label>
+                              <p className="text-sm font-bold text-emerald-600 font-mono">₦{estimatedEarnings.toLocaleString()}</p>
+                            </div>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+
+                          <div className="p-4 bg-slate-900 rounded-2xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-16 h-16 bg-brand-gold/10 rounded-full blur-2xl -mr-8 -mt-8" />
+                            <label className="text-[9px] font-black text-brand-gold uppercase tracking-widest block mb-1">Available Dividend</label>
+                            <p className="text-xl font-black text-white font-mono">₦{availableWithdrawable.toLocaleString()}</p>
+                          </div>
+
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                            <div className="flex flex-col">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Reinvested</span>
+                              <span className="text-[11px] font-bold text-slate-700 font-mono">₦{shTotalReinvested.toLocaleString()}</span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Net Withdrawn</span>
+                              <span className="text-[11px] font-bold text-slate-700 font-mono">₦{shTotalWithdrawn.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions Section */}
+                        <div className="p-4 bg-slate-50 grid grid-cols-2 gap-2">
+                          <Button
+                            variant="primary"
+                            disabled={availableWithdrawable <= 0}
+                            onClick={() => {
+                              setActiveShareholder(sh);
+                              setIsWithdrawOpen(true);
+                            }}
+                            className="w-full font-black bg-brand-gold hover:bg-amber-500 text-slate-900 py-2.5 text-[10px] uppercase border-none shadow-sm h-auto"
+                          >
+                            Withdraw
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            disabled={availableWithdrawable <= 0}
+                            onClick={() => {
+                              setActiveShareholder(sh);
+                              setIsReinvestOpen(true);
+                            }}
+                            className="w-full font-black border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white py-2.5 text-[10px] uppercase h-auto"
+                          >
+                            Reinvest
+                          </Button>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="history"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-4"
+              >
+                <Card className="p-0 overflow-hidden border-slate-200/60">
+                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Transaction Ledger</h3>
+                    <Badge variant="default" className="font-mono text-[9px]">
+                      {localAuditLogs.filter(l => l.category === 'shareholder').length} Records
+                    </Badge>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700">
+                      <thead>
+                        <tr className="bg-white text-slate-500 font-black uppercase text-[10px] tracking-widest border-b border-slate-100">
+                          <th className="p-4">Action</th>
+                          <th className="p-4">Shareholder</th>
+                          <th className="p-4">Amount</th>
+                          <th className="p-4">Timestamp</th>
+                          <th className="p-4">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {localAuditLogs
+                          .filter(log => log.category === 'shareholder' || log.action?.includes('withdrawal') || log.action?.includes('reinvest'))
+                          .map((log, lidx) => (
+                            <motion.tr 
+                              key={log.id || lidx}
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: lidx * 0.03 }}
+                              className="hover:bg-slate-50/50"
+                            >
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  <div className={`h-2 w-2 rounded-full ${log.action?.includes('withdrawal') ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                                  <span className="font-extrabold uppercase text-[10px] tracking-tight">{log.action || 'Transaction'}</span>
+                                </div>
+                              </td>
+                              <td className="p-4 font-bold text-slate-900">
+                                {localShareholders.find(s => s.id === log.shareholder_id)?.full_name || log.user_name || 'System Admin'}
+                              </td>
+                              <td className={`p-4 font-black font-mono ${log.action?.includes('withdrawal') ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                ₦{log.amount?.toLocaleString() || '0'}
+                              </td>
+                              <td className="p-4 text-slate-500 font-medium">
+                                {new Date(log.timestamp || log.created_at).toLocaleString()}
+                              </td>
+                              <td className="p-4">
+                                <Badge variant="success" className="text-[9px] uppercase font-black">Verified</Badge>
+                              </td>
+                            </motion.tr>
+                          ))}
+                        
+                        {localAuditLogs.filter(log => log.category === 'shareholder' || log.action?.includes('withdrawal') || log.action?.includes('reinvest')).length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="p-12 text-center text-slate-400 font-medium">
+                              <History className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                              <p>No shareholder transactions detected in current ledger cycle.</p>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
 
@@ -1659,56 +2007,219 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             </Card>
           </div>
 
-          {/* RIGHT COLUMN: PAYROLL SPLITS BREAKDOWN TABLE */}
-          <Card className="lg:col-span-7 p-5">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Salary Disbursal Splits Breakdown</h3>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
-                    <th className="p-3">Team Member Roles</th>
-                    <th className="p-3">Formulas (Per Tricycle)</th>
-                    <th className="p-3 text-right">Computed Pay (30 Days)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-mono">
-                  {[
-                    { name: "Barrister Legal Officer", rate: 1000, computed: barristerSal, percent: totalPayroll_liability > 0 ? (barristerSal / totalPayroll_liability) * 100 : 25 },
-                    { name: "General Manager", rate: 500, computed: managerSal, percent: totalPayroll_liability > 0 ? (managerSal / totalPayroll_liability) * 100 : 25 },
-                    { name: "Admin Adam (Payroll Officer)", rate: 1000, computed: adamSal, percent: totalPayroll_liability > 0 ? (adamSal / totalPayroll_liability) * 100 : 25 },
-                    { name: "Admin Abakaka (Logistics Manager)", rate: 1000, computed: abakakaSal, percent: totalPayroll_liability > 0 ? (abakakaSal / totalPayroll_liability) * 100 : 25 }
-                  ].map((role, index) => (
-                    <motion.tr 
-                      key={`payroll-${index}`} 
-                      className="hover:bg-slate-50/50"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <td className="p-3 font-sans font-bold text-slate-900">
-                        {role.name}
-                        <div className="w-24 bg-slate-100 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                          <motion.div 
-                            className="bg-slate-900 h-full rounded-full"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${role.percent || 0}%` }}
-                            transition={{ duration: 0.8, delay: index * 0.1 }}
-                          />
-                        </div>
-                      </td>
-                      <td className="p-3 text-slate-600">₦{role.rate.toLocaleString()} × {activeTricyclesCount} active tricycles</td>
-                      <td className="p-3 text-right font-bold text-slate-900">₦{role.computed.toLocaleString()}</td>
-                    </motion.tr>
-                  ))}
-                  <tr className="bg-slate-50 font-sans">
-                    <td colSpan={2} className="p-3 font-extrabold text-slate-900">Aggregate Team Salaries:</td>
-                    <td className="p-3 text-right font-black font-mono text-sm text-slate-950">₦{totalPayroll_liability.toLocaleString()}</td>
-                  </tr>
-                </tbody>
-              </table>
+          {/* SALARY DISBURSAL ANALYTICS GRID */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                  <div className="h-4 w-1 bg-brand-gold rounded-full" />
+                  Salary Disbursal Analytics
+                </h3>
+                <p className="text-[11px] text-slate-500 font-medium mt-1">Real-time operational payroll liabilities across management tiers.</p>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+                <button
+                  onClick={() => setPayrollSubView('analytics')}
+                  className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-2 ${
+                    payrollSubView === 'analytics' 
+                      ? 'bg-white text-slate-900 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <Trello className="h-3 w-3" />
+                  Analytics
+                </button>
+                <button
+                  onClick={() => setPayrollSubView('history')}
+                  className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-black transition-all flex items-center justify-center gap-2 ${
+                    payrollSubView === 'history' 
+                      ? 'bg-white text-slate-900 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <History className="h-3 w-3" />
+                  Ledger
+                </button>
+              </div>
             </div>
-          </Card>
+
+            <AnimatePresence mode="wait">
+              {payrollSubView === 'analytics' ? (
+                <motion.div
+                  key="payroll-analytics"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="space-y-6"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { id: 'legal', name: "Barrister Legal Officer", rate: 1000, computed: barristerSal, icon: ShieldCheck, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
+                      { id: 'gm', name: "General Manager", rate: 500, computed: managerSal, icon: Briefcase, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+                      { id: 'payroll', name: "Admin Adam (Payroll Officer)", rate: 1000, computed: adamSal, icon: Receipt, color: 'text-brand-gold', bg: 'bg-amber-50', border: 'border-amber-100' },
+                      { id: 'logistics', name: "Admin Abakaka (Logistics Manager)", rate: 1000, computed: abakakaSal, icon: Truck, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' }
+                    ].map((role, ridx) => {
+                      const Icon = role.icon;
+                      const percentage = totalPayroll_liability > 0 ? (role.computed / totalPayroll_liability) * 100 : 25;
+                      
+                      return (
+                        <motion.div
+                          key={role.id}
+                          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ delay: ridx * 0.05, type: 'spring', stiffness: 100 }}
+                          className="group"
+                        >
+                          <Card className="p-0 overflow-hidden border-slate-200/60 hover:shadow-2xl transition-all duration-300 h-full flex flex-col bg-white">
+                            <div className="p-4 sm:p-5 flex items-start gap-4 flex-1">
+                              <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-2xl ${role.bg} ${role.color} flex items-center justify-center shrink-0 shadow-inner group-hover:rotate-6 transition-transform`}>
+                                <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start gap-2">
+                                  <div className="min-w-0">
+                                    <h4 className="text-xs sm:text-sm font-black text-slate-900 leading-tight">{role.name}</h4>
+                                    <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase mt-0.5">Management Tier</p>
+                                  </div>
+                                  <Badge variant="default" className="text-[8px] sm:text-[9px] font-black font-mono shrink-0">
+                                    {percentage.toFixed(0)}%
+                                  </Badge>
+                                </div>
+                                
+                                <div className="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                                  <div className="space-y-1">
+                                    <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest block">Operational Payout</span>
+                                    <div className="flex items-baseline gap-1.5">
+                                      <span className="text-lg sm:text-xl font-black text-slate-950 font-mono tracking-tight">₦{role.computed.toLocaleString()}</span>
+                                      <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">/ 30d</span>
+                                    </div>
+                                  </div>
+                                  <div className="text-right self-end sm:self-auto">
+                                    <div className="px-2 py-1 bg-slate-100 rounded-lg inline-block border border-slate-200/50">
+                                      <span className="text-[9px] font-bold text-slate-700 font-mono">₦{role.rate.toLocaleString()} × {activeTricyclesCount}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="h-1 w-full bg-slate-100 overflow-hidden mt-auto">
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${percentage}%` }}
+                                transition={{ delay: 0.3 + (ridx * 0.1), duration: 1, ease: "circOut" }}
+                                className={`h-full ${role.id === 'legal' ? 'bg-indigo-500' : role.id === 'gm' ? 'bg-emerald-500' : role.id === 'payroll' ? 'bg-amber-500' : 'bg-rose-500'}`}
+                              />
+                            </div>
+                          </Card>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 }}
+                    className="p-5 sm:p-6 bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden group"
+                  >
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/5 rounded-full blur-3xl -mr-32 -mt-32 group-hover:bg-brand-gold/10 transition-colors duration-1000" />
+                    
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
+                      <div className="flex items-center gap-4 text-center sm:text-left">
+                        <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/10 flex items-center justify-center shadow-inner backdrop-blur-sm">
+                          <TrendingUp className="h-6 w-6 sm:h-7 sm:w-7 text-brand-gold" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-white tracking-tight">Aggregate Operational Liability</p>
+                          <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium mt-1">
+                            Calculated across <span className="text-brand-gold font-bold">{activeTricyclesCount} active asset units</span>.
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row items-center gap-6 w-full sm:w-auto">
+                        <div className="text-center sm:text-right">
+                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Total 30-Day Liability</span>
+                          <span className="text-2xl sm:text-3xl font-black text-white font-mono tracking-tighter">₦{totalPayroll_liability.toLocaleString()}</span>
+                        </div>
+                        <Button
+                          variant="primary"
+                          disabled={payrollLoading || totalPayroll_liability <= 0}
+                          onClick={handleProcessPayroll}
+                          className="w-full sm:w-auto font-black bg-brand-gold hover:bg-amber-500 text-slate-950 px-8 py-3 rounded-2xl shadow-[0_8px_16px_rgba(212,175,55,0.2)] hover:shadow-[0_12px_24px_rgba(212,175,55,0.3)] transition-all h-auto uppercase tracking-widest text-[11px] border-none"
+                        >
+                          {payrollLoading ? 'Processing...' : 'Disburse Payroll'}
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {payrollSuccess && (
+                      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 text-center text-emerald-400 text-[10px] font-bold uppercase tracking-widest">{payrollSuccess}</motion.p>
+                    )}
+                    {payrollError && (
+                      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 text-center text-rose-400 text-[10px] font-bold uppercase tracking-widest">{payrollError}</motion.p>
+                    )}
+                  </motion.div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="payroll-history"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm"
+                >
+                  <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Disbursement Ledger</span>
+                    <Badge variant="default" className="font-mono text-[9px]">{localAuditLogs.filter(l => l.category === 'payroll').length} Records</Badge>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="text-slate-400 font-black uppercase text-[9px] tracking-widest border-b border-slate-100">
+                          <th className="p-4">Recipient Role</th>
+                          <th className="p-4 text-right">Amount</th>
+                          <th className="p-4">Timestamp</th>
+                          <th className="p-4">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {localAuditLogs
+                          .filter(log => log.category === 'payroll' || log.action === 'SALARY_DISBURSEMENT')
+                          .map((log, lidx) => (
+                            <tr key={log.id || lidx} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                  <span className="font-bold text-slate-900">{log.description.split('to ')[1] || 'Staff Member'}</span>
+                                </div>
+                              </td>
+                              <td className="p-4 text-right font-black font-mono text-emerald-600">
+                                ₦{log.amount?.toLocaleString() || '0'}
+                              </td>
+                              <td className="p-4 text-slate-500 font-medium text-[10px]">
+                                {new Date(log.timestamp || log.created_at).toLocaleString()}
+                              </td>
+                              <td className="p-4">
+                                <Badge variant="success" className="text-[8px] uppercase font-black py-0.5">Disbursed</Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        {localAuditLogs.filter(log => log.category === 'payroll' || log.action === 'SALARY_DISBURSEMENT').length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="p-12 text-center text-slate-400">
+                              <History className="h-8 w-8 mx-auto mb-3 opacity-20" />
+                              <p className="text-[10px] font-medium uppercase tracking-widest">No payroll transactions found.</p>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </motion.div>
       )}
 
@@ -1770,7 +2281,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                         <td className="p-3 font-sans font-bold text-slate-800">{log.userId}</td>
                         <td className="p-3">
                           <Badge variant={log.userRole === 'director' ? 'primary' : 'outline'}>
-                            {log.userRole.toUpperCase()}
+                            {log.userRole?.toUpperCase()}
                           </Badge>
                         </td>
                         <td className="p-3 font-black text-slate-900">{log.action}</td>
@@ -1808,8 +2319,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             </div>
 
             <div className="flex justify-between">
-              <span className="text-text-muted">Installment Block:</span>
-              <span className="font-bold text-slate-900">Cycle #{currentInstallmentNumber}</span>
+              <span className="text-text-muted">Target Period:</span>
+              <span className="font-black text-emerald-600">Cycle #{selectedCycle} — Inst. #{selectedInstallment}</span>
             </div>
 
             <div className="flex justify-between border-t border-slate-200 pt-2 font-bold text-slate-900">

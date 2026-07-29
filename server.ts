@@ -18,7 +18,8 @@ import {
   generateUUID, 
   saveR2File, 
   getR2FilePath,
-  setDBChangeListener
+  setDBChangeListener,
+  initCloudPersistence
 } from './src/utils/server_db';
 import { PushService } from './src/utils/PushService';
 import { WorkersAIService } from './src/utils/ai_service';
@@ -2893,7 +2894,7 @@ app.post('/api/notifications/translate', authenticateSession, async (req, res) =
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-2.5-flash',
       contents: `You are a professional Hausa/English translation engine for an enterprise logistics software. Translate the following text into ${to === 'ha' ? 'Hausa' : 'English'}. Match the exact context of driver fleet remittances and financial reports. Return ONLY the translated string without quotes, explanations or conversational fillers:\n\n${text}`,
     });
 
@@ -3341,7 +3342,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
 
       // Make the initial request
       let response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
+        model: 'gemini-2.5-flash',
         contents,
         config: {
           systemInstruction: systemPrompt,
@@ -3399,7 +3400,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           res.setHeader('Connection', 'keep-alive');
 
           const streamResponse = await ai.models.generateContentStream({
-            model: 'gemini-3.1-flash-lite',
+            model: 'gemini-2.5-flash',
             contents: nextContents,
             config: {
               systemInstruction: systemPrompt,
@@ -3415,7 +3416,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           return res.end();
         } else {
           const finalResponse = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
+            model: 'gemini-2.5-flash',
             contents: nextContents,
             config: {
               systemInstruction: systemPrompt,
@@ -3433,7 +3434,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           res.setHeader('Connection', 'keep-alive');
 
           const streamResponse = await ai.models.generateContentStream({
-            model: 'gemini-3.1-flash-lite',
+            model: 'gemini-2.5-flash',
             contents,
             config: {
               systemInstruction: systemPrompt,
@@ -7216,6 +7217,44 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
 
 
 // SECURE SYSTEM OPERATIONAL RESET TOOL (Admin & Director ONLY)
+app.get('/api/admin/admins', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied: Administrative role required.' });
+    }
+
+    const db = loadDB();
+    const mappedAdmins = (db.admins || []).map((adm: any) => {
+      const user = db.users.find((u: any) => u.id === adm.user_id);
+      return {
+        ...adm,
+        fullName: user?.full_name || adm.fullName || 'Admin User',
+        email: user?.email || adm.email || '',
+        phone: user?.phone || adm.phone || '',
+        status: adm.status || 'active'
+      };
+    });
+
+    res.json(mappedAdmins);
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to fetch admins: ${err.message}` });
+  }
+});
+
+app.get('/api/admin/audit-logs', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied: Administrative role required.' });
+    }
+    const db = loadDB();
+    res.json(db.audit_logs || []);
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to fetch audit logs: ${err.message}` });
+  }
+});
+
 app.post('/api/admin/reset-test-data', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
@@ -7421,6 +7460,9 @@ setDBChangeListener(() => {
 
 // VITE MIDDLEWARE SETUP
 async function startServer() {
+  // Wait for database state rehydration from Cloud (Firestore)
+  await initCloudPersistence();
+  
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

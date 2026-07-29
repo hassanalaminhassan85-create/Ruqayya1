@@ -130,6 +130,76 @@ function getDriverFinancials(driver: any, db: any) {
   }
 }
 
+function lookupContractTerms(vehicle: any) {
+  if (!vehicle) {
+    return {
+      agreedAmount: 300000,
+      purchasePrice: 15000000,
+      remainingVehicleBalance: 15000000
+    };
+  }
+
+  const brand = (vehicle.brand || '').toLowerCase().trim();
+  const model = (vehicle.model || '').toLowerCase().trim();
+  const capacity = (vehicle.capacity || '').toLowerCase().trim();
+  const year = parseInt(vehicle.year) || 2020;
+
+  // Base values based on tonnage capacity
+  let basePurchasePrice = 15000000;
+  let baseAgreedAmount = 300000;
+
+  if (capacity.includes('30') || capacity.includes('thirty')) {
+    basePurchasePrice = 18000000;
+    baseAgreedAmount = 360000;
+  } else if (capacity.includes('20') || capacity.includes('twenty')) {
+    basePurchasePrice = 15000000;
+    baseAgreedAmount = 300000;
+  } else if (capacity.includes('10') || capacity.includes('ten')) {
+    basePurchasePrice = 12000000;
+    baseAgreedAmount = 240000;
+  } else if (capacity.includes('5') || capacity.includes('five')) {
+    basePurchasePrice = 8000000;
+    baseAgreedAmount = 180000;
+  }
+
+  // Adjustments based on brand
+  let brandPriceAdjustment = 0;
+  let brandRateAdjustment = 0;
+
+  if (brand.includes('shacman')) {
+    brandPriceAdjustment = 1000000;
+    brandRateAdjustment = 20000;
+  } else if (brand.includes('sinotruk') || brand.includes('howo')) {
+    brandPriceAdjustment = 500000;
+    brandRateAdjustment = 10000;
+  } else if (brand.includes('faw')) {
+    brandPriceAdjustment = -500000;
+    brandRateAdjustment = -10000;
+  }
+
+  // Adjustments based on manufacturing year
+  let ageAdjustment = 0;
+  let ageRateAdjustment = 0;
+  if (year < 2020) {
+    const yearsDiff = 2020 - year;
+    ageAdjustment = -Math.min(5, yearsDiff) * 1000000;
+    ageRateAdjustment = -Math.min(5, yearsDiff) * 20000;
+  } else if (year > 2023) {
+    const yearsDiff = year - 2023;
+    ageAdjustment = Math.min(3, yearsDiff) * 500000;
+    ageRateAdjustment = Math.min(3, yearsDiff) * 10000;
+  }
+
+  const finalPurchasePrice = Math.max(5000000, basePurchasePrice + brandPriceAdjustment + ageAdjustment);
+  const finalAgreedAmount = Math.max(120000, baseAgreedAmount + brandRateAdjustment + ageRateAdjustment);
+
+  return {
+    agreedAmount: finalAgreedAmount,
+    purchasePrice: finalPurchasePrice,
+    remainingVehicleBalance: finalPurchasePrice
+  };
+}
+
 function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
   const agreedAmount = driver.agreed_amount || 180000;
   const installmentTarget = Math.round(agreedAmount / 6);
@@ -1188,7 +1258,11 @@ async function generateVapidHeader(env: Env, endpoint: string): Promise<string> 
   const privateKey = env.VAPID_PRIVATE_KEY || 'vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk';
 
   function base64url(buffer: ArrayBuffer | Uint8Array): string {
-    const binary = String.fromCharCode(...new Uint8Array(buffer));
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
     const b64 = btoa(binary);
     return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
@@ -1660,7 +1734,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // PUBLIC: Database Diagnostic Check via SELECT 1
   if (path === '/api/db-diagnostic' && method === 'GET') {
-    const d1 = getD1();
+    const d1 = env.DB || env.ruqayya;
     let dbStatus = 'disconnected';
     try {
       if (d1 && typeof d1.prepare === 'function') {
@@ -2569,6 +2643,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       }
     }
 
+    // GET /api/drivers/:id/contract-lookup
+    if (parts.length === 2 && parts[1] === 'contract-lookup' && method === 'GET') {
+      const drv = db.drivers.find((d: any) => d.id === parts[0]);
+      if (!drv) return buildResponse({ error: 'Driver profile not found.' }, 404);
+
+      const vehicle = db.vehicles.find((v: any) => v.driver_id === drv.id);
+      const terms = lookupContractTerms(vehicle);
+      return buildResponse(terms);
+    }
+
     // GET /api/drivers/:id/installments
     if (parts.length === 2 && parts[1] === 'installments' && method === 'GET') {
       const drv = db.drivers.find((d: any) => d.id === parts[0]);
@@ -3328,7 +3412,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       
       if (env.GEMINI_API_KEY) {
         try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3701,7 +3785,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
             chatHistory.push({ role: 'user', parts: [{ text: prompt }] });
             
             const chat = ai.chats.create({
-              model: 'gemini-3.6-flash',
+              model: 'gemini-2.5-flash',
               config: {
                 systemInstruction,
                 temperature: 0.2,
