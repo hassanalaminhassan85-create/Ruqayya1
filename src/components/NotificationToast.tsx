@@ -351,8 +351,8 @@ export const NotificationToastContainer: React.FC<{ lang: 'en' | 'ha'; currentRo
                   }
                 }
 
-                // Deliver background lock screen notification if browser tab is hidden
-                if (document.hidden && settings.enablePush) {
+                // Deliver native OS/Browser notification tray banner
+                if (settings.enablePush) {
                   newToastsToAdd.forEach(toast => {
                     const title = lang === 'en' ? toast.titleEn : toast.titleHa;
                     const message = lang === 'en' ? toast.messageEn : toast.messageHa;
@@ -364,13 +364,11 @@ export const NotificationToastContainer: React.FC<{ lang: 'en' | 'ha'; currentRo
               // Safety Fallback (Always alert)
               playNotificationSound();
               triggerVibration(newToastsToAdd[0].type);
-              if (document.hidden) {
-                newToastsToAdd.forEach(toast => {
-                  const title = lang === 'en' ? toast.titleEn : toast.titleHa;
-                  const message = lang === 'en' ? toast.messageEn : toast.messageHa;
-                  showLocalBrowserNotification(`RUQAYYA: ${title}`, message);
-                });
-              }
+              newToastsToAdd.forEach(toast => {
+                const title = lang === 'en' ? toast.titleEn : toast.titleHa;
+                const message = lang === 'en' ? toast.messageEn : toast.messageHa;
+                showLocalBrowserNotification(`RUQAYYA: ${title}`, message);
+              });
             });
           } catch (e) {
             console.warn("Sound vibration engine failure:", e);

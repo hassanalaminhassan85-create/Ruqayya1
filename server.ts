@@ -2254,9 +2254,9 @@ app.post('/api/announcements', authenticateSession, (req, res) => {
 
 // Helper to enrich notifications dynamically for advanced metadata, priorities, categories, and actions
 function enrichNotification(n: any) {
-  const titleEn = n.title_en || n.titleEn || '';
+  const titleEn = n.title_en || n.titleEn || n.title || '';
   const titleHa = n.title_ha || n.titleHa || '';
-  const messageEn = n.message_en || n.messageEn || '';
+  const messageEn = n.message_en || n.messageEn || n.message || n.body || '';
   const messageHa = n.message_ha || n.messageHa || '';
   
   // Categorize based on keywords
@@ -7383,11 +7383,11 @@ async function sendPushForNotification(n: any) {
     
     const payload = {
       id: n.id,
-      title: enriched.titleEn || enriched.title_en || n.title_en || '',
-      body: enriched.messageEn || enriched.message_en || n.message_en || '',
-      titleEn: enriched.titleEn || enriched.title_en || n.title_en || '',
+      title: enriched.titleEn || enriched.title_en || n.title_en || n.title || '',
+      body: enriched.messageEn || enriched.message_en || n.message_en || n.message || n.body || '',
+      titleEn: enriched.titleEn || enriched.title_en || n.title_en || n.title || '',
       titleHa: enriched.titleHa || enriched.title_ha || n.title_ha || '',
-      messageEn: enriched.messageEn || enriched.message_en || n.message_en || '',
+      messageEn: enriched.messageEn || enriched.message_en || n.message_en || n.message || n.body || '',
       messageHa: enriched.messageHa || enriched.message_ha || n.message_ha || '',
       type: n.type || 'info',
       category: enriched.category || 'system',
@@ -7396,34 +7396,60 @@ async function sendPushForNotification(n: any) {
       timestamp: n.created_at || new Date().toISOString()
     };
 
-    if (n.user_id) {
-      // Check user preference
-      const prefs = db.user_preferences?.find((p: any) => p.user_id === n.user_id);
-      if (prefs && prefs.enablePush === false) {
-        console.log(`PushService: Skipping push for user ${n.user_id} due to opt-out preference.`);
-        return;
-      }
-      
-      // Evaluate Quiet Hours
-      if (prefs && prefs.quietHoursStart && prefs.quietHoursEnd) {
-        const now = new Date();
-        const currentStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        let isQuiet = false;
-        if (prefs.quietHoursStart <= prefs.quietHoursEnd) {
-          isQuiet = currentStr >= prefs.quietHoursStart && currentStr <= prefs.quietHoursEnd;
-        } else {
-          isQuiet = currentStr >= prefs.quietHoursStart || currentStr <= prefs.quietHoursEnd;
-        }
-        if (isQuiet) {
-          console.log(`PushService: Skipping push for user ${n.user_id} due to active Quiet Hours.`);
-          return;
-        }
-      }
+    let targetUserIds: string[] = [];
 
-      const results = await PushService.sendNotification(n.user_id, payload);
-      console.log(`PushService: Dispatched to user ${n.user_id}:`, results);
-    } else {
-      // Broadcast to all devices
+    // Resolve target users based on various potential ID fields found in different notification types
+    if (n.user_id) {
+      targetUserIds.push(n.user_id);
+    } else if (n.driver_id) {
+      const drv = db.drivers.find(d => d.id === n.driver_id);
+      if (drv && drv.user_id) targetUserIds.push(drv.user_id);
+    } else if (n.admin_id) {
+      const adm = db.admins.find(a => a.id === n.admin_id);
+      if (adm && adm.user_id) targetUserIds.push(adm.user_id);
+    } else if (n.shareholder_id) {
+      const sh = db.shareholders.find(s => s.id === n.shareholder_id);
+      if (sh && sh.user_id) targetUserIds.push(sh.user_id);
+    } else if (n.target_role) {
+      const roles = db.roles.filter(r => r.name === n.target_role);
+      const roleIds = roles.map(r => r.id);
+      const usersWithRole = db.users.filter(u => roleIds.includes(u.role_id));
+      targetUserIds = usersWithRole.map(u => u.id);
+    }
+
+    if (targetUserIds.length > 0) {
+      // Remove duplicate IDs
+      const uniqueIds = Array.from(new Set(targetUserIds));
+      
+      for (const uid of uniqueIds) {
+        // Check user preference
+        const prefs = db.user_preferences?.find((p: any) => p.user_id === uid);
+        if (prefs && prefs.enablePush === false) {
+          console.log(`PushService: Skipping push for user ${uid} due to opt-out preference.`);
+          continue;
+        }
+        
+        // Evaluate Quiet Hours
+        if (prefs && prefs.quietHoursStart && prefs.quietHoursEnd) {
+          const now = new Date();
+          const currentStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          let isQuiet = false;
+          if (prefs.quietHoursStart <= prefs.quietHoursEnd) {
+            isQuiet = currentStr >= prefs.quietHoursStart && currentStr <= prefs.quietHoursEnd;
+          } else {
+            isQuiet = currentStr >= prefs.quietHoursStart || currentStr <= prefs.quietHoursEnd;
+          }
+          if (isQuiet) {
+            console.log(`PushService: Skipping push for user ${uid} due to active Quiet Hours.`);
+            continue;
+          }
+        }
+
+        const results = await PushService.sendNotification(uid, payload);
+        console.log(`PushService: Dispatched targeted push to user ${uid}:`, results);
+      }
+    } else if (!n.user_id && !n.driver_id && !n.admin_id && !n.target_role) {
+      // Broadcast to all devices only if it's a generic announcement or global system alert
       const results = await PushService.broadcastNotification(payload);
       console.log(`PushService: Broadcasted notification to all devices:`, results);
     }
