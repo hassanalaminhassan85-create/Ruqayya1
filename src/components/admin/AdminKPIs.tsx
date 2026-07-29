@@ -26,7 +26,8 @@ import {
   Maximize2,
   Minimize2,
   Check,
-  Undo
+  Undo,
+  ArrowRight
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Driver, Vehicle, FinancialRecord } from '../../types';
@@ -38,6 +39,7 @@ interface AdminKPIsProps {
   finance: FinancialRecord[];
   payments: any[];
   activeCycle: any;
+  setActiveTab?: (tab: any) => void;
 }
 
 interface WidgetConfig {
@@ -55,8 +57,11 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
   vehicles,
   finance,
   payments,
-  activeCycle
+  activeCycle,
+  setActiveTab
 }) => {
+  const [selectedKPI, setSelectedKPI] = useState<any | null>(null);
+
   // Metrics calculation
   const totalDrivers = drivers.length;
   const smartDrivers = drivers.filter(d => d.classification === 'Smart').length;
@@ -164,7 +169,7 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
     }
   }[lang];
 
-  // Raw base KPIs data dictionary
+  // Raw base KPIs data dictionary with detailed metadata and redirection targets
   const rawKpis = [
     {
       id: "total_drivers",
@@ -173,7 +178,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       subtitle: labels.rosterSize,
       icon: <Users className="h-4 w-4 text-brand-gold" />,
       color: "border-brand-gold",
-      accentBg: "bg-brand-gold/10"
+      accentBg: "bg-brand-gold/10",
+      detailedDescription: lang === 'en' 
+        ? `Comprehensive roster of all registered tricycle operators across the transport network. Total active roster stands at ${totalDrivers} certified personnel with verified licenses and background clearances.` 
+        : `Jimillar dukkan direbobin keken napep da aka yi rijista a fadin cibiyar sadarwa (${totalDrivers} direbobi).`,
+      targetTab: "drivers",
+      actionLabel: lang === 'en' ? "Open Drivers Directory" : "Budewa Rukunin Direbobi"
     },
     {
       id: "classification",
@@ -182,7 +192,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       subtitle: labels.classBreakdown,
       icon: <ShieldCheck className="h-4 w-4 text-blue-500" />,
       color: "border-blue-500",
-      accentBg: "bg-blue-500/10"
+      accentBg: "bg-blue-500/10",
+      detailedDescription: lang === 'en'
+        ? `Tracks ${smartDrivers} Smart digital-onboarded operators vs ${assistedDrivers} Assisted manual registrations. Ensures precise tier-based remittance and lease contract auditing.`
+        : `Rarrabewar direbobi tsakanin Smart (${smartDrivers}) da Assisted (${assistedDrivers}) don kula da biyan kudi da kwangila.`,
+      targetTab: "drivers",
+      actionLabel: lang === 'en' ? "Manage Driver Classifications" : "Sarrafa Rukunin Direbobi"
     },
     {
       id: "rest_active",
@@ -191,7 +206,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       subtitle: labels.statusBreakdown,
       icon: <Moon className="h-4 w-4 text-purple-500" />,
       color: "border-purple-500",
-      accentBg: "bg-purple-500/10"
+      accentBg: "bg-purple-500/10",
+      detailedDescription: lang === 'en'
+        ? `Monitors real-time shift distributions (${activeDrivers} active on transit duty vs ${restingDrivers} on compulsory rest). Enforces safety and operational compliance.`
+        : `Kula da rabon aiki da hutu ainihin lokaci (${activeDrivers} suna kan aiki, ${restingDrivers} suna hutu).`,
+      targetTab: "trips",
+      actionLabel: lang === 'en' ? "View Trip Manifests" : "Duba Bayanin Tafiye-tafiye"
     },
     {
       id: "total_vehicles",
@@ -200,7 +220,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       subtitle: labels.rigAssets,
       icon: <Truck className="h-4 w-4 text-indigo-500" />,
       color: "border-indigo-500",
-      accentBg: "bg-indigo-500/10"
+      accentBg: "bg-indigo-500/10",
+      detailedDescription: lang === 'en'
+        ? `Complete inventory of all ${totalVehicles} 30-ton tricycle rigs, maintenance records, fuel type specifications, and lease assignment nodes.`
+        : `Dukkan kekunan hawa ${totalVehicles} da aka kebe don jigilar kaya da kula da lafiyar injina.`,
+      targetTab: "fleet",
+      actionLabel: lang === 'en' ? "Manage Fleet Assets" : "Sarrafa Kayan Kamfani"
     },
     {
       id: "revenue",
@@ -210,7 +235,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       icon: <TrendingUp className="h-4 w-4 text-emerald-500" />,
       color: "border-emerald-500",
       accentBg: "bg-emerald-500/10",
-      valueColor: "text-emerald-500"
+      valueColor: "text-emerald-500",
+      detailedDescription: lang === 'en'
+        ? `Real-time accumulated revenue from daily freight transport manifests, driver remittances, and fuel voucher allocations totaling ₦${revenueTotal.toLocaleString()}.`
+        : `Kudaden shiga da aka tara daga jigilar kaya da biyan kudin direbobi (₦${revenueTotal.toLocaleString()}).`,
+      targetTab: "finance",
+      actionLabel: lang === 'en' ? "Open Financial Command Center" : "Budewa Cibiyar Kudi"
     },
     {
       id: "payments",
@@ -220,7 +250,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       icon: <Wallet className="h-4 w-4 text-sky-500" />,
       color: "border-sky-500",
       accentBg: "bg-sky-500/10",
-      valueColor: "text-sky-500"
+      valueColor: "text-sky-500",
+      detailedDescription: lang === 'en'
+        ? `Audited record of approved installment payments (₦${approvedPayments.toLocaleString()}) made by drivers toward asset ownership lease contracts.`
+        : `Adadin biyan kudin sashi da aka tabbatar (₦${approvedPayments.toLocaleString()}) na mallakar kekuna.`,
+      targetTab: "payments",
+      actionLabel: lang === 'en' ? "Review Payment Approvals" : "Duba Tabbatar da Biya"
     },
     {
       id: "expenses",
@@ -230,7 +265,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       icon: <TrendingDown className="h-4 w-4 text-rose-500" />,
       color: "border-rose-500",
       accentBg: "bg-rose-500/10",
-      valueColor: "text-rose-500"
+      valueColor: "text-rose-500",
+      detailedDescription: lang === 'en'
+        ? `Itemized corporate expenditures covering fuel vouchers, tricycle maintenance, spare parts, and logistics support totaling ₦${expenseTotal.toLocaleString()}.`
+        : `Kudin da aka kashe wajen gyaran motoci da man fetur (₦${expenseTotal.toLocaleString()}).`,
+      targetTab: "finance",
+      actionLabel: lang === 'en' ? "Examine Expense Ledgers" : "Duba Kudaden da Aka Kashe"
     },
     {
       id: "net_amount",
@@ -240,7 +280,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       icon: <DollarSign className="h-4 w-4 text-teal-500" />,
       color: "border-teal-500",
       accentBg: "bg-teal-500/10",
-      valueColor: netEarnings >= 0 ? "text-emerald-500 font-extrabold" : "text-rose-500 font-extrabold"
+      valueColor: netEarnings >= 0 ? "text-emerald-500 font-extrabold" : "text-rose-500 font-extrabold",
+      detailedDescription: lang === 'en'
+        ? `Calculated net corporate financial position (Total Revenue minus Total Expenses), currently standing at ₦${netEarnings.toLocaleString()} verified surplus.`
+        : `Riba ko babban kudin kamfani bayan cire kashe-kashe (₦${netEarnings.toLocaleString()}).`,
+      targetTab: "finance",
+      actionLabel: lang === 'en' ? "View Treasury Balance" : "Duba Rumbun Kudi"
     },
     {
       id: "distribution",
@@ -250,7 +295,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       icon: <Activity className="h-4 w-4 text-amber-500" />,
       color: "border-amber-500",
       accentBg: "bg-amber-500/10",
-      valueColor: "text-amber-500"
+      valueColor: "text-amber-500",
+      detailedDescription: lang === 'en'
+        ? `Automated 2% allocation (₦${distributionPool.toLocaleString()}) of net corporate surplus accrued for stakeholder profit-sharing and equity distributions.`
+        : `Kashi 2% na riba da aka ware domin rabawa masu hannun jari (₦${distributionPool.toLocaleString()}).`,
+      targetTab: "directory",
+      actionLabel: lang === 'en' ? "View Shareholder Registry" : "Duba Masu Hannun Jari"
     },
     {
       id: "cycles",
@@ -259,7 +309,12 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
       subtitle: labels.cycleState,
       icon: <RefreshCw className="h-4 w-4 text-orange-500 animate-spin-slow" />,
       color: "border-orange-500",
-      accentBg: "bg-orange-500/10"
+      accentBg: "bg-orange-500/10",
+      detailedDescription: lang === 'en'
+        ? `Controls the active 30-day corporate operating cycle engine, countdown timers, freight tonnage goals, and payroll scheduling.`
+        : `Yana kula da zangon aiki na kwanaki 30 da ragowar lokaci da burin kamfani.`,
+      targetTab: "dashboard",
+      actionLabel: lang === 'en' ? "Manage Operating Cycles" : "Sarrafa Zangon Aiki"
     }
   ];
 

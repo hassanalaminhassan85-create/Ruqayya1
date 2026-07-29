@@ -187,7 +187,7 @@ export function loadDB(): DBState {
       let changed = false;
 
       // Defensive initialization of collection nodes
-      if (!parsed.cycles) { parsed.cycles = []; changed = true; }
+      if (!parsed.cycles || parsed.cycles.length === 0) { parsed.cycles = [...INITIAL_DB_STATE.cycles]; changed = true; }
       if (!parsed.company_settings) { parsed.company_settings = { ...INITIAL_DB_STATE.company_settings }; changed = true; }
       if (!parsed.shareholder_settings) { parsed.shareholder_settings = { ...INITIAL_DB_STATE.shareholder_settings }; changed = true; }
       if (!parsed.company_operations_state) { parsed.company_operations_state = { ...INITIAL_DB_STATE.company_operations_state }; changed = true; }

@@ -25,19 +25,23 @@ import {
   Briefcase,
   Coins
 } from 'lucide-react';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../../utils/firebase';
 
 interface CompanyOperationsCardProps {
   lang: 'en' | 'ha';
   onStateChange?: () => void;
   driversCount: number;
   vehiclesCount: number;
+  activeCycle?: any;
 }
 
 export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({ 
   lang, 
   onStateChange,
   driversCount,
-  vehiclesCount
+  vehiclesCount,
+  activeCycle
 }) => {
   const [opsState, setOpsState] = useState<any>({
     status: 'Setup Mode',
@@ -48,6 +52,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
     pauseHistory: [],
     auditLog: []
   });
+
   const [metrics, setMetrics] = useState<any>({
     totalDrivers: 0,
     totalTricycles: 0,
@@ -59,10 +64,58 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   const [showHistory, setShowHistory] = useState(false);
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [showPauseModal, setShowPauseModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [pauseReason, setPauseReason] = useState('');
+  const [pauseDays, setPauseDays] = useState(2);
   const [actionError, setActionError] = useState('');
   const [checklist, setChecklist] = useState<any>([]);
   const [generatedCycleId, setGeneratedCycleId] = useState('');
+
+  // Sync with Firestore activeCycle prop
+  useEffect(() => {
+    if (activeCycle && activeCycle.isActive) {
+      setOpsState(prev => ({
+        ...prev,
+        status: activeCycle.status === 'paused' ? 'Paused' : 'Operational Mode',
+        currentCycle: activeCycle.cycleId || activeCycle.id || prev.currentCycle,
+        currentDay: parseInt(activeCycle.cycleDay?.match(/\d+/)?.[0] || '1', 10)
+      }));
+    } else if (activeCycle === null && opsState.status !== 'Setup Mode' && !loading) {
+      // HEAL: If backend thinks we are operational but Firestore is empty, 
+      // attempt to restore Firestore from the backend state.
+      const healFirestore = async () => {
+        try {
+          await setDoc(doc(db, 'system_status', 'activeCycle'), {
+            cycleId: opsState.currentCycle || 'CYC-RESTORED',
+            isActive: opsState.status === 'Operational Mode' || opsState.status === 'Paused',
+            status: opsState.status === 'Paused' ? 'paused' : 'active',
+            startDate: opsState.startedAt ? opsState.startedAt.split('T')[0] : new Date().toISOString().split('T')[0],
+            endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
+            drivers: metrics.totalDrivers,
+            fleet: metrics.totalTricycles,
+            remit: metrics.todayCollections,
+            health: 'Healthy',
+            cycleDay: `Day ${opsState.currentDay || 1}/30`,
+            created_at: new Date().toISOString()
+          }, { merge: true });
+          console.log("Healed Firestore cycle state from backend state.");
+        } catch (err) {
+          console.error("Failed to heal Firestore state:", err);
+        }
+      };
+      
+      if (opsState.status === 'Operational Mode' || opsState.status === 'Paused') {
+        healFirestore();
+      } else {
+        // If really Setup Mode, just keep it that way
+        setOpsState(prev => ({
+          ...prev,
+          status: 'Setup Mode',
+          currentCycle: ''
+        }));
+      }
+    }
+  }, [activeCycle, loading]);
 
   // Inline forms state
   const [showSalaryForm, setShowSalaryForm] = useState(false);
@@ -232,6 +285,22 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         if (res.detail) {
           window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
         }
+        
+        // Sync to Firestore
+        await setDoc(doc(db, 'system_status', 'activeCycle'), {
+          cycleId: generatedCycleId,
+          isActive: true,
+          status: 'active',
+          startDate: new Date().toISOString().split('T')[0],
+          endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
+          drivers: metrics.totalDrivers,
+          fleet: metrics.totalTricycles,
+          remit: 0,
+          health: 'Healthy',
+          cycleDay: 'Day 1/30',
+          created_at: new Date().toISOString()
+        });
+
         if (onStateChange) onStateChange();
         fetchOperationsState();
       }
@@ -247,7 +316,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
     }
     setActionError('');
     try {
-      const res = await api.pauseOperations(pauseReason);
+      const res = await api.pauseOperations({ reason: pauseReason, pauseDays: Number(pauseDays) || 0 });
       if (res && res.success) {
         setOpsState(res.state);
         setShowPauseModal(false);
@@ -255,11 +324,34 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         if (res.detail) {
           window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
         }
+
+        // Sync to Firestore
+        await setDoc(doc(db, 'system_status', 'activeCycle'), {
+          status: 'paused',
+          pausedAt: new Date().toISOString(),
+          pauseReason: pauseReason
+        }, { merge: true });
+
         if (onStateChange) onStateChange();
         fetchOperationsState();
       }
     } catch (err: any) {
       setActionError(err.message);
+    }
+  };
+
+  const handleDeleteCycle = async () => {
+    setActionError('');
+    try {
+      const targetId = opsState?.currentCycle || 'active';
+      const res = await api.deleteCycle(targetId);
+      if (res && res.success) {
+        setShowDeleteModal(false);
+        if (onStateChange) onStateChange();
+        fetchOperationsState();
+      }
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to delete cycle.');
     }
   };
 
@@ -272,6 +364,12 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         if (res.detail) {
           window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
         }
+
+        // Sync to Firestore
+        await setDoc(doc(db, 'system_status', 'activeCycle'), {
+          status: 'active'
+        }, { merge: true });
+
         if (onStateChange) onStateChange();
         fetchOperationsState();
       }
@@ -322,7 +420,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
       const padded = String(nextNum).padStart(4, '0');
       setGeneratedCycleId(`CYC-2026-${padded}`);
     } catch (err) {
-      setGeneratedCycleId(`CYC-2026-2459`);
+      setGeneratedCycleId('');
     }
     setShowChecklistModal(true);
   };
@@ -643,16 +741,37 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
               </div>
             )}
 
-            <div className="mt-4">
-              <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold mb-1">
-                {lang === 'en' ? 'Reason for Suspension (Immutable Audited Comment)' : 'Dalilin Dakatarwa'}
-              </label>
-              <textarea 
-                value={pauseReason}
-                onChange={(e) => setPauseReason(e.target.value)}
-                placeholder={lang === 'en' ? "E.g., Mid-year financial alignment checks" : "Sanya takaitaccen dalili a nan"}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 focus:outline-none focus:border-rose-500 h-24"
-              />
+            <div className="mt-4 flex flex-col gap-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold mb-1">
+                  {lang === 'en' ? 'Reason for Suspension (Immutable Audited Comment)' : 'Dalilin Dakatarwa'}
+                </label>
+                <textarea 
+                  value={pauseReason}
+                  onChange={(e) => setPauseReason(e.target.value)}
+                  placeholder={lang === 'en' ? "E.g., Mid-year financial alignment checks" : "Sanya takaitaccen dalili a nan"}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 focus:outline-none focus:border-rose-500 h-20"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold mb-1">
+                  {lang === 'en' ? 'Extension Duration (Days to Extend Scheduled End Date)' : 'Kwanakin Kara Tsawon Zagaye'}
+                </label>
+                <input 
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={pauseDays}
+                  onChange={(e) => setPauseDays(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-amber-400 font-mono font-bold focus:outline-none focus:border-rose-500"
+                />
+                <p className="text-[10px] text-emerald-400 font-semibold mt-1 italic">
+                  {lang === 'en' 
+                    ? `Cycle end date will be extended by ${pauseDays} day(s) automatically.`
+                    : `Ranar karewa zata kara kwanaki ${pauseDays}.`}
+                </p>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 mt-5">
@@ -668,6 +787,45 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                 className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-slate-100 font-extrabold rounded shadow-md cursor-pointer text-xs"
               >
                 {lang === 'en' ? 'Suspend Operations' : 'Dakatar da Aiki'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Cycle Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-xl max-w-md w-full p-6 shadow-2xl relative">
+            <h3 className="text-lg font-black text-rose-500 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-rose-500" />
+              {lang === 'en' ? 'Delete Operating Cycle Everywhere' : 'Goge Zagayen Aiki'}
+            </h3>
+            <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+              {lang === 'en' 
+                ? `Are you sure you want to permanently delete cycle ${opsState?.currentCycle || 'Active Cycle'}? It will be removed globally from all dashboards.` 
+                : `Shin kana son goge zagayen aiki ${opsState?.currentCycle || 'Zagayen Aiki'}? Zai goge daga ko'ina.`}
+            </p>
+
+            {actionError && (
+              <div className="my-3 p-3 bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs rounded-lg">
+                {actionError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-5">
+              <Button 
+                variant="outline" 
+                onClick={() => { setShowDeleteModal(false); setActionError(''); }}
+                className="px-4 py-2 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer text-xs"
+              >
+                {lang === 'en' ? 'Cancel' : 'Soke'}
+              </Button>
+              <Button 
+                onClick={handleDeleteCycle}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-slate-100 font-extrabold rounded shadow-md cursor-pointer text-xs"
+              >
+                {lang === 'en' ? 'Confirm Delete Everywhere' : 'Goge Daga Ko\'ina'}
               </Button>
             </div>
           </div>

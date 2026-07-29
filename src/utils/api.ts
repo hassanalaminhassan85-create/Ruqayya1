@@ -163,6 +163,13 @@ export const api = {
     return data;
   },
 
+  updateUsername: async (payload: { userId: string; newUsername: string }) => {
+    return api.request('/api/auth/username', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   logout: async (logoutAllDevices = false) => {
     try {
       await api.request('/api/auth/logout', {
@@ -350,10 +357,16 @@ export const api = {
     });
   },
 
-  pauseCycle: async (payload: { reason: string }) => {
+  pauseCycle: async (payload: { reason: string; pauseDays?: number; daysPaused?: number; extensionDays?: number }) => {
     return api.request('/api/director/cycles/pause', {
       method: 'POST',
       body: JSON.stringify(payload)
+    });
+  },
+
+  deleteCycle: async (id: string) => {
+    return api.request(`/api/director/cycles/${id}`, {
+      method: 'DELETE'
     });
   },
 
@@ -557,10 +570,11 @@ export const api = {
       body: payload ? JSON.stringify(payload) : undefined
     });
   },
-  pauseOperations: async (reason: string) => {
+  pauseOperations: async (payload: string | { reason: string; pauseDays?: number; daysPaused?: number; extensionDays?: number }) => {
+    const body = typeof payload === 'string' ? { reason: payload } : payload;
     return api.request('/api/operations/pause', {
       method: 'POST',
-      body: JSON.stringify({ reason })
+      body: JSON.stringify(body)
     });
   },
   resumeOperations: async (reason?: string) => {

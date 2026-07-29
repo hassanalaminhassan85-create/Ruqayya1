@@ -21,6 +21,7 @@ interface AICopilotDrawerProps {
   lang: 'en' | 'ha';
   currentRole: string;
   userName: string;
+  activeCycleId?: string;
 }
 
 export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
@@ -28,7 +29,8 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
   onClose,
   lang: globalLang,
   currentRole,
-  userName
+  userName,
+  activeCycleId
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -1140,7 +1142,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
 
                       <div className="text-center py-2">
                         <h1 className="text-lg font-black text-slate-100 tracking-tight">OPERATIONS CYCLE REPORT</h1>
-                        <p className="text-[10px] text-brand-gold tracking-widest font-bold">CYCLE SERIAL: CYC-001</p>
+                        <p className="text-[10px] text-brand-gold tracking-widest font-bold">CYCLE SERIAL: {activeCycleId || 'N/A'}</p>
                       </div>
 
                       <div className="grid grid-cols-3 gap-3">

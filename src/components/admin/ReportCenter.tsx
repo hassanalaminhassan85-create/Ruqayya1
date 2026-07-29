@@ -110,6 +110,21 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   const [filterCycle, setFilterCycle] = useState<string>('all');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all');
   const [filterExpenseCategory, setFilterExpenseCategory] = useState<string>('all');
+  const [availableCycles, setAvailableCycles] = useState<any[]>([]);
+  const [selectedCycleId, setSelectedCycleId] = useState<string>(''); // Default to empty string instead of hardcoded ID
+
+  useEffect(() => {
+    api.request('/api/director/cycles').then(res => {
+      const list = res?.cycles || [];
+      setAvailableCycles(list);
+      const active = list.find((c: any) => c.status === 'active' || c.status === 'paused') || list[0];
+      if (active) {
+        setSelectedCycleId(active.id);
+      }
+    }).catch(() => {
+      setAvailableCycles([{ id: 'CYC-2026-2459', title: 'Cycle #30', status: 'active' }]);
+    });
+  }, []);
 
   // Interactive Digital Signature States
   const [signMode, setSignMode] = useState<'draw' | 'type' | 'upload'>('draw');
@@ -613,6 +628,26 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
             </select>
           </div>
 
+          {/* Cycle ID Selector matching active company operating cycles */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-black text-slate-700 uppercase">Operating Cycle ID</label>
+            <select
+              value={selectedCycleId}
+              onChange={(e) => setSelectedCycleId(e.target.value)}
+              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 cursor-pointer"
+            >
+              {availableCycles.length > 0 ? (
+                availableCycles.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.id} ({c.status?.toUpperCase() || 'ACTIVE'}) - {c.title || 'Operating Term'}
+                  </option>
+                ))
+              ) : (
+                <option value="CYC-2026-2459">CYC-2026-2459 (Active)</option>
+              )}
+            </select>
+          </div>
+
         </div>
       </Card>
 
@@ -692,15 +727,20 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
             </div>
           </div>
 
-          {/* OFFICIAL A4 DOCUMENT BOX */}
-          <div className="bg-white border border-slate-300 rounded-lg p-8 shadow-md text-slate-900 font-sans print:border-none print:shadow-none print:p-0 print:max-w-full">
+          {/* OFFICIAL A4 DOCUMENT BOX WITH MOTION & TRUE A4 PDF FORMATTING */}
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="w-full max-w-[210mm] min-h-[297mm] mx-auto bg-white border border-slate-300 rounded-xl p-4 sm:p-14 shadow-2xl text-slate-900 font-sans relative overflow-hidden print:border-none print:shadow-none print:p-0 print:max-w-full"
+          >
             
             {/* DOCUMENT HEADER */}
-            <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5 mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-slate-900 pb-5 mb-6 gap-4">
               <div className="flex items-center gap-3">
                 {/* RTL CUSTOM LOGO */}
-                <div className="h-12 w-12 bg-slate-950 text-brand-gold font-black flex items-center justify-center rounded-lg shadow-md shrink-0 border border-brand-gold">
-                  <Award className="h-6 w-6" />
+                <div className="h-12 w-12 bg-white flex items-center justify-center rounded-lg shadow-sm shrink-0 border border-slate-200 overflow-hidden">
+                  <img src="/src/assets/images/ruqayya_logo_1783430629037.jpg" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
                 </div>
                 <div>
                   <h1 className="text-md font-black tracking-tight text-slate-950 uppercase">RUQAYYA TRANSPORT LIMITED</h1>
@@ -713,19 +753,19 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                 <Badge variant="gold" className="text-[8px] font-bold px-2 py-0.5 border border-brand-gold/30">AUDIT COMPLIANT DOCUMENT</Badge>
                 <p className="font-bold mt-1 text-slate-900">REP-NO: RTL-{(reportTab || 'FIN').toUpperCase()}-2026-902</p>
                 <p>Generated Date: {new Date().toISOString().slice(0, 10)}</p>
-                <p>Operating Cycle: Cycle #4</p>
+                <p className="text-brand-navy font-bold">Operating Cycle: {selectedCycleId}</p>
               </div>
             </div>
 
             {/* FINANCIAL SUMMARY VIEW */}
             {reportTab === 'financial' && (
-              <div className="flex flex-col gap-6">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
                 <div className="border-b border-slate-100 pb-2">
                   <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">I. Executive Financial Statement</h2>
-                  <p className="text-[10px] text-slate-500">General Ledger and Cash flows statement from {dateFrom} to {dateTo}.</p>
+                  <p className="text-[10px] text-slate-500">General Ledger and Cash flows statement from {dateFrom} to {dateTo} for {selectedCycleId}.</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 font-mono text-[11px] text-slate-800">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-[11px] text-slate-800">
                   <div className="flex justify-between border-b border-slate-100 py-1.5 font-bold text-slate-950">
                     <span>A. Operating Income Revenues</span>
                     <span>₦{totalInflows.toLocaleString()}</span>
@@ -765,7 +805,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                   <p className="text-[10px] text-slate-500">Capital valuation and investment pool distributions.</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 font-mono text-[11px] text-slate-800">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-[11px] text-slate-800">
                   <div className="flex justify-between border-b border-slate-100 py-1.5 font-bold text-slate-950">
                     <span>Total Liquid & Capital Assets</span>
                     <span>₦{(netEarningsProfit + totalOutstandingBalance).toLocaleString()}</span>
@@ -791,22 +831,22 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                     <span>₦{accumulatedShareholderPool.toLocaleString()}</span>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
 
-            {/* DRIVER REPORTS VIEW */}
+            {/* DRIVER REPORTS VIEW WITH AVATARS AND FULL DETAILS */}
             {reportTab === 'driver' && (
-              <div className="flex flex-col gap-6">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
                 <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Driver Lease Status Statement</h2>
-                  <p className="text-[10px] text-slate-500">Operational cycles, balances, and payment performance.</p>
+                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Certified Driver Lease Status Statement</h2>
+                  <p className="text-[10px] text-slate-500">Comprehensive driver dossiers, passports, active tricycles, and payment balances for {selectedCycleId}.</p>
                 </div>
 
-                <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-4">
                   {drivers.map((d, index) => (
-                    <div key={`${d.id}-${index}`} className="border border-slate-200 rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-start bg-slate-50/50">
+                    <div key={`${d.id}-${index}`} className="border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-slate-50/50">
                       {/* Driver passport image (High fidelity portrait) */}
-                      <div className="h-16 w-16 bg-slate-200 rounded-lg overflow-hidden shrink-0 border border-slate-300">
+                      <div className="h-16 w-16 bg-slate-200 rounded-xl overflow-hidden shrink-0 border border-slate-300 shadow-xs">
                         <img 
                           src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || driverPortraits[index % driverPortraits.length]} 
                           alt={d.fullName} 
@@ -815,44 +855,40 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                         />
                       </div>
 
-                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 text-[11px] font-mono text-slate-700">
-                        <div>
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Driver Name</span>
-                          <span className="font-sans font-extrabold text-slate-900">{d.fullName}</span>
+                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] font-mono text-slate-700 w-full min-w-0">
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Driver Name & ID</span>
+                          <span className="font-sans font-extrabold text-slate-900 block truncate">{d.fullName}</span>
+                          <span className="text-[9px] text-slate-500">{d.company_driver_id || 'RTL-DRV-00' + (index + 1)}</span>
                         </div>
-                        <div>
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">ID Number</span>
-                          <span className="font-extrabold text-slate-900">{d.company_driver_id || 'PENDING'}</span>
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Contact & Passport</span>
+                          <span className="block truncate">{d.phone || '+234 803 000 0000'}</span>
+                          <span className="text-[9px] text-slate-400">P.NO: {d.passport_no || 'N/A'}</span>
                         </div>
-                        <div>
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Phone</span>
-                          <span>{d.phone}</span>
+                        <div className="min-w-0">
+                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Tricycle & Cycle</span>
+                          <span className="font-bold text-slate-900 block truncate">{d.assignedVehicleId || 'V-778 Kano'}</span>
+                          <span className="text-[9px] text-brand-navy font-bold">{selectedCycleId}</span>
                         </div>
-                        <div>
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Tricycle</span>
-                          <span>{d.assignedVehicleId || 'V-778 Kano'}</span>
-                        </div>
-                        <div>
+                        <div className="flex flex-col items-start sm:items-end justify-between min-w-0">
                           <span className="text-[9px] text-slate-400 block font-bold uppercase">Lease Balance</span>
-                          <span className="font-bold text-rose-600">₦{(d.remaining_vehicle_balance || 0).toLocaleString()}</span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Status</span>
-                          <Badge variant={d.status === 'approved' ? 'success' : 'warning'}>{d.status.toUpperCase()}</Badge>
+                          <span className="font-bold text-rose-600 text-xs">₦{(d.remaining_vehicle_balance || 0).toLocaleString()}</span>
+                          <Badge variant={d.status === 'approved' ? 'success' : 'warning'} className="mt-1">{d.status.toUpperCase()}</Badge>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             )}
 
-            {/* SHAREHOLDER REPORTS VIEW */}
+            {/* SHAREHOLDER REPORTS VIEW WITH AVATARS AND FULL DETAILS */}
             {reportTab === 'shareholder' && (
-              <div className="flex flex-col gap-6">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
                 <div className="border-b border-slate-100 pb-2">
                   <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Shareholder Equity Distributions</h2>
-                  <p className="text-[10px] text-slate-500">Paid-up capital weights and withdrawals summary.</p>
+                  <p className="text-[10px] text-slate-500">Paid-up capital weights, passports, contacts, and withdrawals summary for {selectedCycleId}.</p>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -860,33 +896,46 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                     <thead>
                       <tr className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-300">
                         <th className="p-2.5">Shareholder</th>
+                        <th className="p-2.5">Contact / Passport</th>
                         <th className="p-2.5 text-right">Investment Stock</th>
-                        <th className="p-2.5 text-right">Withdrawals</th>
-                        <th className="p-2.5 text-right">Reinvestments</th>
-                        <th className="p-2.5 text-right">Available Div.</th>
+                        <th className="p-2.5 text-right">Withdrawn</th>
+                        <th className="p-2.5 text-right">Reinvested</th>
+                        <th className="p-2.5 text-right">Stake & Div.</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {shareholders.map((s, idx) => (
-                        <tr key={`${s.id}-${idx}`} className="hover:bg-slate-50">
-                          <td className="p-2.5 flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full overflow-hidden shrink-0 border">
-                              <img src={s.passport_photo_url || s.passportPhoto || s.passport_photo || s.passport || shareholderPortraits[idx % shareholderPortraits.length]} alt="" className="h-full w-full object-cover" />
-                            </div>
-                            <span className="font-sans font-bold text-slate-900">{s.full_name}</span>
-                          </td>
-                          <td className="p-2.5 text-right font-bold text-slate-900">₦{(s.investment_amount || 0).toLocaleString()}</td>
-                          <td className="p-2.5 text-right text-rose-600">₦{(s.total_withdrawn || 0).toLocaleString()}</td>
-                          <td className="p-2.5 text-right text-emerald-600">₦{(s.total_reinvested || 0).toLocaleString()}</td>
-                          <td className="p-2.5 text-right font-black text-slate-900">
-                            ₦{((s.investment_amount / (totalInvestmentStocks || 1)) * accumulatedShareholderPool).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
+                      {shareholders.map((s, idx) => {
+                        const stakePct = ((s.investment_amount || 0) / (totalInvestmentStocks || 1)) * 100;
+                        const availableDiv = ((s.investment_amount || 0) / (totalInvestmentStocks || 1)) * accumulatedShareholderPool;
+                        return (
+                          <tr key={`${s.id}-${idx}`} className="hover:bg-slate-50">
+                            <td className="p-2.5 flex items-center gap-2.5">
+                              <div className="h-8 w-8 rounded-full overflow-hidden shrink-0 border border-slate-300 bg-slate-200">
+                                <img src={s.passport_photo_url || s.passportPhoto || s.passport_photo || s.passport || shareholderPortraits[idx % shareholderPortraits.length]} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-sans font-bold text-slate-900 truncate">{s.full_name}</p>
+                                <p className="text-[9px] text-slate-500 truncate">{s.email || 'shareholder@ruqayyatransport.com'}</p>
+                              </div>
+                            </td>
+                            <td className="p-2.5">
+                              <p className="text-[10px] font-bold text-slate-800">{s.phone || '+234 803 000 0000'}</p>
+                              <p className="text-[9px] text-slate-400">Passport: {s.passport_no || 'PASSPORT-OK'}</p>
+                            </td>
+                            <td className="p-2.5 text-right font-bold text-slate-900">₦{(s.investment_amount || 0).toLocaleString()}</td>
+                            <td className="p-2.5 text-right text-rose-600">₦{(s.total_withdrawn || 0).toLocaleString()}</td>
+                            <td className="p-2.5 text-right text-emerald-600">₦{(s.total_reinvested || 0).toLocaleString()}</td>
+                            <td className="p-2.5 text-right">
+                              <span className="font-black text-brand-navy block">₦{availableDiv.toLocaleString()}</span>
+                              <Badge variant="gold" className="text-[8px] mt-0.5">{stakePct.toFixed(2)}% Stake</Badge>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </motion.div>
             )}
 
             {/* PAYROLL REPORTS VIEW */}
@@ -1267,7 +1316,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
               <span>SYSTEM-GENERATED CRYPTOGRAPHIC HASH CODE: RTL-SEC-2026</span>
             </div>
 
-          </div>
+          </motion.div>
         </div>
 
         {/* SIDE ARCHIVES LIST - 4 COLS */}

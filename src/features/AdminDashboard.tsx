@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import EnterpriseDirectory from '../components/admin/EnterpriseDirectory';
 import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -35,7 +36,10 @@ import {
   MessageSquare,
   Wallet,
   Coins,
-  Settings
+  Settings,
+  Camera,
+  Edit3,
+  Sparkles
 } from 'lucide-react';
 
 import { AdminKPIs } from '../components/admin/AdminKPIs';
@@ -53,7 +57,7 @@ import { PeopleManagement } from '../components/admin/PeopleManagement';
 import { CycleTimer } from '../components/director/CycleTimer';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { ActivityFeed } from '../components/admin/ActivityFeed';
-import { fetchActiveCycle as getActiveCycleData } from '../services/cycleService';
+import { subscribeToActiveCycle } from '../utils/cycleService';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -77,8 +81,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [shareholders, setShareholders] = useState<Shareholder[]>([]);
   const [activeCycle, setActiveCycle] = useState<any>(null);
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
+
+  // Admin profile & avatar states
+  const [adminName, setAdminName] = useState(() => localStorage.getItem('ruqayya_admin_name') || 'Operations Admin');
+  const [adminAvatar, setAdminAvatar] = useState(() => localStorage.getItem('ruqayya_admin_avatar') || '');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [tempAdminName, setTempAdminName] = useState(adminName);
+  const [tempAdminAvatar, setTempAdminAvatar] = useState(adminAvatar);
 
   // Filter States
   const [driverFilter, setDriverFilter] = useState<'all' | 'pending' | 'approved' | 'correction_requested' | 'rejected'>('all');
@@ -170,26 +181,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       return;
     }
     try {
-      const [vList, dList, tList, fin, payList, shList, logList, cycleData] = await Promise.all([
+      const [vList, dList, tList, fin, payList, shList, logList] = await Promise.all([
         api.getVehicles().catch(() => []),
         api.getDrivers().catch(() => []),
         api.getTrips().catch(() => []),
         api.getFinance().catch(() => []),
         api.getPayments().catch(() => []),
         api.getShareholders().catch(() => []),
-        api.getAuditLogs().catch(() => []),
-        getActiveCycleData().catch(() => ({
-          cycleId: 'CYC-2026-2459',
-          isActive: false,
-          status: 'inactive' as const,
-          startDate: '2026-07-29',
-          endDate: '2026-08-28',
-          drivers: 10,
-          fleet: 10,
-          remit: 800000000,
-          health: 'Healthy',
-          cycleDay: 'Day 1/30'
-        }))
+        api.getAuditLogs().catch(() => [])
       ]);
       setVehicles(vList || []);
       setDrivers(dList || []);
@@ -203,15 +202,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         .filter((f: any) => f.type === 'revenue')
         .reduce((sum: number, r: any) => sum + r.amount, 0);
       setTotalEarnings(revTotal);
-
-      // Determine unified active cycle state
-      setActiveCycle({
-        id: cycleData.cycleId,
-        startDate: cycleData.startDate,
-        endDate: cycleData.endDate,
-        status: cycleData.status,
-        isActive: cycleData.isActive
-      });
     } catch (e) {
       console.error("Failed to sync backend data in AdminDashboard:", e);
     } finally {
@@ -223,33 +213,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     const handleOpenAssisted = () => {
       setIsRegisterAssistedOpen(true);
     };
-    
-    const handleLocalDbChange = async (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail) {
-        if (detail.drivers) setDrivers(detail.drivers);
-        if (detail.finance) setFinance(detail.finance);
-        if (detail.driver_payments) setPayments(detail.driver_payments);
-        if (detail.vehicles) setVehicles(detail.vehicles);
-        if (detail.audit_logs) setLogs(detail.audit_logs);
-      }
-      const updatedCycleData = await getActiveCycleData().catch(() => null);
-      if (updatedCycleData) {
-        setActiveCycle({
-          id: updatedCycleData.cycleId,
-          startDate: updatedCycleData.startDate,
-          endDate: updatedCycleData.endDate,
-          status: updatedCycleData.status,
-          isActive: updatedCycleData.isActive
-        });
-      }
-    };
 
     window.addEventListener('open-assisted-driver', handleOpenAssisted);
-    window.addEventListener('db-change', handleLocalDbChange);
+
+    const unsubscribe = subscribeToActiveCycle((data) => {
+      if (data) {
+        setActiveCycle({
+          id: data.cycleId,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          status: data.status,
+          isActive: data.isActive
+        });
+      } else {
+        setActiveCycle(null);
+      }
+    });
+
     return () => {
       window.removeEventListener('open-assisted-driver', handleOpenAssisted);
-      window.removeEventListener('db-change', handleLocalDbChange);
+      unsubscribe();
     };
   }, []);
 
@@ -279,9 +262,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               .filter((f: any) => f.type === 'revenue')
               .reduce((sum: number, r: any) => sum + r.amount, 0);
             setTotalEarnings(revTotal);
-
-            const activeCyc = (data.cycles || []).find((c: any) => c && (c.status === 'active' || c.status === 'paused'));
-            setActiveCycle(activeCyc || null);
           }
         } catch (err) {
           console.error("Failed to parse live stream chunk in AdminDashboard:", err);
@@ -444,48 +424,157 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       
       {activeTab === 'dashboard' && (
         <>
-          {/* Header with quick indicators */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-border-main/50 pb-2 mb-1">
-            <div>
-              <span className="text-[10px] font-black tracking-widest text-brand-gold uppercase block">
-            {(() => {
-              const hours = new Date().getHours();
-              let greeting = "Good Morning";
-              if (hours >= 12 && hours < 17) greeting = "Good Afternoon";
-              if (hours >= 17) greeting = "Good Evening";
-              
-              if (lang === 'ha') {
-                if (hours < 12) greeting = "In kwana lafiya (Barka da Safiya)";
-                else if (hours < 17) greeting = "Barka da Rana";
-                else greeting = "Barka da Yamma";
-              }
-              return `${greeting}, Operations Admin`;
-            })()}
-          </span>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <h2 className="text-sm font-black tracking-tight text-text-main uppercase flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-gold animate-ping" />
-              {lang === 'en' ? "Admin Operations Control" : "Gudanarwar Masu Kula (Admin)"}
-            </h2>
-          </div>
-          <p className="text-[9px] text-text-muted mt-0.5 leading-none font-semibold">
-            {lang === 'en' ? "Tricycle lease assets, certified driver registry nodes, and remittance ledger control." : "Kekunan napep, tantance direbobi, da duba kudaden remittance."}
-          </p>
-        </div>
+          {/* Header with quick indicators and high-motion welcome profile avatar */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border-main/50 pb-3 mb-2">
+            <div className="flex items-center gap-3.5">
+              <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.4 }}
+                className="relative cursor-pointer group"
+                onClick={() => setIsProfileModalOpen(true)}
+                title="Click to edit profile & upload avatar"
+              >
+                <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-brand-gold via-amber-400 to-blue-500 opacity-75 blur-xs group-hover:opacity-100 animate-spin" style={{ animationDuration: '6s' }} />
+                <div className="relative h-14 w-14 rounded-full bg-slate-900 border-2 border-brand-gold overflow-hidden flex items-center justify-center shadow-lg">
+                  {adminAvatar ? (
+                    <img src={adminAvatar} alt={adminName} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span className="text-brand-gold font-black text-sm">{adminName.split(' ').map(n => n[0]).join('').substring(0, 2)}</span>
+                  )}
+                </div>
+                <div className="absolute bottom-0 right-0 h-4 w-4 bg-brand-gold rounded-full border-2 border-slate-900 flex items-center justify-center text-slate-950 shadow-xs">
+                  <Edit3 className="h-2 w-2 font-bold" />
+                </div>
+              </motion.div>
 
-        {/* Telemetry Indicator */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-mono text-[8px] font-bold">
-            SECURE ACCESS II
-          </span>
-          <span className="px-1.5 py-0.5 rounded-md bg-brand-gold/10 border border-brand-gold/20 text-brand-gold font-mono text-[8px] font-bold">
-            FLEET: {vehicles.length} RIGS
-          </span>
-          <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-500 font-mono text-[8px] font-bold">
-            DRIVERS: {drivers.length} ACTIVE
-          </span>
-        </div>
-      </div>
+              <div>
+                <motion.span 
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-[11px] font-black tracking-widest text-brand-gold uppercase flex items-center gap-1.5"
+                >
+                  <Sparkles className="h-3 w-3 animate-pulse text-brand-gold" />
+                  {(() => {
+                    const hours = new Date().getHours();
+                    let greeting = "Good Morning";
+                    if (hours >= 12 && hours < 17) greeting = "Good Afternoon";
+                    if (hours >= 17) greeting = "Good Evening";
+                    
+                    if (lang === 'ha') {
+                      if (hours < 12) greeting = "In kwana lafiya (Barka da Safiya)";
+                      else if (hours < 17) greeting = "Barka da Rana";
+                      else greeting = "Barka da Yamma";
+                    }
+                    return `${greeting}, ${adminName} 🚀✨`;
+                  })()}
+                </motion.span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <h2 className="text-base font-black tracking-tight text-text-main uppercase flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-brand-gold animate-ping" />
+                    {lang === 'en' ? "Admin Operations Control" : "Gudanarwar Masu Kula (Admin)"} 👑
+                  </h2>
+                </div>
+                <p className="text-[10px] text-text-muted mt-0.5 leading-snug font-semibold">
+                  {lang === 'en' ? "Tricycle lease assets, certified driver registry nodes, and remittance ledger control." : "Kekunan napep, tantance direbobi, da duba kudaden remittance."}
+                </p>
+              </div>
+            </div>
+
+            {/* Telemetry Indicator */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] font-bold shadow-xs">
+                SECURE ACCESS II 🛡️
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-brand-gold/10 border border-brand-gold/20 text-brand-gold font-mono text-[9px] font-bold shadow-xs">
+                FLEET: {vehicles.length} RIGS 🛺
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-500 font-mono text-[9px] font-bold shadow-xs">
+                DRIVERS: {drivers.length} ACTIVE 👤
+              </span>
+            </div>
+          </div>
+
+          {/* Profile Edit Modal */}
+          <Modal
+            isOpen={isProfileModalOpen}
+            onClose={() => setIsProfileModalOpen(false)}
+            title={lang === 'en' ? "Edit Admin Profile & Avatar" : "Gyara Bayanan Admin da Hoton Hoto"}
+          >
+            <div className="flex flex-col gap-4 p-2">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase">Administrator Name</label>
+                <input
+                  type="text"
+                  value={tempAdminName}
+                  onChange={(e) => setTempAdminName(e.target.value)}
+                  className="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-gold"
+                  placeholder="e.g. Operations Admin"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase">Profile Avatar URL or Upload Image</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={tempAdminAvatar}
+                    onChange={(e) => setTempAdminAvatar(e.target.value)}
+                    className="flex-1 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-gold"
+                    placeholder="https://images.unsplash.com/... or paste image URL"
+                  />
+                  <label className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors">
+                    <Camera className="h-4 w-4 text-brand-gold" />
+                    <span>Upload</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setTempAdminAvatar(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {tempAdminAvatar && (
+                <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-brand-gold shrink-0">
+                    <img src={tempAdminAvatar} alt="Preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">Avatar Preview</p>
+                    <p className="text-[10px] text-slate-500">Looks great! High-motion avatar active.</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <Button variant="ghost" onClick={() => setIsProfileModalOpen(false)}>Cancel</Button>
+                <Button 
+                  variant="primary" 
+                  onClick={() => {
+                    const finalName = tempAdminName.trim() || 'Operations Admin';
+                    setAdminName(finalName);
+                    setAdminAvatar(tempAdminAvatar);
+                    localStorage.setItem('ruqayya_admin_name', finalName);
+                    localStorage.setItem('ruqayya_admin_avatar', tempAdminAvatar);
+                    setIsProfileModalOpen(false);
+                  }}
+                >
+                  Save Profile
+                </Button>
+              </div>
+            </div>
+          </Modal>
 
       {loading ? (
         <div className="py-6 text-center text-text-muted font-bold font-mono text-xs">
@@ -502,6 +591,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 onStateChange={syncAllData}
                 driversCount={drivers.length}
                 vehiclesCount={vehicles.length}
+                activeCycle={activeCycle}
               />
             </div>
 
@@ -517,7 +607,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 lang={lang}
                 startDate={activeCycle?.startDate || '2026-07-29'}
                 endDate={activeCycle?.endDate || '2026-08-28'}
-                cycleId={activeCycle?.id || 'CYC-2026-2459'}
+                cycleId={activeCycle?.id || 'No Active Cycle'}
                 status={activeCycle?.status || 'inactive'}
                 isActive={activeCycle?.isActive ?? false}
               />
@@ -630,6 +720,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 finance={finance}
                 payments={payments}
                 activeCycle={activeCycle}
+                setActiveTab={setActiveTab}
               />
             </div>
             <div className="lg:col-span-4 h-full">

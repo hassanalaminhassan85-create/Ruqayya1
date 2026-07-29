@@ -31,7 +31,7 @@ import { AICopilotDrawer } from './components/AICopilotDrawer';
 import { ChatDashboard } from './components/ChatDashboard';
 import { offlineSync } from './utils/offlineSync';
 import { checkDatabaseConnection } from './utils/dbDiagnostic';
-import { fetchActiveCycle, ActiveCycleData } from './services/cycleService';
+import { subscribeToActiveCycle } from './utils/cycleService';
 import { 
   Truck, 
   Users, 
@@ -130,23 +130,14 @@ export default function App() {
   const [aiCopilotOpen, setAiCopilotOpen] = useState(false);
   const [timeStr, setTimeStr] = useState<string>('');
   const [isTimeSynced, setIsTimeSynced] = useState<boolean>(false);
-  const [activeCycle, setActiveCycle] = useState<ActiveCycleData | null>(null);
+  const [activeCycle, setActiveCycle] = useState<any>(null);
 
-  // Global active cycle polling & synchronization service
+  // Global active cycle synchronization service
   useEffect(() => {
-    let isMounted = true;
-    const loadCycle = async () => {
-      const data = await fetchActiveCycle();
-      if (isMounted) {
-        setActiveCycle(data);
-      }
-    };
-    loadCycle();
-    const interval = setInterval(loadCycle, 10000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
+    const unsubscribe = subscribeToActiveCycle((data) => {
+      setActiveCycle(data);
+    });
+    return () => unsubscribe();
   }, []);
 
   // Ticking WAT clock effect with NTP / API-based time synchronization to prevent system time drift
@@ -696,7 +687,7 @@ export default function App() {
           activeTab={driverTabValue}
           setActiveTab={(tab) => {
             setDriverTab(tab);
-            if (tab === 'overview') setActiveSection('dashboard');
+            if (tab === 'overview' || tab === 'pay-now') setActiveSection('dashboard');
             else if (tab === 'vehicle') setActiveSection('fleet');
             else if (tab === 'payments') setActiveSection('payments');
             else if (tab === 'history') setActiveSection('trips');
@@ -963,73 +954,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-3">
-              {/* Quick Actions Dropdown */}
-              {currentRole !== 'public' && currentRole !== 'driver' && (
-                <div className="relative">
-                  <button
-                    onClick={() => setQuickActionsOpen(!quickActionsOpen)}
-                    className="px-3 py-1.5 rounded-lg bg-brand-gold text-slate-950 hover:bg-brand-gold/90 transition-all font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <Zap className="h-3.5 w-3.5 fill-slate-950 animate-pulse shrink-0" />
-                    <span className="hidden sm:inline">{lang === 'en' ? "Quick Actions" : "Ayyuka Sauri"}</span>
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${quickActionsOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {quickActionsOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setQuickActionsOpen(false)} />
-                      <div className="absolute right-0 mt-2 w-56 bg-white border border-border-main rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-border-main/50 font-sans">
-                        <div className="px-3.5 py-2 bg-slate-50/50 text-[10px] font-bold text-text-muted uppercase tracking-wider">
-                          {lang === 'en' ? "Shortcuts" : "Hanyoyin Sauri"}
-                        </div>
-                        <div className="py-1">
-                          <button
-                            onClick={() => {
-                              setActiveSection('fleet');
-                              setQuickActionsOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Truck className="h-3.5 w-3.5 text-brand-gold shrink-0" />
-                            {lang === 'en' ? "Register Tricycle" : "Rijistar Sabon Keke"}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setActiveSection('trips');
-                              setQuickActionsOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <MapPin className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                            {lang === 'en' ? "Log Daily Remittance" : "Sanya Remittance"}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setActiveSection('payments');
-                              setQuickActionsOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                            {lang === 'en' ? "Record Driver Payment" : "Shigar da Biyan Kudi"}
-                          </button>
-                        </div>
-                        <div className="py-1">
-                          <button
-                            onClick={() => {
-                              setActiveSection('help');
-                              setQuickActionsOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-text-main hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <HelpCircle className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                            {lang === 'en' ? "Help Command Center" : "Cibiyar Taimako"}
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
 
               <NotificationCenter lang={lang} />
               <div className="hidden sm:flex items-center gap-1.5">
@@ -1052,99 +976,6 @@ export default function App() {
         </header>
       )}
 
-      {/* QUICK ACTIONS HORIZONTAL BAR */}
-      {currentRole !== 'public' && currentRole !== 'driver' && activeSection !== 'ai-assistant' && (
-        <div className="bg-bg-surface border-b border-border-main/50 px-4 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shadow-xs">
-          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 min-w-0 pr-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-text-muted font-mono whitespace-nowrap mr-2 flex items-center gap-1 shrink-0">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-gold animate-pulse shrink-0" />
-                {lang === 'en' ? "QUICK ACTIONS" : "AYYUKAN SAURI"}:
-              </span>
-              
-              <button
-                onClick={() => setShowRecordPaymentModal(true)}
-                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
-              >
-                <CreditCard className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                <span>{lang === 'en' ? "Record Payment" : "Sanya Biyan Kudi"}</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setCurrentRole('admin');
-                  setActiveSection('dashboard');
-                  setAdminTab('drivers');
-                  // Trigger standard driver registration open
-                  setTimeout(() => {
-                    window.dispatchEvent(new CustomEvent('open-assisted-driver'));
-                  }, 100);
-                }}
-                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
-              >
-                <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                <span>{lang === 'en' ? "Register Driver" : "Yi Rajistar Direba"}</span>
-              </button>
-
-              <button
-                onClick={() => setShowImportDriverModal(true)}
-                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
-              >
-                <Upload className="h-3.5 w-3.5 text-brand-gold shrink-0" />
-                <span>{lang === 'en' ? "Import Driver" : "Shigar da CSV"}</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  if (currentRole === 'director') {
-                    setDirectorTab('shareholders');
-                  } else {
-                    setCurrentRole('director');
-                    setActiveSection('dashboard');
-                    setDirectorTab('shareholders');
-                  }
-                }}
-                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
-              >
-                <Building className="h-3.5 w-3.5 text-purple-500 shrink-0" />
-                <span>{lang === 'en' ? "Add Shareholder" : "Saka Mai Hanni"}</span>
-              </button>
-
-              <button
-                onClick={() => setShowAddExpenseModal(true)}
-                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
-              >
-                <TrendingDown className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                <span>{lang === 'en' ? "Add Expense" : "Shigar da Asara"}</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  window.print();
-                }}
-                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
-              >
-                <FileText className="h-3.5 w-3.5 text-sky-500 shrink-0" />
-                <span>{lang === 'en' ? "Generate Report" : "Fitar da Rahoto"}</span>
-              </button>
-
-              <button
-                onClick={() => setShowPayrollModal(true)}
-                className="px-2.5 py-1.5 rounded-lg border border-border-main hover:border-text-main text-[11px] font-bold text-text-main hover:bg-bg-base/50 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-transparent"
-              >
-                <Briefcase className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                <span>{lang === 'en' ? "Payroll" : "Albashin Ma'aikata"}</span>
-              </button>
-            </div>
-            
-            <div className="hidden md:flex items-center gap-2 text-[10px] font-bold text-text-muted font-mono shrink-0">
-              <span className="px-1.5 py-0.5 rounded bg-bg-base border border-border-main/50">SECURE NODE</span>
-              <span className="text-brand-gold">•</span>
-              <span>AES-256</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* QUICK ACTIONS MODALS MOUNT */}
       <ImportDriverModal
@@ -1205,13 +1036,10 @@ export default function App() {
             {/* Profile Info */}
             <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2 relative group">
               <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-brand-gold text-xs shrink-0 ring-2 ring-slate-700">
-                  {currentRole === 'driver' ? 'DR' : currentRole === 'admin' ? 'AD' : 'EX'}
-                </div>
                 {!sidebarCollapsed && (
                   <div className="min-w-0 flex-1">
                     <span className="text-xs font-bold text-slate-200 block truncate leading-tight">
-                      {currentRole === 'driver' ? driverName : currentRole === 'admin' ? "Operator Ibrahim" : "Director Kabir"}
+                      {currentRole === 'driver' ? (driverName || 'Authenticated Driver') : currentRole === 'admin' ? (localStorage.getItem('ruqayya_admin_name') || 'Operations Admin') : (localStorage.getItem('ruqayya_director_name') || 'General Director')}
                     </span>
                     <span className="text-[10px] text-brand-gold block font-mono font-bold leading-none mt-1 truncate">
                       {dictionary.roles[currentRole]}
@@ -1469,7 +1297,8 @@ export default function App() {
         onClose={() => setAiCopilotOpen(false)}
         lang={lang}
         currentRole={currentRole}
-        userName={currentRole === 'driver' ? driverName : currentRole === 'admin' ? "Operator Ibrahim" : "Director Kabir"}
+        userName={currentRole === 'driver' ? (driverName || 'Authenticated Driver') : currentRole === 'admin' ? (localStorage.getItem('ruqayya_admin_name') || 'Operations Admin') : (localStorage.getItem('ruqayya_director_name') || 'General Director')}
+        activeCycleId={activeCycle?.cycleId}
       />
     </div>
     </ErrorBoundary>

@@ -24,21 +24,21 @@ interface CycleTimerProps {
   onStateChange: () => void;
 }
 
+import { subscribeToActiveCycle } from '../../utils/cycleService';
+
+// ... (keep other imports)
+
 export const CycleTimer: React.FC<CycleTimerProps> = ({
   lang,
-  activeCycle: propActiveCycle,
   onStateChange
 }) => {
-  const activeCycle = propActiveCycle || {
-    id: 'CYC-2026-2459',
-    startDate: '2026-07-29',
-    endDate: '2026-08-28',
-    status: 'active'
-  };
+  const [activeCycle, setActiveCycle] = useState<any>(null);
   const [secondsElapsed, setSecondsElapsed] = useState<number>(0);
   const [showPauseModal, setShowPauseModal] = useState<boolean>(false);
   const [showResumeModal, setShowResumeModal] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [pauseReason, setPauseReason] = useState<string>('');
+  const [pauseDays, setPauseDays] = useState<number>(2);
   const [resumeReason, setResumeReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +91,15 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     return Math.floor(activeMs / 1000);
   };
 
-  // Keep duration synchronized in real-time and refresh data periodically
+  // Keep duration synchronized in real-time
+  useEffect(() => {
+    const unsubscribe = subscribeToActiveCycle((data) => {
+      setActiveCycle(data);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     if (!activeCycle) {
       setSecondsElapsed(0);
@@ -104,19 +112,13 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
 
     updateTimer();
 
-    // Refresh data every 30s to stay in sync with server
-    const dataRefreshInterval = setInterval(() => {
-      onStateChange();
-    }, 30000);
-
     // Update timer every second
     const timerInterval = setInterval(updateTimer, 1000);
 
     return () => {
-      clearInterval(dataRefreshInterval);
       clearInterval(timerInterval);
     };
-  }, [activeCycle, onStateChange]);
+  }, [activeCycle]);
 
   const formatDateOnly = (dateStr: string | null | undefined) => {
     if (!dateStr) return 'N/A';
@@ -176,12 +178,27 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     setError(null);
     setIsSubmitting(true);
     try {
-      await api.pauseCycle({ reason: pauseReason });
+      await api.pauseCycle({ reason: pauseReason, pauseDays: Number(pauseDays) || 0 });
       setShowPauseModal(false);
       setPauseReason('');
       onStateChange();
     } catch (err: any) {
       setError(err.message || 'Failed to pause operating cycle.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteCycle = async () => {
+    if (!activeCycle?.id) return;
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await api.deleteCycle(activeCycle.id);
+      setShowDeleteModal(false);
+      onStateChange();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete operating cycle.');
     } finally {
       setIsSubmitting(false);
     }
@@ -318,7 +335,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
               <button
                 type="button"
                 onClick={() => setShowResumeModal(true)}
-                className="w-full px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] sm:text-[10px] rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-sm transition-colors"
+                className="flex-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] sm:text-[10px] rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-sm transition-colors"
               >
                 <Play className="h-2.5 w-2.5" />
                 {lang === 'en' ? "Resume Cycle" : "Dawo da Zagaye"}
@@ -327,12 +344,21 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
               <button
                 type="button"
                 onClick={() => setShowPauseModal(true)}
-                className="w-full px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-black text-[9px] sm:text-[10px] rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-sm transition-colors"
+                className="flex-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-black text-[9px] sm:text-[10px] rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-sm transition-colors"
               >
                 <Pause className="h-2.5 w-2.5" />
                 {lang === 'en' ? "Pause Cycle" : "Dakatar da Zagaye"}
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-[9px] sm:text-[10px] rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors"
+              title={lang === 'en' ? "Delete Cycle Everywhere" : "Goge Zagayen Aiki"}
+            >
+              {lang === 'en' ? "Delete Cycle" : "Goge Zagaye"}
+            </button>
           </div>
         </div>
       ) : (
@@ -391,8 +417,28 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
                     value={pauseReason}
                     onChange={(e) => setPauseReason(e.target.value)}
                     placeholder={lang === 'en' ? "Provide reason (e.g., fuel shortage, public holiday, maintenance break)..." : "Rubuta dalili a nan..."}
-                    className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-semibold w-full h-24 resize-none focus:outline-brand-gold text-slate-950 placeholder:text-slate-400"
+                    className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-semibold w-full h-20 resize-none focus:outline-brand-gold text-slate-950 placeholder:text-slate-400"
                   />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                    {lang === 'en' ? "Extension Duration (How many days to extend?)" : "Kwanakin Tsawa (Kwanaki nawa zai karu?)"}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    required
+                    value={pauseDays}
+                    onChange={(e) => setPauseDays(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                    className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-xs font-extrabold text-slate-900 focus:outline-brand-gold w-full font-mono"
+                  />
+                  <p className="text-[10px] text-emerald-600 font-semibold italic">
+                    {lang === 'en' 
+                      ? `The scheduled cycle end date will automatically extend by ${pauseDays} day(s).`
+                      : `Ranar gama zagaye zata kara tsawon kwanaki ${pauseDays} da kanta.`}
+                  </p>
                 </div>
 
                 <div className="flex justify-end gap-2.5">
@@ -474,6 +520,55 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* DELETE CYCLE DIALOG MODAL */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white border border-rose-200 p-6 rounded-2xl max-w-md w-full shadow-2xl"
+            >
+              <h3 className="text-sm font-black text-rose-600 uppercase tracking-tight flex items-center gap-2 mb-2">
+                <AlertCircle className="h-4.5 w-4.5 text-rose-600 shrink-0" />
+                {lang === 'en' ? "Permanently Delete Operating Cycle" : "Goge Zagayen Aiki Baki Daya"}
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                {lang === 'en' 
+                  ? `Are you sure you want to permanently delete Operating Cycle ${activeCycle?.id}? This action will remove this cycle from every dashboard, financial center, and executive report globally.` 
+                  : `Shin kana da tabbacin goge zagaye ${activeCycle?.id}? Wannan zai goge shi daga dukkan rukunin gudanarwa da rahotannin kudi.`}
+              </p>
+
+              {error && (
+                <div className="mb-4 bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2 text-rose-600 text-xs">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => { setShowDeleteModal(false); setError(null); }}
+                  className="px-4 py-2 text-xs font-extrabold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  {lang === 'en' ? "Cancel" : "Soke"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteCycle}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl transition-colors shadow-sm"
+                >
+                  {isSubmitting ? (lang === 'en' ? "Deleting..." : "Ana gogewa...") : (lang === 'en' ? "Confirm Delete Everywhere" : "Goge Daga Ko'ina")}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

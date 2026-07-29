@@ -30,7 +30,10 @@ import {
   Download,
   Upload,
   PieChart as PieIcon,
-  BarChart4
+  BarChart4,
+  Camera,
+  Edit3,
+  Sparkles
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -119,6 +122,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+
+  // Director profile & avatar states
+  const [directorName, setDirectorName] = useState(() => localStorage.getItem('ruqayya_director_name') || 'General Director');
+  const [directorAvatar, setDirectorAvatar] = useState(() => localStorage.getItem('ruqayya_director_avatar') || '');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [tempDirectorName, setTempDirectorName] = useState(directorName);
+  const [tempDirectorAvatar, setTempDirectorAvatar] = useState(directorAvatar);
 
   // Statistics calculations
   const totalDrivers = drivers.length;
@@ -288,22 +298,149 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         {/* Subtle background glow */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-brand-gold/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-brand-gold animate-pulse" />
-            <span className="text-[10px] font-extrabold tracking-widest text-brand-gold uppercase font-mono">
-              {lang === 'en' ? "EXECUTIVE CENTRAL COMMAND" : "BABBAN SHASHE NA TSARO"}
-            </span>
+        <div className="flex-1 flex items-center gap-4">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.4 }}
+            className="relative cursor-pointer group shrink-0"
+            onClick={() => setIsProfileModalOpen(true)}
+            title="Click to edit profile & upload avatar"
+          >
+            <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-brand-gold via-amber-400 to-purple-500 opacity-75 blur-xs group-hover:opacity-100 animate-spin" style={{ animationDuration: '6s' }} />
+            <div className="relative h-16 w-16 rounded-full bg-slate-900 border-2 border-brand-gold overflow-hidden flex items-center justify-center shadow-lg">
+              {directorAvatar ? (
+                <img src={directorAvatar} alt={directorName} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <span className="text-brand-gold font-black text-sm">{directorName.split(' ').map(n => n[0]).join('').substring(0, 2)}</span>
+              )}
+            </div>
+            <div className="absolute bottom-0 right-0 h-4 w-4 bg-brand-gold rounded-full border-2 border-slate-900 flex items-center justify-center text-slate-950 shadow-xs">
+              <Edit3 className="h-2 w-2 font-bold" />
+            </div>
+          </motion.div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-brand-gold animate-pulse" />
+              <span className="text-[10px] font-extrabold tracking-widest text-brand-gold uppercase font-mono flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-brand-gold animate-pulse" />
+                {lang === 'en' ? "EXECUTIVE CENTRAL COMMAND" : "BABBAN SHASHE NA TSARO"} 👑
+              </span>
+            </div>
+            <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-100 font-sans mt-1">
+              {(() => {
+                const hours = new Date().getHours();
+                let greeting = "Good Morning";
+                if (hours >= 12 && hours < 17) greeting = "Good Afternoon";
+                if (hours >= 17) greeting = "Good Evening";
+                
+                if (lang === 'ha') {
+                  if (hours < 12) greeting = "In kwana lafiya (Barka da Safiya)";
+                  else if (hours < 17) greeting = "Barka da Rana";
+                  else greeting = "Barka da Yamma";
+                }
+                return `${greeting}, ${directorName} 🚀🌟`;
+              })()}
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5 max-w-xl font-medium leading-relaxed">
+              {lang === 'en' 
+                ? "All logistics nodes active. Corporate financial ledgers and ECOWAS cross-border transit protocols are fully in sync."
+                : "Dukkan sassan sufuri suna aiki. Kundin kudi na kamfani da ka'idojin ECOWAS suna daidai da juna."}
+            </p>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-100 font-sans mt-1.5">
-            {lang === 'en' ? "Good Morning, Director General" : "Barka da Safiya, Babban Darakta"}
-          </h1>
-          <p className="text-xs text-slate-400 mt-1 max-w-xl font-medium leading-relaxed">
-            {lang === 'en' 
-              ? "All logistics nodes active. Corporate financial ledgers and ECOWAS cross-border transit protocols are fully in sync."
-              : "Dukkan sassan sufuri suna aiki. Kundin kudi na kamfani da ka'idojin ECOWAS suna daidai da juna."}
-          </p>
         </div>
+
+        {/* Profile Edit Modal for Director */}
+        {isProfileModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 text-white shadow-2xl flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-sm font-black uppercase text-brand-gold">Edit Director Profile & Avatar</h3>
+                <button onClick={() => setIsProfileModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                  <span className="text-lg">&times;</span>
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-300 uppercase">Director Name</label>
+                <input
+                  type="text"
+                  value={tempDirectorName}
+                  onChange={(e) => setTempDirectorName(e.target.value)}
+                  className="p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-brand-gold"
+                  placeholder="e.g. General Director"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-300 uppercase">Profile Avatar URL or Upload</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={tempDirectorAvatar}
+                    onChange={(e) => setTempDirectorAvatar(e.target.value)}
+                    className="flex-1 p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-brand-gold"
+                    placeholder="https://images.unsplash.com/... or image URL"
+                  />
+                  <label className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors">
+                    <Camera className="h-4 w-4 text-brand-gold" />
+                    <span>Upload</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setTempDirectorAvatar(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {tempDirectorAvatar && (
+                <div className="flex items-center gap-3 p-3 bg-slate-850 border border-slate-750 rounded-xl">
+                  <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-brand-gold shrink-0">
+                    <img src={tempDirectorAvatar} alt="Preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-white">Avatar Preview</p>
+                    <p className="text-[10px] text-slate-400">High-motion executive avatar ready.</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button 
+                  onClick={() => setIsProfileModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    const finalName = tempDirectorName.trim() || 'General Director';
+                    setDirectorName(finalName);
+                    setDirectorAvatar(tempDirectorAvatar);
+                    localStorage.setItem('ruqayya_director_name', finalName);
+                    localStorage.setItem('ruqayya_director_avatar', tempDirectorAvatar);
+                    setIsProfileModalOpen(false);
+                  }}
+                  className="px-4 py-2 bg-brand-gold hover:bg-yellow-500 text-slate-950 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"
+                >
+                  Save Profile
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Right side telemetry info */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 self-stretch lg:self-auto min-w-[280px]">

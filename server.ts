@@ -938,19 +938,42 @@ app.post('/api/auth/register-driver', (req, res) => {
 
     // B. Create Driver Profile
     const driverId = generateUUID();
+    const vehicleId = generateUUID();
+    const agreedAmt = parseFloat(personal.agreedAmount) !== undefined && !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 300000;
+    const vehPrice = parseFloat(personal.vehiclePurchasePrice) !== undefined && !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 15000000;
+    const remBal = parseFloat(personal.remainingVehicleBalance) !== undefined && !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : vehPrice;
+    const compDrvId = personal.companyDriverId || `PEND-${generateUUID().substring(0, 4).toUpperCase()}`;
+
     const newDriver = {
       id: driverId,
       user_id: userId,
-      company_driver_id: personal.companyDriverId || `PEND-${generateUUID().substring(0, 4).toUpperCase()}`,
+      userId: userId,
+      company_driver_id: compDrvId,
+      companyDriverId: compDrvId,
+      full_name: personal.fullName,
+      fullName: personal.fullName,
+      email: personal.email.toLowerCase(),
+      phone: personal.phone,
       address: personal.address,
       nin: personal.nin,
       license_number: personal.licenseNumber || `LIC-${generateUUID().substring(0, 5).toUpperCase()}`,
+      licenseNumber: personal.licenseNumber || `LIC-${generateUUID().substring(0, 5).toUpperCase()}`,
       license_expiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      classification: 'Assisted', // Default classification, editable by admins
+      licenseExpiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      vehicle_id: vehicleId,
+      vehicleId: vehicleId,
+      assignedVehicleId: vehicleId,
+      passport_photo_url: driverPassportUrl,
+      passportPhoto: driverPassportUrl,
+      passportPhotoUrl: driverPassportUrl,
+      classification: personal.classification || 'Assisted',
       rating: 5.0,
-      agreed_amount: parseFloat(personal.agreedAmount) !== undefined && !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 300000,
-      vehicle_purchase_price: parseFloat(personal.vehiclePurchasePrice) !== undefined && !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 15000000,
-      remaining_vehicle_balance: parseFloat(personal.remainingVehicleBalance) !== undefined && !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : (parseFloat(personal.vehiclePurchasePrice) || 15000000),
+      agreed_amount: agreedAmt,
+      agreedAmount: agreedAmt,
+      vehicle_purchase_price: vehPrice,
+      vehiclePurchasePrice: vehPrice,
+      remaining_vehicle_balance: remBal,
+      remainingVehicleBalance: remBal,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       status: 'pending' // Needs approval
@@ -961,29 +984,38 @@ app.post('/api/auth/register-driver', (req, res) => {
     const newGuarantor = {
       id: guarantorId,
       driver_id: driverId,
+      driverId: driverId,
       full_name: guarantor.fullName,
+      fullName: guarantor.fullName,
       phone: guarantor.phone,
       address: guarantor.address,
       relationship: guarantor.relationship,
       nin: guarantor.nin,
       passport_photo_url: guarantorPassportUrl,
+      passportPhotoUrl: guarantorPassportUrl,
+      passport: guarantorPassportUrl,
       created_at: new Date().toISOString(),
       status: 'active'
     };
 
     // D. Create Vehicle (Link pending driver)
-    const vehicleId = generateUUID();
     const newVehicle = {
       id: vehicleId,
       driver_id: driverId,
+      driverId: driverId,
       brand: vehicle.brand,
       model: vehicle.model,
       year: parseInt(vehicle.year) || 2020,
-      colour: vehicle.colour,
-      plate_number: vehicle.plateNumber.toUpperCase(),
-      registration_number: vehicle.registrationNumber,
-      chassis_number: vehicle.chassisNumber,
-      engine_number: vehicle.engineNumber,
+      colour: vehicle.colour || vehicle.color,
+      color: vehicle.colour || vehicle.color,
+      plate_number: vehicle.plateNumber ? vehicle.plateNumber.toUpperCase() : '',
+      plateNumber: vehicle.plateNumber ? vehicle.plateNumber.toUpperCase() : '',
+      registration_number: vehicle.registrationNumber || '',
+      registrationNumber: vehicle.registrationNumber || '',
+      chassis_number: vehicle.chassisNumber || '',
+      chassisNumber: vehicle.chassisNumber || '',
+      engine_number: vehicle.engineNumber || '',
+      engineNumber: vehicle.engineNumber || '',
       capacity: vehicle.capacity || '30 Tons',
       mileage: 0,
       created_at: new Date().toISOString(),
@@ -1714,36 +1746,89 @@ app.get('/api/drivers', authenticateSession, (req, res) => {
 // 10. AUTHENTICATED: Get Driver Full Profile Detail
 app.get('/api/drivers/:id', authenticateSession, (req, res) => {
   const actor = (req as any).user;
-  if (actor.role !== 'admin' && actor.role !== 'director') {
+  const db = loadDB();
+
+  let targetId = req.params.id;
+  if (actor.role === 'driver') {
+    // Driver can query 'me', 'self', their user_id, or their driver id
+    const selfDriver = db.drivers.find(d => d.user_id === actor.id || d.id === actor.id || d.id === req.params.id || d.user_id === req.params.id);
+    if (!selfDriver) return res.status(404).json({ error: 'Driver profile not found.' });
+    targetId = selfDriver.id;
+  } else if (actor.role !== 'admin' && actor.role !== 'director') {
     return res.status(403).json({ error: 'Access Denied.' });
   }
 
-  const db = loadDB();
-  const drv = db.drivers.find(d => d.id === req.params.id);
+  let drv = db.drivers.find(d => d.id === targetId || d.user_id === targetId || (targetId === 'me' && d.user_id === actor.id) || (targetId === 'self' && d.user_id === actor.id));
+  if (!drv && actor.role === 'driver') {
+    drv = db.drivers.find(d => d.user_id === actor.id);
+  }
   if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
 
   const user = db.users.find(u => u.id === drv.user_id);
-  const guarantor = db.guarantors.find(g => g.driver_id === drv.id);
-  const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
+  const guarantor = db.guarantors.find(g => g.driver_id === drv.id || g.driverId === drv.id);
+  const vehicle = db.vehicles.find(v => v.driver_id === drv.id || v.driverId === drv.id || v.id === drv.vehicle_id || v.id === drv.vehicleId);
   const documents = (db.driver_documents || []).filter(doc => doc.driver_id === drv.id);
   const passportDoc = documents.find(doc => doc.document_type === 'passport_photo');
-  const passport_photo_url = passportDoc ? passportDoc.file_url : '';
+  const passport_photo_url = passportDoc ? passportDoc.file_url : (drv.passport_photo_url || drv.passportPhoto || drv.passportPhotoUrl || '');
   const financials = getDriverFinancials(drv, db);
+
+  const normalizedGuarantor = guarantor ? {
+    ...guarantor,
+    fullName: guarantor.full_name || guarantor.fullName,
+    full_name: guarantor.full_name || guarantor.fullName,
+    passport_photo_url: guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport || '',
+    passportPhotoUrl: guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport || '',
+    passport: guarantor.passport_photo_url || guarantor.passportPhotoUrl || guarantor.passport || ''
+  } : null;
+
+  const normalizedVehicle = vehicle ? {
+    ...vehicle,
+    plateNumber: vehicle.plate_number || vehicle.plateNumber,
+    plate_number: vehicle.plate_number || vehicle.plateNumber,
+    registrationNumber: vehicle.registration_number || vehicle.registrationNumber,
+    registration_number: vehicle.registration_number || vehicle.registrationNumber,
+    chassisNumber: vehicle.chassis_number || vehicle.chassisNumber,
+    chassis_number: vehicle.chassis_number || vehicle.chassisNumber,
+    engineNumber: vehicle.engine_number || vehicle.engineNumber,
+    engine_number: vehicle.engine_number || vehicle.engineNumber,
+    color: vehicle.colour || vehicle.color,
+    colour: vehicle.colour || vehicle.color
+  } : null;
 
   res.json({
     ...drv,
-    fullName: user?.full_name || 'Candidate',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    guarantor,
-    vehicle,
+    id: drv.id,
+    user_id: drv.user_id,
+    userId: drv.user_id,
+    company_driver_id: drv.company_driver_id || drv.companyDriverId || '',
+    companyDriverId: drv.company_driver_id || drv.companyDriverId || '',
+    fullName: user?.full_name || drv.full_name || drv.fullName || 'Driver',
+    full_name: user?.full_name || drv.full_name || drv.fullName || 'Driver',
+    email: user?.email || drv.email || '',
+    phone: user?.phone || drv.phone || '',
+    address: drv.address || '',
+    nin: drv.nin || '',
+    license_number: drv.license_number || drv.licenseNumber || '',
+    licenseNumber: drv.license_number || drv.licenseNumber || '',
+    license_expiry: drv.license_expiry || drv.licenseExpiry || '',
+    licenseExpiry: drv.license_expiry || drv.licenseExpiry || '',
+    guarantor: normalizedGuarantor,
+    vehicle: normalizedVehicle,
+    vehicleId: vehicle?.id || drv.vehicle_id || drv.vehicleId || null,
+    assignedVehicleId: vehicle?.id || drv.vehicle_id || drv.vehicleId || null,
     documents,
     passport_photo_url,
-    passportPhoto: passport_photo_url, // For fallback
-    passportPhotoUrl: passport_photo_url, // For fallback
-    remaining_vehicle_balance: financials.remainingVehicleBalance,
-    total_amount_paid: financials.totalAmountPaid,
+    passportPhoto: passport_photo_url,
+    passportPhotoUrl: passport_photo_url,
+    agreedAmount: financials.agreedAmount,
+    agreed_amount: financials.agreedAmount,
+    vehiclePurchasePrice: financials.vehiclePurchasePrice,
     vehicle_purchase_price: financials.vehiclePurchasePrice,
+    remainingVehicleBalance: financials.remainingVehicleBalance,
+    remaining_vehicle_balance: financials.remainingVehicleBalance,
+    totalAmountPaid: financials.totalAmountPaid,
+    total_amount_paid: financials.totalAmountPaid,
+    totalPaymentsMade: financials.totalPaymentsMade,
     total_payments_made: financials.totalPaymentsMade
   });
 });
@@ -1790,20 +1875,49 @@ app.put('/api/drivers/:id/status', authenticateSession, (req, res) => {
     }
 
     if (status === 'approved') {
-      drv.company_driver_id = companyDriverId || `DRV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
-      
-      // Update linked vehicle status
-      const vehicle = db.vehicles.find(v => v.driver_id === drv.id);
+      const cid = companyDriverId || drv.company_driver_id || drv.companyDriverId || `DRV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
+      drv.company_driver_id = cid;
+      drv.companyDriverId = cid;
+
+      // Update linked vehicle status & link ids bidirectionally
+      const vehicle = db.vehicles.find(v => v.driver_id === drv.id || v.driverId === drv.id || v.id === drv.vehicle_id || v.id === drv.vehicleId);
       if (vehicle) {
         vehicle.status = 'assigned';
+        vehicle.driver_id = drv.id;
+        vehicle.driverId = drv.id;
+        drv.vehicle_id = vehicle.id;
+        drv.vehicleId = vehicle.id;
+        drv.assignedVehicleId = vehicle.id;
       }
 
-      // Dynamically calculate contract terms based on specific driver-linked vehicle data
+      // Preserve driver's registered numbers or fallback to terms
       const terms = lookupContractTerms(vehicle);
-      drv.agreed_amount = terms.agreedAmount;
-      drv.vehicle_purchase_price = terms.purchasePrice;
-      drv.remaining_vehicle_balance = terms.purchasePrice;
+      if (!drv.agreed_amount && !drv.agreedAmount) {
+        drv.agreed_amount = terms.agreedAmount;
+        drv.agreedAmount = terms.agreedAmount;
+      } else {
+        const val = parseFloat(drv.agreed_amount || drv.agreedAmount);
+        drv.agreed_amount = val;
+        drv.agreedAmount = val;
+      }
 
+      if (!drv.vehicle_purchase_price && !drv.vehiclePurchasePrice) {
+        drv.vehicle_purchase_price = terms.purchasePrice;
+        drv.vehiclePurchasePrice = terms.purchasePrice;
+      } else {
+        const val = parseFloat(drv.vehicle_purchase_price || drv.vehiclePurchasePrice);
+        drv.vehicle_purchase_price = val;
+        drv.vehiclePurchasePrice = val;
+      }
+
+      if (!drv.remaining_vehicle_balance && !drv.remainingVehicleBalance) {
+        drv.remaining_vehicle_balance = drv.vehicle_purchase_price;
+        drv.remainingVehicleBalance = drv.vehicle_purchase_price;
+      } else {
+        const val = parseFloat(drv.remaining_vehicle_balance || drv.remainingVehicleBalance);
+        drv.remaining_vehicle_balance = val;
+        drv.remainingVehicleBalance = val;
+      }
     }
 
     // Notify Driver via notifications
@@ -4603,7 +4717,8 @@ app.get('/api/drivers/:id/installments', authenticateSession, (req, res) => {
     if (opsState.status === 'Setup Mode') {
       return res.json({ success: true, installments: [] });
     }
-    const driver = db.drivers.find(d => d.id === req.params.id);
+    const actor = (req as any).user;
+    const driver = db.drivers.find(d => d.id === req.params.id || d.user_id === req.params.id || (req.params.id === 'me' && d.user_id === actor?.id));
     if (!driver) return res.status(404).json({ error: 'Driver profile not found.' });
     const activeCycle = db.cycles.find(c => c.status === 'active' || c.status === 'paused') || db.cycles[0];
     const installments = calculateInstallmentsForDriver(driver, db, activeCycle);
@@ -4785,7 +4900,7 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
     }
 
-    const { reason } = req.body;
+    const { reason, pauseDays, daysPaused, extensionDays } = req.body;
     if (!reason) {
       return res.status(400).json({ error: 'Reason for pause is required.' });
     }
@@ -4796,10 +4911,25 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
       return res.status(400).json({ error: 'No active operating cycle found to pause.' });
     }
 
+    const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
+
     activeCycle.status = 'paused';
     activeCycle.pauseReason = reason;
     activeCycle.pausedAt = new Date().toISOString();
     activeCycle.pausedBy = actor.fullName;
+    activeCycle.pauseDays = daysToExtend;
+
+    // Extend end date automatically if extension days were specified
+    if (daysToExtend > 0) {
+      const baseEndDate = activeCycle.endDate 
+        ? new Date(activeCycle.endDate).getTime() 
+        : Date.now() + 30 * 24 * 3600 * 1000;
+      if (!isNaN(baseEndDate)) {
+        const extendedDate = new Date(baseEndDate + daysToExtend * 24 * 3600 * 1000);
+        activeCycle.endDate = extendedDate.toISOString().split('T')[0];
+        activeCycle.extendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
+      }
+    }
 
     // Add to cycle pause history
     if (!activeCycle.pauseHistory) {
@@ -4809,7 +4939,9 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
       id: generateUUID(),
       pausedBy: actor.fullName,
       pausedAt: new Date().toISOString(),
-      reason
+      reason,
+      pauseDays: daysToExtend,
+      extendedEndDate: activeCycle.endDate
     });
 
     // Synchronize company operations status
@@ -4824,14 +4956,15 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
       id: generateUUID(),
       pausedBy: actor.fullName,
       pausedAt: new Date().toISOString(),
-      reason
+      reason,
+      pauseDays: daysToExtend
     });
 
     db.notifications.unshift({
       id: generateUUID(),
       title_en: 'Operating Cycle Paused',
       title_ha: 'An Dakatar da Zagayen Sufuri',
-      message_en: `Operating Cycle ${activeCycle.id} was paused by ${actor.fullName}. Reason: ${reason}`,
+      message_en: `Operating Cycle ${activeCycle.id} was paused by ${actor.fullName}. Extended by ${daysToExtend} days. New End Date: ${activeCycle.endDate}. Reason: ${reason}`,
       message_ha: `An dakatar da Zagayen Gudanarwa ${activeCycle.id} ta hanyar ${actor.fullName}. Dalili: ${reason}`,
       type: 'warning',
       read_status: 0,
@@ -4846,11 +4979,79 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
       actor.role,
       'CYCLE_PAUSE',
       null,
-      `Paused operating cycle ${activeCycle.id}. Reason: ${reason}`,
+      `Paused operating cycle ${activeCycle.id}. Extended by ${daysToExtend} days. Reason: ${reason}`,
       req
     );
 
-    res.json({ success: true, cycle: activeCycle });
+    res.json({ success: true, cycle: activeCycle, cycles: db.cycles });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete Operating Cycle Everywhere
+app.delete('/api/director/cycles/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
+    }
+
+    const { id } = req.params;
+    const db = loadDB();
+    if (!db.cycles) db.cycles = [];
+
+    let index = -1;
+    if (id === 'active' || id === 'current') {
+      index = db.cycles.findIndex((c: any) => c.status === 'active' || c.status === 'paused');
+    } else {
+      index = db.cycles.findIndex((c: any) => c.id === id);
+    }
+
+    if (index === -1) {
+      return res.status(404).json({ error: `Operating cycle '${id}' not found.` });
+    }
+
+    const deletedCycle = db.cycles[index];
+    db.cycles.splice(index, 1);
+
+    // If deleted cycle was active or paused, update company_operations_state
+    if (deletedCycle.status === 'active' || deletedCycle.status === 'paused') {
+      if (!db.company_operations_state) {
+        db.company_operations_state = { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
+      }
+      db.company_operations_state.status = 'Setup Mode';
+      db.company_operations_state.currentCycle = '';
+    }
+
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Operating Cycle Permanently Deleted',
+      title_ha: 'An Cire Zagayen Sufuri',
+      message_en: `Operating Cycle ${deletedCycle.id} was permanently deleted by ${actor.fullName}.`,
+      message_ha: `An goge Zagayen Gudanarwa ${deletedCycle.id} ta hanyar ${actor.fullName}.`,
+      type: 'warning',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'CYCLE_DELETE',
+      null,
+      `Permanently deleted operating cycle ${deletedCycle.id}`,
+      req
+    );
+
+    res.json({ 
+      success: true, 
+      message: `Operating Cycle ${deletedCycle.id} deleted successfully across all dashboards.`,
+      cycles: db.cycles
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -5420,10 +5621,12 @@ app.post('/api/operations/pause', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied: Only Administrators can pause operations.' });
     }
 
-    const { reason } = req.body;
+    const { reason, pauseDays, daysPaused, extensionDays } = req.body;
     if (!reason) {
       return res.status(400).json({ error: 'Reason for suspension is mandatory.' });
     }
+
+    const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
 
     const db = loadDB();
     const state = db.company_operations_state || { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
@@ -5468,6 +5671,19 @@ app.post('/api/operations/pause', authenticateSession, (req, res) => {
       activeCycle.pauseReason = reason;
       activeCycle.pausedAt = new Date().toISOString();
       activeCycle.pausedBy = actor.fullName;
+      activeCycle.pauseDays = daysToExtend;
+
+      if (daysToExtend > 0) {
+        const baseEndDate = activeCycle.endDate 
+          ? new Date(activeCycle.endDate).getTime() 
+          : Date.now() + 30 * 24 * 3600 * 1000;
+        if (!isNaN(baseEndDate)) {
+          const extendedDate = new Date(baseEndDate + daysToExtend * 24 * 3600 * 1000);
+          activeCycle.endDate = extendedDate.toISOString().split('T')[0];
+          activeCycle.extendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
+        }
+      }
+
       if (!activeCycle.pauseHistory) {
         activeCycle.pauseHistory = [];
       }
@@ -5475,7 +5691,9 @@ app.post('/api/operations/pause', authenticateSession, (req, res) => {
         id: generateUUID(),
         pausedBy: actor.fullName,
         pausedAt: new Date().toISOString(),
-        reason
+        reason,
+        pauseDays: daysToExtend,
+        extendedEndDate: activeCycle.endDate
       });
     }
 

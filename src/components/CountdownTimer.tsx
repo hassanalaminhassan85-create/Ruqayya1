@@ -19,9 +19,9 @@ interface CountdownTimerProps {
 export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   startDate = '2026-07-29',
   endDate = '2026-08-28',
-  cycleId = 'CYC-2026-2459',
-  status = 'active',
-  isActive = true,
+  cycleId = 'No Active Cycle',
+  status = 'inactive',
+  isActive = false,
   lang = 'en',
   onPauseToggle
 }) => {

@@ -36,6 +36,7 @@ import { Button } from '../ui/Button';
 import { Badge, Alert, Modal } from '../ui/SharedComponents';
 import { api } from '../../utils/api';
 import { Vehicle, Driver, Shareholder } from '../../types';
+import { Driver360Modal } from './Driver360Modal';
 
 interface PeopleManagementProps {
   lang: 'en' | 'ha';
@@ -2181,78 +2182,109 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
       {/* 4. ROSTER DECISION INTERVIEW BOX FOR PENDING CANDIDATES */}
       {isReviewModalOpen && reviewDriver && (
         <Modal onClose={() => { setIsReviewModalOpen(false); setReviewDriver(null); }} title="Enterprise Roster Verification Review">
-          <div className="flex flex-col gap-4 p-2 max-w-md">
-            <div className="flex items-center gap-3 bg-bg-base p-3 rounded-xl border border-border-main/40">
+          <div className="flex flex-col gap-4 p-2 max-w-xl text-text-main max-h-[80vh] overflow-y-auto">
+            {/* Header info */}
+            <div className="flex items-center gap-3 bg-bg-base/60 p-3 rounded-xl border border-border-main/40">
               <img
                 src={reviewDriver.passport_photo_url || reviewDriver.passportPhoto || reviewDriver.passport_photo || reviewDriver.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
                 alt={reviewDriver.fullName}
-                className="h-12 w-12 rounded-full border border-border-main/50 object-cover"
+                className="h-14 w-14 rounded-full border border-border-main/50 object-cover"
                 referrerPolicy="no-referrer"
               />
               <div>
-                <span className="font-extrabold text-brand-navy block text-sm">{reviewDriver.fullName}</span>
-                <span className="text-xs text-text-muted font-mono block"> proposto: Smart Carrier Class</span>
+                <span className="font-extrabold text-brand-navy block text-base">{reviewDriver.fullName}</span>
+                <span className="text-xs text-text-muted font-mono block">Proposed: {reviewDriver.classification || 'Assisted'} Driver</span>
+                <span className="text-[11px] text-text-muted block">Phone: {reviewDriver.phone} | Email: {reviewDriver.email}</span>
               </div>
             </div>
 
-            <div className="flex flex-col gap-3">
-              {reviewDriver.vehicle && (
-                <div className="flex flex-col gap-1.5 bg-[#D4AF37]/5 border border-[#D4AF37]/25 p-3 rounded-xl">
-                  <div className="flex items-center gap-1 text-[10px] font-extrabold uppercase text-[#D4AF37] tracking-wider">
-                    <Coins className="h-3.5 w-3.5" />
-                    Dynamic Contract Terms (Calculated)
+            {/* Complete Data Sections */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              {/* Personal Details */}
+              <div className="bg-bg-base/30 p-3 rounded-xl border border-border-main/40 space-y-1.5">
+                <span className="font-bold text-brand-gold uppercase text-[10px] block border-b border-border-main/30 pb-1">1. Personal Identity</span>
+                <div><span className="text-text-muted">NIN:</span> <span className="font-mono text-text-main">{reviewDriver.nin || 'N/A'}</span></div>
+                <div><span className="text-text-muted">Address:</span> <span className="text-text-main">{reviewDriver.address || 'N/A'}</span></div>
+                <div><span className="text-text-muted">License:</span> <span className="font-mono text-text-main">{reviewDriver.licenseNumber || reviewDriver.license_number || 'N/A'}</span></div>
+                <div><span className="text-text-muted">License Expiry:</span> <span className="font-mono text-text-main">{reviewDriver.licenseExpiry || reviewDriver.license_expiry || 'N/A'}</span></div>
+              </div>
+
+              {/* Guarantor Details */}
+              <div className="bg-bg-base/30 p-3 rounded-xl border border-border-main/40 space-y-1.5">
+                <span className="font-bold text-blue-500 uppercase text-[10px] block border-b border-border-main/30 pb-1">2. Guarantor Profile</span>
+                {reviewDriver.guarantor ? (
+                  <>
+                    <div><span className="text-text-muted">Name:</span> <span className="font-semibold text-text-main">{reviewDriver.guarantor.fullName || reviewDriver.guarantor.full_name}</span></div>
+                    <div><span className="text-text-muted">Phone:</span> <span className="font-mono text-text-main">{reviewDriver.guarantor.phone}</span></div>
+                    <div><span className="text-text-muted">Relationship:</span> <span className="text-text-main">{reviewDriver.guarantor.relationship || 'N/A'}</span></div>
+                    <div><span className="text-text-muted">Guarantor NIN:</span> <span className="font-mono text-text-main">{reviewDriver.guarantor.nin || 'N/A'}</span></div>
+                  </>
+                ) : (
+                  <span className="text-text-muted italic block py-2">No guarantor recorded</span>
+                )}
+              </div>
+
+              {/* Vehicle / Carrier Specs */}
+              <div className="col-span-2 bg-bg-base/30 p-3 rounded-xl border border-border-main/40 space-y-1.5">
+                <span className="font-bold text-emerald-500 uppercase text-[10px] block border-b border-border-main/30 pb-1">3. Vehicle & Carrier Asset Specs</span>
+                {reviewDriver.vehicle ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                    <div><span className="text-text-muted block">Brand/Model:</span> <span className="font-bold text-text-main">{reviewDriver.vehicle.brand} {reviewDriver.vehicle.model}</span></div>
+                    <div><span className="text-text-muted block">Plate Number:</span> <span className="font-mono font-bold text-brand-gold">{reviewDriver.vehicle.plateNumber || reviewDriver.vehicle.plate_number}</span></div>
+                    <div><span className="text-text-muted block">Registration No:</span> <span className="font-mono text-text-main">{reviewDriver.vehicle.registrationNumber || reviewDriver.vehicle.registration_number || 'N/A'}</span></div>
+                    <div><span className="text-text-muted block">Capacity:</span> <span className="font-semibold text-text-main">{reviewDriver.vehicle.capacity || '30 Tons'}</span></div>
+                    <div><span className="text-text-muted block">Engine No:</span> <span className="font-mono text-text-main">{reviewDriver.vehicle.engineNumber || reviewDriver.vehicle.engine_number || 'N/A'}</span></div>
+                    <div><span className="text-text-muted block">Chassis No:</span> <span className="font-mono text-text-main">{reviewDriver.vehicle.chassisNumber || reviewDriver.vehicle.chassis_number || 'N/A'}</span></div>
                   </div>
-                  {lookupLoading ? (
-                    <div className="text-[10px] text-text-muted animate-pulse py-1">
-                      Querying dynamic terms lookup service...
-                    </div>
-                  ) : lookupTerms ? (
-                    <div className="grid grid-cols-2 gap-2 text-[10px] mt-1 text-left">
-                      <div>
-                        <span className="block font-bold text-text-main">30-Day Rent Rate:</span>
-                        <span className="font-mono text-[#D4AF37] font-extrabold text-xs">₦{(lookupTerms.agreedAmount || 0).toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <span className="block font-bold text-text-main">Vehicle Value:</span>
-                        <span className="font-mono text-[#D4AF37] font-extrabold text-xs">₦{(lookupTerms.purchasePrice || 0).toLocaleString()}</span>
-                      </div>
-                      <div className="col-span-2 text-[9px] text-text-muted italic border-t border-border-main/20 pt-1 mt-0.5">
-                        * Automatically calculated from carrier specs ({reviewDriver.vehicle.brand} {reviewDriver.vehicle.model}, {reviewDriver.vehicle.capacity}).
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-[10px] text-rose-400">
-                      Could not retrieve dynamic contract terms. Default terms will be assigned.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <label className="text-[10px] font-bold block text-text-muted mb-0.5">ASSIGN RTL CORPORATE DRIVER ID *</label>
-                <input
-                  type="text"
-                  value={reviewCompanyId}
-                  onChange={(e) => setReviewCompanyId(e.target.value)}
-                  className="w-full bg-bg-base border border-border-main text-text-main px-3 py-2 text-xs rounded-lg focus:outline-none font-mono font-bold text-brand-navy"
-                  placeholder="e.g. RTL-DRV-001"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold block text-text-muted mb-0.5">ADMINISTRATIVE DECISION REMARKS / COMMENTS</label>
-                <textarea
-                  value={reviewRemarks}
-                  onChange={(e) => setReviewRemarks(e.target.value)}
-                  rows={3}
-                  className="w-full bg-bg-base border border-border-main text-text-main px-3 py-2 text-xs rounded-lg focus:outline-none"
-                  placeholder="Add remarks regarding document verification, license, background check..."
-                />
+                ) : (
+                  <span className="text-text-muted italic block py-2">No vehicle attached yet</span>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 mt-4 border-t border-border-main/40 pt-3 flex-wrap">
+            {/* Financial Contract Terms */}
+            <div className="flex flex-col gap-1.5 bg-[#D4AF37]/5 border border-[#D4AF37]/25 p-3 rounded-xl">
+              <div className="flex items-center gap-1 text-[10px] font-extrabold uppercase text-[#D4AF37] tracking-wider">
+                <Coins className="h-3.5 w-3.5" />
+                Registered Financial Terms
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                <div>
+                  <span className="block font-bold text-text-muted text-[10px]">30-Day Rent Rate:</span>
+                  <span className="text-[#D4AF37] font-black">₦{(reviewDriver.agreedAmount || reviewDriver.agreed_amount || lookupTerms?.agreedAmount || 300000).toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="block font-bold text-text-muted text-[10px]">Vehicle Price:</span>
+                  <span className="text-[#D4AF37] font-black">₦{(reviewDriver.vehiclePurchasePrice || reviewDriver.vehicle_purchase_price || lookupTerms?.purchasePrice || 15000000).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Company ID Input */}
+            <div>
+              <label className="text-[10px] font-bold block text-text-muted mb-0.5 uppercase">Assign RTL Corporate Driver ID *</label>
+              <input
+                type="text"
+                value={reviewCompanyId}
+                onChange={(e) => setReviewCompanyId(e.target.value)}
+                className="w-full bg-bg-base border border-border-main text-text-main px-3 py-2 text-xs rounded-lg focus:outline-none font-mono font-bold text-brand-navy"
+                placeholder="e.g. RTL-DRV-001"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold block text-text-muted mb-0.5 uppercase">Administrative Decision Remarks</label>
+              <textarea
+                value={reviewRemarks}
+                onChange={(e) => setReviewRemarks(e.target.value)}
+                rows={2}
+                className="w-full bg-bg-base border border-border-main text-text-main px-3 py-2 text-xs rounded-lg focus:outline-none"
+                placeholder="Add remarks regarding document verification, license, background check..."
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 mt-2 border-t border-border-main/40 pt-3 flex-wrap">
               <Button
                 variant="ghost"
                 type="button"
@@ -2290,61 +2322,14 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
 
       {/* 5. 360° DRIVER PROFILE MODAL */}
       {selectedDriverFor360 && (
-        <Modal onClose={() => setSelectedDriverFor360(null)} title={`${selectedDriverFor360.fullName} - 360° Corporate Dossier`}>
-          <div className="flex flex-col gap-4 p-2 max-w-2xl text-text-main">
-            <div className="flex flex-col sm:flex-row items-center gap-4 border-b border-border-main/40 pb-4">
-              <img
-                src={selectedDriverFor360.passport_photo_url || selectedDriverFor360.passportPhoto || selectedDriverFor360.passport_photo || selectedDriverFor360.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
-                alt={selectedDriverFor360.fullName}
-                className="h-20 w-20 rounded-full border border-border-main shadow-sm object-cover"
-                referrerPolicy="no-referrer"
-              />
-              <div className="flex-1 text-center sm:text-left">
-                <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
-                  <h3 className="text-lg font-black text-brand-navy">{selectedDriverFor360.fullName}</h3>
-                  <Badge variant="success">{(selectedDriverFor360.status || 'ACTIVE').toUpperCase()}</Badge>
-                </div>
-                <p className="text-xs font-mono text-text-muted mt-1">
-                  Corporate ID: {selectedDriverFor360.companyDriverId || 'N/A'} | Type: {selectedDriverFor360.classification || 'Assisted'}
-                </p>
-                <p className="text-[11px] text-text-muted mt-0.5">Joined on: {selectedDriverFor360.created_at ? selectedDriverFor360.created_at.substring(0, 10) : 'N/A'}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Personal details card */}
-              <div className="bg-bg-base/40 p-4 rounded-xl border border-border-main/50 flex flex-col gap-2">
-                <span className="text-[10px] font-bold text-brand-navy block uppercase">Identity & Contact Profile</span>
-                <div className="text-xs flex flex-col gap-1.5 font-medium">
-                  <div><span className="text-text-muted">Telephone:</span> <span className="font-mono">{selectedDriverFor360.phone}</span></div>
-                  <div><span className="text-text-muted">Email:</span> <span className="font-mono">{selectedDriverFor360.email}</span></div>
-                  <div><span className="text-text-muted">NIN:</span> <span className="font-mono">{selectedDriverFor360.nin || 'N/A'}</span></div>
-                  <div><span className="text-text-muted">Address:</span> <span>{selectedDriverFor360.address}</span></div>
-                </div>
-              </div>
-
-              {/* Lease properties card */}
-              <div className="bg-bg-base/40 p-4 rounded-xl border border-border-main/50 flex flex-col gap-2">
-                <span className="text-[10px] font-bold text-brand-navy block uppercase">Lease & Amortization Position</span>
-                <div className="text-xs flex flex-col gap-1.5 font-medium">
-                  <div><span className="text-text-muted">Agreed 30 Cycle Amount to Bring to Company:</span> <span className="font-mono font-bold text-brand-navy">₦{(selectedDriverFor360.agreedAmount || 180000).toLocaleString()}</span></div>
-                  <div><span className="text-text-muted">Vehicle Purchase Amount:</span> <span className="font-mono text-text-main">₦{(selectedDriverFor360.vehiclePurchasePrice || 15000000).toLocaleString()}</span></div>
-                  <div><span className="text-text-muted">Outstanding Balance:</span> <span className="font-mono font-black text-brand-navy">₦{(selectedDriverFor360.remainingVehicleBalance || 15000000).toLocaleString()}</span></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-border-main/30">
-              <Button
-                variant="outline"
-                onClick={() => setSelectedDriverFor360(null)}
-                className="font-bold text-xs"
-              >
-                Close Dossier
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <Driver360Modal
+          lang={lang}
+          driver={selectedDriverFor360}
+          vehicles={vehicles}
+          payments={[]}
+          onClose={() => setSelectedDriverFor360(null)}
+          onSync={onSync}
+        />
       )}
 
       {/* 6. EARNINGS LEDGER FLYOUT FOR SHAREHOLDER */}
