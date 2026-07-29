@@ -82,9 +82,191 @@
       "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
       "created_at": "2026-07-29T07:37:26.664Z",
       "status": "active"
+    },
+    {
+      "id": "5c158f80-ccfc-4506-b2c5-17aa3e8a0eeb",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "token": "tok_admin_ADAM_38bae1d66da64dcab4eadf2d8ed1445c",
+      "expires_at": "2026-08-28T08:04:00.320Z",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "created_at": "2026-07-29T08:04:00.320Z",
+      "status": "logged_out"
+    },
+    {
+      "id": "31f95bf5-0db9-4490-afcb-6c3035955a4d",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "token": "tok_admin_ADAM_317f11e158f64cfaa80611b9bd2ee7ba",
+      "expires_at": "2026-08-28T08:13:34.395Z",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "created_at": "2026-07-29T08:13:34.395Z",
+      "status": "logged_out"
+    },
+    {
+      "id": "e71e1385-16c3-43b6-94b7-5fc845ce2706",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "token": "tok_fallback_ADAM_1785313401555",
+      "expires_at": "2026-08-28T08:23:23.644Z",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "created_at": "2026-07-29T08:23:23.644Z",
+      "status": "logged_out"
+    },
+    {
+      "id": "227546a3-a50d-465b-8121-92df156e1a5d",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "token": "tok_admin_ADAM_6a92118c07c14fc9b1fb7aa41b3d2757",
+      "expires_at": "2026-08-28T08:28:18.762Z",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "created_at": "2026-07-29T08:28:18.762Z",
+      "status": "active"
+    },
+    {
+      "id": "5a1a169c-3ee5-41c4-951f-817badb7a9ba",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "token": "tok_admin_ADAM_2b1337e46c024df7844b6b092f4ac5d2",
+      "expires_at": "2026-08-28T08:28:18.784Z",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "created_at": "2026-07-29T08:28:18.785Z",
+      "status": "active"
     }
   ],
   "audit_logs": [
+    {
+      "id": "AUD-1785315808209-DC49283D",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "CYCLE_RESUME",
+      "previous_value": null,
+      "new_value": "Resumed operating cycle CYC-050",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T09:03:28.209Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785315797874-3C4C7C41",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "COMPANY_OPERATIONS_PAUSE",
+      "previous_value": "Operational Mode",
+      "new_value": "Suspended company operations: Jj",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T09:03:17.874Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785315768478-04702017",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "COMPANY_OPERATIONS_RESUME",
+      "previous_value": "Paused",
+      "new_value": "Resumed company operations: Resumed by administrator",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T09:02:48.478Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785315377994-5F9A30C1",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "CYCLE_PAUSE",
+      "previous_value": null,
+      "new_value": "Paused operating cycle CYC-050. Reason: Uu",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:56:17.994Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785315341241-D2AE80FA",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "COMPANY_OPERATIONS_RESUME",
+      "previous_value": "Paused",
+      "new_value": "Resumed company operations: Resumed by administrator",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:55:41.241Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785314040224-2A4C449C",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "CYCLE_PAUSE",
+      "previous_value": null,
+      "new_value": "Paused operating cycle CYC-050. Reason: Ok",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:34:00.224Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785313698787-67186800",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "SESSION_CREATED",
+      "previous_value": null,
+      "new_value": "Authorized username-only login session valid until 2026-08-28T08:28:18.784Z",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:28:18.787Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785313698766-8A73DF24",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "SESSION_CREATED",
+      "previous_value": null,
+      "new_value": "Authorized username-only login session valid until 2026-08-28T08:28:18.762Z",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:28:18.766Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785312814398-363E224B",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "SESSION_CREATED",
+      "previous_value": null,
+      "new_value": "Authorized username-only login session valid until 2026-08-28T08:13:34.395Z",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:13:34.398Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785312240325-0F415763",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "SESSION_CREATED",
+      "previous_value": null,
+      "new_value": "Authorized username-only login session valid until 2026-08-28T08:04:00.320Z",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:04:00.325Z",
+      "status": "active"
+    },
+    {
+      "id": "AUD-1785311082567-705B1308",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "COMPANY_OPERATIONS_START",
+      "previous_value": "Setup Mode",
+      "new_value": "Activated live enterprise operations. First 30-day operating cycle commenced by Operations Admin ADAM",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T07:44:42.567Z",
+      "status": "active"
+    },
     {
       "id": "AUD-1784549436127-SETUP",
       "user_id": null,
@@ -97,8 +279,53 @@
       "created_at": "2026-07-20T12:10:36.127Z"
     }
   ],
-  "notifications": [],
-  "user_preferences": [],
+  "notifications": [
+    {
+      "id": "d5c6b592-62d0-4f63-b4fd-d5f7352abde3",
+      "title_en": "Operating Cycle Resumed",
+      "title_ha": "An Dawo da Zagayen Sufuri",
+      "message_en": "Operating Cycle CYC-050 was resumed by Operations Admin ADAM.",
+      "message_ha": "An dawo da Zagayen Gudanarwa CYC-050 ta hanyar Operations Admin ADAM.",
+      "type": "success",
+      "read_status": 0,
+      "created_at": "2026-07-29T09:03:28.205Z"
+    },
+    {
+      "id": "5ea39871-29b8-47ea-9da4-1cfc88e2e5ee",
+      "title_en": "Operating Cycle Paused",
+      "title_ha": "An Dakatar da Zagayen Sufuri",
+      "message_en": "Operating Cycle CYC-050 was paused by Operations Admin ADAM. Reason: Uu",
+      "message_ha": "An dakatar da Zagayen Gudanarwa CYC-050 ta hanyar Operations Admin ADAM. Dalili: Uu",
+      "type": "warning",
+      "read_status": 0,
+      "created_at": "2026-07-29T08:56:17.986Z"
+    },
+    {
+      "id": "4f289833-8d87-4b47-be7c-ac597295fdc1",
+      "title_en": "Operating Cycle Paused",
+      "title_ha": "An Dakatar da Zagayen Sufuri",
+      "message_en": "Operating Cycle CYC-050 was paused by Operations Admin ADAM. Reason: Ok",
+      "message_ha": "An dakatar da Zagayen Gudanarwa CYC-050 ta hanyar Operations Admin ADAM. Dalili: Ok",
+      "type": "warning",
+      "read_status": 0,
+      "created_at": "2026-07-29T08:34:00.214Z"
+    }
+  ],
+  "user_preferences": [
+    {
+      "id": "0bb1a867-c327-4b90-ac90-24828669f5b1",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "enablePush": true,
+      "enableSound": true,
+      "enableVibration": true,
+      "enableAnnouncement": true,
+      "enableFinanceAlerts": true,
+      "enableSecurityAlerts": true,
+      "quietHoursStart": "22:00",
+      "quietHoursEnd": "06:00",
+      "preferredLanguage": "en"
+    }
+  ],
   "roles": [
     {
       "id": "role-director",
@@ -164,7 +391,53 @@
   "fuel_vouchers": [],
   "financial_records": [],
   "trip_manifests": [],
-  "cycles": [],
+  "cycles": [
+    {
+      "id": "CYC-050",
+      "startDate": "2026-07-29",
+      "endDate": null,
+      "endGoalTons": 200,
+      "status": "active",
+      "created_at": "2026-07-29T07:44:42.563Z",
+      "created_by": "Operations Admin ADAM",
+      "locked": false,
+      "financials": [],
+      "pauseReason": "Jj",
+      "pausedAt": "2026-07-29T09:03:17.870Z",
+      "pausedBy": "Operations Admin ADAM",
+      "pauseHistory": [
+        {
+          "id": "bfbae93f-27f2-4b57-9c78-c35b09f21118",
+          "pausedBy": "Operations Admin ADAM",
+          "pausedAt": "2026-07-29T09:03:17.870Z",
+          "reason": "Jj",
+          "resumedBy": "Operations Admin ADAM",
+          "resumedAt": "2026-07-29T09:03:28.205Z",
+          "resumeReason": "Ok"
+        },
+        {
+          "id": "f4b7a15b-437f-4bad-b7f6-40004c908da7",
+          "pausedBy": "Operations Admin ADAM",
+          "pausedAt": "2026-07-29T08:56:17.986Z",
+          "reason": "Uu",
+          "resumedBy": "Operations Admin ADAM",
+          "resumedAt": "2026-07-29T09:02:48.473Z",
+          "resumeReason": "Resumed by administrator"
+        },
+        {
+          "id": "46a5137f-9213-4861-997c-d62ecabe13a4",
+          "pausedBy": "Operations Admin ADAM",
+          "pausedAt": "2026-07-29T08:34:00.214Z",
+          "reason": "Ok",
+          "resumedBy": "Operations Admin ADAM",
+          "resumedAt": "2026-07-29T08:55:41.186Z",
+          "resumeReason": "Resumed by administrator"
+        }
+      ],
+      "resumedAt": "2026-07-29T09:03:28.205Z",
+      "resumedBy": "Operations Admin ADAM"
+    }
+  ],
   "driver_payments": [],
   "messages": [],
   "announcements": [],
@@ -182,7 +455,10 @@
       "created_at": "2026-07-29T07:36:15.971Z"
     }
   ],
-  "vapid_keys": null,
+  "vapid_keys": {
+    "publicKey": "BBTQfoPW8_OAvjAy5iR8e3ce-PvQN4AS9JkeK7rIC-49ONqCYCSn4EWD1BBKB7lDR-_8UOXhf2jLkvGfTq_ucrc",
+    "privateKey": "6huXoUbKJyFaCxjNwjvN6fq-HP3K5Js_L5y0yqKIaZc"
+  },
   "company_settings": {
     "companyName": "Ruqayya Transport Limited",
     "companyLogo": "",
@@ -200,12 +476,81 @@
     "distributionPercentage": 2
   },
   "company_operations_state": {
-    "status": "Setup Mode",
-    "currentCycle": "",
+    "status": "Operational Mode",
+    "currentCycle": "CYC-050",
     "currentDay": 1,
-    "startedBy": null,
-    "startedAt": null,
-    "pauseHistory": [],
-    "auditLog": []
+    "startedBy": "Operations Admin ADAM",
+    "startedAt": "2026-07-29T07:44:42.563Z",
+    "pauseHistory": [
+      {
+        "id": "5620f83c-4b85-4fb3-88fc-4f0c7c5983f7",
+        "pausedBy": "Operations Admin ADAM",
+        "pausedAt": "2026-07-29T09:03:17.870Z",
+        "reason": "Jj",
+        "resumedBy": "Operations Admin ADAM",
+        "resumedAt": "2026-07-29T09:03:28.205Z",
+        "resumeReason": "Ok"
+      },
+      {
+        "id": "49a4275a-c7c4-4dfa-84d5-1d4103ac3224",
+        "pausedBy": "Operations Admin ADAM",
+        "pausedAt": "2026-07-29T08:56:17.986Z",
+        "reason": "Uu",
+        "resumedBy": "Operations Admin ADAM",
+        "resumedAt": "2026-07-29T09:02:48.472Z",
+        "resumeReason": "Resumed by administrator"
+      },
+      {
+        "id": "0c11e39a-7e15-48d8-bd20-21b362f5cd5d",
+        "pausedBy": "Operations Admin ADAM",
+        "pausedAt": "2026-07-29T08:34:00.214Z",
+        "reason": "Ok",
+        "resumedBy": "Operations Admin ADAM",
+        "resumedAt": "2026-07-29T08:55:41.186Z",
+        "resumeReason": "Resumed by administrator"
+      }
+    ],
+    "auditLog": [
+      {
+        "id": "0569bd13-4bc5-460c-a653-81357264a172",
+        "action": "Pause Operations",
+        "user": "Operations Admin ADAM",
+        "timestamp": "2026-07-29T09:03:17.870Z",
+        "reason": "Jj",
+        "ip": "127.0.0.1",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "browser": "Chrome"
+      },
+      {
+        "id": "dea4d549-2325-46f6-b391-f392cc689764",
+        "action": "Resume Operations",
+        "user": "Operations Admin ADAM",
+        "timestamp": "2026-07-29T09:02:48.472Z",
+        "reason": "Resumed by administrator",
+        "ip": "127.0.0.1",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "browser": "Chrome"
+      },
+      {
+        "id": "0bbae64d-352e-470e-882e-58b12ac0d1db",
+        "action": "Resume Operations",
+        "user": "Operations Admin ADAM",
+        "timestamp": "2026-07-29T08:55:41.186Z",
+        "reason": "Resumed by administrator",
+        "ip": "127.0.0.1",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "browser": "Chrome"
+      },
+      {
+        "id": "c0ddaf42-52f0-4089-b282-3898d66944c4",
+        "action": "Start Operations",
+        "user": "Operations Admin ADAM",
+        "timestamp": "2026-07-29T07:44:42.563Z",
+        "reason": "Company ready for live transit & leasing business",
+        "ip": "127.0.0.1",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "browser": "Chrome"
+      }
+    ]
   }
 }

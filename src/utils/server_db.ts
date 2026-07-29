@@ -174,7 +174,7 @@ export async function initCloudPersistence() {
       await docRef.set(initialState);
     }
   } catch (err) {
-    console.error('Failed to initialize cloud persistence:', err);
+    console.warn('Failed to initialize cloud persistence (relying on local storage):', err);
   }
 }
 
@@ -251,20 +251,21 @@ export function saveDB(state: DBState): void {
       firestore.collection(CLOUD_DB_COLLECTION).doc(CLOUD_DB_DOC).set(state).then(() => {
         console.log('Successfully synced database to Firestore.');
       }).catch((err: any) => {
-        console.error('Failed to sync database to Firestore:', err.message, 'Code:', err.code);
+        console.warn('Failed to sync database to Firestore (relying on local storage):', err.message, 'Code:', err.code);
         
-        // If we get a permission error on a named database, it might be because the database 
-        // doesn't exist or isn't accessible. Try to fallback to default database for future attempts.
-        if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
+        // Only fallback to the default database if the named database itself was NOT_FOUND (Code 5)
+        if (err.code === 5 || err.message?.includes('NOT_FOUND')) {
           const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
           if (dbId && dbId !== '(default)') {
-            console.warn('PERMISSION_DENIED on named database. Falling back to default database for future syncs.');
+            console.warn('Named database not found. Falling back to default database for future syncs.');
             try {
               firestore = getFirestore();
             } catch (fallbackErr) {
-              console.error('Failed to fallback to default database:', fallbackErr);
+              console.warn('Failed to fallback to default database:', fallbackErr);
             }
           }
+        } else if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
+          console.warn('PERMISSION_DENIED on Firestore database. This can happen during initial rules/IAM propagation. Keeping named database and retrying on next saves.');
         }
       });
     }

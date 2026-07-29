@@ -107,17 +107,40 @@ export function showLocalBrowserNotification(title: string, body: string, action
       badge: '/logo.png',
       tag: 'ruqayya-system-alert',
       renotify: true,
-      data: { url: actionUrl }
+      vibrate: [200, 100, 200],
+      data: { url: actionUrl },
+      actions: [
+        { action: 'open', title: 'Open' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
     };
     
-    const notification = new Notification(title, options);
-    
-    notification.onclick = (e) => {
-      e.preventDefault();
-      window.focus();
-      window.location.href = actionUrl;
-      notification.close();
-    };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        reg.showNotification(title, options);
+      }).catch((err) => {
+        console.warn('Failed to show notification via service worker registration, trying window constructor:', err);
+        try {
+          const notification = new Notification(title, options);
+          notification.onclick = (e) => {
+            e.preventDefault();
+            window.focus();
+            window.location.href = actionUrl;
+            notification.close();
+          };
+        } catch (constructorErr) {
+          console.error('Window Notification constructor failed:', constructorErr);
+        }
+      });
+    } else {
+      const notification = new Notification(title, options);
+      notification.onclick = (e) => {
+        e.preventDefault();
+        window.focus();
+        window.location.href = actionUrl;
+        notification.close();
+      };
+    }
   } catch (err) {
     console.warn('Failed to dispatch local browser notification:', err);
   }
