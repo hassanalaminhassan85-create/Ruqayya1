@@ -39,7 +39,10 @@ import {
   AlertTriangle,
   ShieldCheck,
   Receipt,
-  Trello
+  Trello,
+  Lock,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -114,8 +117,14 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const [shSubView, setShSubView] = useState<'roster' | 'history'>('roster');
   const [payrollSubView, setPayrollSubView] = useState<'analytics' | 'history'>('analytics');
   const [driverView, setDriverView] = useState<'remit' | 'history' | 'compliance'>('remit');
-  const [selectedCycle, setSelectedCycle] = useState('1');
-  const [selectedInstallment, setSelectedInstallment] = useState('1');
+  const [dbCycles, setDbCycles] = useState<any[]>([]);
+  const [selectedCycle, setSelectedCycle] = useState('1'); // Use '1' as initial fallback before cycles load
+  const [selectedInstallment, setSelectedInstallment] = useState('1'); // Default to '1' as requested
+  const [isCyclePopupOpen, setIsCyclePopupOpen] = useState(false);
+  const [isInstallmentPopupOpen, setIsInstallmentPopupOpen] = useState(false);
+  const [isUnpaidDriversPopupOpen, setIsUnpaidDriversPopupOpen] = useState(false);
+  const [pendingCycleSelection, setPendingCycleSelection] = useState('1');
+  const [userHasSelectedCycle, setUserHasSelectedCycle] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isReinvestOpen, setIsReinvestOpen] = useState(false);
   const [shActionAmount, setShActionAmount] = useState('');
@@ -132,13 +141,67 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
 
+  // Format and sequentialize started cycles dynamically
+  const formattedCycles = React.useMemo(() => {
+    if (!dbCycles || dbCycles.length === 0) {
+      return [
+        {
+          id: 'CYC-2026-ACTIVE',
+          seqId: '1',
+          label: 'CYC 001',
+          status: 'active',
+          isCurrent: true,
+          displayLabel: 'CYC 001 CURRENT CYCLE',
+          startDate: '2026-07-01'
+        }
+      ];
+    }
+
+    // Sort by startDate or fallback to original index order (oldest first)
+    const sorted = [...dbCycles].sort((a, b) => {
+      const dateA = a.startDate || a.created_at || '';
+      const dateB = b.startDate || b.created_at || '';
+      return dateA.localeCompare(dateB);
+    });
+
+    return sorted.map((c, index) => {
+      const seqNum = index + 1;
+      const padNum = String(seqNum).padStart(3, '0');
+      const label = `CYC ${padNum}`;
+      const isCurrent = c.status === 'active' || c.status === 'paused';
+      const displayLabel = isCurrent ? `${label} CURRENT CYCLE` : `${label} COMPLETED`;
+      return {
+        ...c,
+        seqId: String(seqNum),
+        label,
+        isCurrent,
+        displayLabel
+      };
+    });
+  }, [dbCycles]);
+
+  // Auto-select current active cycle on load
+  useEffect(() => {
+    if (formattedCycles.length > 0 && !userHasSelectedCycle) {
+      const activeCyc = formattedCycles.find(c => c.isCurrent);
+      if (activeCyc) {
+        setSelectedCycle(activeCyc.seqId);
+        setPendingCycleSelection(activeCyc.seqId);
+      } else {
+        const lastCyc = formattedCycles[formattedCycles.length - 1];
+        setSelectedCycle(lastCyc.seqId);
+        setPendingCycleSelection(lastCyc.seqId);
+      }
+    }
+  }, [formattedCycles, userHasSelectedCycle]);
+
   // Identify drivers missing payments for selected period
   const pendingDrivers = drivers.filter(d => {
     const hasPayment = localAuditLogs.some(log => 
       log.userId === d.id && 
       log.action === 'DRIVER_REMITTANCE' && 
-      log.description?.includes(`Cycle #${selectedCycle}`) &&
-      log.description?.includes(`Inst. #${selectedInstallment}`)
+      (log.description?.includes(`Cycle #${selectedCycle}`) || log.description?.includes(`Cycle ${selectedCycle}`)) &&
+      (log.description?.includes(`Inst. #${selectedInstallment}`) || log.description?.includes(`Installment #${selectedInstallment}`))
     );
     return !hasPayment;
   });
@@ -150,14 +213,16 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     
     setIsFetching(true);
     try {
-      const [pList, sList, aList] = await Promise.all([
+      const [pList, sList, aList, cyList] = await Promise.all([
         api.getPayments().catch(() => []),
         api.getShareholders().catch(() => []),
-        api.getAuditLogs().catch(() => [])
+        api.getAuditLogs().catch(() => []),
+        api.request('/api/director/cycles').catch(() => ({ cycles: [] }))
       ]);
       setLocalPayments(pList || []);
       setLocalShareholders(sList || []);
       setLocalAuditLogs(aList || []);
+      setDbCycles(cyList?.cycles || []);
     } catch (err) {
       console.error("Auxiliary financial data fetch failed:", err);
     } finally {
@@ -494,7 +559,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         outstandingAmount: remainingInstallmentAfterPay,
         date: new Date().toISOString().split('T')[0],
         receiptNumber: payReceiptInput,
-        remarks: payRemarksInput || `Remittance for Cycle #${selectedCycle}, Inst. #${selectedInstallment}`
+        remarks: payRemarksInput || `Remittance for ${formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`}, Inst. #${selectedInstallment}`
       });
 
       // Reset
@@ -1004,20 +1069,29 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Select Lease Driver</h3>
                     <div className="flex gap-1.5">
-                      <select 
-                        value={selectedCycle}
-                        onChange={(e) => setSelectedCycle(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-black focus:outline-none"
+                      <motion.button 
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setIsCyclePopupOpen(true)}
+                        className="bg-slate-900 border border-slate-800 hover:bg-slate-800 text-brand-gold rounded-lg px-2.5 py-1 text-[9px] font-black focus:outline-none flex items-center gap-1 shadow-xs cursor-pointer"
+                        title="Choose Operational Lease Cycle"
                       >
-                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => <option key={num} value={num}>C#{num}</option>)}
-                      </select>
-                      <select 
-                        value={selectedInstallment}
-                        onChange={(e) => setSelectedInstallment(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[9px] font-black focus:outline-none"
+                        <span>{formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`}</span>
+                        <ChevronDown className="h-2.5 w-2.5 text-brand-gold shrink-0" />
+                      </motion.button>
+                      <motion.button 
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          setPendingCycleSelection(selectedCycle);
+                          setIsInstallmentPopupOpen(true);
+                        }}
+                        className="bg-amber-500 border border-amber-600 hover:bg-amber-600 text-white rounded-lg px-2.5 py-1 text-[9px] font-black focus:outline-none flex items-center gap-1 shadow-xs cursor-pointer"
+                        title="Choose Installment"
                       >
-                        {[1,2,3,4,5,6].map(num => <option key={num} value={num}>I#{num}</option>)}
-                      </select>
+                        <span>I#{selectedInstallment}</span>
+                        <ChevronDown className="h-2.5 w-2.5 text-white shrink-0" />
+                      </motion.button>
                     </div>
                   </div>
             <div className="relative">
@@ -1281,7 +1355,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     <h4 className="text-sm font-black text-amber-900 uppercase tracking-widest">Incomplete Remittance Cycle</h4>
                     <p className="text-[11px] text-amber-700 font-medium mt-1 leading-relaxed">
                       The following drivers have <span className="font-black underline decoration-amber-300">not recorded</span> any payments for 
-                      <span className="font-black"> Cycle #{selectedCycle}, Installment #{selectedInstallment}</span>. Automated alerts can be dispatched via the driver portal.
+                      <span className="font-black"> {formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`}, Installment #{selectedInstallment}</span>. Automated alerts can be dispatched via the driver portal.
                     </p>
                   </div>
                 </div>
@@ -2320,7 +2394,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
             <div className="flex justify-between">
               <span className="text-text-muted">Target Period:</span>
-              <span className="font-black text-emerald-600">Cycle #{selectedCycle} — Inst. #{selectedInstallment}</span>
+              <span className="font-black text-emerald-600">{formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`} — Inst. #{selectedInstallment}</span>
             </div>
 
             <div className="flex justify-between border-t border-slate-200 pt-2 font-bold text-slate-900">
@@ -2582,6 +2656,320 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           </div>
         </form>
       </Modal>
+
+      {/* ==============================================
+          1. PREMIUM CYCLE SELECTOR POPUP MODAL
+          ============================================== */}
+      <AnimatePresence>
+        {isCyclePopupOpen && (
+          <div className="fixed inset-0 bg-slate-950/70 flex items-center justify-center p-4 z-50 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0.2 }}
+              className="w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 overflow-hidden relative"
+            >
+              {/* Background gradient embellishment */}
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-brand-gold/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-slate-100 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-5">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <span className="p-1.5 bg-slate-900 text-brand-gold rounded-lg shadow-sm">
+                      <Layers className="h-4 w-4" />
+                    </span>
+                    Select Operational Lease Cycle
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-medium mt-1">
+                    Choose a leasing cycle to view installment schedules and track compliance.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsCyclePopupOpen(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Grid of Dynamic Cycles */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 max-h-[360px] overflow-y-auto pr-1">
+                {formattedCycles.map((cy) => {
+                  const numStr = cy.seqId;
+                  const isCurrent = cy.isCurrent;
+                  const isCompleted = cy.status === 'completed';
+                  
+                  let statusLabel = "Upcoming / Locked";
+                  let statusStyle = "bg-slate-50 text-slate-400 border-slate-200 opacity-60";
+                  let badgeStyle = "bg-slate-200 text-slate-600";
+                  let iconElement = <Lock className="h-3.5 w-3.5 text-slate-400" />;
+
+                  if (isCurrent) {
+                    statusLabel = "Current Active";
+                    statusStyle = "bg-amber-50/70 border-brand-gold text-slate-900 shadow-md ring-2 ring-brand-gold/20";
+                    badgeStyle = "bg-brand-gold text-slate-900 font-extrabold animate-pulse";
+                    iconElement = <Clock className="h-3.5 w-3.5 text-amber-600" />;
+                  } else if (isCompleted) {
+                    statusLabel = "Completed";
+                    statusStyle = "bg-emerald-50/30 border-emerald-200 text-slate-800 hover:bg-emerald-50/50";
+                    badgeStyle = "bg-emerald-100 text-emerald-800 font-bold";
+                    iconElement = <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />;
+                  }
+
+                  return (
+                    <motion.button
+                      key={cy.id || cy.seqId}
+                      whileHover={{ scale: 1.04, y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => {
+                        setPendingCycleSelection(numStr);
+                        setUserHasSelectedCycle(true);
+                        setIsCyclePopupOpen(false);
+                        setIsInstallmentPopupOpen(true);
+                      }}
+                      className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between h-28 transition-all cursor-pointer ${statusStyle}`}
+                    >
+                      <div className="flex justify-between items-start w-full">
+                        <span className="font-mono font-black text-xs">{cy.label}</span>
+                        {iconElement}
+                      </div>
+
+                      <div className="mt-2">
+                        <h4 className="font-extrabold text-xs text-slate-900">{cy.label}</h4>
+                        <span className={`inline-block mt-1 text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded-md ${badgeStyle}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+
+              {/* ERP Footer note */}
+              <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400 font-medium">
+                <span>* Dynamic cycle operations auto-archived into Ruqayya ERP ledger.</span>
+                <span className="font-mono font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md">CONTRACT TERM: 12 CYCLES</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ==============================================
+          2. PREMIUM INSTALLMENT SELECTOR POPUP MODAL
+          ============================================== */}
+      <AnimatePresence>
+        {isInstallmentPopupOpen && (
+          <div className="fixed inset-0 bg-slate-950/70 flex items-center justify-center p-4 z-50 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0.2 }}
+              className="w-full max-w-xl bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 overflow-hidden relative"
+            >
+              {/* background design */}
+              <div className="absolute -top-10 -left-10 w-40 h-40 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-5">
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <span className="p-1.5 bg-amber-500 text-white rounded-lg shadow-sm">
+                      <Calculator className="h-4 w-4" />
+                    </span>
+                    Select Installment for {formattedCycles.find(c => c.seqId === pendingCycleSelection)?.label || `CYC 00${pendingCycleSelection}`}
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-medium mt-1">
+                    Select one of the 6 installments to evaluate unpaid balances and audit driver reports.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsInstallmentPopupOpen(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Grid of 6 Installments */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {[1, 2, 3, 4, 5, 6].map((num) => {
+                  const numStr = num.toString();
+                  return (
+                    <motion.button
+                      key={num}
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        setSelectedCycle(pendingCycleSelection);
+                        setSelectedInstallment(numStr);
+                        setIsInstallmentPopupOpen(false);
+                        setIsUnpaidDriversPopupOpen(true);
+                      }}
+                      className="p-4 bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-400 rounded-2xl text-left flex flex-col justify-between h-28 transition-all cursor-pointer group"
+                    >
+                      <div className="flex justify-between items-start w-full">
+                        <span className="font-mono font-black text-slate-400 group-hover:text-amber-600 text-xs">I#{num}</span>
+                        <div className="p-1 rounded-md bg-white border border-slate-200 group-hover:bg-amber-100 group-hover:border-amber-200">
+                          <Check className="h-3 w-3 text-slate-400 group-hover:text-amber-600" />
+                        </div>
+                      </div>
+
+                      <div className="mt-2">
+                        <h4 className="font-extrabold text-xs text-slate-800">Installment {num}</h4>
+                        <p className="text-[9px] text-slate-400 mt-1 font-mono font-bold">₦41,666.67 Due</p>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex justify-between items-center">
+                <button
+                  onClick={() => {
+                    setIsInstallmentPopupOpen(false);
+                    setIsCyclePopupOpen(true);
+                  }}
+                  className="text-xs text-brand-gold hover:text-slate-900 font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  ← Back to Cycles
+                </button>
+                <span className="text-[9px] text-slate-400 font-medium">Cycle term divided into 6 installments.</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ==============================================
+          3. PREMIUM UNPAID DRIVERS AUDIT LIST POPUP MODAL
+          ============================================== */}
+      <AnimatePresence>
+        {isUnpaidDriversPopupOpen && (
+          <div className="fixed inset-0 bg-slate-950/70 flex items-center justify-center p-4 z-50 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              transition={{ type: "spring", duration: 0.5, bounce: 0.2 }}
+              className="w-full max-w-xl bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 overflow-hidden relative flex flex-col"
+            >
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-rose-500 text-white rounded-lg shadow-sm">
+                      <AlertTriangle className="h-4 w-4" />
+                    </span>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">
+                      Unpaid Drivers ({pendingDrivers.length})
+                    </h3>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium mt-1">
+                    Selected period: <strong className="text-brand-navy">{formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`} — Installment #{selectedInstallment}</strong>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsUnpaidDriversPopupOpen(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+
+              {pendingDrivers.length === 0 ? (
+                <div className="py-12 text-center flex flex-col items-center justify-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
+                    <CheckCircle className="h-6 w-6" />
+                  </div>
+                  <h4 className="font-extrabold text-slate-900 text-sm">Perfect Compliance Recorded!</h4>
+                  <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+                    All leasing drivers have successfully recorded their remittances for {formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`}, Installment #{selectedInstallment}.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsUnpaidDriversPopupOpen(false)}
+                    className="font-bold text-xs"
+                  >
+                    Close Panel
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-rose-50 border border-rose-100 p-3 rounded-2xl mb-4 text-[10px] text-rose-700 font-medium leading-relaxed">
+                    The following drivers have <span className="font-black underline">not submitted</span> remittance for this installment. Choose a driver below to load their financial details directly into the payment calculator.
+                  </div>
+
+                  <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
+                    {pendingDrivers.map((d, index) => {
+                      const overdueAmt = 41666.67; // standard installment
+                      return (
+                        <motion.div
+                          key={d.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.04 }}
+                          whileHover={{ x: 4, backgroundColor: "rgba(244, 63, 94, 0.04)" }}
+                          onClick={() => {
+                            setSelectedDriverId(d.id);
+                            setPayAmountInput('');
+                            setIsUnpaidDriversPopupOpen(false);
+                            const el = document.getElementById("corporate-finance-center");
+                            if (el) el.scrollIntoView({ behavior: "smooth" });
+                          }}
+                          className="p-3 border border-slate-100 hover:border-rose-200 rounded-2xl flex items-center justify-between cursor-pointer bg-white transition-all shadow-xs"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-9 w-9 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
+                              <img
+                                src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100'}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-extrabold text-xs text-slate-800 truncate">{d.fullName}</h4>
+                              <p className="text-[9px] text-slate-400 font-mono mt-0.5 font-bold">ID: {d.company_driver_id || 'PENDING'}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="text-right">
+                              <span className="text-[9px] uppercase tracking-wider text-rose-500 font-black font-mono block">OVERDUE</span>
+                              <span className="text-xs font-black text-rose-600 font-mono block mt-0.5">₦{overdueAmt.toLocaleString()}</span>
+                            </div>
+                            <div className="h-6 w-6 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500">
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">
+                    <button
+                      onClick={() => {
+                        setIsUnpaidDriversPopupOpen(false);
+                        setIsInstallmentPopupOpen(true);
+                      }}
+                      className="text-xs text-slate-500 hover:text-slate-800 font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      ← Back to Installments
+                    </button>
+                    <span className="text-[9px] text-slate-400 font-medium">Automatic system calculation.</span>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

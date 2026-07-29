@@ -204,7 +204,25 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
   const agreedAmount = driver.agreed_amount || 180000;
   const installmentTarget = Math.round(agreedAmount / 6);
   
-  let startDate = activeCycle ? new Date(activeCycle.startDate) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  let startDate = new Date();
+  if (activeCycle) {
+    const rawStart = activeCycle.created_at || activeCycle.startDate;
+    let startMs = NaN;
+    if (rawStart) {
+      if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
+        startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
+      } else {
+        startMs = new Date(rawStart).getTime();
+      }
+    }
+    if (!isNaN(startMs)) {
+      startDate = new Date(startMs);
+    } else {
+      startDate = new Date(activeCycle.startDate);
+    }
+  } else {
+    startDate = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  }
   let endDate = activeCycle && activeCycle.endDate ? new Date(activeCycle.endDate) : new Date();
   
   const payments = (db.driver_payments || []).filter((p: any) => {

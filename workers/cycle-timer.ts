@@ -4,12 +4,24 @@
  */
 
 interface Env {
-  DB: any;
+  DB?: any;
+  ruqayya?: any;
   PUSH_SUBSCRIPTIONS?: any;
   R2_BUCKET?: any;
   AI?: any;
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
+}
+
+// Helper to resolve D1 database connection across possible binding names
+function getD1(env: Env): any {
+  if (env.DB && typeof env.DB.prepare === 'function') {
+    return env.DB;
+  }
+  if (env.ruqayya && typeof env.ruqayya.prepare === 'function') {
+    return env.ruqayya;
+  }
+  return null;
 }
 
 // Helper to generate unique IDs
@@ -47,7 +59,25 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
   const agreedAmount = driver.agreed_amount || 180000;
   const installmentTarget = Math.round(agreedAmount / 6);
   
-  let startDate = activeCycle ? new Date(activeCycle.startDate) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  let startDate = new Date();
+  if (activeCycle) {
+    const rawStart = activeCycle.created_at || activeCycle.startDate;
+    let startMs = NaN;
+    if (rawStart) {
+      if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
+        startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
+      } else {
+        startMs = new Date(rawStart).getTime();
+      }
+    }
+    if (!isNaN(startMs)) {
+      startDate = new Date(startMs);
+    } else {
+      startDate = new Date(activeCycle.startDate);
+    }
+  } else {
+    startDate = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  }
   
   const payments = (db.driver_payments || []).filter((p: any) => {
     return p.driver_id === driver.id && p.status === 'approved' &&
@@ -129,12 +159,24 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
 // Compute active cycle active seconds, discounting paused periods
 function computeActiveDuration(cycle: any): number {
   if (!cycle) return 0;
-  const start = new Date(cycle.startDate).getTime();
+  
+  const rawStart = cycle.created_at || cycle.startDate;
+  let startMs = NaN;
+  if (rawStart) {
+    if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
+      startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
+    } else {
+      startMs = new Date(rawStart).getTime();
+    }
+  }
+  if (isNaN(startMs)) return 0;
+
   const now = cycle.status === 'paused' && cycle.pausedAt 
     ? new Date(cycle.pausedAt).getTime() 
     : Date.now();
   
-  let totalElapsed = now - start;
+  let totalElapsed = now - startMs;
+  if (totalElapsed < 0) totalElapsed = 0;
   
   let totalPausedMs = 0;
   const history = cycle.pauseHistory || [];
@@ -378,9 +420,10 @@ async function sendPushNotificationToUserOrRole(
     }
   }
 
-  if (dbChanged && db && env.DB) {
+  const d1 = getD1(env);
+  if (dbChanged && db && d1) {
     try {
-      await env.DB.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
+      await d1.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
         .bind('push_subscriptions', JSON.stringify(db.push_subscriptions))
         .run();
       console.log("CycleTimer Worker: Successfully updated and saved push_subscriptions collection in D1 after pruning.");
@@ -508,10 +551,11 @@ async function processCycleManagement(env: Env) {
   const db: any = {};
   let usingFirestore = false;
 
-  if (env.DB) {
+  const d1 = getD1(env);
+  if (d1) {
     console.log("CycleTimer Worker: Loading collections from D1 database...");
     try {
-      const dbResponse = await env.DB.prepare("SELECT name, data FROM collections").all();
+      const dbResponse = await d1.prepare("SELECT name, data FROM collections").all();
       const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
       if (results && results.length > 0) {
         for (const row of results) {
@@ -874,12 +918,13 @@ async function processCycleManagement(env: Env) {
 
   // Persist calculations back to Database
   if (dbChanged) {
-    if (env.DB && !usingFirestore) {
+    const d1 = getD1(env);
+    if (d1 && !usingFirestore) {
       console.log("CycleTimer Worker: Saving updated collections to D1...");
       try {
         for (const [name, dataObj] of Object.entries(db)) {
           const jsonStr = JSON.stringify(dataObj);
-          await env.DB.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
+          await d1.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
             .bind(name, jsonStr)
             .run();
         }

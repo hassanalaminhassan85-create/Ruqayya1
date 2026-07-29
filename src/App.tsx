@@ -64,7 +64,8 @@ import {
   Briefcase,
   Coins,
   Sparkles,
-  ArrowLeft
+  ArrowLeft,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -73,6 +74,7 @@ import {
   PayrollModal, 
   RecordPaymentModal 
 } from './components/QuickActionModals';
+import { TimeDisplay } from './components/TimeDisplay';
 
 // Consistent default values defined at module-level to ensure consistent
 // initial rendering on both server and client, completely avoiding hydration mismatches.
@@ -126,11 +128,71 @@ export default function App() {
   const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
   const [aiCopilotOpen, setAiCopilotOpen] = useState(false);
   const [timeStr, setTimeStr] = useState<string>('');
+  const [isTimeSynced, setIsTimeSynced] = useState<boolean>(false);
 
-  // Ticking WAT clock effect
+  // Ticking WAT clock effect with NTP / API-based time synchronization to prevent system time drift
   useEffect(() => {
+    let timeOffset = 0; // ms offset: Server Time - Local Client Time
+
+    const syncTime = async () => {
+      try {
+        // Attempt to fetch from high-availability public time API
+        const response = await fetch('https://worldtimeapi.org/api/timezone/Africa/Lagos', { signal: AbortSignal.timeout(3000) });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.datetime) {
+            const serverMs = new Date(data.datetime).getTime();
+            const clientMs = Date.now();
+            timeOffset = serverMs - clientMs;
+            console.log(`WAT Clock Sync: Synchronized with WorldTimeAPI. Offset: ${timeOffset}ms`);
+            setIsTimeSynced(true);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('WAT Clock Sync: Failed to sync with WorldTimeAPI, trying fallback...', err);
+      }
+
+      try {
+        // Fallback 1: timeapi.io
+        const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Africa/Lagos', { signal: AbortSignal.timeout(3000) });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.dateTime) {
+            const serverMs = new Date(data.dateTime).getTime();
+            const clientMs = Date.now();
+            timeOffset = serverMs - clientMs;
+            console.log(`WAT Clock Sync: Synchronized with TimeAPI. Offset: ${timeOffset}ms`);
+            setIsTimeSynced(true);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('WAT Clock Sync: Failed to sync with TimeAPI, trying server headers...', err);
+      }
+
+      try {
+        // Fallback 2: Local server Date header
+        const startTime = Date.now();
+        const response = await fetch('/api/health', { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+        const serverDateHeader = response.headers.get('Date');
+        if (serverDateHeader) {
+          const rtt = Date.now() - startTime;
+          const serverMs = new Date(serverDateHeader).getTime() + (rtt / 2); // Adjust for round-trip time
+          const clientMs = Date.now();
+          timeOffset = serverMs - clientMs;
+          console.log(`WAT Clock Sync: Synchronized with local server Date headers. Offset: ${timeOffset}ms`);
+          setIsTimeSynced(true);
+          return;
+        }
+      } catch (err) {
+        console.error('WAT Clock Sync: All external and internal time synchronization sources exhausted.', err);
+      }
+      setIsTimeSynced(false);
+    };
+
     const updateTime = () => {
-      const now = new Date();
+      const now = new Date(Date.now() + timeOffset);
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
       const watDate = new Date(utc + 3600000); // UTC + 1 for West African Time
       
@@ -141,9 +203,19 @@ export default function App() {
       setTimeStr(`${hours}:${mins}:${secs} WAT`);
     };
 
-    updateTime();
+    // Initial sync and tick
+    syncTime().then(updateTime);
+    
+    // Ticking interval
     const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
+    
+    // Re-synchronize periodically every 5 minutes to prevent local drift
+    const syncInterval = setInterval(syncTime, 5 * 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(syncInterval);
+    };
   }, []);
 
   // Run D1 DB diagnostic check on component mount
@@ -862,7 +934,7 @@ export default function App() {
                 <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-text-main font-bold tracking-wider">OPERATIONAL</span>
                 <span className="text-border-main/80">•</span>
-                <span className="font-mono text-text-muted">{timeStr}</span>
+                <TimeDisplay isTimeSynced={isTimeSynced} timeStr={timeStr} />
               </div>
             </div>
 
