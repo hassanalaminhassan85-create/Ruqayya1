@@ -390,24 +390,149 @@ async function sendPushNotificationToUserOrRole(
   }
 }
 
+const FIREBASE_CONFIG = {
+  projectId: "aesthetic-reference-fw1xt",
+  apiKey: "AIzaSyCAMd4TDpQKAh2yCU0j-Z2f107QKoSVWDA",
+  firestoreDatabaseId: "ai-studio-ruqayyatransport-ec9c3d70-1fac-4a98-a67d-8c340e7f6358"
+};
+
+const getFirestoreDocUrl = () => {
+  const { projectId, firestoreDatabaseId } = FIREBASE_CONFIG;
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${firestoreDatabaseId}/documents/system_state/main_database`;
+};
+
+function firestoreToPlain(fields: any): any {
+  if (!fields) return {};
+  const plain: any = {};
+  for (const [key, value] of Object.entries(fields)) {
+    plain[key] = valToPlain(value);
+  }
+  return plain;
+}
+
+function valToPlain(valObj: any): any {
+  if (!valObj || typeof valObj !== 'object') return valObj;
+  if ('stringValue' in valObj) return valObj.stringValue;
+  if ('integerValue' in valObj) return parseInt(valObj.integerValue, 10);
+  if ('doubleValue' in valObj) return parseFloat(valObj.doubleValue);
+  if ('booleanValue' in valObj) return valObj.booleanValue;
+  if ('nullValue' in valObj) return null;
+  if ('arrayValue' in valObj) {
+    const list = valObj.arrayValue.values || [];
+    return list.map((item: any) => valToPlain(item));
+  }
+  if ('mapValue' in valObj) {
+    return firestoreToPlain(valObj.mapValue.fields);
+  }
+  return null;
+}
+
+function plainToFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return { nullValue: null };
+  if (typeof obj === 'string') return { stringValue: obj };
+  if (typeof obj === 'boolean') return { booleanValue: obj };
+  if (typeof obj === 'number') {
+    if (Number.isInteger(obj)) {
+      return { integerValue: obj.toString() };
+    } else {
+      return { doubleValue: obj };
+    }
+  }
+  if (Array.isArray(obj)) {
+    return {
+      arrayValue: {
+        values: obj.map(item => plainToFirestore(item))
+      }
+    };
+  }
+  if (typeof obj === 'object') {
+    const fields: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        fields[key] = plainToFirestore(value);
+      }
+    }
+    return {
+      mapValue: {
+        fields
+      }
+    };
+  }
+  return { nullValue: null };
+}
+
+async function fetchFromFirestore(): Promise<any> {
+  try {
+    const url = getFirestoreDocUrl();
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (res.status === 404) return null;
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    const doc = await res.json() as any;
+    if (doc && doc.fields) {
+      return firestoreToPlain(doc.fields);
+    }
+    return null;
+  } catch (err: any) {
+    console.error("[FIRESTORE REST ERROR] Failed to load database state from Firestore:", err.message);
+    return null;
+  }
+}
+
+async function saveToFirestore(state: any): Promise<void> {
+  try {
+    const url = getFirestoreDocUrl();
+    const converted = plainToFirestore(state);
+    const fields = converted && converted.mapValue ? converted.mapValue.fields : {};
+    const body = { fields };
+    
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`HTTP error! status: ${res.status}, response: ${errText}`);
+    }
+  } catch (err: any) {
+    console.error("[FIRESTORE REST ERROR] Failed to save database state to Firestore:", err.message);
+  }
+}
+
 // Background Task Executor
 async function processCycleManagement(env: Env) {
-  if (!env.DB) {
-    throw new Error("D1 DB database binding is not configured in this background worker.");
-  }
-
-  console.log("CycleTimer Worker: Loading collections from D1 database...");
-  const dbResponse = await env.DB.prepare("SELECT name, data FROM collections").all();
-  const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
-  
-  if (!results) {
-    console.log("CycleTimer Worker: Database collections empty. Postponing task.");
-    return;
-  }
-
   const db: any = {};
-  for (const row of results) {
-    db[row.name] = JSON.parse(row.data);
+  let usingFirestore = false;
+
+  if (env.DB) {
+    console.log("CycleTimer Worker: Loading collections from D1 database...");
+    try {
+      const dbResponse = await env.DB.prepare("SELECT name, data FROM collections").all();
+      const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
+      if (results && results.length > 0) {
+        for (const row of results) {
+          db[row.name] = JSON.parse(row.data);
+        }
+      }
+    } catch (d1Err) {
+      console.warn("CycleTimer Worker: Failed to load from D1. Will try Firestore fallback.", d1Err);
+    }
+  }
+
+  if (Object.keys(db).length === 0) {
+    console.log("CycleTimer Worker: No D1 bound or D1 empty. Fetching from Firestore REST API fallback...");
+    const firestoreDb = await fetchFromFirestore();
+    if (firestoreDb) {
+      Object.assign(db, firestoreDb);
+      usingFirestore = true;
+    } else {
+      console.log("CycleTimer Worker: No persistent database state found. Postponing task.");
+      return;
+    }
   }
 
   // Fallbacks to guarantee data completeness
@@ -747,16 +872,25 @@ async function processCycleManagement(env: Env) {
   writeAuditLog("system", "cron@ruqayyatransport.com", "system", "CRON_HEARTBEAT", null, `Cycle timer checked. Drivers: ${stats.driversChecked}, Penalties applied: ${stats.penaltiesIssued}, Warnings: ${stats.remindersIssued}`, db);
   dbChanged = true;
 
-  // Persist calculations back to D1 Database
+  // Persist calculations back to Database
   if (dbChanged) {
-    console.log("CycleTimer Worker: Saving updated collections to D1...");
-    for (const [name, dataObj] of Object.entries(db)) {
-      const jsonStr = JSON.stringify(dataObj);
-      await env.DB.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
-        .bind(name, jsonStr)
-        .run();
+    if (env.DB && !usingFirestore) {
+      console.log("CycleTimer Worker: Saving updated collections to D1...");
+      try {
+        for (const [name, dataObj] of Object.entries(db)) {
+          const jsonStr = JSON.stringify(dataObj);
+          await env.DB.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
+            .bind(name, jsonStr)
+            .run();
+        }
+        console.log("CycleTimer Worker: Database collections updated in D1 successfully.");
+      } catch (d1Err) {
+        console.error("CycleTimer Worker: Failed to save to D1.", d1Err);
+      }
+    } else {
+      console.log("CycleTimer Worker: Saving updated collections to Firestore REST API...");
+      await saveToFirestore(db);
     }
-    console.log("CycleTimer Worker: Database collections updated successfully.");
   }
 }
 

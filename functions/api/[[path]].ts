@@ -565,7 +565,128 @@ async function sendPushForNotification(env: Env, db: any, n: any) {
   }
 }
 
-// Database Manager Class with D1 persistent storage & memory fallback
+// Database Manager Class with D1 persistent storage & Firestore REST API fallback
+const FIREBASE_CONFIG = {
+  projectId: "aesthetic-reference-fw1xt",
+  apiKey: "AIzaSyCAMd4TDpQKAh2yCU0j-Z2f107QKoSVWDA",
+  firestoreDatabaseId: "ai-studio-ruqayyatransport-ec9c3d70-1fac-4a98-a67d-8c340e7f6358"
+};
+
+const getFirestoreDocUrl = () => {
+  const { projectId, firestoreDatabaseId } = FIREBASE_CONFIG;
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${firestoreDatabaseId}/documents/system_state/main_database`;
+};
+
+function firestoreToPlain(fields: any): any {
+  if (!fields) return {};
+  const plain: any = {};
+  for (const [key, value] of Object.entries(fields)) {
+    plain[key] = valToPlain(value);
+  }
+  return plain;
+}
+
+function valToPlain(valObj: any): any {
+  if (!valObj || typeof valObj !== 'object') return valObj;
+  if ('stringValue' in valObj) return valObj.stringValue;
+  if ('integerValue' in valObj) return parseInt(valObj.integerValue, 10);
+  if ('doubleValue' in valObj) return parseFloat(valObj.doubleValue);
+  if ('booleanValue' in valObj) return valObj.booleanValue;
+  if ('nullValue' in valObj) return null;
+  if ('arrayValue' in valObj) {
+    const list = valObj.arrayValue.values || [];
+    return list.map((item: any) => valToPlain(item));
+  }
+  if ('mapValue' in valObj) {
+    return firestoreToPlain(valObj.mapValue.fields);
+  }
+  return null;
+}
+
+function plainToFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return { nullValue: null };
+  if (typeof obj === 'string') return { stringValue: obj };
+  if (typeof obj === 'boolean') return { booleanValue: obj };
+  if (typeof obj === 'number') {
+    if (Number.isInteger(obj)) {
+      return { integerValue: obj.toString() };
+    } else {
+      return { doubleValue: obj };
+    }
+  }
+  if (Array.isArray(obj)) {
+    return {
+      arrayValue: {
+        values: obj.map(item => plainToFirestore(item))
+      }
+    };
+  }
+  if (typeof obj === 'object') {
+    const fields: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        fields[key] = plainToFirestore(value);
+      }
+    }
+    return {
+      mapValue: {
+        fields
+      }
+    };
+  }
+  return { nullValue: null };
+}
+
+async function fetchFromFirestore(): Promise<any> {
+  try {
+    const url = getFirestoreDocUrl();
+    console.log(`[FIRESTORE REST] Fetching from ${url}`);
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (res.status === 404) {
+        console.log("[FIRESTORE REST] main_database document not found (404), starting fresh.");
+        return null;
+      }
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    const doc = await res.json() as any;
+    if (doc && doc.fields) {
+      const plain = firestoreToPlain(doc.fields);
+      console.log("[FIRESTORE REST] Successfully loaded database state from Firestore REST API.");
+      return plain;
+    }
+    return null;
+  } catch (err: any) {
+    console.error("[FIRESTORE REST ERROR] Failed to load database state from Firestore:", err.message);
+    return null;
+  }
+}
+
+async function saveToFirestore(state: any): Promise<void> {
+  try {
+    const url = getFirestoreDocUrl();
+    console.log(`[FIRESTORE REST] Saving to ${url}`);
+    const converted = plainToFirestore(state);
+    const fields = converted && converted.mapValue ? converted.mapValue.fields : {};
+    const body = { fields };
+    
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`HTTP error! status: ${res.status}, response: ${errText}`);
+    }
+    console.log("[FIRESTORE REST] Successfully saved database state to Firestore REST API.");
+  } catch (err: any) {
+    console.error("[FIRESTORE REST ERROR] Failed to save database state to Firestore:", err.message);
+  }
+}
+
 class D1Manager {
   private env: Env;
   private memoryDb: any = null;
@@ -649,11 +770,18 @@ class D1Manager {
           db = seedState;
         }
       } else {
-        if (!this.memoryDb) {
-          console.log(`[MEMORY DB QUERY] No persistent DB bound, initializing Memory fallback...`);
-          this.memoryDb = await this.ensureDefaults({});
+        console.log(`[D1 Fallback] No D1 DB bound. Attempting to fetch from Firestore REST API...`);
+        const firestoreDb = await fetchFromFirestore();
+        if (firestoreDb) {
+          db = await this.ensureDefaults(firestoreDb);
+          this.memoryDb = db;
+        } else {
+          if (!this.memoryDb) {
+            console.log(`[MEMORY DB QUERY] No persistent DB or Firestore found, initializing Memory fallback...`);
+            this.memoryDb = await this.ensureDefaults({});
+          }
+          db = this.memoryDb;
         }
-        db = this.memoryDb;
       }
 
       // Populate loadedNotificationIds with historical IDs to prevent push loops
@@ -747,6 +875,8 @@ class D1Manager {
       }
     } else {
       this.memoryDb = state;
+      console.log(`[D1 Fallback] No D1 DB bound. Saving state to Firestore REST API...`);
+      await saveToFirestore(state);
     }
   }
 
