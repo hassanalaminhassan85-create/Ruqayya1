@@ -287,19 +287,15 @@ export function seedDBIfEmpty() {
   const db = loadDB();
   let modified = false;
 
-  // Check if there is existing demo data that needs to be wiped for a clean slate
+  // Check if there is old demo driver/vehicle data that needs to be wiped for a clean slate
   const hasDemoData = db.users.some(u => 
     u.email === 'musa.garba@ruqayyatransport.com' || 
-    u.email === 'kabir.m@ruqayyatransport.com' ||
-    u.email === 'amina.g@ruqayyatransport.com' ||
     u.full_name === 'Alhaji Musa Garba' ||
-    u.full_name === 'Alhaji Kabir Mohammed' ||
-    u.full_name === 'Hajiya Amina Garba' ||
     u.full_name?.includes('Ibrahim Bello')
   );
 
   if (hasDemoData) {
-    console.log('Detected demo data. Wiping database for fresh ready-to-start business...');
+    console.log('Detected demo driver/vehicle data. Wiping database for fresh ready-to-start business...');
     db.users = [];
     db.directors = [];
     db.admins = [];
@@ -414,6 +410,91 @@ export function seedDBIfEmpty() {
         new_value: 'Clean ERP system initialized. Database is fresh and ready for operations.',
         ip_address: '127.0.0.1',
         created_at: new Date().toISOString()
+      }
+    ];
+
+    modified = true;
+  }
+
+  // 4. Seed Corporate Shareholders if empty
+  if (!db.shareholders || db.shareholders.length === 0) {
+    const kabirUserId = generateUUID();
+    const aminaUserId = generateUUID();
+
+    let kabirUser = db.users.find(u => u.username === 'KABIR' || u.email?.includes('kabir'));
+    if (!kabirUser) {
+      kabirUser = {
+        id: kabirUserId,
+        username: 'KABIR',
+        email: 'kabir.m@ruqayyatransport.com',
+        phone: '+234 803 555 0001',
+        password_hash: hashPassword('shareholder123'),
+        full_name: 'Alhaji Kabir Mohammed',
+        role_id: 'role-shareholder',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active'
+      };
+      db.users.push(kabirUser);
+    }
+
+    let aminaUser = db.users.find(u => u.username === 'AMINA' || u.email?.includes('amina'));
+    if (!aminaUser) {
+      aminaUser = {
+        id: aminaUserId,
+        username: 'AMINA',
+        email: 'amina.g@ruqayyatransport.com',
+        phone: '+234 803 555 0002',
+        password_hash: hashPassword('shareholder123'),
+        full_name: 'Hajiya Amina Garba',
+        role_id: 'role-shareholder',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active'
+      };
+      db.users.push(aminaUser);
+    }
+
+    db.shareholders = [
+      {
+        id: 'SH-2026-001',
+        user_id: kabirUser.id,
+        full_name: 'Alhaji Kabir Mohammed',
+        fullName: 'Alhaji Kabir Mohammed',
+        phone: '+234 803 555 0001',
+        email: 'kabir.m@ruqayyatransport.com',
+        address: 'Plot 12 Commercial Layout, Kano, Nigeria',
+        investment_amount: 12000000,
+        investmentAmount: 12000000,
+        investment_date: '2026-01-15',
+        investmentDate: '2026-01-15',
+        passport_photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
+        passportPhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
+        ownership_percentage: 60,
+        total_withdrawn: 0,
+        total_reinvested: 0,
+        created_at: new Date().toISOString(),
+        status: 'active'
+      },
+      {
+        id: 'SH-2026-002',
+        user_id: aminaUser.id,
+        full_name: 'Hajiya Amina Garba',
+        fullName: 'Hajiya Amina Garba',
+        phone: '+234 803 555 0002',
+        email: 'amina.g@ruqayyatransport.com',
+        address: 'No 45 GRA Maiduguri, Borno State, Nigeria',
+        investment_amount: 8000000,
+        investmentAmount: 8000000,
+        investment_date: '2026-02-01',
+        investmentDate: '2026-02-01',
+        passport_photo_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150',
+        passportPhoto: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150',
+        ownership_percentage: 40,
+        total_withdrawn: 0,
+        total_reinvested: 0,
+        created_at: new Date().toISOString(),
+        status: 'active'
       }
     ];
 

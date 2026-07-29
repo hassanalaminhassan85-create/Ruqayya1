@@ -205,12 +205,16 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         // Edit flow
         const payload = {
           full_name: shFormFullName,
+          fullName: shFormFullName,
           phone: shFormPhone,
           email: shFormEmail,
           address: shFormAddress,
           investment_amount: parseFloat(shFormInvestmentAmount),
+          investmentAmount: parseFloat(shFormInvestmentAmount),
           investment_date: shFormInvestmentDate,
+          investmentDate: shFormInvestmentDate,
           passport_photo_url: shFormPassportPhoto,
+          passportPhoto: shFormPassportPhoto,
           passport_number: shFormPassportNumber
         };
         await api.updateShareholder(editingShareholder.id, payload);
@@ -219,12 +223,16 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         // Add flow
         const payload = {
           full_name: shFormFullName,
+          fullName: shFormFullName,
           phone: shFormPhone,
           email: shFormEmail,
           address: shFormAddress,
           investment_amount: parseFloat(shFormInvestmentAmount),
+          investmentAmount: parseFloat(shFormInvestmentAmount),
           investment_date: shFormInvestmentDate,
+          investmentDate: shFormInvestmentDate,
           passport_photo_url: shFormPassportPhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
+          passportPhoto: shFormPassportPhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
           passport_number: shFormPassportNumber
         };
         await api.addShareholder(payload);
@@ -332,7 +340,13 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         api.request('/api/director/cycles').catch(() => ({ cycles: [] }))
       ]);
       setLocalPayments(pList || []);
-      setLocalShareholders(sList || []);
+      if (sList && sList.length > 0) {
+        setLocalShareholders(sList);
+      } else if (shareholders && shareholders.length > 0) {
+        setLocalShareholders(shareholders);
+      } else {
+        setLocalShareholders([]);
+      }
       setLocalAuditLogs(aList || []);
       setDbCycles(cyList?.cycles || []);
     } catch (err) {
@@ -343,6 +357,9 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   };
 
   useEffect(() => {
+    if (shareholders && shareholders.length > 0) {
+      setLocalShareholders(shareholders);
+    }
     fetchAuxRecords();
   }, [payments, shareholders, finance]);
 

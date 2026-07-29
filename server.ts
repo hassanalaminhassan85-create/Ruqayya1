@@ -3877,18 +3877,26 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 
-    const { fullName, phone, email, address, investmentAmount, investmentDate, passportPhoto } = req.body;
-    if (!fullName || !phone || !email || !address || !investmentAmount || !investmentDate) {
-      return res.status(400).json({ error: 'All fields are mandatory.' });
+    const fullName = req.body.fullName || req.body.full_name;
+    const phone = req.body.phone;
+    const email = req.body.email;
+    const address = req.body.address || 'N/A';
+    const rawAmount = req.body.investmentAmount !== undefined ? req.body.investmentAmount : req.body.investment_amount;
+    const investmentAmount = parseFloat(rawAmount) || 0;
+    const investmentDate = req.body.investmentDate || req.body.investment_date || new Date().toISOString().split('T')[0];
+    const passportPhoto = req.body.passportPhoto || req.body.passport_photo_url || '';
+
+    if (!fullName || !phone || !email || !investmentAmount) {
+      return res.status(400).json({ error: 'Full name, phone, email, and investment amount are mandatory.' });
     }
 
     const db = loadDB();
-    if (db.shareholders.some(s => s.email.toLowerCase() === email.toLowerCase())) {
+    if (db.shareholders.some(s => s.email && s.email.toLowerCase() === email.toLowerCase())) {
       return res.status(400).json({ error: 'Email registered to another investor node.' });
     }
 
-    let passportUrl = '';
-    if (passportPhoto) {
+    let passportUrl = passportPhoto.startsWith('http') ? passportPhoto : '';
+    if (passportPhoto && !passportPhoto.startsWith('http')) {
       passportUrl = saveR2File(`shareholder_${fullName.replace(/\s+/g, '_')}`, passportPhoto);
     }
 
@@ -3898,8 +3906,8 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       phone,
       email: email.toLowerCase(),
       address,
-      passport_photo_url: passportUrl,
-      investment_amount: parseFloat(investmentAmount) || 0.0,
+      passport_photo_url: passportUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
+      investment_amount: investmentAmount,
       investment_date: investmentDate,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -3914,13 +3922,13 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       id: generateUUID(),
       type: 'revenue',
       category: 'other',
-      amount: parseFloat(investmentAmount),
+      amount: investmentAmount,
       date: investmentDate,
       description: `Corporate equity capital investment - Shareholder ${fullName}`
     });
 
     // Create user account if not exists for the shareholder
-    let targetUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    let targetUser = db.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
     if (!targetUser) {
       const { password, mustChangePassword } = req.body;
       const hashed = hashPassword(password || 'shareholder123');
@@ -3946,8 +3954,8 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       target_role: 'shareholder',
       title_en: 'Capital Contribution Registered',
       title_ha: 'An Yi Rijistar Gudunmawar Kudi',
-      message_en: `Equity investment of ₦${parseFloat(investmentAmount).toLocaleString()} has been confirmed for ${fullName}.`,
-      message_ha: `An tabbatar da jarin kudi na karkashin sunan ${fullName} na naira ₦${parseFloat(investmentAmount).toLocaleString()}.`,
+      message_en: `Equity investment of ₦${investmentAmount.toLocaleString()} has been confirmed for ${fullName}.`,
+      message_ha: `An tabbatar da jarin kudi na karkashin sunan ${fullName} na naira ₦${investmentAmount.toLocaleString()}.`,
       type: 'success',
       read_status: 0,
       created_at: new Date().toISOString()
@@ -3961,11 +3969,11 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       actor.role,
       'SHAREHOLDER_ADDED',
       null,
-      `Registered investor: ${fullName} | Investment: ₦${parseFloat(investmentAmount).toLocaleString()}`,
+      `Registered investor: ${fullName} | Investment: ₦${investmentAmount.toLocaleString()}`,
       req
     );
 
-    res.json({ success: true, message: 'Shareholder logged successfully.' });
+    res.json({ success: true, shareholder: newShareholder, message: 'Shareholder logged successfully.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
