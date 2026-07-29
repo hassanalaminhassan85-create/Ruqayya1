@@ -34,9 +34,9 @@ export const TimeDisplay: React.FC<TimeDisplayProps> = ({ isTimeSynced, timeStr 
   const secondAngle = seconds * 6;
 
   return (
-    <div className="flex items-center gap-2" id="wat-time-display-container">
+    <div className="flex items-center gap-1.5 sm:gap-2" id="wat-time-display-container">
       {/* CSS-Based SVG Analog Clock Face */}
-      <div className="relative w-6 h-6 flex items-center justify-center rounded-full bg-slate-900 border border-slate-700/60 shadow-inner" id="analog-clock-wrapper">
+      <div className="relative w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full bg-slate-900 border border-slate-700/60 shadow-inner shrink-0" id="analog-clock-wrapper">
         <svg viewBox="0 0 100 100" className="w-full h-full">
           {/* Clock face ticks/markers (4 primary dots) */}
           <circle cx="50" cy="12" r="2.5" className="fill-slate-500" />
@@ -103,7 +103,7 @@ export const TimeDisplay: React.FC<TimeDisplayProps> = ({ isTimeSynced, timeStr 
       </div>
 
       {/* Digital Readout */}
-      <span className="font-mono text-text-muted text-sm tracking-wide" id="digital-wat-clock">
+      <span className="font-mono text-text-muted text-[10px] sm:text-xs md:text-sm tracking-wide shrink-0" id="digital-wat-clock">
         {timeStr}
       </span>
     </div>

@@ -930,10 +930,10 @@ export default function App() {
                 </button>
               )}
 
-              <div className="hidden md:flex items-center gap-2 pl-3 ml-1 border-l border-border-main/50 text-[10px] font-semibold text-text-muted">
-                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-text-main font-bold tracking-wider">OPERATIONAL</span>
-                <span className="text-border-main/80">•</span>
+              <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-border-main/50 text-[10px] font-semibold text-text-muted">
+                <span className="hidden sm:inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="hidden sm:inline text-text-main font-bold tracking-wider">OPERATIONAL</span>
+                <span className="hidden sm:inline text-border-main/80">•</span>
                 <TimeDisplay isTimeSynced={isTimeSynced} timeStr={timeStr} />
               </div>
             </div>
