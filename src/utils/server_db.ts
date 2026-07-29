@@ -16,11 +16,14 @@ try {
   const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
   
   if (getApps().length === 0) {
-    // In AI Studio Cloud Run environment, initializeApp() without arguments 
-    // uses the default service account credentials and correct project ID.
-    // Specifying a project ID from a config file might lead to PERMISSION_DENIED 
-    // if the config is stale or from a different project.
-    initializeApp();
+    if (firebaseConfig && (firebaseConfig as any).projectId) {
+      initializeApp({
+        projectId: (firebaseConfig as any).projectId
+      });
+      console.log(`Initialized Firebase Admin with projectId: ${(firebaseConfig as any).projectId}`);
+    } else {
+      initializeApp();
+    }
   }
 
   // Use (default) if no ID is provided, or if the provided one looks like a placeholder
