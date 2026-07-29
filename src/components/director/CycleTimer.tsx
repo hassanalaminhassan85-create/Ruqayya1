@@ -30,7 +30,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
   onStateChange
 }) => {
   const activeCycle = propActiveCycle || {
-    id: 'CYC-050',
+    id: 'CYC-2026-2459',
     startDate: '2026-07-29',
     endDate: '2026-08-28',
     status: 'active'

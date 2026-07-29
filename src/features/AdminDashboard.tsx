@@ -53,6 +53,7 @@ import { PeopleManagement } from '../components/admin/PeopleManagement';
 import { CycleTimer } from '../components/director/CycleTimer';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { ActivityFeed } from '../components/admin/ActivityFeed';
+import { fetchActiveCycle as getActiveCycleData } from '../services/cycleService';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -169,15 +170,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       return;
     }
     try {
-      const [vList, dList, tList, fin, payList, shList, cyList, logList] = await Promise.all([
+      const [vList, dList, tList, fin, payList, shList, logList, cycleData] = await Promise.all([
         api.getVehicles().catch(() => []),
         api.getDrivers().catch(() => []),
         api.getTrips().catch(() => []),
         api.getFinance().catch(() => []),
         api.getPayments().catch(() => []),
         api.getShareholders().catch(() => []),
-        api.request('/api/director/cycles').catch(() => ({ cycles: [] })),
-        api.getAuditLogs().catch(() => [])
+        api.getAuditLogs().catch(() => []),
+        getActiveCycleData().catch(() => ({
+          cycleId: 'CYC-2026-2459',
+          isActive: false,
+          status: 'inactive' as const,
+          startDate: '2026-07-29',
+          endDate: '2026-08-28',
+          drivers: 10,
+          fleet: 10,
+          remit: 800000000,
+          health: 'Healthy',
+          cycleDay: 'Day 1/30'
+        }))
       ]);
       setVehicles(vList || []);
       setDrivers(dList || []);
@@ -192,10 +204,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         .reduce((sum: number, r: any) => sum + r.amount, 0);
       setTotalEarnings(revTotal);
 
-      // Determine active cycle from database
-      const realCycles = cyList?.cycles || [];
-      const currentActive = realCycles.find((c: any) => c && (c.status === 'active' || c.status === 'paused'));
-      setActiveCycle(currentActive || null);
+      // Determine unified active cycle state
+      setActiveCycle({
+        id: cycleData.cycleId,
+        startDate: cycleData.startDate,
+        endDate: cycleData.endDate,
+        status: cycleData.status,
+        isActive: cycleData.isActive
+      });
     } catch (e) {
       console.error("Failed to sync backend data in AdminDashboard:", e);
     } finally {
@@ -208,7 +224,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       setIsRegisterAssistedOpen(true);
     };
     
-    const handleLocalDbChange = (e: Event) => {
+    const handleLocalDbChange = async (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail) {
         if (detail.drivers) setDrivers(detail.drivers);
@@ -216,10 +232,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         if (detail.driver_payments) setPayments(detail.driver_payments);
         if (detail.vehicles) setVehicles(detail.vehicles);
         if (detail.audit_logs) setLogs(detail.audit_logs);
-        if (detail.cycles) {
-          const activeCyc = (detail.cycles || []).find((c: any) => c && (c.status === 'active' || c.status === 'paused'));
-          setActiveCycle(activeCyc || null);
-        }
+      }
+      const updatedCycleData = await getActiveCycleData().catch(() => null);
+      if (updatedCycleData) {
+        setActiveCycle({
+          id: updatedCycleData.cycleId,
+          startDate: updatedCycleData.startDate,
+          endDate: updatedCycleData.endDate,
+          status: updatedCycleData.status,
+          isActive: updatedCycleData.isActive
+        });
       }
     };
 
@@ -495,8 +517,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 lang={lang}
                 startDate={activeCycle?.startDate || '2026-07-29'}
                 endDate={activeCycle?.endDate || '2026-08-28'}
-                cycleId={activeCycle?.id || 'CYC-050'}
-                status={activeCycle?.status || 'active'}
+                cycleId={activeCycle?.id || 'CYC-2026-2459'}
+                status={activeCycle?.status || 'inactive'}
+                isActive={activeCycle?.isActive ?? false}
               />
               <CycleStatusSummary
                 lang={lang}

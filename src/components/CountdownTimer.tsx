@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Clock, Calendar, CheckCircle2 } from 'lucide-react';
+import { Clock, Calendar, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 interface CountdownTimerProps {
   startDate?: string;
   endDate?: string;
   cycleId?: string;
-  status?: 'active' | 'paused' | 'inactive';
+  status?: 'active' | 'paused' | 'inactive' | 'Setup Mode' | 'Operational Mode' | string;
+  isActive?: boolean;
   lang?: 'en' | 'ha';
   onPauseToggle?: () => void;
 }
@@ -18,11 +19,15 @@ interface CountdownTimerProps {
 export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   startDate = '2026-07-29',
   endDate = '2026-08-28',
-  cycleId = 'CYC-050',
+  cycleId = 'CYC-2026-2459',
   status = 'active',
+  isActive = true,
   lang = 'en',
   onPauseToggle
 }) => {
+  // Determine if cycle is truly active based on props
+  const cycleIsActive = isActive && status !== 'inactive' && status !== 'Setup Mode';
+
   // Target date parsing (pure client-side compatible for Cloudflare Pages static hosting)
   const getTargetTimestamp = (dateStr: string): number => {
     try {
@@ -31,7 +36,6 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
       }
       return new Date(`${dateStr}T23:59:59`).getTime();
     } catch {
-      // Fallback default target 2026-08-28
       return new Date('2026-08-28T23:59:59').getTime();
     }
   };
@@ -56,6 +60,8 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   });
 
   useEffect(() => {
+    if (!cycleIsActive) return;
+
     const calculateTimeRemaining = () => {
       const now = Date.now();
       const targetTime = getTargetTimestamp(endDate);
@@ -94,14 +100,11 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
       });
     };
 
-    // Immediate initial computation
     calculateTimeRemaining();
-
-    // 1-second interval update for client-side live ticking
     const timer = setInterval(calculateTimeRemaining, 1000);
 
     return () => clearInterval(timer);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, cycleIsActive]);
 
   const units = [
     { label: lang === 'ha' ? 'KWANAKI' : 'DAYS', value: timeLeft.days },
@@ -109,6 +112,77 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
     { label: lang === 'ha' ? 'MINTOCI' : 'MINS', value: timeLeft.minutes },
     { label: lang === 'ha' ? 'DAKIKU' : 'SECS', value: timeLeft.seconds }
   ];
+
+  // Render Inactive Banner State when cycle is not running
+  if (!cycleIsActive) {
+    return (
+      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 flex flex-col gap-3 w-full">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-slate-50 border border-slate-200/80 rounded-lg shadow-2xs">
+              <Clock className="h-4 w-4 text-slate-400" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono">
+                {lang === 'ha' ? 'KIDAYAR ZAGAYEN AIKI' : 'ACTIVE CYCLE TIMER'}
+              </h3>
+              <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
+                {lang === 'ha' ? 'Kidayar kwanaki 30' : '30-Day countdown status'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[9px] font-black font-mono">
+              {cycleId}
+            </span>
+            <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border bg-amber-50 border-amber-200 text-amber-600">
+              {lang === 'ha' ? 'BA A FARA BA' : 'INACTIVE'}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-3 bg-amber-50/80 border border-amber-200/70 rounded-xl flex items-center gap-2.5 text-xs text-amber-800 font-medium">
+          <AlertTriangle className="h-4.5 w-4.5 text-amber-600 shrink-0" />
+          <span>
+            {lang === 'ha'
+              ? 'Babu zagayen aiki mai gudana yanzu. Fara aiki daga bangaren gudanarwa don buɗe kidayar kwanaki 30.'
+              : 'No active operating cycle. Start operations from the Enterprise System card to begin the 30-day countdown.'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 bg-slate-50/80 border border-slate-100 rounded-xl p-2.5 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-slate-100 text-slate-500 rounded-lg border border-slate-200/60 shrink-0">
+              <Calendar className="h-3.5 w-3.5" />
+            </div>
+            <div>
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block leading-none">
+                {lang === 'ha' ? 'LOKACIN FARA' : 'START TIME'}
+              </span>
+              <span className="font-extrabold text-slate-800 font-mono text-[11px] leading-none mt-1 block">
+                {startDate}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pl-2 border-l border-slate-200/60">
+            <div className="p-1.5 bg-slate-100 text-slate-500 rounded-lg border border-slate-200/60 shrink-0">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </div>
+            <div>
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block leading-none">
+                {lang === 'ha' ? 'RANAR KAMMALAWA' : 'SCHEDULED END'}
+              </span>
+              <span className="font-extrabold text-slate-800 font-mono text-[11px] leading-none mt-1 block">
+                {endDate}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xs p-4 flex flex-col gap-3 w-full">

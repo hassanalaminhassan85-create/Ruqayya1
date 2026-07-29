@@ -318,11 +318,11 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
           }
         }
       }
-      const nextNum = maxNum + 1;
-      const padded = String(nextNum).padStart(3, '0');
-      setGeneratedCycleId(`CYC-${padded}`);
+      const nextNum = maxNum > 0 ? maxNum + 1 : 2459;
+      const padded = String(nextNum).padStart(4, '0');
+      setGeneratedCycleId(`CYC-2026-${padded}`);
     } catch (err) {
-      setGeneratedCycleId(`CYC-001`);
+      setGeneratedCycleId(`CYC-2026-2459`);
     }
     setShowChecklistModal(true);
   };

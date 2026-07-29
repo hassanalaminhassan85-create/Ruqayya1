@@ -31,6 +31,7 @@ import { AICopilotDrawer } from './components/AICopilotDrawer';
 import { ChatDashboard } from './components/ChatDashboard';
 import { offlineSync } from './utils/offlineSync';
 import { checkDatabaseConnection } from './utils/dbDiagnostic';
+import { fetchActiveCycle, ActiveCycleData } from './services/cycleService';
 import { 
   Truck, 
   Users, 
@@ -129,6 +130,24 @@ export default function App() {
   const [aiCopilotOpen, setAiCopilotOpen] = useState(false);
   const [timeStr, setTimeStr] = useState<string>('');
   const [isTimeSynced, setIsTimeSynced] = useState<boolean>(false);
+  const [activeCycle, setActiveCycle] = useState<ActiveCycleData | null>(null);
+
+  // Global active cycle polling & synchronization service
+  useEffect(() => {
+    let isMounted = true;
+    const loadCycle = async () => {
+      const data = await fetchActiveCycle();
+      if (isMounted) {
+        setActiveCycle(data);
+      }
+    };
+    loadCycle();
+    const interval = setInterval(loadCycle, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Ticking WAT clock effect with NTP / API-based time synchronization to prevent system time drift
   useEffect(() => {
