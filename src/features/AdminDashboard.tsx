@@ -51,6 +51,7 @@ import { SystemStatusCard } from '../components/admin/SystemStatusCard';
 import { CycleStatusSummary } from '../components/admin/CycleStatusSummary';
 import { PeopleManagement } from '../components/admin/PeopleManagement';
 import { CycleTimer } from '../components/director/CycleTimer';
+import { CountdownTimer } from '../components/CountdownTimer';
 import { ActivityFeed } from '../components/admin/ActivityFeed';
 
 interface AdminDashboardProps {
@@ -490,10 +491,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 payments={payments}
                 onStateChange={syncAllData}
               />
-              <CycleTimer
+              <CountdownTimer
                 lang={lang}
-                activeCycle={activeCycle}
-                onStateChange={syncAllData}
+                startDate={activeCycle?.startDate || '2026-07-29'}
+                endDate={activeCycle?.endDate || '2026-08-28'}
+                cycleId={activeCycle?.id || 'CYC-050'}
+                status={activeCycle?.status || 'active'}
               />
               <CycleStatusSummary
                 lang={lang}

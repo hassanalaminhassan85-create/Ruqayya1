@@ -26,9 +26,15 @@ interface CycleTimerProps {
 
 export const CycleTimer: React.FC<CycleTimerProps> = ({
   lang,
-  activeCycle,
+  activeCycle: propActiveCycle,
   onStateChange
 }) => {
+  const activeCycle = propActiveCycle || {
+    id: 'CYC-050',
+    startDate: '2026-07-29',
+    endDate: '2026-08-28',
+    status: 'active'
+  };
   const [secondsElapsed, setSecondsElapsed] = useState<number>(0);
   const [showPauseModal, setShowPauseModal] = useState<boolean>(false);
   const [showResumeModal, setShowResumeModal] = useState<boolean>(false);
