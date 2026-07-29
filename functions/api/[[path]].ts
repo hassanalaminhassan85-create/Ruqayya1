@@ -3931,6 +3931,8 @@ ${JSON.stringify(cleanedContext, null, 2)}
             address: payload.address || '',
             investment_amount: parseFloat(payload.investment_amount),
             investment_date: payload.investment_date || new Date().toISOString().split('T')[0],
+            passport_photo_url: payload.passport_photo_url || payload.passportPhoto || '',
+            passport_number: payload.passport_number || '',
             created_at: new Date().toISOString(),
             status: 'active'
           };
@@ -3962,8 +3964,11 @@ ${JSON.stringify(cleanedContext, null, 2)}
           const payload = await request.json() as any;
           if (payload.full_name) sh.full_name = payload.full_name;
           if (payload.phone) sh.phone = payload.phone;
+          if (payload.email) sh.email = payload.email;
           if (payload.address) sh.address = payload.address;
           if (payload.investment_amount !== undefined) sh.investment_amount = parseFloat(payload.investment_amount);
+          if (payload.passport_photo_url !== undefined) sh.passport_photo_url = payload.passport_photo_url;
+          if (payload.passport_number !== undefined) sh.passport_number = payload.passport_number;
 
           writeAuditLog(user.id, user.email, user.role, 'SHAREHOLDER_EDITED', null, `Modified shareholder: ${sh.full_name}`, db);
           await dbManager.saveDB(db);

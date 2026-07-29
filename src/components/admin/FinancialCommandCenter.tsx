@@ -132,6 +132,118 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const [shActionError, setShActionError] = useState('');
   const [shActionSuccess, setShActionSuccess] = useState('');
 
+  // Add & Edit Shareholder Modal states
+  const [isAddEditShareholderOpen, setIsAddEditShareholderOpen] = useState(false);
+  const [editingShareholder, setEditingShareholder] = useState<Shareholder | null>(null);
+  const [shFormFullName, setShFormFullName] = useState('');
+  const [shFormPhone, setShFormPhone] = useState('');
+  const [shFormEmail, setShFormEmail] = useState('');
+  const [shFormAddress, setShFormAddress] = useState('');
+  const [shFormInvestmentAmount, setShFormInvestmentAmount] = useState('');
+  const [shFormInvestmentDate, setShFormInvestmentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [shFormPassportNumber, setShFormPassportNumber] = useState('');
+  const [shFormPassportPhoto, setShFormPassportPhoto] = useState('');
+  const [shFormError, setShFormError] = useState('');
+  const [shFormSuccess, setShFormSuccess] = useState('');
+  const [shFormLoading, setShFormLoading] = useState(false);
+
+  const openAddShareholder = () => {
+    setEditingShareholder(null);
+    setShFormFullName('');
+    setShFormPhone('');
+    setShFormEmail('');
+    setShFormAddress('');
+    setShFormInvestmentAmount('');
+    setShFormInvestmentDate(new Date().toISOString().split('T')[0]);
+    setShFormPassportNumber('');
+    setShFormPassportPhoto('');
+    setShFormError('');
+    setShFormSuccess('');
+    setIsAddEditShareholderOpen(true);
+  };
+
+  const openEditShareholder = (sh: Shareholder) => {
+    setEditingShareholder(sh);
+    setShFormFullName(sh.full_name || '');
+    setShFormPhone(sh.phone || '');
+    setShFormEmail(sh.email || '');
+    setShFormAddress(sh.address || '');
+    setShFormInvestmentAmount((sh.investment_amount || 0).toString());
+    setShFormInvestmentDate(sh.investment_date || new Date().toISOString().split('T')[0]);
+    setShFormPassportNumber((sh as any).passport_number || '');
+    setShFormPassportPhoto(sh.passport_photo_url || (sh as any).passportPhoto || (sh as any).passport_photo || (sh as any).passport || '');
+    setShFormError('');
+    setShFormSuccess('');
+    setIsAddEditShareholderOpen(true);
+  };
+
+  const handleShFormFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setShFormPassportPhoto(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAddEditShareholderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setShFormError('');
+    setShFormSuccess('');
+    setShFormLoading(true);
+
+    if (!shFormFullName || !shFormPhone || !shFormEmail || !shFormInvestmentAmount) {
+      setShFormError(lang === 'en' ? "Please fill in all required fields." : "Da fatan a cika duka bayanan da ake bukata.");
+      setShFormLoading(false);
+      return;
+    }
+
+    try {
+      if (editingShareholder) {
+        // Edit flow
+        const payload = {
+          full_name: shFormFullName,
+          phone: shFormPhone,
+          email: shFormEmail,
+          address: shFormAddress,
+          investment_amount: parseFloat(shFormInvestmentAmount),
+          investment_date: shFormInvestmentDate,
+          passport_photo_url: shFormPassportPhoto,
+          passport_number: shFormPassportNumber
+        };
+        await api.updateShareholder(editingShareholder.id, payload);
+        setShFormSuccess(lang === 'en' ? "Shareholder updated successfully!" : "An yi nasarar sabunta mai hannun jari!");
+      } else {
+        // Add flow
+        const payload = {
+          full_name: shFormFullName,
+          phone: shFormPhone,
+          email: shFormEmail,
+          address: shFormAddress,
+          investment_amount: parseFloat(shFormInvestmentAmount),
+          investment_date: shFormInvestmentDate,
+          passport_photo_url: shFormPassportPhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
+          passport_number: shFormPassportNumber
+        };
+        await api.addShareholder(payload);
+        setShFormSuccess(lang === 'en' ? "Shareholder registered successfully!" : "An yi nasarar yi wa mai hannun jari rajista!");
+      }
+
+      // Refresh and close after brief delay
+      setTimeout(async () => {
+        await fetchAuxRecords();
+        onSync();
+        setIsAddEditShareholderOpen(false);
+      }, 1000);
+    } catch (err: any) {
+      setShFormError(err.message || (lang === 'en' ? "Operation failed." : "Aiki bai yi nasara ba."));
+    } finally {
+      setShFormLoading(false);
+    }
+  };
+
   // Payroll disburse state
   const [payrollLoading, setPayrollLoading] = useState(false);
   const [payrollSuccess, setPayrollSuccess] = useState('');
@@ -1759,31 +1871,44 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             </motion.div>
           </div>
 
-          {/* VIEW TOGGLE AND INSIGHTS */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
-              <button
-                onClick={() => setShSubView('roster')}
-                className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                  shSubView === 'roster' 
-                    ? 'bg-white text-slate-900 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Users className="h-3.5 w-3.5" />
-                Investment Roster
-              </button>
-              <button
-                onClick={() => setShSubView('history')}
-                className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                  shSubView === 'history' 
-                    ? 'bg-white text-slate-900 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <History className="h-3.5 w-3.5" />
-                Action History
-              </button>
+          {/* VIEW TOGGLE, ADD BUTTON, AND INSIGHTS */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+                <button
+                  onClick={() => setShSubView('roster')}
+                  className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                    shSubView === 'roster' 
+                      ? 'bg-white text-slate-900 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Investment Roster
+                </button>
+                <button
+                  onClick={() => setShSubView('history')}
+                  className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                    shSubView === 'history' 
+                      ? 'bg-white text-slate-900 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <History className="h-3.5 w-3.5" />
+                  Action History
+                </button>
+              </div>
+
+              {shSubView === 'roster' && (
+                <Button
+                  variant="primary"
+                  onClick={openAddShareholder}
+                  className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm shrink-0 w-full sm:w-auto"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Shareholder
+                </Button>
+              )}
             </div>
 
             <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl border border-emerald-100 w-full sm:w-auto overflow-hidden relative group">
@@ -1795,115 +1920,159 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
           <AnimatePresence mode="wait">
             {shSubView === 'roster' ? (
-              <motion.div
-                key="roster"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-              >
-                {localShareholders.map((sh, idx) => {
-                  const weightStake = totalInvestmentsSum > 0 ? (((sh.investment_amount || 0) / totalInvestmentsSum) * 100) : 0;
-                  const estimatedEarnings = continuousDividendPool * (weightStake / 100);
-                  const shTotalWithdrawn = sh.total_withdrawn || 0;
-                  const availableWithdrawable = Math.max(0, estimatedEarnings - shTotalWithdrawn);
-                  const shTotalReinvested = sh.total_reinvested || 0;
+              localShareholders.length === 0 ? (
+                <motion.div
+                  key="empty-roster"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col items-center justify-center text-center p-12 bg-slate-50/50 rounded-2xl border border-dashed border-slate-300 max-w-2xl mx-auto my-6"
+                >
+                  <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-400">
+                    <Users className="h-8 w-8" />
+                  </div>
+                  <h3 className="font-extrabold text-slate-800 text-lg mb-2">Investment Roster is Empty</h3>
+                  <p className="text-slate-500 text-xs max-w-md mb-6 leading-relaxed">
+                    No board directors or corporate investors are registered yet in this operating cycle. Registering a shareholder initializes their dynamic earnings ledger and automatically calculates their equity stake real-time based on their Capital Stock.
+                  </p>
+                  <Button
+                    variant="primary"
+                    onClick={openAddShareholder}
+                    className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-6 py-3 rounded-xl flex items-center gap-2 shadow-md"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add First Shareholder
+                  </Button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="roster"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                >
+                  {localShareholders.map((sh, idx) => {
+                    const weightStake = totalInvestmentsSum > 0 ? (((sh.investment_amount || 0) / totalInvestmentsSum) * 100) : 0;
+                    const estimatedEarnings = continuousDividendPool * (weightStake / 100);
+                    const shTotalWithdrawn = sh.total_withdrawn || 0;
+                    const availableWithdrawable = Math.max(0, estimatedEarnings - shTotalWithdrawn);
+                    const shTotalReinvested = sh.total_reinvested || 0;
 
-                  return (
-                    <motion.div
-                      key={sh.id || idx}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="group"
-                    >
-                      <Card className="p-0 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 border-slate-200/60 h-full flex flex-col">
-                        {/* Header Section */}
-                        <div className="p-5 bg-gradient-to-br from-slate-50 to-white border-b border-slate-100 relative overflow-hidden">
-                          <div className="absolute top-0 right-0 p-3">
-                            <Badge variant={availableWithdrawable > 0 ? 'success' : 'neutral'} className="font-mono text-[9px] font-black uppercase">
-                              {weightStake.toFixed(2)}% Stake
-                            </Badge>
+                    return (
+                      <motion.div
+                        key={sh.id || idx}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className="group"
+                      >
+                        <Card className="p-0 overflow-hidden hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 border-slate-200/60 h-full flex flex-col">
+                          {/* Header Section */}
+                          <div className="p-5 bg-gradient-to-br from-slate-50 to-white border-b border-slate-100 relative overflow-hidden">
+                            <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                              <Badge variant={availableWithdrawable > 0 ? 'success' : 'neutral'} className="font-mono text-[9px] font-black uppercase">
+                                {weightStake.toFixed(2)}% Stake
+                              </Badge>
+                              <button
+                                onClick={() => openEditShareholder(sh)}
+                                className="p-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-all shadow-sm"
+                                title="Edit Shareholder"
+                              >
+                                <Edit3 className="h-3 w-3" />
+                              </button>
+                            </div>
+                            
+                            <div className="flex items-center gap-4">
+                              <div className="h-14 w-14 rounded-2xl border-2 border-white shadow-lg overflow-hidden shrink-0 bg-slate-900 group-hover:rotate-3 transition-transform duration-500">
+                                <img 
+                                  src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
+                                  alt={sh.full_name} 
+                                  className="h-full w-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              <div>
+                                <h4 className="font-black text-slate-900 text-sm tracking-tight">{sh.full_name}</h4>
+                                <p className="text-[10px] text-slate-500 font-medium truncate max-w-[140px]">{sh.email}</p>
+                              </div>
+                            </div>
                           </div>
-                          
-                          <div className="flex items-center gap-4">
-                            <div className="h-14 w-14 rounded-2xl border-2 border-white shadow-lg overflow-hidden shrink-0 bg-slate-900 group-hover:rotate-3 transition-transform duration-500">
-                              <img 
-                                src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
-                                alt={sh.full_name} 
-                                className="h-full w-full object-cover"
-                                referrerPolicy="no-referrer"
-                              />
+
+                          {/* Metrics Section */}
+                          <div className="p-5 flex-1 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Capital Stock</label>
+                                <p className="text-sm font-bold text-slate-900 font-mono">₦{(sh.investment_amount || 0).toLocaleString()}</p>
+                              </div>
+                              <div>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Accumulated</label>
+                                <p className="text-sm font-bold text-emerald-600 font-mono">₦{estimatedEarnings.toLocaleString()}</p>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="font-black text-slate-900 text-sm tracking-tight">{sh.full_name}</h4>
-                              <p className="text-[10px] text-slate-500 font-medium truncate max-w-[140px]">{sh.email}</p>
+
+                            <div className="p-4 bg-slate-900 rounded-2xl relative overflow-hidden">
+                              <div className="absolute top-0 right-0 w-16 h-16 bg-brand-gold/10 rounded-full blur-2xl -mr-8 -mt-8" />
+                              <label className="text-[9px] font-black text-brand-gold uppercase tracking-widest block mb-1">Available Dividend</label>
+                              <p className="text-xl font-black text-white font-mono">₦{availableWithdrawable.toLocaleString()}</p>
+                            </div>
+
+                            {/* Passport and Phone Information */}
+                            <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-3">
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Passport No</span>
+                                <span className="text-[11px] font-bold text-slate-700 font-mono">{(sh as any).passport_number || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Phone</span>
+                                <span className="text-[11px] font-bold text-slate-700">{sh.phone || 'N/A'}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-100 font-mono text-[10px]">
+                              <div className="flex flex-col">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Reinvested</span>
+                                <span className="text-[11px] font-bold text-slate-700 font-mono">₦{shTotalReinvested.toLocaleString()}</span>
+                              </div>
+                              <div className="flex flex-col text-right">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Net Withdrawn</span>
+                                <span className="text-[11px] font-bold text-slate-700 font-mono">₦{shTotalWithdrawn.toLocaleString()}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Metrics Section */}
-                        <div className="p-5 flex-1 space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Capital Stock</label>
-                              <p className="text-sm font-bold text-slate-900 font-mono">₦{(sh.investment_amount || 0).toLocaleString()}</p>
-                            </div>
-                            <div>
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Accumulated</label>
-                              <p className="text-sm font-bold text-emerald-600 font-mono">₦{estimatedEarnings.toLocaleString()}</p>
-                            </div>
+                          {/* Actions Section */}
+                          <div className="p-4 bg-slate-50 grid grid-cols-2 gap-2">
+                            <Button
+                              variant="primary"
+                              disabled={availableWithdrawable <= 0}
+                              onClick={() => {
+                                setActiveShareholder(sh);
+                                setIsWithdrawOpen(true);
+                              }}
+                              className="w-full font-black bg-brand-gold hover:bg-amber-500 text-slate-900 py-2.5 text-[10px] uppercase border-none shadow-sm h-auto"
+                            >
+                              Withdraw
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              disabled={availableWithdrawable <= 0}
+                              onClick={() => {
+                                setActiveShareholder(sh);
+                                setIsReinvestOpen(true);
+                              }}
+                              className="w-full font-black border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white py-2.5 text-[10px] uppercase h-auto"
+                            >
+                              Reinvest
+                            </Button>
                           </div>
-
-                          <div className="p-4 bg-slate-900 rounded-2xl relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-16 h-16 bg-brand-gold/10 rounded-full blur-2xl -mr-8 -mt-8" />
-                            <label className="text-[9px] font-black text-brand-gold uppercase tracking-widest block mb-1">Available Dividend</label>
-                            <p className="text-xl font-black text-white font-mono">₦{availableWithdrawable.toLocaleString()}</p>
-                          </div>
-
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                            <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Reinvested</span>
-                              <span className="text-[11px] font-bold text-slate-700 font-mono">₦{shTotalReinvested.toLocaleString()}</span>
-                            </div>
-                            <div className="flex flex-col text-right">
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Net Withdrawn</span>
-                              <span className="text-[11px] font-bold text-slate-700 font-mono">₦{shTotalWithdrawn.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions Section */}
-                        <div className="p-4 bg-slate-50 grid grid-cols-2 gap-2">
-                          <Button
-                            variant="primary"
-                            disabled={availableWithdrawable <= 0}
-                            onClick={() => {
-                              setActiveShareholder(sh);
-                              setIsWithdrawOpen(true);
-                            }}
-                            className="w-full font-black bg-brand-gold hover:bg-amber-500 text-slate-900 py-2.5 text-[10px] uppercase border-none shadow-sm h-auto"
-                          >
-                            Withdraw
-                          </Button>
-
-                          <Button
-                            variant="outline"
-                            disabled={availableWithdrawable <= 0}
-                            onClick={() => {
-                              setActiveShareholder(sh);
-                              setIsReinvestOpen(true);
-                            }}
-                            className="w-full font-black border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white py-2.5 text-[10px] uppercase h-auto"
-                          >
-                            Reinvest
-                          </Button>
-                        </div>
-                      </Card>
-                    </motion.div>
-                  );
-                })}
-              </motion.div>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+              )
             ) : (
               <motion.div
                 key="history"
@@ -2524,6 +2693,193 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
               className="bg-rose-600 hover:bg-rose-700 text-white border-none"
             >
               Post Ledger Expense
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ==============================================
+          MODAL: ADD / EDIT SHAREHOLDER (WITH PASSPORT)
+          ============================================== */}
+      <Modal
+        isOpen={isAddEditShareholderOpen}
+        onClose={() => {
+          setIsAddEditShareholderOpen(false);
+          setEditingShareholder(null);
+        }}
+        title={editingShareholder ? (lang === 'en' ? "Edit Shareholder Profile" : "Gyara Bayanan Mai Hannun Jari") : (lang === 'en' ? "Register Corporate Shareholder" : "Yi Rajistar Mai Hannun Jari")}
+      >
+        <form onSubmit={handleAddEditShareholderSubmit} className="flex flex-col gap-4 text-xs">
+          {shFormError && <Alert variant="danger">{shFormError}</Alert>}
+          {shFormSuccess && <Alert variant="success">{shFormSuccess}</Alert>}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Full Name" : "Cikakken Suna"} *</label>
+              <input
+                type="text"
+                required
+                placeholder={lang === 'en' ? "e.g. Alhaji Hassan Aminu" : "Misali Alhaji Hassan Aminu"}
+                value={shFormFullName}
+                onChange={(e) => setShFormFullName(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Phone Number" : "Lambar Waya"} *</label>
+              <input
+                type="tel"
+                required
+                placeholder="e.g. +234 803 123 4567"
+                value={shFormPhone}
+                onChange={(e) => setShFormPhone(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Email Address" : "Adireshin Imel"} *</label>
+              <input
+                type="email"
+                required
+                placeholder="e.g. hassan@example.com"
+                value={shFormEmail}
+                onChange={(e) => setShFormEmail(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Passport Number" : "Lambar Fasfot"} *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. A01234567"
+                value={shFormPassportNumber}
+                onChange={(e) => setShFormPassportNumber(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono uppercase"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="font-bold text-slate-700">{lang === 'en' ? "Home/Office Address" : "Adireshin Gida/Ofis"}</label>
+            <input
+              type="text"
+              placeholder={lang === 'en' ? "e.g. No 12 Airport Road, Kano" : "Misali No 12 Airport Road, Kano"}
+              value={shFormAddress}
+              onChange={(e) => setShFormAddress(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Capital Stock / Investment (₦)" : "Jarin Hannun Jari (₦)"} *</label>
+              <input
+                type="number"
+                required
+                placeholder="e.g. 5000000"
+                value={shFormInvestmentAmount}
+                onChange={(e) => setShFormInvestmentAmount(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Investment Date" : "Ranar Sanya Jari"}</label>
+              <input
+                type="date"
+                value={shFormInvestmentDate}
+                onChange={(e) => setShFormInvestmentDate(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 pt-3 flex flex-col gap-3">
+            <label className="font-black text-[10px] text-slate-400 uppercase tracking-widest">{lang === 'en' ? "Shareholder Passport Photo" : "Hoton Fasfot Na Mai Hannun Jari"}</label>
+            
+            <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div className="h-20 w-20 rounded-2xl border-2 border-white shadow-md overflow-hidden bg-slate-900 shrink-0">
+                {shFormPassportPhoto ? (
+                  <img
+                    src={shFormPassportPhoto}
+                    alt="Passport Preview"
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center text-slate-400 text-xs">
+                    No Photo
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex-1 w-full space-y-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleShFormFileChange}
+                  className="block w-full text-[10px] text-slate-500
+                    file:mr-4 file:py-1.5 file:px-3
+                    file:rounded-lg file:border-0
+                    file:text-[10px] file:font-bold
+                    file:bg-slate-900 file:text-white
+                    hover:file:bg-slate-800"
+                />
+                <p className="text-[9px] text-slate-400 leading-normal">
+                  {lang === 'en' ? "Upload a JPG or PNG passport photo. Or click below to select a default premium preset image if a file is not handy." : "Sanya hoton JPG ko PNG. Ko latsa kasa domin zabar hoto na gaba daya."}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShFormPassportPhoto('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150')}
+                    className="px-2 py-1 text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded"
+                  >
+                    Preset 1 (Male)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShFormPassportPhoto('https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150')}
+                    className="px-2 py-1 text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded"
+                  >
+                    Preset 2 (Female)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShFormPassportPhoto('https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150')}
+                    className="px-2 py-1 text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded"
+                  >
+                    Preset 3 (Male)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 mt-4 border-t border-slate-100 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsAddEditShareholderOpen(false);
+                setEditingShareholder(null);
+              }}
+              className="px-4 py-2 text-xs font-bold"
+            >
+              {lang === 'en' ? "Cancel" : "Soke"}
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={shFormLoading}
+              className="bg-slate-900 hover:bg-slate-800 text-white border-none font-bold px-4 py-2 text-xs"
+            >
+              {shFormLoading ? (lang === 'en' ? "Saving..." : "Ana Ajiye...") : (lang === 'en' ? "Save Shareholder" : "Ajiye Mai Hannun Jari")}
             </Button>
           </div>
         </form>
