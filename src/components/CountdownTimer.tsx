@@ -14,38 +14,52 @@ interface CountdownTimerProps {
   isActive?: boolean;
   lang?: 'en' | 'ha';
   onPauseToggle?: () => void;
+  extendedDays?: number;
+  // Additional stats for full information
+  drivers?: number;
+  fleet?: number;
+  remit?: number;
+  health?: string;
+  cycleDay?: string;
 }
 
 export const CountdownTimer: React.FC<CountdownTimerProps> = ({
-  startDate = '2026-07-29',
-  endDate = '2026-08-28',
+  startDate,
+  endDate,
   cycleId = 'No Active Cycle',
   status = 'inactive',
   isActive = false,
   lang = 'en',
-  onPauseToggle
+  onPauseToggle,
+  extendedDays = 0,
+  drivers = 0,
+  fleet = 0,
+  remit = 0,
+  health = 'N/A',
+  cycleDay = '0'
 }) => {
   // Determine if cycle is truly active based on props
   const cycleIsActive = isActive && status !== 'inactive' && status !== 'Setup Mode';
 
-  // Target date parsing (pure client-side compatible for Cloudflare Pages static hosting)
-  const getTargetTimestamp = (dateStr: string): number => {
+  // Target date parsing incorporating extension days
+  const getTargetTimestamp = (dateStr?: string, startStr?: string, extension: number = 0): number => {
     try {
-      if (dateStr.includes('T')) {
-        return new Date(dateStr).getTime();
-      }
-      return new Date(`${dateStr}T23:59:59`).getTime();
+      const start = startStr ? new Date(startStr.includes('T') ? startStr : `${startStr}T00:00:00`) : new Date('2026-07-29T00:00:00');
+      const baseEndMs = start.getTime() + 30 * 24 * 3600 * 1000;
+      const extendedEndMs = baseEndMs + (extension || 0) * 24 * 3600 * 1000;
+      return extendedEndMs;
     } catch {
       return new Date('2026-08-28T23:59:59').getTime();
     }
   };
 
-  const getStartTimestamp = (dateStr: string): number => {
+  const getStartTimestamp = (dateStr?: string): number => {
     try {
-      if (dateStr.includes('T')) {
-        return new Date(dateStr).getTime();
+      const base = dateStr || '2026-07-29';
+      if (base.includes('T')) {
+        return new Date(base).getTime();
       }
-      return new Date(`${dateStr}T00:00:00`).getTime();
+      return new Date(`${base}T00:00:00`).getTime();
     } catch {
       return new Date('2026-07-29T00:00:00').getTime();
     }
@@ -64,7 +78,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
 
     const calculateTimeRemaining = () => {
       const now = Date.now();
-      const targetTime = getTargetTimestamp(endDate);
+      const targetTime = getTargetTimestamp(endDate, startDate, extendedDays);
       const startTime = getStartTimestamp(startDate);
       const totalDuration = Math.max(1, targetTime - startTime);
 
@@ -127,7 +141,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
                 {lang === 'ha' ? 'KIDAYAR ZAGAYEN AIKI' : 'ACTIVE CYCLE TIMER'}
               </h3>
               <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-                {lang === 'ha' ? 'Kidayar kwanaki 30' : '30-Day countdown status'}
+                {lang === 'ha' ? `Kidayar kwanaki ${30 + (extendedDays || 0)}` : `${30 + (extendedDays || 0)}-Day countdown status`}
               </p>
             </div>
           </div>
@@ -180,6 +194,24 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Debug / Full Info View for Inactive State */}
+        {(drivers > 0 || fleet > 0 || remit > 0) && (
+          <div className="grid grid-cols-3 gap-1.5 mt-1 border-t border-slate-100 pt-2.5">
+            <div className="flex flex-col">
+              <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tight">Drivers</span>
+              <span className="text-[10px] font-black text-slate-700">{drivers}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tight">Fleet</span>
+              <span className="text-[10px] font-black text-slate-700">{fleet}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tight">Remit</span>
+              <span className="text-[10px] font-black text-emerald-600">₦{remit.toLocaleString()}</span>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -197,7 +229,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
               {lang === 'ha' ? 'KIDAYAR ZAGAYEN AIKI' : 'ACTIVE CYCLE TIMER'}
             </h3>
             <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-              {lang === 'ha' ? 'Kidayar kwanaki 30 tare da sarrafa dakatarwa' : '30-Day countdown with freeze control'}
+              {lang === 'ha' ? `Kidayar kwanaki ${30 + (extendedDays || 0)} tare da sarrafa dakatarwa` : `${30 + (extendedDays || 0)}-Day countdown with freeze control`}
             </p>
           </div>
         </div>

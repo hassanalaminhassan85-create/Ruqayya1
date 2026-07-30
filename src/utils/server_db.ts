@@ -11,7 +11,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase Admin for persistent storage
-let firestore: any = null;
+export let firestore: any = null;
 try {
   const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
   
@@ -26,19 +26,13 @@ try {
     }
   }
 
-  // Use (default) if no ID is provided, or if the provided one looks like a placeholder
-  if (!dbId || dbId === '(default)') {
-    firestore = getFirestore();
+  // Use the configured database ID
+  if (dbId) {
+    firestore = getFirestore(undefined, dbId);
+    console.log(`Initialized with database: ${dbId}`);
   } else {
-    try {
-      // Correct signature for getFirestore with databaseId in firebase-admin is getFirestore(app?, databaseId?)
-      // Passing undefined as the first argument uses the default app.
-      firestore = getFirestore(undefined, dbId);
-      console.log(`Initialized with named database: ${dbId}`);
-    } catch (err) {
-      console.warn(`Failed to initialize named database ${dbId}, falling back to default:`, err);
-      firestore = getFirestore();
-    }
+    firestore = getFirestore();
+    console.log(`Initialized with default database`);
   }
 } catch (e) {
   console.error("Firebase Admin initialization failed:", e);
@@ -265,7 +259,8 @@ export function saveDB(state: DBState): void {
             }
           }
         } else if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
-          console.warn('PERMISSION_DENIED on Firestore database. This can happen during initial rules/IAM propagation. Keeping named database and retrying on next saves.');
+          console.warn('PERMISSION_DENIED on Firestore named database. Switching to default database.');
+          firestore = getFirestore(); // Switch to default
         }
       });
     }

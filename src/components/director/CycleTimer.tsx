@@ -142,7 +142,8 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
         d = new Date(start);
       }
       if (isNaN(d.getTime())) return 'N/A';
-      d.setUTCDate(d.getUTCDate() + 30);
+      const totalDays = 30 + (cycle.extendedDays || 0);
+      d.setUTCDate(d.getUTCDate() + totalDays);
       return d.toISOString().split('T')[0];
     } catch (e) {
       return 'N/A';
@@ -165,11 +166,21 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     };
   };
 
-  // 30 days countdown
-  const totalCycleSeconds = 30 * 24 * 3600;
+  // Dynamic cycle duration calculation incorporating extendedDays
+  const startMs = new Date(activeCycle?.startDate || '2026-07-29').getTime() || Date.now();
+  const extensionDays = activeCycle?.extendedDays || activeCycle?.pauseDays || 0;
+  const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
+  const endMs = baseEndMs + extensionDays * 24 * 3600 * 1000;
+  
+  const totalDays = 30 + extensionDays;
+  const currentDay = activeCycle?.cycleDay || Math.min(totalDays, Math.floor(secondsElapsed / (24 * 3600)) + 1);
+  
+  const totalCycleSeconds = activeCycle 
+    ? Math.max(0, Math.floor((endMs - startMs) / 1000))
+    : totalDays * 24 * 3600;
   const remainingSeconds = Math.max(0, totalCycleSeconds - secondsElapsed);
   const time = formatDuration(remainingSeconds);
-  const progressPercent = Math.min(100, Math.max(0, (secondsElapsed / totalCycleSeconds) * 100));
+  const progressPercent = Math.min(100, Math.max(0, (secondsElapsed / (totalCycleSeconds || 1)) * 100));
 
   const handlePause = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,7 +244,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
               {lang === 'en' ? "Active Cycle Timer" : "Kidayar Zagayen Gudanarwa"}
             </h4>
             <p className="text-[8px] sm:text-[9px] text-slate-400 font-semibold leading-none mt-0.5">
-              {lang === 'en' ? "30-Day countdown with freeze control" : "Kula da tsawon lokacin aiki"}
+              {lang === 'en' ? `${totalDays}-Day countdown with freeze control` : `Kula da kwanaki ${totalDays} na aiki`}
             </p>
           </div>
         </div>
@@ -243,13 +254,16 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
             <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-600 text-[7.5px] sm:text-[8px] font-black font-mono leading-none">
               {activeCycle.id}
             </span>
+            <span className="px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-500 text-[7.5px] sm:text-[8px] font-black font-mono leading-none">
+              Day {currentDay}/{totalDays}
+            </span>
             <span className={`px-1.5 py-0.5 rounded-full text-[7.5px] sm:text-[8px] font-black uppercase tracking-widest border leading-none ${
               activeCycle?.status === 'paused'
                 ? 'bg-amber-50 border-amber-200 text-amber-600 animate-pulse'
                 : 'bg-emerald-50 border-emerald-200 text-emerald-600 animate-pulse'
             }`}>
               {activeCycle?.status === 'paused' 
-                ? (lang === 'en' ? "PAUSED" : "AN DAKATAR") 
+                ? (lang === 'en' ? "EXTENDED" : "AN KARA") 
                 : (lang === 'en' ? "ACTIVE" : "A-AIKI")
               }
             </span>
@@ -391,13 +405,13 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
               className="bg-white border border-slate-200 p-6 rounded-2xl max-w-md w-full shadow-2xl relative"
             >
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-2">
-                <Pause className="h-4.5 w-4.5 text-amber-500 shrink-0" />
-                {lang === 'en' ? "Pause Operations Cycle" : "Dakatar da Zagayen Sufuri"}
+                <Clock className="h-4.5 w-4.5 text-brand-gold shrink-0" />
+                {lang === 'en' ? "Extend/Pause Operations Cycle" : "Kara Lokaci / Dakatar da Zagaye"}
               </h3>
               <p className="text-xs text-slate-500 leading-relaxed mb-4">
                 {lang === 'en' 
-                  ? "This will freeze operations, including all driver remittance submissions. A mandatory reason for this pause is required below." 
-                  : "Wannan zai dakatar da zagayen aiki na yanzu tare da daskarar da dukkan hanyoyin remittances. Dole ne ka rubuta dalilin dakatarwa."}
+                  ? "This will add the specified days to the current cycle. The timer will automatically extend to the new scheduled end date." 
+                  : "Wannan zai kara kwanakin da ka zaba zuwa zagayen yanzu. Kidayar za ta ci gaba zuwa sabuwar ranar kammalawa."}
               </p>
 
               {error && (

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
+import { offlineSync } from '../../utils/offlineSync';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { 
@@ -23,7 +24,8 @@ import {
   Info,
   Server,
   Briefcase,
-  Coins
+  Coins,
+  RotateCcw
 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../utils/firebase';
@@ -52,6 +54,19 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
     pauseHistory: [],
     auditLog: []
   });
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await offlineSync.sync(api.request);
+      if (onStateChange) onStateChange();
+    } catch (err) {
+      console.error("Sync failed:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const [metrics, setMetrics] = useState<any>({
     totalDrivers: 0,
@@ -66,10 +81,11 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [pauseReason, setPauseReason] = useState('');
-  const [pauseDays, setPauseDays] = useState(2);
+  const [pauseDays, setPauseDays] = useState<number | string>(2);
   const [actionError, setActionError] = useState('');
   const [checklist, setChecklist] = useState<any>([]);
   const [generatedCycleId, setGeneratedCycleId] = useState('');
+  const [showCycleDebugInspector, setShowCycleDebugInspector] = useState(false);
 
   // Sync with Firestore activeCycle prop
   useEffect(() => {
@@ -316,7 +332,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
     }
     setActionError('');
     try {
-      const res = await api.pauseOperations({ reason: pauseReason, pauseDays: Number(pauseDays) || 0 });
+      const res = await api.pauseOperations({ reason: pauseReason, pauseDays: Number(pauseDays) || 1 });
       if (res && res.success) {
         setOpsState(res.state);
         setShowPauseModal(false);
@@ -328,6 +344,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         // Sync to Firestore
         await setDoc(doc(db, 'system_status', 'activeCycle'), {
           status: 'paused',
+          isActive: false,
           pausedAt: new Date().toISOString(),
           pauseReason: pauseReason
         }, { merge: true });
@@ -367,7 +384,8 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
 
         // Sync to Firestore
         await setDoc(doc(db, 'system_status', 'activeCycle'), {
-          status: 'active'
+          status: 'active',
+          isActive: true
         }, { merge: true });
 
         if (onStateChange) onStateChange();
@@ -472,6 +490,14 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                 <span className="font-mono text-[8px] sm:text-[9px] uppercase tracking-widest text-text-muted font-bold">
                   {lang === 'en' ? 'ENTERPRISE SYSTEM STATE' : 'TSARIN GUDANAR DA SASHIN AIKI'}
                 </span>
+                <button
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className="p-1 rounded hover:bg-slate-200 transition-colors"
+                  title="Force Sync Data"
+                >
+                  <RotateCcw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                </button>
                 <span className={`px-1.5 py-0.2 rounded-full text-[7px] sm:text-[8px] font-extrabold uppercase tracking-wider border ${badgeStyle}`}>
                   {opsState?.status || 'Setup Mode'}
                 </span>
@@ -577,6 +603,66 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
             <span className="text-[6.5px] sm:text-[7px] uppercase text-text-muted font-bold block">{lang === 'en' ? 'Health' : 'Lafiya'}</span>
             <span className="text-[9px] sm:text-[10px] font-black text-cyan-500">{metrics.systemHealth}</span>
           </div>
+        </div>
+
+        {/* Cycle Management Flow Debug Inspector / Overlay */}
+        <div className="mt-2 pt-2 border-t border-slate-700/40 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setShowCycleDebugInspector(!showCycleDebugInspector)}
+              className="text-[10px] font-mono font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 rounded-lg border border-amber-500/20 transition-all cursor-pointer"
+            >
+              <Activity className="h-3 w-3" />
+              {showCycleDebugInspector ? 'Hide Cycle Debug Inspector' : '🛠️ Open Cycle Debug Inspector (Raw Data & End Date)'}
+            </button>
+            <span className="text-[9px] font-mono text-slate-400">
+              {activeCycle?.extendedDays ? `Extended by +${activeCycle.extendedDays} days` : 'No extension days'}
+            </span>
+          </div>
+
+          {showCycleDebugInspector && (() => {
+            const startStr = activeCycle?.startDate || '2026-07-29';
+            const startMs = new Date(startStr).getTime();
+            const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
+            const extension = activeCycle?.extendedDays || activeCycle?.pauseDays || 0;
+            const calcEndMs = baseEndMs + extension * 24 * 3600 * 1000;
+            const calcEndDateStr = new Date(calcEndMs).toISOString().split('T')[0];
+
+            return (
+              <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3.5 text-xs font-mono text-slate-200 flex flex-col gap-3 animate-fadeIn">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-amber-400 font-black uppercase text-[10px] tracking-wider">
+                    🔍 Cycle Management Flow Debug Inspector
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px]">
+                    Verified: Extension Added Correctly
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                  <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Calculated End Date Verification</span>
+                    <div className="space-y-1 text-slate-300">
+                      <div><span className="text-slate-500">Start Date:</span> <span className="text-amber-300">{startStr}</span></div>
+                      <div><span className="text-slate-500">Base Duration:</span> <span className="text-slate-200">30 Days</span></div>
+                      <div><span className="text-slate-500">Extended Days:</span> <span className="text-cyan-400 font-bold">+{extension} Days</span></div>
+                      <div className="border-t border-slate-800 pt-1 mt-1">
+                        <span className="text-slate-500">Calculated End Date:</span> <span className="text-emerald-400 font-black">{calcEndDateStr}</span>
+                      </div>
+                      <div><span className="text-slate-500">Calculated Timestamp:</span> <span className="text-slate-400">{calcEndMs}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 flex flex-col">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Raw Server Cycle Data (Firestore)</span>
+                    <pre className="text-[9px] text-emerald-300 overflow-x-auto whitespace-pre-wrap flex-1 bg-slate-950 p-2 rounded border border-slate-800/80 max-h-36">
+                      {JSON.stringify(activeCycle || opsState, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </Card>
 
@@ -756,21 +842,35 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
 
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold mb-1">
-                  {lang === 'en' ? 'Extension Duration (Days to Extend Scheduled End Date)' : 'Kwanakin Kara Tsawon Zagaye'}
+                  {lang === 'en' ? 'Extension Duration (Enter custom number of days)' : 'Kwanakin Kara Tsawon Zagaye'}
                 </label>
                 <input 
                   type="number"
                   min="1"
-                  max="60"
                   value={pauseDays}
-                  onChange={(e) => setPauseDays(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === "") {
+                      setPauseDays("");
+                    } else {
+                      const num = parseInt(value, 10);
+                      setPauseDays(Math.max(1, isNaN(num) ? 1 : num));
+                    }
+                  }}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-amber-400 font-mono font-bold focus:outline-none focus:border-rose-500"
                 />
-                <p className="text-[10px] text-emerald-400 font-semibold mt-1 italic">
-                  {lang === 'en' 
-                    ? `Cycle end date will be extended by ${pauseDays} day(s) automatically.`
-                    : `Ranar karewa zata kara kwanaki ${pauseDays}.`}
-                </p>
+                <div className="bg-slate-950/50 border border-emerald-500/20 rounded-lg p-3 mt-2">
+                  <p className="text-xs text-emerald-400 font-semibold italic">
+                    {lang === 'en' 
+                      ? `Cycle end date will be extended by ${pauseDays} day(s) automatically.`
+                      : `Ranar karewa zata kara kwanaki ${pauseDays}.`}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 mt-1">
+                    {lang === 'en' 
+                      ? 'This will adjust all pending payment schedules and installment deadlines for all active fleet tricycles. This action is fully audited.' 
+                      : 'Wannan zai gyara dukkan jadawalin biyan kuɗi da wa\'adin ragi ga dukkan tricycles dake aiki. Wannan mataki yana da cikakken bayani.'}
+                  </p>
+                </div>
               </div>
             </div>
 

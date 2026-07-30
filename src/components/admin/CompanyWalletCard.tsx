@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { offlineSync } from '../../utils/offlineSync';
 import { 
   Wallet, 
   ArrowUpRight, 
@@ -18,7 +19,8 @@ import {
   Plus,
   Minus,
   Sparkles,
-  DollarSign
+  DollarSign,
+  RotateCcw
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { Button } from '../ui/Button';
@@ -40,6 +42,19 @@ export const CompanyWalletCard: React.FC<CompanyWalletCardProps> = ({
   const [animatingBalance, setAnimatingBalance] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [cardFlipped, setCardFlipped] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await offlineSync.sync(api.request);
+      if (onStateChange) onStateChange();
+    } catch (err) {
+      console.error("Sync failed:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Inflow / Outflow summary stats
   const totalInflow = finance
@@ -140,6 +155,14 @@ export const CompanyWalletCard: React.FC<CompanyWalletCardProps> = ({
                   </span>
                   <span className="block text-[6px] sm:text-[7px] font-mono text-slate-400">CORPORATE WALLET NODE</span>
                 </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleSync(); }}
+                  disabled={isSyncing}
+                  className="ml-2 p-1 rounded hover:bg-slate-700 transition-colors z-20"
+                  title="Force Sync Data"
+                >
+                  <RotateCcw className={`h-3 w-3 text-slate-400 ${isSyncing ? 'animate-spin' : ''}`} />
+                </button>
               </div>
               <span className="text-[6px] sm:text-[7px] font-bold text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded border border-emerald-500/20 flex items-center gap-0.5 leading-none">
                 <ShieldCheck className="h-1.5 w-1.5" />

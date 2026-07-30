@@ -218,14 +218,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
 
     const unsubscribe = subscribeToActiveCycle((data) => {
       if (data) {
+        console.log('[AdminDashboard] Received cycle update:', data);
         setActiveCycle({
-          id: data.cycleId,
-          startDate: data.startDate,
-          endDate: data.endDate,
-          status: data.status,
-          isActive: data.isActive
+          ...data,
+          id: data.cycleId // Ensure id is mapped if components expect .id
         });
       } else {
+        console.log('[AdminDashboard] No active cycle received');
         setActiveCycle(null);
       }
     });
@@ -610,6 +609,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 cycleId={activeCycle?.id || 'No Active Cycle'}
                 status={activeCycle?.status || 'inactive'}
                 isActive={activeCycle?.isActive ?? false}
+                extendedDays={activeCycle?.extendedDays || 0}
+                drivers={activeCycle?.drivers}
+                fleet={activeCycle?.fleet}
+                remit={activeCycle?.remit}
+                health={activeCycle?.health}
+                cycleDay={activeCycle?.cycleDay}
               />
               <CycleStatusSummary
                 lang={lang}

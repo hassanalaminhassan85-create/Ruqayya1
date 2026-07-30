@@ -19,7 +19,8 @@ import {
   saveR2File, 
   getR2FilePath,
   setDBChangeListener,
-  initCloudPersistence
+  initCloudPersistence,
+  firestore
 } from './src/utils/server_db';
 import { PushService } from './src/utils/PushService';
 import { WorkersAIService } from './src/utils/ai_service';
@@ -425,6 +426,51 @@ function broadcastStateUpdate() {
   });
 }
 
+// Helper: Sync Active Cycle Metadata to Firestore for real-time dashboard widgets
+async function syncActiveCycleToFirestore(db: any) {
+  if (!firestore) return;
+  
+  const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+  
+  // Calculate real-time metrics even if inactive to show "Full Information"
+  const activeDriversCount = (db.drivers || []).filter((d: any) => d.status === 'active' || d.status === 'approved').length;
+  const totalFleetCount = (db.vehicles || []).length;
+  
+  const cycleStart = activeCycle ? new Date(activeCycle.startDate) : new Date();
+  const currentRemit = (db.financial_records || [])
+    .filter((f: any) => f.type === 'revenue' && activeCycle && new Date(f.date) >= cycleStart)
+    .reduce((sum: number, f: any) => sum + f.amount, 0);
+
+  const payload: any = {
+    isActive: !!activeCycle,
+    status: activeCycle ? activeCycle.status : 'inactive',
+    cycleId: activeCycle ? activeCycle.id : 'No Active Cycle',
+    startDate: activeCycle ? activeCycle.startDate : new Date().toISOString().split('T')[0],
+    endDate: activeCycle ? activeCycle.endDate : '',
+    extendedDays: activeCycle ? (activeCycle.extendedDays || activeCycle.pauseDays || 0) : 0,
+    pauseDays: activeCycle ? (activeCycle.pauseDays || activeCycle.extendedDays || 0) : 0,
+    drivers: activeDriversCount,
+    fleet: totalFleetCount,
+    remit: currentRemit,
+    health: activeCycle ? (activeCycle.status === 'paused' ? 'Paused' : 'Stable') : 'Inactive',
+    cycleDay: activeCycle ? (db.company_operations_state?.currentDay || 1).toString() : '0',
+    updated_at: new Date().toISOString()
+  };
+
+  if (activeCycle) {
+    if (activeCycle.pausedAt) payload.pausedAt = activeCycle.pausedAt;
+    if (activeCycle.pauseReason) payload.pauseReason = activeCycle.pauseReason;
+    if (activeCycle.pauseHistory) payload.pauseHistory = activeCycle.pauseHistory;
+  }
+
+  try {
+    await firestore.collection('system_status').doc('activeCycle').set(payload, { merge: true });
+    console.log(`[FirestoreSync] Synced cycle status: ${payload.status} (${payload.cycleId})`);
+  } catch (err: any) {
+    console.error('[FirestoreSync] Failed to sync cycle status:', err.message);
+  }
+}
+
 // Register the database change listener to broadcast state snapshots to all browser clients
 setDBChangeListener(() => {
   broadcastStateUpdate();
@@ -570,14 +616,15 @@ setInterval(() => {
       const secondsElapsed = computeActiveDuration(activeCycle);
       const daysElapsed = Math.floor(secondsElapsed / (24 * 3600)) + 1;
       const currentDayInDB = db.company_operations_state.currentDay || 1;
+      const totalAllowedDays = 30 + (activeCycle.extendedDays || 0);
 
-      if (daysElapsed !== currentDayInDB && daysElapsed <= 30) {
+      if (daysElapsed !== currentDayInDB && daysElapsed <= totalAllowedDays) {
         db.company_operations_state.currentDay = daysElapsed;
         dbChanged = true;
       }
 
-      // End-of-cycle distribution trigger (30-day countdown expiration)
-      if (daysElapsed > 30) {
+      // End-of-cycle distribution trigger
+      if (daysElapsed > totalAllowedDays) {
         const endDate = new Date().toISOString();
         activeCycle.status = 'completed';
         activeCycle.endDate = endDate;
@@ -714,6 +761,7 @@ setInterval(() => {
 
     if (dbChanged) {
       saveDB(db);
+      syncActiveCycleToFirestore(db);
     }
   } catch (err) {
     console.error("Background automation task error:", err);
@@ -4850,12 +4898,13 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
     const newCycle = {
       id: cycleId,
       startDate,
-      endDate: endDate || null,
+      endDate: endDate || new Date(new Date(startDate).getTime() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
       endGoalTons: parseFloat(endGoalTons) || 200,
       status: 'active',
       created_at: new Date().toISOString(),
       created_by: actor.fullName,
       locked: false,
+      extendedDays: 0,
       financials: [],
       pauseHistory: []
     };
@@ -4875,6 +4924,7 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
     });
 
     saveDB(db);
+    syncActiveCycleToFirestore(db);
 
     writeServerAuditLog(
       actor.id,
@@ -4893,7 +4943,7 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
 });
 
 // Pause Active Operating Cycle
-app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
+app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => {
   try {
     const actor = (req as any).user;
     if (actor.role !== 'director' && actor.role !== 'admin') {
@@ -4913,7 +4963,8 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
 
     const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
 
-    activeCycle.status = 'paused';
+    // activeCycle.status = 'paused'; // MODIFIED: Keep active so no resume needed
+    activeCycle.status = 'active'; 
     activeCycle.pauseReason = reason;
     activeCycle.pausedAt = new Date().toISOString();
     activeCycle.pausedBy = actor.fullName;
@@ -4923,7 +4974,7 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
     if (daysToExtend > 0) {
       const baseEndDate = activeCycle.endDate 
         ? new Date(activeCycle.endDate).getTime() 
-        : Date.now() + 30 * 24 * 3600 * 1000;
+        : new Date(activeCycle.startDate).getTime() + 30 * 24 * 3600 * 1000;
       if (!isNaN(baseEndDate)) {
         const extendedDate = new Date(baseEndDate + daysToExtend * 24 * 3600 * 1000);
         activeCycle.endDate = extendedDate.toISOString().split('T')[0];
@@ -4939,6 +4990,7 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
       id: generateUUID(),
       pausedBy: actor.fullName,
       pausedAt: new Date().toISOString(),
+      resumedAt: new Date().toISOString(), // Automatically resume instantly
       reason,
       pauseDays: daysToExtend,
       extendedEndDate: activeCycle.endDate
@@ -4948,7 +5000,7 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
     if (!db.company_operations_state) {
       db.company_operations_state = { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
     }
-    db.company_operations_state.status = 'Paused';
+    db.company_operations_state.status = 'Active'; // Keep as Active
     if (!db.company_operations_state.pauseHistory) {
       db.company_operations_state.pauseHistory = [];
     }
@@ -4972,6 +5024,27 @@ app.post('/api/director/cycles/pause', authenticateSession, (req, res) => {
     });
 
     saveDB(db);
+    syncActiveCycleToFirestore(db);
+
+    // Update Firestore activeCycle
+    if (firestore) {
+      console.log('Attempting to update Firestore system_status/activeCycle');
+      try {
+        await firestore.collection('system_status').doc('activeCycle').set({
+          status: 'paused',
+          endDate: activeCycle.endDate,
+          pauseReason: reason,
+          extendedDays: activeCycle.extendedDays || 0,
+          pauseDays: activeCycle.pauseDays || 0
+        }, { merge: true });
+        console.log(`Updated Firestore system_status/activeCycle for cycle ${activeCycle.id}`);
+      } catch (err) {
+        console.error('Failed to update Firestore activeCycle:', err);
+        throw err;
+      }
+    } else {
+      console.warn('Firestore not initialized');
+    }
 
     writeServerAuditLog(
       actor.id,
@@ -5036,6 +5109,7 @@ app.delete('/api/director/cycles/:id', authenticateSession, (req, res) => {
     });
 
     saveDB(db);
+    syncActiveCycleToFirestore(db);
 
     writeServerAuditLog(
       actor.id,
@@ -5105,6 +5179,7 @@ app.post('/api/director/cycles/resume', authenticateSession, (req, res) => {
     });
 
     saveDB(db);
+    syncActiveCycleToFirestore(db);
 
     writeServerAuditLog(
       actor.id,
@@ -5289,6 +5364,7 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
     });
 
     saveDB(db);
+    syncActiveCycleToFirestore(db);
 
     writeServerAuditLog(
       actor.id,
@@ -5614,7 +5690,7 @@ app.post('/api/operations/start', authenticateSession, (req, res) => {
 });
 
 // POST pause company operations
-app.post('/api/operations/pause', authenticateSession, (req, res) => {
+app.post('/api/operations/pause', authenticateSession, async (req, res) => {
   try {
     const actor = (req as any).user;
     if (actor.role !== 'admin' && actor.role !== 'director') {
@@ -5699,6 +5775,20 @@ app.post('/api/operations/pause', authenticateSession, (req, res) => {
 
     db.company_operations_state = state;
     saveDB(db);
+    syncActiveCycleToFirestore(db);
+    if (firestore) {
+      try {
+        await firestore.collection('system_status').doc('activeCycle').set({
+          status: 'paused',
+          endDate: activeCycle?.endDate || '',
+          pauseReason: reason,
+          extendedDays: activeCycle?.extendedDays || 0,
+          pauseDays: activeCycle?.pauseDays || 0
+        }, { merge: true });
+      } catch (err) {
+        console.error('Failed to update Firestore activeCycle on operations pause:', err);
+      }
+    }
 
     writeServerAuditLog(
       actor.id,

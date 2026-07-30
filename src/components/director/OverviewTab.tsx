@@ -208,7 +208,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     if (activeMs < 0) activeMs = 0;
     
     const secondsElapsed = Math.floor(activeMs / 1000);
-    const totalCycleSeconds = 30 * 24 * 3600;
+    const totalDays = 30 + (cycle.extendedDays || 0);
+    const totalCycleSeconds = totalDays * 24 * 3600;
     const remainingSeconds = Math.max(0, totalCycleSeconds - secondsElapsed);
     
     const days = Math.floor(remainingSeconds / (3600 * 24));
@@ -240,7 +241,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         d = new Date(start);
       }
       if (isNaN(d.getTime())) return 'N/A';
-      d.setUTCDate(d.getUTCDate() + 30);
+      const totalDays = 30 + (cycle.extendedDays || 0);
+      d.setUTCDate(d.getUTCDate() + totalDays);
       return d.toISOString().split('T')[0];
     } catch (e) {
       return 'N/A';
@@ -997,7 +999,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               <div>
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
                   <Clock className="h-4.5 w-4.5 text-brand-gold" />
-                  {lang === 'en' ? "Active operating Cycle Timeline" : "Zagayen Aiki Na Kwanaki 30"}
+                  {lang === 'en' ? "Active operating Cycle Timeline" : `Zagayen Aiki Na Kwanaki ${30 + (activeCycle?.extendedDays || 0)}`}
                 </h3>
                 <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Continuous tricycle fleet audit mapping and boardroom settlement cycle.</p>
               </div>
