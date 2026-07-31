@@ -61,6 +61,7 @@ interface OverviewTabProps {
   admins: any[];
   shareholders: any[];
   cycles: any[];
+  activeCycle?: any;
   companySettings: any;
   shareholderSettings: any;
   tripManifests: any[];
@@ -96,6 +97,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   admins,
   shareholders,
   cycles,
+  activeCycle: propActiveCycle,
   companySettings,
   shareholderSettings,
   tripManifests,
@@ -150,7 +152,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const sharePct = shareholderSettings?.distributionPercentage ?? 2;
   const shareholderPool = netProfit > 0 ? (netProfit * (sharePct / 100)) : 0;
 
-  const activeCycle = (cycles || []).find(c => c && (c.status === 'active' || c.status === 'paused'));
+  const activeCycle = propActiveCycle || (cycles || []).find(c => c && (c.status === 'active' || c.status === 'paused')) || cycles[0];
   const targetTons = activeCycle ? activeCycle.endGoalTons : 200;
   const currentTons = 94.6; // In a real production DB, this aggregates trip manifests weights
   const completionPercentage = Math.round((currentTons / targetTons) * 100);

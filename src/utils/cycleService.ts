@@ -42,7 +42,7 @@ const DEFAULT_ACTIVE_CYCLE: ActiveCycleData = {
 
 export function subscribeToActiveCycle(onUpdate: (data: ActiveCycleData | null) => void) {
   const docRef = doc(db, 'system_status', 'activeCycle');
-  return onSnapshot(docRef, (snap) => {
+  return onSnapshot(docRef, async (snap) => {
     if (snap.exists()) {
       const data = snap.data() as ActiveCycleData;
       
@@ -53,22 +53,37 @@ export function subscribeToActiveCycle(onUpdate: (data: ActiveCycleData | null) 
       const calculatedEndTimestamp = baseEnd + extension * 24 * 3600 * 1000;
       const calculatedEndDateStr = new Date(calculatedEndTimestamp).toISOString().split('T')[0];
 
-      console.log(`[CycleService DEBUG] ========================================`);
-      console.log(`[CycleService DEBUG] Raw Server Cycle Data:`, JSON.parse(JSON.stringify(data)));
-      console.log(`[CycleService DEBUG] Start Date: ${data.startDate || '2026-07-29'}`);
-      console.log(`[CycleService DEBUG] Base 30-Day End Date: ${new Date(baseEnd).toISOString().split('T')[0]}`);
-      console.log(`[CycleService DEBUG] Extension Days: ${extension}`);
-      console.log(`[CycleService DEBUG] Calculated End Date: ${calculatedEndDateStr}`);
-      console.log(`[CycleService DEBUG] Calculated Timestamp: ${calculatedEndTimestamp}`);
-      console.log(`[CycleService DEBUG] ========================================`);
-
       onUpdate(data);
     } else {
-      console.warn('[CycleService] system_status/activeCycle document does not exist in Firestore. Providing default fallback active cycle.');
+      // Fallback: check backend API for active cycles
+      try {
+        const res = await fetch('/api/director/cycles').then(r => r.json()).catch(() => ({ cycles: [] }));
+        const cycles = res.cycles || [];
+        const active = cycles.find((c: any) => c.status === 'active' || c.status === 'paused') || cycles[0];
+        if (active) {
+          onUpdate({
+            cycleId: active.id,
+            isActive: active.status === 'active' || active.status === 'paused',
+            status: active.status || 'active',
+            startDate: active.startDate,
+            endDate: active.endDate,
+            extendedDays: active.extendedDays || 0,
+            pauseDays: active.pauseDays || 0,
+            drivers: active.drivers || 4,
+            fleet: active.fleet || 4,
+            remit: active.remit || 0,
+            health: active.health || 'Optimal',
+            cycleDay: active.cycleDay || 'Day 1 of 30'
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('[CycleService] Failed to fetch fallback backend cycles:', err);
+      }
       onUpdate(DEFAULT_ACTIVE_CYCLE);
     }
   }, (error) => {
-    console.warn('[CycleService] Firestore subscription error handled gracefully (falling back to default cycle):', error);
+    console.warn('[CycleService] Firestore subscription error handled gracefully:', error);
     onUpdate(DEFAULT_ACTIVE_CYCLE);
   });
 }

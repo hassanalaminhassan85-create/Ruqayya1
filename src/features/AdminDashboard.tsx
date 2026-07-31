@@ -64,9 +64,10 @@ interface AdminDashboardProps {
   dictionary: Dictionary;
   activeTab?: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings';
   setActiveTab?: (tab: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings') => void;
+  activeCycle?: any;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab, activeCycle: propActiveCycle }) => {
   // Tabs & Views
   const [localActiveTab, setLocalActiveTab] = useState<'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('dashboard');
   const activeTab = propActiveTab || localActiveTab;
@@ -79,7 +80,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [finance, setFinance] = useState<FinancialRecord[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [shareholders, setShareholders] = useState<Shareholder[]>([]);
-  const [activeCycle, setActiveCycle] = useState<any>(null);
+  const [localActiveCycle, setLocalActiveCycle] = useState<any>(null);
+  const activeCycle = propActiveCycle !== undefined ? propActiveCycle : localActiveCycle;
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
@@ -216,16 +218,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
 
     window.addEventListener('open-assisted-driver', handleOpenAssisted);
 
-    const unsubscribe = subscribeToActiveCycle((data) => {
+    const unsubscribe = propActiveCycle !== undefined ? () => {} : subscribeToActiveCycle((data) => {
       if (data) {
         console.log('[AdminDashboard] Received cycle update:', data);
-        setActiveCycle({
+        setLocalActiveCycle({
           ...data,
           id: data.cycleId // Ensure id is mapped if components expect .id
         });
       } else {
         console.log('[AdminDashboard] No active cycle received');
-        setActiveCycle(null);
+        setLocalActiveCycle(null);
       }
     });
 

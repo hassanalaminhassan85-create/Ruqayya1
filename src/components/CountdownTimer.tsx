@@ -118,7 +118,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
     const timer = setInterval(calculateTimeRemaining, 1000);
 
     return () => clearInterval(timer);
-  }, [startDate, endDate, cycleIsActive]);
+  }, [startDate, endDate, cycleIsActive, extendedDays]);
 
   const units = [
     { label: lang === 'ha' ? 'KWANAKI' : 'DAYS', value: timeLeft.days },

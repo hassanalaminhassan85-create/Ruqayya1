@@ -12,6 +12,9 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase Admin for persistent storage
 export let firestore: any = null;
+export function setFirestore(val: any) {
+  firestore = val;
+}
 try {
   const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
   
@@ -167,8 +170,11 @@ export async function initCloudPersistence() {
       const initialState = loadDB();
       await docRef.set(initialState);
     }
-  } catch (err) {
-    console.warn('Failed to initialize cloud persistence (relying on local storage):', err);
+  } catch (err: any) {
+    console.warn('Failed to initialize cloud persistence (relying on local storage):', err?.message || err);
+    if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
+      firestore = null;
+    }
   }
 }
 
@@ -259,8 +265,8 @@ export function saveDB(state: DBState): void {
             }
           }
         } else if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
-          console.warn('PERMISSION_DENIED on Firestore named database. Switching to default database.');
-          firestore = getFirestore(); // Switch to default
+          console.warn('PERMISSION_DENIED on Firestore. Disabling cloud sync to rely on local storage.');
+          firestore = null;
         }
       });
     }

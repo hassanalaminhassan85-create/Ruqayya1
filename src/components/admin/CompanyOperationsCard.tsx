@@ -89,49 +89,15 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
 
   // Sync with Firestore activeCycle prop
   useEffect(() => {
-    if (activeCycle && activeCycle.isActive) {
+    if (activeCycle) {
       setOpsState(prev => ({
         ...prev,
-        status: activeCycle.status === 'paused' ? 'Paused' : 'Operational Mode',
+        status: activeCycle.status === 'paused' ? 'Paused' : (activeCycle.isActive ? 'Operational Mode' : 'Setup Mode'),
         currentCycle: activeCycle.cycleId || activeCycle.id || prev.currentCycle,
         currentDay: parseInt(activeCycle.cycleDay?.match(/\d+/)?.[0] || '1', 10)
       }));
-    } else if (activeCycle === null && opsState.status !== 'Setup Mode' && !loading) {
-      // HEAL: If backend thinks we are operational but Firestore is empty, 
-      // attempt to restore Firestore from the backend state.
-      const healFirestore = async () => {
-        try {
-          await setDoc(doc(db, 'system_status', 'activeCycle'), {
-            cycleId: opsState.currentCycle || 'CYC-RESTORED',
-            isActive: opsState.status === 'Operational Mode' || opsState.status === 'Paused',
-            status: opsState.status === 'Paused' ? 'paused' : 'active',
-            startDate: opsState.startedAt ? opsState.startedAt.split('T')[0] : new Date().toISOString().split('T')[0],
-            endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
-            drivers: metrics.totalDrivers,
-            fleet: metrics.totalTricycles,
-            remit: metrics.todayCollections,
-            health: 'Healthy',
-            cycleDay: `Day ${opsState.currentDay || 1}/30`,
-            created_at: new Date().toISOString()
-          }, { merge: true });
-          console.log("Healed Firestore cycle state from backend state.");
-        } catch (err) {
-          console.error("Failed to heal Firestore state:", err);
-        }
-      };
-      
-      if (opsState.status === 'Operational Mode' || opsState.status === 'Paused') {
-        healFirestore();
-      } else {
-        // If really Setup Mode, just keep it that way
-        setOpsState(prev => ({
-          ...prev,
-          status: 'Setup Mode',
-          currentCycle: ''
-        }));
-      }
     }
-  }, [activeCycle, loading]);
+  }, [activeCycle]);
 
   // Inline forms state
   const [showSalaryForm, setShowSalaryForm] = useState(false);
@@ -301,21 +267,6 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         if (res.detail) {
           window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
         }
-        
-        // Sync to Firestore
-        await setDoc(doc(db, 'system_status', 'activeCycle'), {
-          cycleId: generatedCycleId,
-          isActive: true,
-          status: 'active',
-          startDate: new Date().toISOString().split('T')[0],
-          endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
-          drivers: metrics.totalDrivers,
-          fleet: metrics.totalTricycles,
-          remit: 0,
-          health: 'Healthy',
-          cycleDay: 'Day 1/30',
-          created_at: new Date().toISOString()
-        });
 
         if (onStateChange) onStateChange();
         fetchOperationsState();
@@ -340,14 +291,6 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         if (res.detail) {
           window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
         }
-
-        // Sync to Firestore
-        await setDoc(doc(db, 'system_status', 'activeCycle'), {
-          status: 'paused',
-          isActive: false,
-          pausedAt: new Date().toISOString(),
-          pauseReason: pauseReason
-        }, { merge: true });
 
         if (onStateChange) onStateChange();
         fetchOperationsState();
@@ -381,12 +324,6 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
         if (res.detail) {
           window.dispatchEvent(new CustomEvent('db-change', { detail: res.detail }));
         }
-
-        // Sync to Firestore
-        await setDoc(doc(db, 'system_status', 'activeCycle'), {
-          status: 'active',
-          isActive: true
-        }, { merge: true });
 
         if (onStateChange) onStateChange();
         fetchOperationsState();

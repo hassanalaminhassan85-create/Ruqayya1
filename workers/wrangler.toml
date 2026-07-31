@@ -22,8 +22,3 @@ bucket_name = "ruqayya"
 
 [ai]
 binding = "AI"
-
-[vars]
-# Optional VAPID keys for direct push notifications
-VAPID_PUBLIC_KEY = "BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg"
-VAPID_PRIVATE_KEY = "vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk"

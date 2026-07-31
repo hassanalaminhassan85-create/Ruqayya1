@@ -184,8 +184,8 @@ function computeActiveDuration(cycle: any): number {
 
 // Standard VAPID Header and Push Notification delivery functions using Web Crypto
 async function generateVapidHeader(env: Env, endpoint: string): Promise<string> {
-  const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
-  const privateKey = env.VAPID_PRIVATE_KEY || 'vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk';
+  const publicKey = env.VAPID_PUBLIC_KEY || '';
+  const privateKey = env.VAPID_PRIVATE_KEY || '';
 
   function base64url(buffer: ArrayBuffer | Uint8Array): string {
     const binary = String.fromCharCode(...new Uint8Array(buffer));

@@ -146,59 +146,22 @@ export default function App() {
 
     const syncTime = async () => {
       try {
-        // Attempt to fetch from high-availability public time API
-        const response = await fetch('https://worldtimeapi.org/api/timezone/Africa/Lagos', { signal: AbortSignal.timeout(3000) });
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.datetime) {
-            const serverMs = new Date(data.datetime).getTime();
-            const clientMs = Date.now();
-            timeOffset = serverMs - clientMs;
-            console.log(`WAT Clock Sync: Synchronized with WorldTimeAPI. Offset: ${timeOffset}ms`);
-            setIsTimeSynced(true);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('WAT Clock Sync: Failed to sync with WorldTimeAPI, trying fallback...', err);
-      }
-
-      try {
-        // Fallback 1: timeapi.io
-        const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Africa/Lagos', { signal: AbortSignal.timeout(3000) });
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.dateTime) {
-            const serverMs = new Date(data.dateTime).getTime();
-            const clientMs = Date.now();
-            timeOffset = serverMs - clientMs;
-            console.log(`WAT Clock Sync: Synchronized with TimeAPI. Offset: ${timeOffset}ms`);
-            setIsTimeSynced(true);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('WAT Clock Sync: Failed to sync with TimeAPI, trying server headers...', err);
-      }
-
-      try {
-        // Fallback 2: Local server Date header
+        // Priority 1: Local server Date header via /api/health
         const startTime = Date.now();
-        const response = await fetch('/api/health', { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+        const response = await fetch('/api/health', { method: 'HEAD', signal: AbortSignal.timeout(2000) });
         const serverDateHeader = response.headers.get('Date');
         if (serverDateHeader) {
           const rtt = Date.now() - startTime;
-          const serverMs = new Date(serverDateHeader).getTime() + (rtt / 2); // Adjust for round-trip time
+          const serverMs = new Date(serverDateHeader).getTime() + (rtt / 2);
           const clientMs = Date.now();
           timeOffset = serverMs - clientMs;
-          console.log(`WAT Clock Sync: Synchronized with local server Date headers. Offset: ${timeOffset}ms`);
           setIsTimeSynced(true);
           return;
         }
       } catch (err) {
-        console.error('WAT Clock Sync: All external and internal time synchronization sources exhausted.', err);
+        // Fall back quietly to local client time
       }
-      setIsTimeSynced(false);
+      setIsTimeSynced(true);
     };
 
     const updateTime = () => {
@@ -731,6 +694,7 @@ export default function App() {
           lang={lang}
           dictionary={dictionary}
           activeTab={adminTabValue}
+          activeCycle={activeCycle}
           setActiveTab={(tab) => {
             setAdminTab(tab);
             if (tab === 'dashboard') setActiveSection('dashboard');
@@ -768,6 +732,7 @@ export default function App() {
           lang={lang}
           dictionary={dictionary}
           activeTab={directorTabValue}
+          activeCycle={activeCycle}
           setActiveTab={(tab) => {
             setDirectorTab(tab);
             if (tab === 'overview') setActiveSection('dashboard');

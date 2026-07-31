@@ -283,7 +283,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
       return {
         ...c,
         id: cycleIdText,
-        seqId: String(seqNum),
+        seqId: cycleIdText,
         label: cycleIdText,
         isCurrent,
         displayLabel
@@ -1228,7 +1228,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                         className="bg-slate-900 border border-slate-800 hover:bg-slate-800 text-brand-gold rounded-lg px-2.5 py-1 text-[9px] font-black focus:outline-none flex items-center gap-1 shadow-xs cursor-pointer"
                         title="Choose Operational Lease Cycle"
                       >
-                        <span>{formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`}</span>
+                        <span>{formattedCycles.find(c => c.seqId === selectedCycle)?.label || selectedCycle || 'No Active Cycle'}</span>
                         <ChevronDown className="h-2.5 w-2.5 text-brand-gold shrink-0" />
                       </motion.button>
                       <motion.button 
@@ -1507,7 +1507,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     <h4 className="text-sm font-black text-amber-900 uppercase tracking-widest">Incomplete Remittance Cycle</h4>
                     <p className="text-[11px] text-amber-700 font-medium mt-1 leading-relaxed">
                       The following drivers have <span className="font-black underline decoration-amber-300">not recorded</span> any payments for 
-                      <span className="font-black"> {formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`}, Installment #{selectedInstallment}</span>. Automated alerts can be dispatched via the driver portal.
+                      <span className="font-black"> {formattedCycles.find(c => c.seqId === selectedCycle)?.label || selectedCycle || 'No Active Cycle'}, Installment #{selectedInstallment}</span>. Automated alerts can be dispatched via the driver portal.
                     </p>
                   </div>
                 </div>
@@ -2605,7 +2605,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
             <div className="flex justify-between">
               <span className="text-text-muted">Target Period:</span>
-              <span className="font-black text-emerald-600">{formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`} — Inst. #{selectedInstallment}</span>
+              <span className="font-black text-emerald-600">{formattedCycles.find(c => c.seqId === selectedCycle)?.label || selectedCycle || 'No Active Cycle'} — Inst. #{selectedInstallment}</span>
             </div>
 
             <div className="flex justify-between border-t border-slate-200 pt-2 font-bold text-slate-900">
@@ -3177,7 +3177,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     <span className="p-1.5 bg-amber-500 text-white rounded-lg shadow-sm">
                       <Calculator className="h-4 w-4" />
                     </span>
-                    Select Installment for {formattedCycles.find(c => c.seqId === pendingCycleSelection)?.label || `CYC 00${pendingCycleSelection}`}
+                    Select Installment for {formattedCycles.find(c => c.seqId === pendingCycleSelection)?.label || pendingCycleSelection || 'No Active Cycle'}
                   </h3>
                   <p className="text-[10px] text-slate-500 font-medium mt-1">
                     Select one of the 6 installments to evaluate unpaid balances and audit driver reports.
@@ -3267,7 +3267,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     </h3>
                   </div>
                   <p className="text-[10px] text-slate-500 font-medium mt-1">
-                    Selected period: <strong className="text-brand-navy">{formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`} — Installment #{selectedInstallment}</strong>
+                    Selected period: <strong className="text-brand-navy">{formattedCycles.find(c => c.seqId === selectedCycle)?.label || selectedCycle || 'No Active Cycle'} — Installment #{selectedInstallment}</strong>
                   </p>
                 </div>
                 <button
@@ -3285,7 +3285,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                   </div>
                   <h4 className="font-extrabold text-slate-900 text-sm">Perfect Compliance Recorded!</h4>
                   <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                    All leasing drivers have successfully recorded their remittances for {formattedCycles.find(c => c.seqId === selectedCycle)?.label || `CYC 00${selectedCycle}`}, Installment #{selectedInstallment}.
+                    All leasing drivers have successfully recorded their remittances for {formattedCycles.find(c => c.seqId === selectedCycle)?.label || selectedCycle || 'No Active Cycle'}, Installment #{selectedInstallment}.
                   </p>
                   <Button
                     size="sm"

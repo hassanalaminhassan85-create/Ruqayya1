@@ -1190,8 +1190,12 @@ const buildResponse = (data: any, status = 200, headers = {}) => {
 
 // Helper to sign and generate standard ES256 VAPID JWT header for Web Push using Web Crypto
 async function generateVapidHeader(env: Env, endpoint: string): Promise<string> {
-  const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
-  const privateKey = env.VAPID_PRIVATE_KEY || 'vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk';
+  const publicKey = env.VAPID_PUBLIC_KEY;
+  const privateKey = env.VAPID_PRIVATE_KEY;
+
+  if (!publicKey || !privateKey) {
+    throw new Error("VAPID keys not configured in environment bindings.");
+  }
 
   function base64url(buffer: ArrayBuffer | Uint8Array): string {
     const bytes = new Uint8Array(buffer);
@@ -1693,7 +1697,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // PUBLIC: VAPID Public Key Retrieval
   if (path === '/api/notifications/vapid-public-key' && method === 'GET') {
-    const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
+    const publicKey = env.VAPID_PUBLIC_KEY || '';
+    if (!publicKey) {
+      return buildResponse({ error: 'VAPID_PUBLIC_KEY not configured.' }, 500);
+    }
     return buildResponse({ publicKey });
   }
 
@@ -3127,7 +3134,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // F. GET /api/notifications/status
   if (path === '/api/notifications/status' && method === 'GET') {
-    const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
+    const publicKey = env.VAPID_PUBLIC_KEY || '';
+    if (!publicKey) {
+      return buildResponse({ error: 'VAPID_PUBLIC_KEY not configured.' }, 500);
+    }
     let devicesCount = 0;
     let subscribed = false;
 

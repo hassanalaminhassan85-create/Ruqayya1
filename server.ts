@@ -20,7 +20,8 @@ import {
   getR2FilePath,
   setDBChangeListener,
   initCloudPersistence,
-  firestore
+  firestore,
+  setFirestore
 } from './src/utils/server_db';
 import { PushService } from './src/utils/PushService';
 import { WorkersAIService } from './src/utils/ai_service';
@@ -464,10 +465,15 @@ async function syncActiveCycleToFirestore(db: any) {
   }
 
   try {
-    await firestore.collection('system_status').doc('activeCycle').set(payload, { merge: true });
-    console.log(`[FirestoreSync] Synced cycle status: ${payload.status} (${payload.cycleId})`);
+    if (firestore) {
+      await firestore.collection('system_status').doc('activeCycle').set(payload, { merge: true });
+      console.log(`[FirestoreSync] Synced cycle status: ${payload.status} (${payload.cycleId})`);
+    }
   } catch (err: any) {
-    console.error('[FirestoreSync] Failed to sync cycle status:', err.message);
+    console.warn('[FirestoreSync] Failed to sync cycle status (relying on local storage):', err?.message || err);
+    if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
+      setFirestore(null);
+    }
   }
 }
 
@@ -3504,7 +3510,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
 
       // Make the initial request
       let response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         contents,
         config: {
           systemInstruction: systemPrompt,
@@ -3562,7 +3568,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           res.setHeader('Connection', 'keep-alive');
 
           const streamResponse = await ai.models.generateContentStream({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             contents: nextContents,
             config: {
               systemInstruction: systemPrompt,
@@ -3578,7 +3584,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           return res.end();
         } else {
           const finalResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             contents: nextContents,
             config: {
               systemInstruction: systemPrompt,
@@ -4707,12 +4713,12 @@ export function lookupContractTerms(vehicle: any) {
 }
 
 export function getDriverFinancials(driver: any, db: any) {
-  const purchasePrice = parseFloat(driver.vehicle_purchase_price) || 15000000;
-  const agreedAmount = parseFloat(driver.agreed_amount) || 300000;
+  const purchasePrice = parseFloat(driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice) || 15000000;
+  const agreedAmount = parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 300000;
   
   if (driver.opening_balance && driver.opening_balance.is_imported) {
-    const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance) || 0;
-    const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date) || 0;
+    const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance ?? driver.opening_balance.remainingVehicleBalance) || 0;
+    const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date ?? driver.opening_balance.totalPaidToDate) || 0;
     
     // Sum of all approved payments in ERP
     const approvedPaymentsInERP = (db.driver_payments || [])
@@ -4739,8 +4745,9 @@ export function getDriverFinancials(driver: any, db: any) {
     const countErpPaid = approvedPaymentsInERP.length;
     
     const totalAmountPaid = totalErpPaid;
-    const initialRemaining = driver.remaining_vehicle_balance !== undefined && !isNaN(parseFloat(driver.remaining_vehicle_balance))
-      ? parseFloat(driver.remaining_vehicle_balance)
+    const rawInitialRemaining = driver.remaining_vehicle_balance !== undefined ? driver.remaining_vehicle_balance : driver.remainingVehicleBalance;
+    const initialRemaining = rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining))
+      ? parseFloat(rawInitialRemaining)
       : purchasePrice;
     const remainingVehicleBalance = Math.max(0, initialRemaining - totalErpPaid);
     
@@ -4956,30 +4963,28 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
     }
 
     const db = loadDB();
-    const activeCycle = db.cycles.find(c => c.status === 'active');
+    const activeCycle = db.cycles.find(c => c.status === 'active' || c.status === 'paused');
     if (!activeCycle) {
       return res.status(400).json({ error: 'No active operating cycle found to pause.' });
     }
 
     const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
+    const newExtendedDays = (activeCycle.extendedDays || activeCycle.pauseDays || 0) + daysToExtend;
 
     // activeCycle.status = 'paused'; // MODIFIED: Keep active so no resume needed
     activeCycle.status = 'active'; 
     activeCycle.pauseReason = reason;
     activeCycle.pausedAt = new Date().toISOString();
     activeCycle.pausedBy = actor.fullName;
-    activeCycle.pauseDays = daysToExtend;
+    activeCycle.pauseDays = newExtendedDays;
+    activeCycle.extendedDays = newExtendedDays;
 
     // Extend end date automatically if extension days were specified
     if (daysToExtend > 0) {
-      const baseEndDate = activeCycle.endDate 
-        ? new Date(activeCycle.endDate).getTime() 
-        : new Date(activeCycle.startDate).getTime() + 30 * 24 * 3600 * 1000;
-      if (!isNaN(baseEndDate)) {
-        const extendedDate = new Date(baseEndDate + daysToExtend * 24 * 3600 * 1000);
-        activeCycle.endDate = extendedDate.toISOString().split('T')[0];
-        activeCycle.extendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
-      }
+      const startMs = activeCycle.startDate ? new Date(activeCycle.startDate.includes('T') ? activeCycle.startDate : `${activeCycle.startDate}T00:00:00`).getTime() : new Date('2026-07-29T00:00:00').getTime();
+      const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
+      const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
+      activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
     }
 
     // Add to cycle pause history
@@ -5038,9 +5043,11 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
           pauseDays: activeCycle.pauseDays || 0
         }, { merge: true });
         console.log(`Updated Firestore system_status/activeCycle for cycle ${activeCycle.id}`);
-      } catch (err) {
-        console.error('Failed to update Firestore activeCycle:', err);
-        throw err;
+      } catch (err: any) {
+        console.warn('Failed to update Firestore activeCycle (relying on local storage):', err?.message || err);
+        if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
+          setFirestore(null);
+        }
       }
     } else {
       console.warn('Firestore not initialized');
@@ -5535,7 +5542,7 @@ function getBrowserName(userAgent: string): string {
 }
 
 // POST start company operations
-app.post('/api/operations/start', authenticateSession, (req, res) => {
+app.post('/api/operations/start', authenticateSession, async (req, res) => {
   try {
     const actor = (req as any).user;
     if (actor.role !== 'admin' && actor.role !== 'director') {
@@ -5667,6 +5674,7 @@ app.post('/api/operations/start', authenticateSession, (req, res) => {
     }
 
     saveDB(db);
+    await syncActiveCycleToFirestore(db);
 
     writeServerAuditLog(
       actor.id,
@@ -5741,23 +5749,22 @@ app.post('/api/operations/pause', authenticateSession, async (req, res) => {
 
     // Synchronize active operating cycle status to paused
     if (!db.cycles) db.cycles = [];
-    const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+    const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
     if (activeCycle) {
       activeCycle.status = 'paused';
       activeCycle.pauseReason = reason;
       activeCycle.pausedAt = new Date().toISOString();
       activeCycle.pausedBy = actor.fullName;
-      activeCycle.pauseDays = daysToExtend;
+
+      const newExtendedDays = (activeCycle.extendedDays || activeCycle.pauseDays || 0) + daysToExtend;
+      activeCycle.pauseDays = newExtendedDays;
+      activeCycle.extendedDays = newExtendedDays;
 
       if (daysToExtend > 0) {
-        const baseEndDate = activeCycle.endDate 
-          ? new Date(activeCycle.endDate).getTime() 
-          : Date.now() + 30 * 24 * 3600 * 1000;
-        if (!isNaN(baseEndDate)) {
-          const extendedDate = new Date(baseEndDate + daysToExtend * 24 * 3600 * 1000);
-          activeCycle.endDate = extendedDate.toISOString().split('T')[0];
-          activeCycle.extendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
-        }
+        const startMs = activeCycle.startDate ? new Date(activeCycle.startDate.includes('T') ? activeCycle.startDate : `${activeCycle.startDate}T00:00:00`).getTime() : new Date('2026-07-29T00:00:00').getTime();
+        const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
+        const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
+        activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
       }
 
       if (!activeCycle.pauseHistory) {
@@ -5785,8 +5792,11 @@ app.post('/api/operations/pause', authenticateSession, async (req, res) => {
           extendedDays: activeCycle?.extendedDays || 0,
           pauseDays: activeCycle?.pauseDays || 0
         }, { merge: true });
-      } catch (err) {
-        console.error('Failed to update Firestore activeCycle on operations pause:', err);
+      } catch (err: any) {
+        console.warn('Failed to update Firestore activeCycle on operations pause (relying on local storage):', err?.message || err);
+        if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
+          setFirestore(null);
+        }
       }
     }
 
@@ -5812,7 +5822,7 @@ app.post('/api/operations/pause', authenticateSession, async (req, res) => {
 });
 
 // POST resume company operations
-app.post('/api/operations/resume', authenticateSession, (req, res) => {
+app.post('/api/operations/resume', authenticateSession, async (req, res) => {
   try {
     const actor = (req as any).user;
     if (actor.role !== 'admin' && actor.role !== 'director') {
@@ -5870,6 +5880,7 @@ app.post('/api/operations/resume', authenticateSession, (req, res) => {
 
     db.company_operations_state = state;
     saveDB(db);
+    await syncActiveCycleToFirestore(db);
 
     writeServerAuditLog(
       actor.id,

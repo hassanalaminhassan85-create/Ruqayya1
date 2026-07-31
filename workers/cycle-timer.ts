@@ -194,8 +194,12 @@ function computeActiveDuration(cycle: any): number {
 
 // Cryptographic Web Push payload sender helper
 async function generateVapidHeader(env: Env, endpoint: string): Promise<string> {
-  const publicKey = env.VAPID_PUBLIC_KEY || 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
-  const privateKey = env.VAPID_PRIVATE_KEY || 'vPMa7vScOargYGEdGvVFoFiQpIVZxPh4hhkUV4pt5Gk';
+  const publicKey = env.VAPID_PUBLIC_KEY;
+  const privateKey = env.VAPID_PRIVATE_KEY;
+
+  if (!publicKey || !privateKey) {
+    throw new Error("VAPID keys not configured in environment bindings.");
+  }
 
   function base64url(buffer: ArrayBuffer | Uint8Array): string {
     const binary = String.fromCharCode(...new Uint8Array(buffer));

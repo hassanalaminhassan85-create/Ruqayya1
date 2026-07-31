@@ -68,8 +68,8 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
     let sub = await reg.pushManager.getSubscription();
 
     if (!sub) {
-      // 1. Fetch the VAPID Public Key from the backend, or use the robust hardcoded fallback
-      let vapidKey = 'BITZn5RUFNAiDT00zIT7QnCn-BzrOb1F1YT2dxnglz29nJ_ueg_G6VlaXfRGofieR2dSOJRNsWYF7aGYjorYfXg';
+      // 1. Fetch the VAPID Public Key from the backend
+      let vapidKey = '';
       try {
         const token = localStorage.getItem('ruqayya_token') || '';
         const res = await fetch('/api/notifications/vapid-public-key', {
@@ -82,7 +82,12 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
           }
         }
       } catch (err) {
-        console.warn('Ruqayya ERP: Could not fetch dynamic VAPID key, utilizing pre-compiled default.', err);
+        console.warn('Ruqayya ERP: Could not fetch dynamic VAPID key.', err);
+      }
+
+      if (!vapidKey) {
+        console.error('Ruqayya ERP: No VAPID public key available, cannot subscribe to push notifications.');
+        return false;
       }
 
       // Convert VAPID key to appropriate Uint8Array format

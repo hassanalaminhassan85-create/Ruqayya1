@@ -15,13 +15,15 @@ import { FinancialCommandCenter } from '../components/admin/FinancialCommandCent
 import { ReportCenter } from '../components/admin/ReportCenter';
 import { CommunicationCenter } from '../components/admin/CommunicationCenter';
 import { DocumentHub } from '../components/admin/DocumentHub';
+import { subscribeToActiveCycle } from '../utils/cycleService';
 
 export const DirectorDashboard: React.FC<{
   lang: Language;
   dictionary: Dictionary;
   activeTab: string;
   setActiveTab: (tab: any) => void;
-}> = ({ lang, dictionary, activeTab, setActiveTab }) => {
+  activeCycle?: any;
+}> = ({ lang, dictionary, activeTab, setActiveTab, activeCycle: propActiveCycle }) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [trips, setTrips] = useState<DailyRemittance[]>([]);
@@ -33,6 +35,8 @@ export const DirectorDashboard: React.FC<{
   const [payments, setPayments] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
+  const [localActiveCycle, setLocalActiveCycle] = useState<any>(null);
+  const activeCycle = propActiveCycle !== undefined ? propActiveCycle : localActiveCycle;
   const [loading, setLoading] = useState(true);
   const [sseConnected, setSseConnected] = useState(false);
 
@@ -73,6 +77,17 @@ export const DirectorDashboard: React.FC<{
     syncData();
     const interval = setInterval(syncData, 10000);
     
+    const unsubCycle = propActiveCycle !== undefined ? () => {} : subscribeToActiveCycle((data) => {
+      if (data) {
+        setLocalActiveCycle({
+          ...data,
+          id: data.cycleId
+        });
+      } else {
+        setLocalActiveCycle(null);
+      }
+    });
+
     // SSE Simulation or real connection
     const token = api.getToken();
     let es: EventSource | null = null;
@@ -96,9 +111,10 @@ export const DirectorDashboard: React.FC<{
 
     return () => {
       clearInterval(interval);
+      unsubCycle();
       es?.close();
     };
-  }, []);
+  }, [propActiveCycle]);
 
   const handleStartCycle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +151,7 @@ export const DirectorDashboard: React.FC<{
           admins={admins}
           shareholders={shareholders}
           cycles={cycles}
+          activeCycle={activeCycle}
           companySettings={settings?.company_settings || {}}
           shareholderSettings={settings?.shareholder_settings || {}}
           tripManifests={trips}

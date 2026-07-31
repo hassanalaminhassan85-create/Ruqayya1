@@ -5,6 +5,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { 
   FileText, 
   Printer, 
@@ -43,13 +45,27 @@ import {
   Type,
   Trash2,
   LockKeyhole,
-  Check
+  Check,
+  Sparkles,
+  Truck,
+  ArrowUpRight,
+  ArrowDownRight,
+  Layers,
+  Building
 } from 'lucide-react';
+
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge, Alert, Modal } from '../ui/SharedComponents';
 import { Driver, Vehicle, FinancialRecord, Shareholder } from '../../types';
 import { api } from '../../utils/api';
+
+// Official WhatsApp Icon SVG Component
+const WhatsAppIcon: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c-.001 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662a11.87 11.87 0 005.71 1.455h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+);
 
 interface ReportCenterProps {
   lang: 'en' | 'ha';
@@ -95,7 +111,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   trips = []
 }) => {
   // Navigation tabs inside Report Center
-  const [reportTab, setReportTab] = useState<'financial' | 'driver' | 'shareholder' | 'payroll' | 'expense' | 'collection' | 'wallet' | 'company' | 'audit'>('financial');
+  const [reportTab, setReportTab] = useState<'financial' | 'driver' | 'shareholder' | 'payroll' | 'expense' | 'collection' | 'wallet' | 'company' | 'audit' | 'all'>('financial');
   
   // Date configuration & filter states
   const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly' | 'custom' | 'cycle' | 'annual'>('monthly');
@@ -111,7 +127,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all');
   const [filterExpenseCategory, setFilterExpenseCategory] = useState<string>('all');
   const [availableCycles, setAvailableCycles] = useState<any[]>([]);
-  const [selectedCycleId, setSelectedCycleId] = useState<string>(''); // Default to empty string instead of hardcoded ID
+  const [selectedCycleId, setSelectedCycleId] = useState<string>('');
 
   useEffect(() => {
     api.request('/api/director/cycles').then(res => {
@@ -120,9 +136,11 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
       const active = list.find((c: any) => c.status === 'active' || c.status === 'paused') || list[0];
       if (active) {
         setSelectedCycleId(active.id);
+      } else if (list.length > 0) {
+        setSelectedCycleId(list[0].id);
       }
     }).catch(() => {
-      setAvailableCycles([{ id: 'CYC-2026-2459', title: 'Cycle #30', status: 'active' }]);
+      setAvailableCycles([]);
     });
   }, []);
 
@@ -134,12 +152,12 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
   
   // Signature store
-  const [prepName, setPrepName] = useState('Mallam Bashir K. Kano');
-  const [prepRole, setPrepRole] = useState('Chief Financial Accountant');
-  const [prepSign, setPrepSign] = useState('M.B.K. Kano');
+  const [prepName, setPrepName] = useState('Executive Director MMR');
+  const [prepRole, setPrepRole] = useState('Executive Director & Operations');
+  const [prepSign, setPrepSign] = useState('MMR');
   const [prepDate, setPrepDate] = useState(() => new Date().toISOString().split('T')[0]);
 
-  const [apprName, setApprName] = useState('Dr. Ruqayya Muhammad');
+  const [apprName, setApprName] = useState('');
   const [apprRole, setApprRole] = useState('Managing Director & CEO');
   const [apprSign, setApprSign] = useState('');
   const [apprDate, setApprDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -158,7 +176,39 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
   // Canvas drawing ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+
+  // PDF Generation
+  const handleDownloadPDF = async () => {
+    if (!reportRef.current) return;
+    
+    const canvas = await html2canvas(reportRef.current, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`RUQAYYA_REPORT_${reportTab.toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  // PDF Generation for All Reports
+  const fullReportRef = useRef<HTMLDivElement>(null);
+  const handleDownloadAllPDF = async () => {
+    if (!fullReportRef.current) return;
+    
+    const canvas = await html2canvas(fullReportRef.current, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`RUQAYYA_FULL_REPORT_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
 
   // Initialize history
   useEffect(() => {
@@ -181,9 +231,9 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
         filtersUsed: "June 2026 • All Cycles • Approved Only",
         revisionNumber: 1,
         isLocked: true,
-        preparedByName: "Mallam Bashir K. Kano",
-        preparedByPosition: "Chief Financial Accountant",
-        preparedBySignature: "Mallam Bashir K. Kano",
+        preparedByName: "Executive Director MMR",
+        preparedByPosition: "Executive Director & Operations",
+        preparedBySignature: "MMR",
         preparedByDate: "2026-06-30",
         approvedByName: "Dr. Ruqayya Muhammad",
         approvedByPosition: "Managing Director & CEO",
@@ -206,34 +256,34 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   // Translations
   const t = {
     en: {
-      centerTitle: "Enterprise Report Center",
+      centerTitle: "Enterprise Financial Report Center",
       centerSub: "Compile, digitally approve, stamp, & download certified audit-ready fleet accounting statements.",
-      filterSec: "Configuration Filters",
-      reportType: "Report Type",
+      filterSec: "Report Configuration & Filters",
+      reportType: "Report Periodicity",
       dateRange: "Timeframe Range",
       lockReport: "Approve & Lock Document",
       downloadPdf: "A4 Print Preview",
       exportCsv: "Export Ledger CSV",
-      exportExcel: "Export excel Spreadsheet",
-      preparedBy: "Prepared By (Sign)",
-      approvedBy: "Approved By (CEO)",
+      exportExcel: "Export Excel Spreadsheet",
+      preparedBy: "Prepared By (Executive Sign)",
+      approvedBy: "Approved By (CEO Sign)",
       companyStamp: "Corporate Seal / Stamp",
       sealTypeNone: "No Seal Applied",
-      sealTypeSeal: "Official Company Seal",
+      sealTypeSeal: "Official Corporate Seal",
       sealTypeDigital: "Digital Audit Verified",
       sealTypeApproval: "Approved Board Stamp",
       sealTypeQr: "Security QR Verified",
-      signaturePad: "Digital Signature Desk",
-      drawSign: "Draw freehand signature",
-      typeSign: "Type initials",
-      clearSign: "Clear desk",
+      signaturePad: "Digital Signature Terminal",
+      drawSign: "Draw Freehand Signature",
+      typeSign: "Type Initials",
+      clearSign: "Clear Terminal",
       saveSign: "Insert Signature",
       statusLocked: "Immutable Certified Report",
       statusOpen: "Draft Report Console",
       reportHist: "Compliance History Archives",
-      noReports: "No archived compliance reports.",
+      noReports: "No archived compliance reports found.",
       revision: "Revision No.",
-      hashText: "Cryptographic Audit Signature",
+      hashText: "Cryptographic Audit Fingerprint",
       verifyTitle: "System Security Verifier",
       qrTitle: "Secure QR Report Checker"
     },
@@ -348,7 +398,6 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
       return activeTricycleIds.size;
     }
 
-    // Fallback: get all vehicles that had ANY trip manifest ever
     const allTripVehicleIds = new Set<string>();
     (trips || []).forEach((t: any) => {
       const vid = t.vehicle_id || t.vehicleId;
@@ -359,15 +408,12 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
       return allTripVehicleIds.size;
     }
 
-    // Secondary fallback
     return vehicles.filter(v => v && (v.status === 'active' || v.status === 'assigned')).length || vehicles.length || 5;
   })();
   const totalOutstandingBalance = drivers.reduce((sum, d) => sum + (d && d.remaining_vehicle_balance ? d.remaining_vehicle_balance : 0), 0);
   
   // Continuous 2% shareholder pool math
   const accumulatedShareholderPool = netEarningsProfit > 0 ? (netEarningsProfit * 0.02) : 0;
-  const totalShareholderWithdrawals = shareholders.reduce((sum, s) => sum + (s && s.total_withdrawn ? s.total_withdrawn : 0), 0);
-  const totalShareholderReinvestments = shareholders.reduce((sum, s) => sum + (s && s.total_reinvested ? s.total_reinvested : 0), 0);
   const totalInvestmentStocks = shareholders.reduce((sum, s) => sum + (s && s.investment_amount ? s.investment_amount : 0), 0);
 
   // Active Team Payroll formula: count * salary
@@ -384,7 +430,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    ctx.strokeStyle = '#0F172A'; // Navy deep
+    ctx.strokeStyle = '#0F172A';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     
@@ -403,6 +449,38 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
     
     const rect = canvas.getBoundingClientRect();
     ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.stroke();
+  };
+
+  const startDrawingTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.strokeStyle = '#0F172A';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    ctx.beginPath();
+    ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+    setIsDrawing(true);
+  };
+
+  const drawTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
     ctx.stroke();
   };
 
@@ -467,6 +545,39 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
     document.body.removeChild(link);
   };
 
+  // WHATSAPP SHARE DISPATCH HANDLER
+  const handleSendToWhatsApp = () => {
+    const companyPhone = "2348032835857";
+    const reportCategoryName = reportTab.toUpperCase();
+    const dateRangeStr = `${dateFrom} to ${dateTo}`;
+    const totalRevFormatted = totalInflows.toLocaleString();
+    const totalExpFormatted = totalOutflows.toLocaleString();
+    const netProfitFormatted = netEarningsProfit.toLocaleString();
+
+    const message = `📊 *RUQAYYA TRANSPORT LIMITED - OFFICIAL FINANCIAL REPORT*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏷️ *Report Category:* ${reportCategoryName} STATEMENT
+📅 *Reporting Period:* ${dateRangeStr}
+🔄 *Operating Cycle:* ${selectedCycleId || 'CYC-ACTIVE'}
+
+💰 *KEY FINANCIAL SUMMARY:*
+• Gross Revenues / Inflows: ₦${totalRevFormatted}
+• Operating Expenses / Outflows: ₦${totalExpFormatted}
+• Net Surplus / Profit (EBITDA): ₦${netProfitFormatted}
+
+🚛 *FLEET METRICS:*
+• Active Tricycles / Vehicles: ${activeVehiclesCount}
+• Driver Lease Balances: ₦${totalOutstandingBalance.toLocaleString()}
+• Shareholder 2% Reserve Pool: ₦${accumulatedShareholderPool.toLocaleString()}
+
+🔐 *Security Verification Hash:* ${activeReportHash}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_Generated via Ruqayya Transport Limited ERP System_`;
+
+    const encodedUrl = `https://wa.me/${companyPhone}?text=${encodeURIComponent(message)}`;
+    window.open(encodedUrl, '_blank', 'noopener,noreferrer');
+  };
+
   // LOCK REPORT & ARCHIVE AS IMMUTABLE
   const lockReport = () => {
     const repNum = "RTL-REP-" + Math.floor(100000 + Math.random() * 900000);
@@ -526,24 +637,154 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   });
 
   return (
-    <div className="flex flex-col gap-6" id="report-center-root">
+    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto" id="report-center-root">
       
+      {/* ====================================================
+          TOP-CENTER COMPANY LOGO VISUAL FOCAL POINT
+          ==================================================== */}
+      <motion.div 
+        initial={{ opacity: 0, y: -25, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, type: 'spring', stiffness: 100 }}
+        className="relative flex flex-col items-center justify-center text-center py-8 px-4 bg-gradient-to-b from-slate-900/95 via-slate-900/80 to-slate-900/40 rounded-3xl border border-slate-800/80 backdrop-blur-xl shadow-2xl overflow-hidden print:hidden"
+      >
+        {/* Background Ambient Golden Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-brand-gold/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
+
+        {/* Floating Logo Badge with Ring Animation */}
+        <motion.div
+          animate={{ y: [0, -6, 0] }}
+          transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+          className="relative z-10 mb-3 group cursor-pointer"
+        >
+          <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-full p-1.5 bg-gradient-to-tr from-brand-gold via-amber-400 to-amber-600 shadow-2xl shadow-amber-500/30 flex items-center justify-center">
+            <div className="h-full w-full rounded-full overflow-hidden bg-white border-2 border-slate-950 flex items-center justify-center">
+              <img 
+                src="/src/assets/images/ruqayya_logo_1783430629037.jpg" 
+                alt="Ruqayya Transport Limited Official Logo" 
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+              />
+            </div>
+            {/* Orbiting Pulsing Status Dot */}
+            <div className="absolute -bottom-1 -right-1 h-5 w-5 bg-emerald-500 border-2 border-slate-900 rounded-full flex items-center justify-center shadow-md">
+              <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Title & Subtitle Typography */}
+        <div className="relative z-10 max-w-2xl flex flex-col items-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-brand-gold text-[10px] sm:text-xs font-black uppercase tracking-widest mb-2 shadow-xs">
+            <Sparkles className="h-3.5 w-3.5 text-brand-gold" />
+            <span>AUDIT CERTIFIED FINANCIAL REPORTING SYSTEM</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight font-serif drop-shadow-md">
+            RUQAYYA TRANSPORT LIMITED
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1 max-w-xl">
+            Executive Financial Statements, General Ledger & Fleet Revenue Analytics
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 mt-3 text-[10px] font-mono text-slate-400">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              CYCLE: <strong className="text-brand-gold">{selectedCycleId || 'ACTIVE'}</strong>
+            </span>
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60">
+              <Building className="h-3 w-3 text-slate-400" />
+              HEADQUARTERS: MAIDUGURI, BORNO
+            </span>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ====================================================
+          ANIMATED FINANCIAL KPI CARDS
+          ==================================================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print:hidden">
+        
+        {/* Total Inflows */}
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <Card className="p-4 bg-slate-900/90 border border-slate-800 shadow-xl relative overflow-hidden group">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Gross Operating Revenues</span>
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <TrendingUp className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-xl sm:text-2xl font-black font-mono text-emerald-400 mt-2">
+              ₦{totalInflows.toLocaleString()}
+            </p>
+            <span className="text-[10px] text-slate-500 font-mono block mt-1">Total revenue inflows & collections</span>
+          </Card>
+        </motion.div>
+
+        {/* Total Outflows */}
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+          <Card className="p-4 bg-slate-900/90 border border-slate-800 shadow-xl relative overflow-hidden group">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Operating Expenses</span>
+              <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                <TrendingDown className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-xl sm:text-2xl font-black font-mono text-rose-400 mt-2">
+              -₦{totalOutflows.toLocaleString()}
+            </p>
+            <span className="text-[10px] text-slate-500 font-mono block mt-1">Fleet repairs, fuel & staff wages</span>
+          </Card>
+        </motion.div>
+
+        {/* Net Profit */}
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <Card className="p-4 bg-slate-900/90 border border-slate-800 shadow-xl relative overflow-hidden group">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Net Surplus / Profit</span>
+              <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-brand-gold">
+                <DollarSign className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-xl sm:text-2xl font-black font-mono text-brand-gold mt-2">
+              ₦{netEarningsProfit.toLocaleString()}
+            </p>
+            <span className="text-[10px] text-slate-500 font-mono block mt-1">EBITDA Net Corporate Earnings</span>
+          </Card>
+        </motion.div>
+
+        {/* Fleet & Lease Balances */}
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+          <Card className="p-4 bg-slate-900/90 border border-slate-800 shadow-xl relative overflow-hidden group">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Driver Lease Balances</span>
+              <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                <Truck className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-xl sm:text-2xl font-black font-mono text-blue-400 mt-2">
+              ₦{totalOutstandingBalance.toLocaleString()}
+            </p>
+            <span className="text-[10px] text-slate-500 font-mono block mt-1">{activeVehiclesCount} Active Tricycles in Service</span>
+          </Card>
+        </motion.div>
+
+      </div>
+
       {/* FILTER PANEL */}
-      <Card className="p-5 border-l-4 border-slate-900 bg-bg-surface shadow-xs print:hidden">
-        <div className="flex items-center gap-2 mb-4 border-b border-border-main pb-2">
+      <Card className="p-5 border-l-4 border-brand-gold bg-slate-900/90 border-slate-800 text-white shadow-xl print:hidden">
+        <div className="flex items-center gap-2 mb-4 border-b border-slate-800 pb-2">
           <SlidersHorizontal className="h-4 w-4 text-brand-gold" />
-          <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">{t.filterSec}</h4>
+          <h4 className="text-xs font-black text-white uppercase tracking-wider">{t.filterSec}</h4>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           
           {/* Report Type */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black text-slate-700 uppercase">{t.reportType}</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase">{t.reportType}</label>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value as any)}
-              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
+              className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-medium text-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-gold"
             >
               <option value="daily">Daily Statement</option>
               <option value="weekly">Weekly Statement</option>
@@ -556,39 +797,39 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
           {/* Date From */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black text-slate-700 uppercase">From</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase">From</label>
             <div className="relative">
-              <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                className="w-full pl-8 pr-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-200"
               />
             </div>
           </div>
 
           {/* Date To */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black text-slate-700 uppercase">To</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase">To</label>
             <div className="relative">
-              <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full pl-8 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                className="w-full pl-8 pr-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-200"
               />
             </div>
           </div>
 
           {/* Select Driver */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black text-slate-700 uppercase">Driver Filter</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase">Driver Filter</label>
             <select
               value={filterDriverId}
               onChange={(e) => setFilterDriverId(e.target.value)}
-              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
+              className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-medium text-slate-200"
             >
               <option value="all">All Drivers</option>
               {drivers.map((d, index) => (
@@ -599,11 +840,11 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
           {/* Select Shareholder */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black text-slate-700 uppercase">Shareholder</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase">Shareholder</label>
             <select
               value={filterShareholderId}
               onChange={(e) => setFilterShareholderId(e.target.value)}
-              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800"
+              className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-medium text-slate-200"
             >
               <option value="all">All Shareholders</option>
               {shareholders.map((s, idx) => (
@@ -614,11 +855,11 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
           {/* Stamp Selector */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black text-slate-700 uppercase">{t.companyStamp}</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase">{t.companyStamp}</label>
             <select
               value={sealType}
               onChange={(e) => setSealType(e.target.value as any)}
-              className="px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs font-black text-brand-gold cursor-pointer"
+              className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-black text-brand-gold cursor-pointer"
             >
               <option value="none">{t.sealTypeNone}</option>
               <option value="seal">{t.sealTypeSeal}</option>
@@ -629,12 +870,12 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
           </div>
 
           {/* Cycle ID Selector matching active company operating cycles */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black text-slate-700 uppercase">Operating Cycle ID</label>
+          <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-6">
+            <label className="text-[10px] font-black text-slate-400 uppercase">Operating Cycle Term ID</label>
             <select
               value={selectedCycleId}
               onChange={(e) => setSelectedCycleId(e.target.value)}
-              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 cursor-pointer"
+              className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-bold text-brand-gold cursor-pointer w-full"
             >
               {availableCycles.length > 0 ? (
                 availableCycles.map((c: any) => (
@@ -643,7 +884,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                   </option>
                 ))
               ) : (
-                <option value="CYC-2026-2459">CYC-2026-2459 (Active)</option>
+                <option value={selectedCycleId || 'CYC-ACTIVE'}>{selectedCycleId || 'Active Operating Cycle'}</option>
               )}
             </select>
           </div>
@@ -652,7 +893,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
       </Card>
 
       {/* INNER NAVIGATION RAILS */}
-      <div className="flex flex-wrap gap-1 border-b border-slate-200 pb-2 print:hidden">
+      <div className="flex flex-wrap gap-1.5 border-b border-slate-800 pb-2 print:hidden">
         {[
           { key: 'financial', label: lang === 'en' ? 'Financial Summary' : 'Kudin Shiga' },
           { key: 'driver', label: lang === 'en' ? 'Driver Reports' : 'Rahoton Direbobi' },
@@ -669,10 +910,10 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
             <button
               key={tab.key}
               onClick={() => setReportTab(tab.key as any)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
                 isActive 
-                  ? 'bg-slate-900 text-brand-gold shadow-xs' 
-                  : 'text-text-muted hover:text-text-main hover:bg-slate-100'
+                  ? 'bg-slate-900 text-brand-gold border border-amber-500/40 shadow-lg shadow-amber-500/10' 
+                  : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
               }`}
             >
               {tab.label}
@@ -688,81 +929,98 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
         <div className="lg:col-span-8 flex flex-col gap-4">
           
           {/* PRINT & ACTIONS FLOATER */}
-          <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3 print:hidden shadow-xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-4 print:hidden shadow-lg">
             <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">{t.statusOpen}</span>
+              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-[10px] sm:text-xs font-black text-slate-200 uppercase tracking-wider">{t.statusOpen}</span>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={triggerPrint}
-                className="font-bold flex items-center gap-1 text-[11px] h-8 bg-white border-slate-200 text-slate-800 cursor-pointer"
+                className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-slate-950 border-slate-800 text-slate-200 hover:text-white cursor-pointer whitespace-nowrap"
               >
-                <Printer className="h-3.5 w-3.5 text-slate-950" />
-                <span>{t.downloadPdf}</span>
+                <Printer className="h-3.5 w-3.5 text-brand-gold shrink-0" />
+                <span className="whitespace-nowrap">{t.downloadPdf}</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadPDF}
+                className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-slate-950 border-slate-800 text-slate-200 hover:text-white cursor-pointer whitespace-nowrap"
+              >
+                <Download className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                <span className="whitespace-nowrap">Download PDF</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadAllPDF}
+                className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-emerald-950 border-emerald-800 text-emerald-200 hover:text-white cursor-pointer whitespace-nowrap"
+              >
+                <Download className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                <span className="whitespace-nowrap">Download All PDF</span>
               </Button>
 
               <Button
                 variant="outline"
                 size="sm"
                 onClick={exportCSV}
-                className="font-bold flex items-center gap-1 text-[11px] h-8 bg-white border-slate-200 text-slate-800 cursor-pointer"
+                className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-slate-950 border-slate-800 text-slate-200 hover:text-white cursor-pointer whitespace-nowrap"
               >
-                <FileSpreadsheet className="h-3.5 w-3.5 text-slate-900" />
-                <span>CSV</span>
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                <span className="whitespace-nowrap">CSV Ledger</span>
               </Button>
 
               <Button
                 variant="primary"
                 size="sm"
                 onClick={lockReport}
-                className="font-bold flex items-center gap-1 text-[11px] h-8 bg-slate-950 text-brand-gold border-none cursor-pointer hover:bg-slate-900 shadow-sm"
+                className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-brand-gold text-slate-950 hover:bg-amber-400 border-none cursor-pointer shadow-md whitespace-nowrap"
               >
-                <LockKeyhole className="h-3.5 w-3.5" />
-                <span>{t.lockReport}</span>
+                <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
+                <span className="whitespace-nowrap">{t.lockReport}</span>
               </Button>
             </div>
           </div>
 
           {/* OFFICIAL A4 DOCUMENT BOX WITH MOTION & TRUE A4 PDF FORMATTING */}
           <motion.div 
+            ref={reportRef}
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="w-full max-w-[210mm] min-h-[297mm] mx-auto bg-white border border-slate-300 rounded-xl p-4 sm:p-14 shadow-2xl text-slate-900 font-sans relative overflow-hidden print:border-none print:shadow-none print:p-0 print:max-w-full"
+            className="w-full max-w-[210mm] min-h-[297mm] mx-auto bg-white border border-slate-300 rounded-2xl p-4 sm:p-10 md:p-14 shadow-2xl text-slate-900 font-sans relative overflow-hidden print:border-none print:shadow-none print:p-0 print:max-w-full"
           >
             
             {/* DOCUMENT HEADER */}
-            <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-slate-900 pb-5 mb-6 gap-4">
-              <div className="flex items-center gap-3">
-                {/* RTL CUSTOM LOGO */}
-                <div className="h-12 w-12 bg-white flex items-center justify-center rounded-lg shadow-sm shrink-0 border border-slate-200 overflow-hidden">
-                  <img src="/src/assets/images/ruqayya_logo_1783430629037.jpg" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
-                </div>
-                <div>
-                  <h1 className="text-md font-black tracking-tight text-slate-950 uppercase">RUQAYYA TRANSPORT LIMITED</h1>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Enterprise Resource Planning (ERP)</p>
-                  <p className="text-[9px] text-slate-400 font-mono">No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria • muhdadam573@gmail.com</p>
-                </div>
+            <div className="flex flex-col items-center text-center border-b-2 border-slate-900 pb-5 mb-6">
+              {/* RTL CUSTOM LOGO */}
+              <div className="h-20 w-20 bg-white flex items-center justify-center rounded-2xl shadow-sm mb-4 border border-slate-200 overflow-hidden">
+                <img src="/src/assets/images/ruqayya_logo_1783430629037.jpg" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
               </div>
-
-              <div className="text-right font-mono text-[9px] text-slate-700 flex flex-col items-end gap-1">
-                <Badge variant="gold" className="text-[8px] font-bold px-2 py-0.5 border border-brand-gold/30">AUDIT COMPLIANT DOCUMENT</Badge>
-                <p className="font-bold mt-1 text-slate-900">REP-NO: RTL-{(reportTab || 'FIN').toUpperCase()}-2026-902</p>
-                <p>Generated Date: {new Date().toISOString().slice(0, 10)}</p>
-                <p className="text-brand-navy font-bold">Operating Cycle: {selectedCycleId}</p>
-              </div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 uppercase font-serif">RUQAYYA TRANSPORT LIMITED</h1>
+              <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest mt-1">Enterprise Resource Planning (ERP)</p>
+              <motion.p 
+                initial={{ color: '#64748b' }}
+                animate={{ color: ['#64748b', '#b45309', '#64748b'] }}
+                transition={{ duration: 3, repeat: Infinity }}
+                className="text-[10px] font-mono mt-2 max-w-lg"
+              >
+                No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria • muhdadam573@gmail.com
+              </motion.p>
             </div>
 
             {/* FINANCIAL SUMMARY VIEW */}
             {reportTab === 'financial' && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
                 <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">I. Executive Financial Statement</h2>
-                  <p className="text-[10px] text-slate-500">General Ledger and Cash flows statement from {dateFrom} to {dateTo} for {selectedCycleId}.</p>
+                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">I. Executive Financial Statement & Cash Inflows</h2>
+                  <p className="text-[10px] text-slate-500">General Ledger and Cash flows statement from {dateFrom} to {dateTo} for {selectedCycleId || 'Active Operating Cycle'}.</p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-[11px] text-slate-800">
@@ -771,7 +1029,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                     <span>₦{totalInflows.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">1. Driver Installments Receipts</span>
+                    <span className="pl-3 text-slate-500">1. Driver Installment Receipts</span>
                     <span>₦{filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-100 py-1.5">
@@ -795,13 +1053,13 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                     <span>-₦{totalCurrentPayroll.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between border-b-2 border-slate-900 py-1.5 font-black text-slate-950 text-xs bg-slate-50 px-2 rounded">
-                    <span>C. NET CORPORATE SURPLUS PROFIT</span>
+                    <span>C. NET CORPORATE SURPLUS PROFIT (EBITDA)</span>
                     <span className="text-emerald-600">₦{netEarningsProfit.toLocaleString()}</span>
                   </div>
                 </div>
 
                 <div className="border-b border-slate-100 pb-2 mt-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">II. Balance Sheet & Equity Weight</h2>
+                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">II. Balance Sheet & Capital Equity Structure</h2>
                   <p className="text-[10px] text-slate-500">Capital valuation and investment pool distributions.</p>
                 </div>
 
@@ -839,7 +1097,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
                 <div className="border-b border-slate-100 pb-2">
                   <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Certified Driver Lease Status Statement</h2>
-                  <p className="text-[10px] text-slate-500">Comprehensive driver dossiers, passports, active tricycles, and payment balances for {selectedCycleId}.</p>
+                  <p className="text-[10px] text-slate-500">Comprehensive driver dossiers, passports, active tricycles, and payment balances for {selectedCycleId || 'Active Operating Cycle'}.</p>
                 </div>
 
                 <div className="flex flex-col gap-4">
@@ -869,7 +1127,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                         <div className="min-w-0">
                           <span className="text-[9px] text-slate-400 block font-bold uppercase">Tricycle & Cycle</span>
                           <span className="font-bold text-slate-900 block truncate">{d.assignedVehicleId || 'V-778 Kano'}</span>
-                          <span className="text-[9px] text-brand-navy font-bold">{selectedCycleId}</span>
+                          <span className="text-[9px] text-brand-navy font-bold">{selectedCycleId || 'CYC-ACTIVE'}</span>
                         </div>
                         <div className="flex flex-col items-start sm:items-end justify-between min-w-0">
                           <span className="text-[9px] text-slate-400 block font-bold uppercase">Lease Balance</span>
@@ -888,52 +1146,45 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
                 <div className="border-b border-slate-100 pb-2">
                   <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Shareholder Equity Distributions</h2>
-                  <p className="text-[10px] text-slate-500">Paid-up capital weights, passports, contacts, and withdrawals summary for {selectedCycleId}.</p>
+                  <p className="text-[10px] text-slate-500">Paid-up capital weights, passports, contacts, and withdrawals summary for {selectedCycleId || 'Active Operating Cycle'}.</p>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-[11px] font-mono">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-300">
-                        <th className="p-2.5">Shareholder</th>
-                        <th className="p-2.5">Contact / Passport</th>
-                        <th className="p-2.5 text-right">Investment Stock</th>
-                        <th className="p-2.5 text-right">Withdrawn</th>
-                        <th className="p-2.5 text-right">Reinvested</th>
-                        <th className="p-2.5 text-right">Stake & Div.</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {shareholders.map((s, idx) => {
-                        const stakePct = ((s.investment_amount || 0) / (totalInvestmentStocks || 1)) * 100;
-                        const availableDiv = ((s.investment_amount || 0) / (totalInvestmentStocks || 1)) * accumulatedShareholderPool;
-                        return (
-                          <tr key={`${s.id}-${idx}`} className="hover:bg-slate-50">
-                            <td className="p-2.5 flex items-center gap-2.5">
-                              <div className="h-8 w-8 rounded-full overflow-hidden shrink-0 border border-slate-300 bg-slate-200">
-                                <img src={s.passport_photo_url || s.passportPhoto || s.passport_photo || s.passport || shareholderPortraits[idx % shareholderPortraits.length]} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-sans font-bold text-slate-900 truncate">{s.full_name}</p>
-                                <p className="text-[9px] text-slate-500 truncate">{s.email || 'shareholder@ruqayyatransport.com'}</p>
-                              </div>
-                            </td>
-                            <td className="p-2.5">
-                              <p className="text-[10px] font-bold text-slate-800">{s.phone || '+234 803 000 0000'}</p>
-                              <p className="text-[9px] text-slate-400">Passport: {s.passport_no || 'PASSPORT-OK'}</p>
-                            </td>
-                            <td className="p-2.5 text-right font-bold text-slate-900">₦{(s.investment_amount || 0).toLocaleString()}</td>
-                            <td className="p-2.5 text-right text-rose-600">₦{(s.total_withdrawn || 0).toLocaleString()}</td>
-                            <td className="p-2.5 text-right text-emerald-600">₦{(s.total_reinvested || 0).toLocaleString()}</td>
-                            <td className="p-2.5 text-right">
-                              <span className="font-black text-brand-navy block">₦{availableDiv.toLocaleString()}</span>
-                              <Badge variant="gold" className="text-[8px] mt-0.5">{stakePct.toFixed(2)}% Stake</Badge>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="space-y-4">
+                  {shareholders.map((s, idx) => {
+                    const stakePct = ((s.investment_amount || 0) / (totalInvestmentStocks || 1)) * 100;
+                    const availableDiv = ((s.investment_amount || 0) / (totalInvestmentStocks || 1)) * accumulatedShareholderPool;
+                    return (
+                      <motion.div 
+                        key={`${s.id}-${idx}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full overflow-hidden shrink-0 border border-slate-300 bg-slate-200">
+                            <img src={s.passport_photo_url || s.passportPhoto || s.passport_photo || s.passport || shareholderPortraits[idx % shareholderPortraits.length]} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-sans font-bold text-slate-900 text-sm truncate">{s.full_name}</p>
+                            <p className="text-[10px] text-slate-500 truncate">{s.email || 'shareholder@ruqayyatransport.com'}</p>
+                            <p className="text-[10px] font-bold text-slate-800">{s.phone || '+234 803 000 0000'}</p>
+                            <p className="text-[9px] text-slate-400">Passport: {s.passport_no || 'PASSPORT-OK'}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono border-t border-slate-200 pt-3">
+                          <div className="flex flex-col"><span className="text-slate-500 uppercase">Investment</span><span className="font-bold text-slate-900">₦{(s.investment_amount || 0).toLocaleString()}</span></div>
+                          <div className="flex flex-col"><span className="text-slate-500 uppercase">Withdrawn</span><span className="font-bold text-rose-600">₦{(s.total_withdrawn || 0).toLocaleString()}</span></div>
+                          <div className="flex flex-col"><span className="text-slate-500 uppercase">Reinvested</span><span className="font-bold text-emerald-600">₦{(s.total_reinvested || 0).toLocaleString()}</span></div>
+                          <div className="flex flex-col items-start gap-0.5">
+                            <span className="text-slate-500 uppercase text-[9px]">Stake & Div.</span>
+                            <span className="font-black text-brand-navy text-[11px]">₦{availableDiv.toLocaleString()}</span>
+                            <Badge variant="gold" className="text-[8px] px-1.5 py-0.5 rounded-md whitespace-nowrap">{stakePct.toFixed(2)}% Stake</Badge>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
@@ -946,47 +1197,51 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                   <p className="text-[10px] text-slate-500">Automated staff salaries calculated dynamically by active tricycle fleet count.</p>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-[11px] font-mono">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-300">
-                        <th className="p-2.5">Staff Employee</th>
-                        <th className="p-2.5">Role Division</th>
-                        <th className="p-2.5">Salary Formula</th>
-                        <th className="p-2.5 text-right">Disbursed Wage</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      <tr className="hover:bg-slate-50">
-                        <td className="p-2.5 font-sans font-bold text-slate-900">Barrister Ibrahim M. Hassan</td>
-                        <td className="p-2.5 text-slate-500">Legal Advisor</td>
-                        <td className="p-2.5">₦1,000 / Active Vehicle</td>
-                        <td className="p-2.5 text-right font-bold">₦{barristerSal.toLocaleString()}</td>
-                      </tr>
-                      <tr className="hover:bg-slate-50">
-                        <td className="p-2.5 font-sans font-bold text-slate-900">Operations Manager (Sarkin Napep)</td>
-                        <td className="p-2.5 text-slate-500">Operations Executive</td>
-                        <td className="p-2.5">₦500 / Active Vehicle</td>
-                        <td className="p-2.5 text-right font-bold">₦{managerSal.toLocaleString()}</td>
-                      </tr>
-                      <tr className="hover:bg-slate-50">
-                        <td className="p-2.5 font-sans font-bold text-slate-900">Adam (Technical Inspector)</td>
-                        <td className="p-2.5 text-slate-500">Maintenance Inspector</td>
-                        <td className="p-2.5">₦1,000 / Active Vehicle</td>
-                        <td className="p-2.5 text-right font-bold">₦{fieldSal1.toLocaleString()}</td>
-                      </tr>
-                      <tr className="hover:bg-slate-50">
-                        <td className="p-2.5 font-sans font-bold text-slate-900">Abakaka (Remittance Supervisor)</td>
-                        <td className="p-2.5 text-slate-500">Financial Supervisor</td>
-                        <td className="p-2.5">₦1,000 / Active Vehicle</td>
-                        <td className="p-2.5 text-right font-bold">₦{fieldSal2.toLocaleString()}</td>
-                      </tr>
-                      <tr className="bg-slate-50 font-black">
-                        <td colSpan={3} className="p-2.5 text-left font-sans text-xs">Total Payroll Liability</td>
-                        <td className="p-2.5 text-right text-xs">₦{totalCurrentPayroll.toLocaleString()}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div className="w-full">
+                  <div className="block sm:hidden flex flex-col gap-3">
+                    {[
+                      { name: 'BARRISTER', formula: '₦1,000 / Active Vehicle', salary: barristerSal },
+                      { name: 'MANAGER', formula: '₦500 / Active Vehicle', salary: managerSal },
+                      { name: 'ADAM', formula: '₦1,000 / Active Vehicle', salary: fieldSal1 },
+                      { name: 'ABAKAKA', formula: '₦1,000 / Active Vehicle', salary: fieldSal2 },
+                    ].map((staff) => (
+                      <div key={staff.name} className="flex flex-col gap-1 p-3 border rounded-lg bg-white shadow-sm">
+                        <div className="font-bold text-slate-950 text-sm">{staff.name}</div>
+                        <div className="text-[11px] text-slate-500">{staff.formula}</div>
+                        <div className="font-black text-slate-950 text-sm mt-1">₦{staff.salary.toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden sm:block w-full overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm font-sans text-slate-900">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-800 font-black uppercase border-b border-slate-300">
+                          <th className="p-3">Staff Employee</th>
+                          <th className="p-3">Salary Formula</th>
+                          <th className="p-3 text-right">Disbursed Wage</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {[
+                          { name: 'BARRISTER', formula: '₦1,000 / Active Vehicle', salary: barristerSal },
+                          { name: 'MANAGER', formula: '₦500 / Active Vehicle', salary: managerSal },
+                          { name: 'ADAM', formula: '₦1,000 / Active Vehicle', salary: fieldSal1 },
+                          { name: 'ABAKAKA', formula: '₦1,000 / Active Vehicle', salary: fieldSal2 },
+                        ].map((staff) => (
+                          <tr key={staff.name} className="hover:bg-slate-50">
+                            <td className="p-3 font-bold text-slate-950">{staff.name}</td>
+                            <td className="p-3">{staff.formula}</td>
+                            <td className="p-3 text-right font-black">₦{staff.salary.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-slate-100 font-black">
+                          <td colSpan={2} className="p-3 text-left text-sm">Total Payroll Liability</td>
+                          <td className="p-3 text-right text-sm">₦{totalCurrentPayroll.toLocaleString()}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
@@ -999,30 +1254,30 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                   <p className="text-[10px] text-slate-500">A4 certified expenditure ledger.</p>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-[11px] font-mono">
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm font-sans text-slate-900">
                     <thead>
-                      <tr className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-300">
-                        <th className="p-2.5">Date</th>
-                        <th className="p-2.5">Category</th>
-                        <th className="p-2.5">Description</th>
-                        <th className="p-2.5">Inspector</th>
-                        <th className="p-2.5 text-right">Amount</th>
+                      <tr className="bg-slate-100 text-slate-800 font-black uppercase border-b border-slate-300">
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Category</th>
+                        <th className="p-3">Description</th>
+                        <th className="p-3">Inspector</th>
+                        <th className="p-3 text-right">Amount</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-200">
                       {filteredFinance.filter(f => f.type === 'expense').map((f, index) => (
                         <tr key={`${f.id}-${index}`} className="hover:bg-slate-50">
-                          <td className="p-2.5 text-slate-500">{f.date?.slice(0, 10)}</td>
-                          <td className="p-2.5 uppercase font-bold text-slate-900">{f.category}</td>
-                          <td className="p-2.5 font-sans text-xs text-slate-600">{f.description}</td>
-                          <td className="p-2.5 font-sans text-slate-600">{f.approvedBy || 'Operations Admin'}</td>
-                          <td className="p-2.5 text-right text-rose-600 font-bold">-₦{f.amount.toLocaleString()}</td>
+                          <td className="p-3 text-slate-700">{f.date?.slice(0, 10)}</td>
+                          <td className="p-3 uppercase font-bold text-slate-950">{f.category}</td>
+                          <td className="p-3 font-sans text-sm text-slate-700">{f.description}</td>
+                          <td className="p-3 font-sans text-slate-700">{f.approvedBy || 'Operations Admin'}</td>
+                          <td className="p-3 text-right text-rose-700 font-black">-₦{f.amount.toLocaleString()}</td>
                         </tr>
                       ))}
-                      <tr className="bg-slate-50 font-black">
-                        <td colSpan={4} className="p-2.5 text-left font-sans text-xs">Total Spends</td>
-                        <td className="p-2.5 text-right text-xs text-rose-600">-₦{totalOutflows.toLocaleString()}</td>
+                      <tr className="bg-slate-100 font-black">
+                        <td colSpan={4} className="p-3 text-left text-sm">Total Spends</td>
+                        <td className="p-3 text-right text-sm text-rose-700">-₦{totalOutflows.toLocaleString()}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1038,28 +1293,28 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                   <p className="text-[10px] text-slate-500">Remittance transaction logs.</p>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-[11px] font-mono">
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm font-sans text-slate-900">
                     <thead>
-                      <tr className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-300">
-                        <th className="p-2.5">Receipt No</th>
-                        <th className="p-2.5">Date</th>
-                        <th className="p-2.5">Driver ID</th>
-                        <th className="p-2.5 text-right">Amount</th>
+                      <tr className="bg-slate-100 text-slate-800 font-black uppercase border-b border-slate-300">
+                        <th className="p-3">Receipt No</th>
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Driver ID</th>
+                        <th className="p-3 text-right">Amount</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-200">
                       {filteredPayments.map((p, index) => (
                         <tr key={`${p.id}-${index}`} className="hover:bg-slate-50">
-                          <td className="p-2.5 font-bold text-slate-900">{p.receipt_number || p.id.slice(0, 8).toUpperCase()}</td>
-                          <td className="p-2.5 text-slate-500">{p.date?.slice(0, 10)}</td>
-                          <td className="p-2.5">{p.driver_id || 'System'}</td>
-                          <td className="p-2.5 text-right text-emerald-600 font-bold">+₦{(p.amount || 0).toLocaleString()}</td>
+                          <td className="p-3 font-bold text-slate-950">{p.receipt_number || p.id.slice(0, 8).toUpperCase()}</td>
+                          <td className="p-3 text-slate-700">{p.date?.slice(0, 10)}</td>
+                          <td className="p-3 text-slate-700">{p.driver_id || 'System'}</td>
+                          <td className="p-3 text-right text-emerald-700 font-black">+₦{(p.amount || 0).toLocaleString()}</td>
                         </tr>
                       ))}
-                      <tr className="bg-slate-50 font-black">
-                        <td colSpan={3} className="p-2.5 text-left font-sans text-xs">Total Collections</td>
-                        <td className="p-2.5 text-right text-xs text-emerald-600">₦{filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}</td>
+                      <tr className="bg-slate-100 font-black">
+                        <td colSpan={3} className="p-3 text-left text-sm">Total Collections</td>
+                        <td className="p-3 text-right text-sm text-emerald-700">₦{filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1289,7 +1544,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       value={apprName}
                       onChange={(e) => setApprName(e.target.value)}
                       className="font-extrabold text-slate-900 bg-transparent border-none p-0 focus:ring-0 text-xs w-full"
-                      placeholder="Officer Name"
+                      placeholder="Enter Admin Name"
                     />
                     <input
                       type="text"
@@ -1319,21 +1574,85 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
           </motion.div>
         </div>
 
+        {/* HIDDEN CONTAINER FOR ALL REPORTS PDF */}
+        <div style={{ display: 'none' }}>
+            <div ref={fullReportRef} className="p-10 bg-white text-slate-900 font-sans">
+                <h1 className="text-3xl font-black uppercase text-center mb-10">GENERAL REPORT: ALL SECTIONS</h1>
+                
+                {/* Financial Summary */}
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold uppercase mb-4 border-b pb-2">Financial Summary</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="flex justify-between"><span>Revenue</span><span>₦{totalInflows.toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span>Expenses</span><span>₦{totalOutflows.toLocaleString()}</span></div>
+                        <div className="flex justify-between font-bold"><span>Net</span><span>₦{netEarningsProfit.toLocaleString()}</span></div>
+                    </div>
+                </div>
+
+                {/* Driver Reports */}
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold uppercase mb-4 border-b pb-2">Driver Reports</h2>
+                    <div className="space-y-2">
+                        {drivers.map(d => (
+                            <div key={d.id} className="border-b pb-1 flex justify-between"><span>{d.fullName}</span><span>{d.assignedVehicleId}</span></div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Shareholder Reports */}
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold uppercase mb-4 border-b pb-2">Shareholder Reports</h2>
+                    <div className="space-y-4">
+                        {shareholders.map(s => (
+                            <div key={s.id} className="border-b pb-2">
+                                <p className="font-bold">{s.full_name}</p>
+                                <p className="text-sm">Investment: ₦{s.investment_amount?.toLocaleString()}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Payroll Reports */}
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold uppercase mb-4 border-b pb-2">Payroll Reports</h2>
+                    <div className="space-y-4">
+                         <div className="flex justify-between"><span>BARRISTER</span><span>₦{barristerSal.toLocaleString()}</span></div>
+                         <div className="flex justify-between"><span>MANAGER</span><span>₦{managerSal.toLocaleString()}</span></div>
+                         <div className="flex justify-between"><span>ADAM</span><span>₦{fieldSal1.toLocaleString()}</span></div>
+                         <div className="flex justify-between"><span>ABAKAKA</span><span>₦{fieldSal2.toLocaleString()}</span></div>
+                    </div>
+                </div>
+
+                {/* Expense Reports */}
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold uppercase mb-4 border-b pb-2">Expense Reports</h2>
+                    <div className="space-y-2">
+                        {filteredFinance.filter(f => f.type === 'expense').map(f => (
+                            <div key={f.id} className="flex justify-between border-b pb-1">
+                                <span>{f.category} - {f.description}</span>
+                                <span>₦{f.amount.toLocaleString()}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {/* SIDE ARCHIVES LIST - 4 COLS */}
         <div className="lg:col-span-4 flex flex-col gap-6 print:hidden">
           
           {/* SEARCH COMPLIANCE */}
-          <Card className="p-4 flex flex-col gap-3">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">{t.reportHist}</h3>
+          <Card className="p-4 flex flex-col gap-3 bg-slate-900/90 border-slate-800 text-white">
+            <h3 className="text-xs font-black text-white uppercase tracking-widest">{t.reportHist}</h3>
             
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
               <input
                 type="text"
                 placeholder="Search report ID..."
                 value={searchHistoryQuery}
                 onChange={(e) => setSearchHistoryQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200"
               />
             </div>
 
@@ -1346,12 +1665,12 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                     setActiveReportHash(r.hash);
                     setIsQrModalOpen(true);
                   }}
-                  className="p-3 border border-slate-100 rounded-xl bg-slate-50 hover:bg-slate-100 cursor-pointer flex justify-between items-start transition-colors"
+                  className="p-3 border border-slate-800 rounded-xl bg-slate-950 hover:bg-slate-800 cursor-pointer flex justify-between items-start transition-colors"
                 >
                   <div className="min-w-0">
-                    <p className="font-extrabold text-xs text-slate-900 truncate">{r.reportNumber}</p>
-                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{r.reportType} • {r.generatedDate}</p>
-                    <p className="text-[9px] text-slate-400 font-mono truncate">{r.preparedByName}</p>
+                    <p className="font-extrabold text-xs text-slate-100 truncate">{r.reportNumber}</p>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">{r.reportType} • {r.generatedDate}</p>
+                    <p className="text-[9px] text-slate-500 font-mono truncate">{r.preparedByName}</p>
                   </div>
 
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -1361,7 +1680,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                         e.stopPropagation();
                         generateRevision(r);
                       }}
-                      className="text-[9px] font-black text-slate-900 uppercase tracking-wider hover:underline"
+                      className="text-[9px] font-black text-brand-gold uppercase tracking-wider hover:underline"
                     >
                       Revised
                     </button>
@@ -1370,7 +1689,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
               ))}
 
               {filteredHistory.length === 0 && (
-                <div className="text-center py-8 text-text-muted text-xs">
+                <div className="text-center py-8 text-slate-500 text-xs">
                   {t.noReports}
                 </div>
               )}
@@ -1378,18 +1697,77 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
           </Card>
 
           {/* AUTOMATION ENGINE NOTICE */}
-          <Card className="p-4 border-l-4 border-brand-gold bg-slate-50">
+          <Card className="p-4 border-l-4 border-brand-gold bg-slate-900/90 border-slate-800 text-white">
             <div className="flex items-start gap-2.5">
               <ShieldCheck className="h-5 w-5 text-brand-gold shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider">Automated Ledger Core</h4>
-                <p className="text-[10px] text-slate-500 mt-1">This report center automatically syncs with our Real-Time general ledger, active fleet counts, shareholder investment stock wallets, and driver remittance balances.</p>
+                <h4 className="font-black text-slate-100 text-xs uppercase tracking-wider">Automated Ledger Core</h4>
+                <p className="text-[10px] text-slate-400 mt-1">This report center automatically syncs with our Real-Time general ledger, active fleet counts, shareholder investment stock wallets, and driver remittance balances.</p>
               </div>
             </div>
           </Card>
         </div>
 
       </div>
+
+      {/* ====================================================
+          BOTTOM FOOTER WITH PREMIUM SEND TO WHATSAPP BUTTON
+          ==================================================== */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="mt-10 border-t border-slate-800 pt-8 pb-10 flex flex-col items-center justify-center text-center gap-6 bg-slate-900/90 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-6 sm:p-8 shadow-2xl print:hidden relative overflow-hidden"
+      >
+        {/* Ambient Subtle Green Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* WhatsApp Callout Description */}
+        <div className="flex flex-col items-center gap-2 max-w-lg mx-auto relative z-10">
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-extrabold uppercase tracking-widest shadow-xs">
+            <WhatsAppIcon className="h-3.5 w-3.5 text-emerald-400" />
+            <span>DIRECT EXECUTIVE COMMUNICATION</span>
+          </div>
+          <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">
+            {lang === 'en' ? "Share Financial Report via WhatsApp" : "Turin Rahoton Kudi Ta WhatsApp"}
+          </h3>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {lang === 'en' 
+              ? "Instantly dispatch a certified summary of this financial statement directly to the managing director or executive board on WhatsApp."
+              : "Aika wa shugabannin kamfani ko manaja takaitaccen rahoton kudi kai tsaye ta manhajjar WhatsApp."}
+          </p>
+        </div>
+
+        {/* Premium Official WhatsApp Green Button */}
+        <motion.button
+          whileHover={{ scale: 1.05, boxShadow: "0 15px 30px -5px rgba(37, 211, 102, 0.45)" }}
+          whileTap={{ scale: 0.95 }}
+          onClick={handleSendToWhatsApp}
+          className="relative group overflow-hidden bg-gradient-to-r from-[#25D366] via-emerald-500 to-[#128C7E] text-white px-8 py-4 rounded-2xl font-black text-xs sm:text-sm tracking-wide shadow-2xl flex items-center justify-center gap-3.5 transition-all cursor-pointer border border-emerald-400/40 z-10"
+        >
+          {/* Pulse Halo Effect */}
+          <span className="absolute -inset-1 rounded-2xl bg-[#25D366] opacity-30 blur-md group-hover:opacity-75 transition-opacity animate-pulse" />
+          
+          <span className="relative z-10 flex items-center justify-center h-8 w-8 rounded-full bg-white/20 backdrop-blur-xs shadow-inner">
+            <WhatsAppIcon className="h-5 w-5 text-white" />
+          </span>
+
+          <span className="relative z-10 uppercase tracking-widest font-black">
+            {lang === 'en' ? "Send to WhatsApp" : "Aika Ta WhatsApp"}
+          </span>
+
+          <Share2 className="relative z-10 h-4 w-4 text-emerald-100 group-hover:translate-x-1 transition-transform" />
+        </motion.button>
+
+        {/* Company Copyright Footer Metadata */}
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-[10px] text-slate-400 font-mono border-t border-slate-800/80 pt-5 w-full max-w-3xl relative z-10">
+          <span>© 2026 RUQAYYA TRANSPORT LIMITED</span>
+          <span className="hidden sm:inline text-slate-600">•</span>
+          <span>HEAD OFFICE: BAGA ROAD, MAIDUGURI, BORNO STATE</span>
+          <span className="hidden sm:inline text-slate-600">•</span>
+          <span>SYSTEM ID: RTL-ERP-SEC-902</span>
+        </div>
+      </motion.div>
 
       {/* DYNAMIC DIGITAL SIGNATURE MODAL */}
       <Modal
@@ -1432,7 +1810,10 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
                 onMouseLeave={stopDrawing}
-                className="w-full h-[150px] bg-slate-50 border border-slate-300 rounded-lg cursor-crosshair"
+                onTouchStart={startDrawingTouch}
+                onTouchMove={drawTouch}
+                onTouchEnd={stopDrawing}
+                className="w-full h-[150px] bg-slate-50 border border-slate-300 rounded-lg cursor-crosshair touch-none"
               />
               <button
                 onClick={clearCanvas}
@@ -1450,7 +1831,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                 type="text"
                 value={typedSign}
                 onChange={(e) => setTypedSign(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-serif italic text-lg text-center"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg font-serif italic text-lg text-center text-slate-900"
                 placeholder="Type signature..."
               />
               <p className="text-[10px] text-slate-400 text-center">Your typed initials will be formatted in certified cursive typography.</p>
