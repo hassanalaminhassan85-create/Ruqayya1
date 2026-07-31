@@ -116,7 +116,10 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           id: data.cycleId,
           title: `Active Operating Cycle ${data.cycleId}`,
           status: data.status,
-          startDate: data.startDate
+          startDate: data.startDate,
+          agreedAmount: 300000,
+          daysRemaining: data.daysRemaining,
+          currentDay: data.currentDay
         });
       } else {
         setSelectedCycle(null);

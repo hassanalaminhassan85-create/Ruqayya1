@@ -10,12 +10,19 @@ interface CountdownTimerProps {
   startDate?: string;
   endDate?: string;
   cycleId?: string;
-  status?: 'active' | 'paused' | 'inactive' | 'Setup Mode' | 'Operational Mode' | string;
+  status?: 'active' | 'paused' | 'completed' | 'inactive' | string;
   isActive?: boolean;
   lang?: 'en' | 'ha';
   onPauseToggle?: () => void;
-  extendedDays?: number;
-  // Additional stats for full information
+  // Canonical data from server
+  daysRemaining?: number;
+  hoursRemaining?: number;
+  minutesRemaining?: number;
+  secondsRemaining?: number;
+  progressPercent?: number;
+  currentDay?: number;
+  totalCycleDays?: number;
+  // Additional stats
   drivers?: number;
   fleet?: number;
   remit?: number;
@@ -31,7 +38,13 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   isActive = false,
   lang = 'en',
   onPauseToggle,
-  extendedDays = 0,
+  daysRemaining = 0,
+  hoursRemaining = 0,
+  minutesRemaining = 0,
+  secondsRemaining = 0,
+  progressPercent = 0,
+  currentDay = 0,
+  totalCycleDays = 30,
   drivers = 0,
   fleet = 0,
   remit = 0,
@@ -39,86 +52,54 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   cycleDay = '0'
 }) => {
   // Determine if cycle is truly active based on props
-  const cycleIsActive = isActive && status !== 'inactive' && status !== 'Setup Mode';
-
-  // Target date parsing incorporating extension days
-  const getTargetTimestamp = (dateStr?: string, startStr?: string, extension: number = 0): number => {
-    try {
-      const start = startStr ? new Date(startStr.includes('T') ? startStr : `${startStr}T00:00:00`) : new Date('2026-07-29T00:00:00');
-      const baseEndMs = start.getTime() + 30 * 24 * 3600 * 1000;
-      const extendedEndMs = baseEndMs + (extension || 0) * 24 * 3600 * 1000;
-      return extendedEndMs;
-    } catch {
-      return new Date('2026-08-28T23:59:59').getTime();
-    }
-  };
-
-  const getStartTimestamp = (dateStr?: string): number => {
-    try {
-      const base = dateStr || '2026-07-29';
-      if (base.includes('T')) {
-        return new Date(base).getTime();
-      }
-      return new Date(`${base}T00:00:00`).getTime();
-    } catch {
-      return new Date('2026-07-29T00:00:00').getTime();
-    }
-  };
+  const cycleIsActive = isActive && status !== 'inactive' && status !== 'completed';
 
   const [timeLeft, setTimeLeft] = useState({
-    days: '00',
-    hours: '00',
-    minutes: '00',
-    seconds: '00',
-    progress: 0
+    days: String(daysRemaining).padStart(2, '0'),
+    hours: String(hoursRemaining).padStart(2, '0'),
+    minutes: String(minutesRemaining).padStart(2, '0'),
+    seconds: String(secondsRemaining).padStart(2, '0'),
+    progress: progressPercent
   });
 
+  // Local tick to keep UI smooth between server updates
   useEffect(() => {
-    if (!cycleIsActive) return;
-
-    const calculateTimeRemaining = () => {
-      const now = Date.now();
-      const targetTime = getTargetTimestamp(endDate, startDate, extendedDays);
-      const startTime = getStartTimestamp(startDate);
-      const totalDuration = Math.max(1, targetTime - startTime);
-
-      const diff = targetTime - now;
-
-      if (diff <= 0) {
-        setTimeLeft({
-          days: '00',
-          hours: '00',
-          minutes: '00',
-          seconds: '00',
-          progress: 100
-        });
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      const elapsed = Math.max(0, now - startTime);
-      const progress = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
-
-      const pad = (num: number) => String(num).padStart(2, '0');
-
+    if (!cycleIsActive || status === 'paused') {
       setTimeLeft({
-        days: pad(days),
-        hours: pad(hours),
-        minutes: pad(minutes),
-        seconds: pad(seconds),
-        progress
+        days: String(daysRemaining).padStart(2, '0'),
+        hours: String(hoursRemaining).padStart(2, '0'),
+        minutes: String(minutesRemaining).padStart(2, '0'),
+        seconds: String(secondsRemaining).padStart(2, '0'),
+        progress: progressPercent
       });
+      return;
+    }
+
+    let totalSecs = (daysRemaining * 24 * 3600) + (hoursRemaining * 3600) + (minutesRemaining * 60) + secondsRemaining;
+    
+    const tick = () => {
+      if (totalSecs <= 0) return;
+      totalSecs--;
+      
+      const d = Math.floor(totalSecs / (24 * 3600));
+      const h = Math.floor((totalSecs % (24 * 3600)) / 3600);
+      const m = Math.floor((totalSecs % 3600) / 60);
+      const s = totalSecs % 60;
+      
+      const pad = (num: number) => String(num).padStart(2, '0');
+      
+      setTimeLeft(prev => ({
+        days: pad(d),
+        hours: pad(h),
+        minutes: pad(m),
+        seconds: pad(s),
+        progress: prev.progress // Progress updated by server
+      }));
     };
 
-    calculateTimeRemaining();
-    const timer = setInterval(calculateTimeRemaining, 1000);
-
-    return () => clearInterval(timer);
-  }, [startDate, endDate, cycleIsActive, extendedDays]);
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [daysRemaining, hoursRemaining, minutesRemaining, secondsRemaining, cycleIsActive, status, progressPercent]);
 
   const units = [
     { label: lang === 'ha' ? 'KWANAKI' : 'DAYS', value: timeLeft.days },
@@ -141,7 +122,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
                 {lang === 'ha' ? 'KIDAYAR ZAGAYEN AIKI' : 'ACTIVE CYCLE TIMER'}
               </h3>
               <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-                {lang === 'ha' ? `Kidayar kwanaki ${30 + (extendedDays || 0)}` : `${30 + (extendedDays || 0)}-Day countdown status`}
+                {lang === 'ha' ? `Kidayar kwanaki ${totalCycleDays}` : `${totalCycleDays}-Day countdown status`}
               </p>
             </div>
           </div>
@@ -229,7 +210,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
               {lang === 'ha' ? 'KIDAYAR ZAGAYEN AIKI' : 'ACTIVE CYCLE TIMER'}
             </h3>
             <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-              {lang === 'ha' ? `Kidayar kwanaki ${30 + (extendedDays || 0)} tare da sarrafa dakatarwa` : `${30 + (extendedDays || 0)}-Day countdown with freeze control`}
+              {lang === 'ha' ? `Kidayar kwanaki ${totalCycleDays} tare da sarrafa dakatarwa` : `${totalCycleDays}-Day countdown with freeze control`}
             </p>
           </div>
         </div>

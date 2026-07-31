@@ -153,6 +153,47 @@ export interface Shareholder {
   total_reinvested?: number;
 }
 
+// Operating Cycle Data Types
+export interface Cycle {
+  id: string;
+  status: 'active' | 'paused' | 'completed' | 'inactive';
+  startDate: string;
+  endDate: string;
+  pausedAt?: string;
+  totalPausedSeconds: number;
+  extendedDays: number;
+  pauseReason?: string;
+  created_at: string;
+  updated_at: string;
+  metrics?: {
+    totalRevenue: number;
+    totalExpenses: number;
+    netGeneratedAmount: number;
+    distributionPercentage: number;
+    distributionPool: number;
+    activeDrivers: number;
+    totalFleetCount: number;
+  };
+}
+
+export interface CanonicalCycleStatus {
+  isActive: boolean;
+  status: 'active' | 'paused' | 'completed' | 'inactive';
+  cycleId: string;
+  startDate: string;
+  endDate: string;
+  daysRemaining: number;
+  hoursRemaining: number;
+  minutesRemaining: number;
+  secondsRemaining: number;
+  totalSecondsRemaining: number;
+  progressPercent: number;
+  currentDay: number;
+  totalCycleDays: number;
+  pauseReason?: string;
+  pausedAt?: string;
+}
+
 // I18n translations type structure
 export interface Dictionary {
   landing: {

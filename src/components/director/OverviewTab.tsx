@@ -153,9 +153,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const shareholderPool = netProfit > 0 ? (netProfit * (sharePct / 100)) : 0;
 
   const activeCycle = propActiveCycle || (cycles || []).find(c => c && (c.status === 'active' || c.status === 'paused')) || cycles[0];
-  const targetTons = activeCycle ? activeCycle.endGoalTons : 200;
-  const currentTons = 94.6; // In a real production DB, this aggregates trip manifests weights
-  const completionPercentage = Math.round((currentTons / targetTons) * 100);
+  const targetTons = activeCycle?.endGoalTons || 200;
+  const currentTons = activeCycle?.currentTons || 94.6;
+  const completionPercentage = activeCycle?.progressPercent || Math.round((currentTons / targetTons) * 100);
 
   const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
@@ -166,66 +166,18 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     return () => clearInterval(interval);
   }, [activeCycle]);
 
-  const getRemainingDays = (cycle: any) => {
+  const getRemainingDaysLabel = (cycle: any) => {
     if (!cycle) return "N/A";
-    
-    const rawStart = cycle.created_at || cycle.startDate;
-    let startMs = NaN;
-    if (rawStart) {
-      if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
-        startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
-      } else {
-        startMs = new Date(rawStart).getTime();
+    if (cycle.daysRemaining !== undefined) {
+      if (cycle.daysRemaining === 0 && cycle.hoursRemaining === 0) {
+        return lang === 'en' ? "Concluding..." : "Gama...";
       }
-    }
-    if (isNaN(startMs)) return "N/A";
-
-    let nowMs = nowTick;
-    if (cycle.status === 'paused' && cycle.pausedAt) {
-      const pausedMs = new Date(cycle.pausedAt).getTime();
-      if (!isNaN(pausedMs)) {
-        nowMs = pausedMs;
+      if (cycle.daysRemaining === 0) {
+        return lang === 'en' ? `${cycle.hoursRemaining} Hrs Left` : `${cycle.hoursRemaining} Awari Suka Rage`;
       }
+      return lang === 'en' ? `${cycle.daysRemaining} Days Left` : `Kwanaki ${cycle.daysRemaining} Suka Rage`;
     }
-
-    let totalMs = nowMs - startMs;
-    if (totalMs < 0) totalMs = 0;
-
-    let totalPausedMs = 0;
-    if (cycle.pauseHistory && Array.isArray(cycle.pauseHistory)) {
-      cycle.pauseHistory.forEach((p: any) => {
-        const pStart = new Date(p.pausedAt).getTime();
-        if (isNaN(pStart)) return;
-
-        if (p.resumedAt) {
-          const pEnd = new Date(p.resumedAt).getTime();
-          if (!isNaN(pEnd)) {
-            totalPausedMs += (pEnd - pStart);
-          }
-        }
-      });
-    }
-
-    let activeMs = totalMs - totalPausedMs;
-    if (activeMs < 0) activeMs = 0;
-    
-    const secondsElapsed = Math.floor(activeMs / 1000);
-    const totalDays = 30 + (cycle.extendedDays || 0);
-    const totalCycleSeconds = totalDays * 24 * 3600;
-    const remainingSeconds = Math.max(0, totalCycleSeconds - secondsElapsed);
-    
-    const days = Math.floor(remainingSeconds / (3600 * 24));
-    const hours = Math.floor((remainingSeconds % (3600 * 24)) / 3600);
-    
-    if (days === 0 && hours === 0) {
-      return lang === 'en' ? "Concluding..." : "Gama...";
-    }
-    
-    if (days === 0) {
-      return lang === 'en' ? `${hours} Hrs Left` : `${hours} Awari Suka Rage`;
-    }
-    
-    return lang === 'en' ? `${days} Days Left` : `Kwanaki ${days} Suka Rage`;
+    return "N/A";
   };
 
   const getScheduledEnd = (cycle: any) => {
@@ -821,7 +773,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               <div className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full" style={{ width: `${completionPercentage}%` }} />
             </div>
             <span className="text-[10px] font-bold text-slate-500 mt-2">
-              {activeCycle ? getRemainingDays(activeCycle) : (lang === 'en' ? 'No Active' : 'Babu')}
+              {activeCycle ? getRemainingDaysLabel(activeCycle) : (lang === 'en' ? 'No Active' : 'Babu')}
             </span>
           </div>
         </motion.div>
@@ -1048,7 +1000,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   <div>
                     <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block">Remaining Days</span>
                     <span className="font-extrabold text-slate-800 font-mono mt-0.5 block">
-                      {activeCycle ? getRemainingDays(activeCycle) : "N/A"}
+                      {activeCycle ? getRemainingDaysLabel(activeCycle) : "N/A"}
                     </span>
                   </div>
                   <div>

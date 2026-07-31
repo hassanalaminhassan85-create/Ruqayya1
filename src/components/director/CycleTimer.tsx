@@ -24,7 +24,7 @@ interface CycleTimerProps {
   onStateChange: () => void;
 }
 
-import { subscribeToActiveCycle } from '../../utils/cycleService';
+import { subscribeToActiveCycle, ActiveCycleData } from '../../utils/cycleService';
 
 // ... (keep other imports)
 
@@ -32,8 +32,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
   lang,
   onStateChange
 }) => {
-  const [activeCycle, setActiveCycle] = useState<any>(null);
-  const [secondsElapsed, setSecondsElapsed] = useState<number>(0);
+  const [activeCycle, setActiveCycle] = useState<ActiveCycleData | null>(null);
   const [showPauseModal, setShowPauseModal] = useState<boolean>(false);
   const [showResumeModal, setShowResumeModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -43,144 +42,79 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Compute active duration elapsed in seconds, deducting paused intervals
-  const computeActiveDuration = (cycle: any) => {
-    if (!cycle) return 0;
-    
-    // Fallback to startDate if created_at is missing
-    const rawStart = cycle.created_at || cycle.startDate;
-    let startMs = NaN;
-    if (rawStart) {
-      if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
-        startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
-      } else {
-        startMs = new Date(rawStart).getTime();
-      }
-    }
-    if (isNaN(startMs)) return 0;
+  const [timeLeft, setTimeLeft] = useState({
+    days: '00',
+    hours: '00',
+    minutes: '00',
+    seconds: '00'
+  });
 
-    let nowMs = Date.now();
-    if (cycle.status === 'paused' && cycle.pausedAt) {
-      const pausedMs = new Date(cycle.pausedAt).getTime();
-      if (!isNaN(pausedMs)) {
-        nowMs = pausedMs;
-      }
-    }
-
-    let totalMs = nowMs - startMs;
-    if (totalMs < 0) totalMs = 0;
-
-    // Deduct other completed pause intervals
-    let totalPausedMs = 0;
-    if (cycle.pauseHistory && Array.isArray(cycle.pauseHistory)) {
-      cycle.pauseHistory.forEach((p: any) => {
-        const pStart = new Date(p.pausedAt).getTime();
-        if (isNaN(pStart)) return;
-
-        if (p.resumedAt) {
-          const pEnd = new Date(p.resumedAt).getTime();
-          if (!isNaN(pEnd)) {
-            totalPausedMs += (pEnd - pStart);
-          }
-        }
-      });
-    }
-
-    let activeMs = totalMs - totalPausedMs;
-    if (activeMs < 0) activeMs = 0;
-    return Math.floor(activeMs / 1000);
-  };
-
-  // Keep duration synchronized in real-time
+  // Subscribe to canonical cycle status from the single source of truth
   useEffect(() => {
     const unsubscribe = subscribeToActiveCycle((data) => {
-      setActiveCycle(data);
+      setActiveCycle(data as any);
+      if (data) {
+        setTimeLeft({
+          days: String(data.daysRemaining).padStart(2, '0'),
+          hours: String(data.hoursRemaining).padStart(2, '0'),
+          minutes: String(data.minutesRemaining).padStart(2, '0'),
+          seconds: String(data.secondsRemaining).padStart(2, '0')
+        });
+      }
     });
 
     return () => unsubscribe();
   }, []);
 
+  // Local ticker for smooth UI
   useEffect(() => {
-    if (!activeCycle) {
-      setSecondsElapsed(0);
-      return;
-    }
+    if (!activeCycle || activeCycle.status !== 'active') return;
 
-    const updateTimer = () => {
-      setSecondsElapsed(computeActiveDuration(activeCycle));
+    const tick = () => {
+      setTimeLeft(prev => {
+        let d = parseInt(prev.days);
+        let h = parseInt(prev.hours);
+        let m = parseInt(prev.minutes);
+        let s = parseInt(prev.seconds);
+
+        if (d === 0 && h === 0 && m === 0 && s === 0) return prev;
+
+        s--;
+        if (s < 0) {
+          s = 59;
+          m--;
+          if (m < 0) {
+            m = 59;
+            h--;
+            if (h < 0) {
+              h = 23;
+              d--;
+            }
+          }
+        }
+
+        const pad = (num: number) => String(num).padStart(2, '0');
+        return {
+          days: pad(d),
+          hours: pad(h),
+          minutes: pad(m),
+          seconds: pad(s)
+        };
+      });
     };
 
-    updateTimer();
-
-    // Update timer every second
-    const timerInterval = setInterval(updateTimer, 1000);
-
-    return () => {
-      clearInterval(timerInterval);
-    };
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
   }, [activeCycle]);
 
   const formatDateOnly = (dateStr: string | null | undefined) => {
     if (!dateStr) return 'N/A';
-    if (dateStr.includes('T')) {
-      return dateStr.split('T')[0];
-    }
-    return dateStr;
+    return dateStr.split('T')[0];
   };
 
-  const getScheduledEnd = (cycle: any) => {
-    if (cycle.endDate) {
-      return formatDateOnly(cycle.endDate);
-    }
-    const start = cycle.created_at || cycle.startDate;
-    if (!start) return 'N/A';
-    try {
-      let d: Date;
-      if (typeof start === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(start)) {
-        d = new Date(`${start}T00:00:00Z`);
-      } else {
-        d = new Date(start);
-      }
-      if (isNaN(d.getTime())) return 'N/A';
-      const totalDays = 30 + (cycle.extendedDays || 0);
-      d.setUTCDate(d.getUTCDate() + totalDays);
-      return d.toISOString().split('T')[0];
-    } catch (e) {
-      return 'N/A';
-    }
-  };
-
-  const formatDuration = (totalSecs: number) => {
-    const days = Math.floor(totalSecs / (3600 * 24));
-    const hours = Math.floor((totalSecs % (3600 * 24)) / 3600);
-    const mins = Math.floor((totalSecs % 3600) / 60);
-    const secs = totalSecs % 60;
-
-    const pad = (num: number) => String(num).padStart(2, '0');
-
-    return {
-      days: pad(days),
-      hours: pad(hours),
-      minutes: pad(mins),
-      seconds: pad(secs)
-    };
-  };
-
-  // Dynamic cycle duration calculation incorporating extendedDays
-  const startMs = new Date(activeCycle?.startDate || '2026-07-29').getTime() || Date.now();
-  const extensionDays = activeCycle?.extendedDays || activeCycle?.pauseDays || 0;
-  const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
-  const endMs = baseEndMs + extensionDays * 24 * 3600 * 1000;
-  
-  const totalDays = 30 + extensionDays;
-  const currentDay = activeCycle?.cycleDay || Math.min(totalDays, Math.floor(secondsElapsed / (24 * 3600)) + 1);
-  
-  const totalCycleSeconds = activeCycle 
-    ? Math.max(0, Math.floor((endMs - startMs) / 1000))
-    : totalDays * 24 * 3600;
-  const remainingSeconds = Math.max(0, totalCycleSeconds - secondsElapsed);
-  const time = formatDuration(remainingSeconds);
-  const progressPercent = Math.min(100, Math.max(0, (secondsElapsed / (totalCycleSeconds || 1)) * 100));
+  const currentDay = activeCycle?.currentDay || 0;
+  const totalDays = activeCycle?.totalCycleDays || 30;
+  const progressPercent = activeCycle?.progressPercent || 0;
 
   const handlePause = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,10 +214,10 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
           {/* LCD Countdown Timer Dashboard */}
           <div className="grid grid-cols-4 gap-1 px-0.5 max-w-md mx-auto w-full">
             {[
-              { label: lang === 'en' ? "DAYS" : "KWANAKI", val: time.days },
-              { label: lang === 'en' ? "HRS" : "AWARI", val: time.hours },
-              { label: lang === 'en' ? "MINS" : "MINTOCI", val: time.minutes },
-              { label: lang === 'en' ? "SECS" : "DAKIKU", val: time.seconds }
+              { label: lang === 'en' ? "DAYS" : "KWANAKI", val: timeLeft.days },
+              { label: lang === 'en' ? "HRS" : "AWARI", val: timeLeft.hours },
+              { label: lang === 'en' ? "MINS" : "MINTOCI", val: timeLeft.minutes },
+              { label: lang === 'en' ? "SECS" : "DAKIKU", val: timeLeft.seconds }
             ].map((unit, idx) => (
               <div key={`time-${idx}`} className="flex flex-col items-center p-1 sm:p-2 bg-slate-950 border border-slate-800 rounded-lg shadow-sm relative overflow-hidden">
                 <div className="absolute inset-0 bg-radial-gradient from-slate-900 via-transparent to-transparent opacity-40 pointer-events-none" />
@@ -323,7 +257,7 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
                     {lang === 'en' ? "Scheduled End" : "Ranar Kammalawa"}
                   </span>
                   <span className="font-extrabold text-slate-700 font-mono text-[9px] sm:text-[10px] leading-none mt-0.5 block">
-                    {getScheduledEnd(activeCycle)}
+                    {formatDateOnly(activeCycle.endDate)}
                   </span>
                 </div>
               </div>

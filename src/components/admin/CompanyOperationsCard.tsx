@@ -93,8 +93,8 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
       setOpsState(prev => ({
         ...prev,
         status: activeCycle.status === 'paused' ? 'Paused' : (activeCycle.isActive ? 'Operational Mode' : 'Setup Mode'),
-        currentCycle: activeCycle.cycleId || activeCycle.id || prev.currentCycle,
-        currentDay: parseInt(activeCycle.cycleDay?.match(/\d+/)?.[0] || '1', 10)
+        currentCycle: activeCycle.cycleId || prev.currentCycle,
+        currentDay: activeCycle.currentDay || 1
       }));
     }
   }, [activeCycle]);
@@ -462,13 +462,13 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                     <span className="text-[7.5px] uppercase tracking-wider text-text-muted block font-semibold leading-none">{lang === 'en' ? 'Cycle' : 'Zagaye'}</span>
                     <div className="text-[10px] font-black text-text-main flex items-center gap-1 mt-0.5 leading-none">
                       <Clock className="h-2.5 w-2.5 text-brand-gold" />
-                      {opsState?.currentCycle || 'N/A'}
+                      {activeCycle?.cycleId || opsState?.currentCycle || 'N/A'}
                     </div>
                   </div>
                   <div className="border-l border-border-main/30 pl-2 text-left">
                     <span className="text-[7.5px] uppercase tracking-wider text-text-muted block font-semibold leading-none">{lang === 'en' ? 'Cycle Day' : 'Rana'}</span>
                     <span className="text-[10px] font-black text-text-main mt-0.5 block leading-none">
-                      Day {opsState?.currentDay || 1}/30
+                      Day {activeCycle?.currentDay || opsState?.currentDay || 1}/{activeCycle?.totalCycleDays || 30}
                     </span>
                   </div>
                 </div>
@@ -558,21 +558,18 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
           </div>
 
           {showCycleDebugInspector && (() => {
-            const startStr = activeCycle?.startDate || '2026-07-29';
-            const startMs = new Date(startStr).getTime();
-            const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
-            const extension = activeCycle?.extendedDays || activeCycle?.pauseDays || 0;
-            const calcEndMs = baseEndMs + extension * 24 * 3600 * 1000;
-            const calcEndDateStr = new Date(calcEndMs).toISOString().split('T')[0];
+            const startStr = activeCycle?.startDate || '';
+            const endStr = activeCycle?.endDate || '';
+            const extension = activeCycle?.totalPausedSeconds ? Math.floor(activeCycle.totalPausedSeconds / 86400) : 0;
 
             return (
               <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3.5 text-xs font-mono text-slate-200 flex flex-col gap-3 animate-fadeIn">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <span className="text-amber-400 font-black uppercase text-[10px] tracking-wider">
-                    🔍 Cycle Management Flow Debug Inspector
+                    🔍 Cycle Management Flow Debug Inspector (Canonical)
                   </span>
                   <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px]">
-                    Verified: Extension Added Correctly
+                    Verified: Canonical Backend Data
                   </span>
                 </div>
 
@@ -582,18 +579,17 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                     <div className="space-y-1 text-slate-300">
                       <div><span className="text-slate-500">Start Date:</span> <span className="text-amber-300">{startStr}</span></div>
                       <div><span className="text-slate-500">Base Duration:</span> <span className="text-slate-200">30 Days</span></div>
-                      <div><span className="text-slate-500">Extended Days:</span> <span className="text-cyan-400 font-bold">+{extension} Days</span></div>
+                      <div><span className="text-slate-500">Total Paused:</span> <span className="text-cyan-400 font-bold">~{extension} Days</span></div>
                       <div className="border-t border-slate-800 pt-1 mt-1">
-                        <span className="text-slate-500">Calculated End Date:</span> <span className="text-emerald-400 font-black">{calcEndDateStr}</span>
+                        <span className="text-slate-500">Canonical End Date:</span> <span className="text-emerald-400 font-black">{endStr}</span>
                       </div>
-                      <div><span className="text-slate-500">Calculated Timestamp:</span> <span className="text-slate-400">{calcEndMs}</span></div>
                     </div>
                   </div>
 
                   <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 flex flex-col">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Raw Server Cycle Data (Firestore)</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Raw Canonical Status (API)</span>
                     <pre className="text-[9px] text-emerald-300 overflow-x-auto whitespace-pre-wrap flex-1 bg-slate-950 p-2 rounded border border-slate-800/80 max-h-36">
-                      {JSON.stringify(activeCycle || opsState, null, 2)}
+                      {JSON.stringify(activeCycle, null, 2)}
                     </pre>
                   </div>
                 </div>
@@ -840,8 +836,8 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
             </h3>
             <p className="text-xs text-slate-300 mt-2 leading-relaxed">
               {lang === 'en' 
-                ? `Are you sure you want to permanently delete cycle ${opsState?.currentCycle || 'Active Cycle'}? It will be removed globally from all dashboards.` 
-                : `Shin kana son goge zagayen aiki ${opsState?.currentCycle || 'Zagayen Aiki'}? Zai goge daga ko'ina.`}
+                ? `Are you sure you want to permanently delete cycle ${activeCycle?.cycleId || opsState?.currentCycle || 'Active Cycle'}? It will be removed globally from all dashboards.` 
+                : `Shin kana son goge zagayen aiki ${activeCycle?.cycleId || opsState?.currentCycle || 'Zagayen Aiki'}? Zai goge daga ko'ina.`}
             </p>
 
             {actionError && (

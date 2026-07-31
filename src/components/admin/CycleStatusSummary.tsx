@@ -24,9 +24,9 @@ export const CycleStatusSummary: React.FC<CycleStatusSummaryProps> = ({ lang, ac
             {lang === 'en' ? "No active operating cycle." : "Babu zagayen aiki mai gudana."}
           </p>
         </div>
-        {activeCycle?.id && (
+        {activeCycle?.cycleId && (
           <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 text-[9px] font-mono font-bold">
-            ID: {activeCycle.id}
+            ID: {activeCycle.cycleId}
           </span>
         )}
       </Card>
@@ -48,7 +48,7 @@ export const CycleStatusSummary: React.FC<CycleStatusSummaryProps> = ({ lang, ac
       <div className="grid grid-cols-2 gap-2 mt-1">
         <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
           <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block">Cycle ID</span>
-          <p className="text-xs font-mono font-black text-amber-600 mt-0.5">{activeCycle.id}</p>
+          <p className="text-xs font-mono font-black text-amber-600 mt-0.5">{activeCycle.cycleId}</p>
         </div>
         <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
           <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block">Start Date</span>

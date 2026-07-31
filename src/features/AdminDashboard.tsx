@@ -606,12 +606,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               />
               <CountdownTimer
                 lang={lang}
-                startDate={activeCycle?.startDate || '2026-07-29'}
-                endDate={activeCycle?.endDate || '2026-08-28'}
-                cycleId={activeCycle?.id || 'No Active Cycle'}
+                startDate={activeCycle?.startDate || ''}
+                endDate={activeCycle?.endDate || ''}
+                cycleId={activeCycle?.cycleId || 'No Active Cycle'}
                 status={activeCycle?.status || 'inactive'}
                 isActive={activeCycle?.isActive ?? false}
-                extendedDays={activeCycle?.extendedDays || 0}
+                daysRemaining={activeCycle?.daysRemaining || 0}
+                hoursRemaining={activeCycle?.hoursRemaining || 0}
+                minutesRemaining={activeCycle?.minutesRemaining || 0}
+                secondsRemaining={activeCycle?.secondsRemaining || 0}
+                progressPercent={activeCycle?.progressPercent || 0}
+                currentDay={activeCycle?.currentDay || 0}
+                totalCycleDays={activeCycle?.totalCycleDays || 30}
                 drivers={activeCycle?.drivers}
                 fleet={activeCycle?.fleet}
                 remit={activeCycle?.remit}

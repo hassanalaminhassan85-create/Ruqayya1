@@ -427,53 +427,105 @@ function broadcastStateUpdate() {
   });
 }
 
+// Helper: Get canonical cycle status as the single source of truth
+function getCanonicalCycleStatus(db: any): any {
+  const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+  if (!activeCycle) {
+    return {
+      isActive: false,
+      status: 'inactive',
+      cycleId: 'No Active Cycle',
+      startDate: '',
+      endDate: '',
+      daysRemaining: 0,
+      hoursRemaining: 0,
+      minutesRemaining: 0,
+      secondsRemaining: 0,
+      totalSecondsRemaining: 0,
+      progressPercent: 0,
+      currentDay: 0,
+      totalCycleDays: 30,
+      pauseReason: '',
+      pausedAt: ''
+    };
+  }
+
+  const now = Date.now();
+  const startMs = new Date(activeCycle.startDate).getTime();
+  const baseDurationSeconds = 30 * 24 * 3600;
+  const extensionSeconds = (activeCycle.extendedDays || 0) * 24 * 3600;
+  const totalCycleSeconds = baseDurationSeconds + extensionSeconds;
+  
+  // Total paused seconds accumulated so far
+  let totalPausedSeconds = activeCycle.totalPausedSeconds || 0;
+  
+  // If currently paused, add the time since it was paused to the effective total paused time
+  let currentPauseSeconds = 0;
+  if (activeCycle.status === 'paused' && activeCycle.pausedAt) {
+    currentPauseSeconds = Math.floor((now - new Date(activeCycle.pausedAt).getTime()) / 1000);
+  }
+
+  const effectivePausedSeconds = totalPausedSeconds + currentPauseSeconds;
+  const elapsedSeconds = Math.max(0, Math.floor((now - startMs) / 1000) - effectivePausedSeconds);
+  const remainingSeconds = Math.max(0, totalCycleSeconds - elapsedSeconds);
+  
+  const days = Math.floor(remainingSeconds / (24 * 3600));
+  const hours = Math.floor((remainingSeconds % (24 * 3600)) / 3600);
+  const minutes = Math.floor((remainingSeconds % 3600) / 60);
+  const seconds = remainingSeconds % 60;
+  
+  const progressPercent = Math.min(100, (elapsedSeconds / totalCycleSeconds) * 100);
+  const currentDay = Math.min(Math.floor(totalCycleSeconds / (24 * 3600)), Math.floor(elapsedSeconds / (24 * 3600)) + 1);
+
+  return {
+    isActive: true,
+    status: activeCycle.status,
+    cycleId: activeCycle.id,
+    startDate: activeCycle.startDate,
+    endDate: activeCycle.endDate,
+    daysRemaining: days,
+    hoursRemaining: hours,
+    minutesRemaining: minutes,
+    secondsRemaining: seconds,
+    totalSecondsRemaining: remainingSeconds,
+    progressPercent,
+    currentDay,
+    totalCycleDays: Math.floor(totalCycleSeconds / (24 * 3600)),
+    pauseReason: activeCycle.pauseReason || '',
+    pausedAt: activeCycle.pausedAt || ''
+  };
+}
+
 // Helper: Sync Active Cycle Metadata to Firestore for real-time dashboard widgets
 async function syncActiveCycleToFirestore(db: any) {
   if (!firestore) return;
   
-  const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
-  
-  // Calculate real-time metrics even if inactive to show "Full Information"
+  const canonical = getCanonicalCycleStatus(db);
   const activeDriversCount = (db.drivers || []).filter((d: any) => d.status === 'active' || d.status === 'approved').length;
   const totalFleetCount = (db.vehicles || []).length;
   
-  const cycleStart = activeCycle ? new Date(activeCycle.startDate) : new Date();
+  const cycleStart = canonical.isActive ? new Date(canonical.startDate) : new Date();
   const currentRemit = (db.financial_records || [])
-    .filter((f: any) => f.type === 'revenue' && activeCycle && new Date(f.date) >= cycleStart)
+    .filter((f: any) => f.type === 'revenue' && canonical.isActive && new Date(f.date) >= cycleStart)
     .reduce((sum: number, f: any) => sum + f.amount, 0);
 
   const payload: any = {
-    isActive: !!activeCycle,
-    status: activeCycle ? activeCycle.status : 'inactive',
-    cycleId: activeCycle ? activeCycle.id : 'No Active Cycle',
-    startDate: activeCycle ? activeCycle.startDate : new Date().toISOString().split('T')[0],
-    endDate: activeCycle ? activeCycle.endDate : '',
-    extendedDays: activeCycle ? (activeCycle.extendedDays || activeCycle.pauseDays || 0) : 0,
-    pauseDays: activeCycle ? (activeCycle.pauseDays || activeCycle.extendedDays || 0) : 0,
+    ...canonical,
     drivers: activeDriversCount,
     fleet: totalFleetCount,
     remit: currentRemit,
-    health: activeCycle ? (activeCycle.status === 'paused' ? 'Paused' : 'Stable') : 'Inactive',
-    cycleDay: activeCycle ? (db.company_operations_state?.currentDay || 1).toString() : '0',
+    health: canonical.status === 'paused' ? 'Paused' : (canonical.isActive ? 'Stable' : 'Inactive'),
+    cycleDay: canonical.isActive ? `Day ${canonical.currentDay} of ${canonical.totalCycleDays}` : '0',
     updated_at: new Date().toISOString()
   };
-
-  if (activeCycle) {
-    if (activeCycle.pausedAt) payload.pausedAt = activeCycle.pausedAt;
-    if (activeCycle.pauseReason) payload.pauseReason = activeCycle.pauseReason;
-    if (activeCycle.pauseHistory) payload.pauseHistory = activeCycle.pauseHistory;
-  }
 
   try {
     if (firestore) {
       await firestore.collection('system_status').doc('activeCycle').set(payload, { merge: true });
-      console.log(`[FirestoreSync] Synced cycle status: ${payload.status} (${payload.cycleId})`);
+      console.log(`[FirestoreSync] Synced canonical cycle status: ${payload.status} (${payload.cycleId})`);
     }
   } catch (err: any) {
-    console.warn('[FirestoreSync] Failed to sync cycle status (relying on local storage):', err?.message || err);
-    if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
-      setFirestore(null);
-    }
+    console.warn('[FirestoreSync] Failed to sync cycle status:', err?.message || err);
   }
 }
 
@@ -563,15 +615,22 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
   const installments = [];
   let carryForward = 0;
 
+  // Calculate total paused time from the master cycle to shift installment deadlines
+  let masterPausedMs = (activeCycle?.totalPausedSeconds || 0) * 1000;
+  if (activeCycle?.status === 'paused' && activeCycle?.pausedAt) {
+    masterPausedMs += Date.now() - new Date(activeCycle.pausedAt).getTime();
+  }
+
   for (let k = 1; k <= 6; k++) {
     const startDay = (k - 1) * 5 + 1;
     const endDay = k * 5;
 
+    // Shift the schedule by both driver-specific rest days AND company-wide paused time
     const normalEndDate = new Date(startDate.getTime() + (endDay - 1) * 24 * 3600 * 1000);
-    const extendedEndDate = new Date(normalEndDate.getTime() + totalRestDays * 24 * 3600 * 1000);
+    const extendedEndDate = new Date(normalEndDate.getTime() + (totalRestDays * 24 * 3600 * 1000) + masterPausedMs);
     
     const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
-    const extendedStartDate = new Date(normalStartDate.getTime() + totalRestDays * 24 * 3600 * 1000);
+    const extendedStartDate = new Date(normalStartDate.getTime() + (totalRestDays * 24 * 3600 * 1000) + masterPausedMs);
 
     const dueAmount = installmentTarget + carryForward;
     const paidAmount = payments
@@ -616,13 +675,13 @@ setInterval(() => {
     const now = new Date();
 
     // 1. CYCLE MANAGEMENT
-    const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+    const canonical = getCanonicalCycleStatus(db);
+    const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
     
-    if (activeCycle) {
-      const secondsElapsed = computeActiveDuration(activeCycle);
-      const daysElapsed = Math.floor(secondsElapsed / (24 * 3600)) + 1;
+    if (activeCycle && canonical.isActive) {
+      const daysElapsed = canonical.currentDay;
       const currentDayInDB = db.company_operations_state.currentDay || 1;
-      const totalAllowedDays = 30 + (activeCycle.extendedDays || 0);
+      const totalAllowedDays = canonical.totalCycleDays;
 
       if (daysElapsed !== currentDayInDB && daysElapsed <= totalAllowedDays) {
         db.company_operations_state.currentDay = daysElapsed;
@@ -630,7 +689,7 @@ setInterval(() => {
       }
 
       // End-of-cycle distribution trigger
-      if (daysElapsed > totalAllowedDays) {
+      if (canonical.totalSecondsRemaining <= 0 && activeCycle.status !== 'completed') {
         const endDate = new Date().toISOString();
         activeCycle.status = 'completed';
         activeCycle.endDate = endDate;
@@ -764,6 +823,69 @@ setInterval(() => {
         });
       }
     });
+
+    // 4. VEHICLE DOCUMENT MONITORING
+    for (const vehicle of (db.vehicles || [])) {
+      const thresholdMs = 7 * 24 * 3600 * 1000;
+      const docs = [
+        { key: 'insurance', val: vehicle.insurance_expiry || vehicle.insuranceExpiry, name: 'Insurance policy' },
+        { key: 'registration', val: vehicle.registration_expiry || vehicle.registrationExpiry, name: 'Registration file' }
+      ];
+
+      for (const doc of docs) {
+        if (!doc.val) continue;
+        const expiry = new Date(doc.val);
+        const diff = expiry.getTime() - now.getTime();
+
+        if (diff <= thresholdMs) {
+          const alreadyFlagged = (db.notifications || []).some((n: any) => 
+            (n.vehicle_plate === vehicle.plate_number || n.vehicle_plate === vehicle.plateNumber) && 
+            n.document_type === doc.key &&
+            (now.getTime() - new Date(n.created_at).getTime()) < 3 * 24 * 3600 * 1000
+          );
+
+          if (!alreadyFlagged) {
+            const expired = diff < 0;
+            const statusText = expired ? 'EXPIRED' : 'EXPIRING SOON';
+            db.notifications.unshift({
+              id: generateUUID(),
+              vehicle_plate: vehicle.plate_number || vehicle.plateNumber,
+              document_type: doc.key,
+              title_en: `${doc.name} ${statusText}`,
+              message_en: `Vehicle Alert: ${doc.name} for Tricycle ${vehicle.plate_number || vehicle.plateNumber} has ${statusText} (${doc.val}).`,
+              type: 'warning',
+              read_status: 0,
+              created_at: now.toISOString()
+            });
+            dbChanged = true;
+          }
+        }
+      }
+    }
+
+    // 5. MILEAGE MONITORING
+    for (const vehicle of (db.vehicles || [])) {
+      const curMileage = vehicle.current_mileage !== undefined ? vehicle.current_mileage : vehicle.mileage;
+      const oilLimit = vehicle.oil_change_mileage || vehicle.oilChangeMileage;
+      
+      if (curMileage !== undefined && oilLimit) {
+        const cur = parseFloat(curMileage);
+        const limit = parseFloat(oilLimit);
+        if (cur >= limit && vehicle.status !== 'maintenance required' && vehicle.status !== 'maintenance') {
+          vehicle.status = 'maintenance required';
+          db.notifications.unshift({
+            id: generateUUID(),
+            vehicle_plate: vehicle.plate_number || vehicle.plateNumber,
+            title_en: 'Oil Change Maintenance Required',
+            message_en: `Maintenance Alert: Vehicle ${vehicle.plate_number || vehicle.plateNumber} exceeded oil change mileage limit (${cur} km / limit: ${limit} km).`,
+            type: 'warning',
+            read_status: 0,
+            created_at: now.toISOString()
+          });
+          dbChanged = true;
+        }
+      }
+    }
 
     if (dbChanged) {
       saveDB(db);
@@ -4783,6 +4905,17 @@ app.get('/api/drivers/:id/installments', authenticateSession, (req, res) => {
   }
 });
 
+// Public: Get Canonical Cycle Status
+app.get('/api/cycles/status', (req, res) => {
+  try {
+    const db = loadDB();
+    const status = getCanonicalCycleStatus(db);
+    res.json({ success: true, ...status });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET all operational cycles (active, upcoming, history)
 app.get('/api/director/cycles', authenticateSession, (req, res) => {
   try {
@@ -4912,6 +5045,7 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
       created_by: actor.fullName,
       locked: false,
       extendedDays: 0,
+      totalPausedSeconds: 0,
       financials: [],
       pauseHistory: []
     };
@@ -4969,19 +5103,17 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
     }
 
     const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
-    const newExtendedDays = (activeCycle.extendedDays || activeCycle.pauseDays || 0) + daysToExtend;
+    const newExtendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
 
-    // activeCycle.status = 'paused'; // MODIFIED: Keep active so no resume needed
-    activeCycle.status = 'active'; 
+    activeCycle.status = 'paused'; 
     activeCycle.pauseReason = reason;
     activeCycle.pausedAt = new Date().toISOString();
     activeCycle.pausedBy = actor.fullName;
-    activeCycle.pauseDays = newExtendedDays;
     activeCycle.extendedDays = newExtendedDays;
 
     // Extend end date automatically if extension days were specified
     if (daysToExtend > 0) {
-      const startMs = activeCycle.startDate ? new Date(activeCycle.startDate.includes('T') ? activeCycle.startDate : `${activeCycle.startDate}T00:00:00`).getTime() : new Date('2026-07-29T00:00:00').getTime();
+      const startMs = new Date(activeCycle.startDate).getTime();
       const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
       const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
       activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
@@ -4994,8 +5126,7 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
     activeCycle.pauseHistory.unshift({
       id: generateUUID(),
       pausedBy: actor.fullName,
-      pausedAt: new Date().toISOString(),
-      resumedAt: new Date().toISOString(), // Automatically resume instantly
+      pausedAt: activeCycle.pausedAt,
       reason,
       pauseDays: daysToExtend,
       extendedEndDate: activeCycle.endDate
@@ -5005,17 +5136,7 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
     if (!db.company_operations_state) {
       db.company_operations_state = { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
     }
-    db.company_operations_state.status = 'Active'; // Keep as Active
-    if (!db.company_operations_state.pauseHistory) {
-      db.company_operations_state.pauseHistory = [];
-    }
-    db.company_operations_state.pauseHistory.unshift({
-      id: generateUUID(),
-      pausedBy: actor.fullName,
-      pausedAt: new Date().toISOString(),
-      reason,
-      pauseDays: daysToExtend
-    });
+    db.company_operations_state.status = 'Paused'; 
 
     db.notifications.unshift({
       id: generateUUID(),
@@ -5153,21 +5274,29 @@ app.post('/api/director/cycles/resume', authenticateSession, (req, res) => {
       return res.status(400).json({ error: 'No paused operating cycle found to resume.' });
     }
 
+    const now = new Date();
+    const pauseStart = new Date(pausedCycle.pausedAt || now);
+    const pauseDurationSeconds = Math.floor((now.getTime() - pauseStart.getTime()) / 1000);
+    
+    // Canonical update: Add this pause period to the total accumulated paused time
+    pausedCycle.totalPausedSeconds = (pausedCycle.totalPausedSeconds || 0) + Math.max(0, pauseDurationSeconds);
     pausedCycle.status = 'active';
-    pausedCycle.resumedAt = new Date().toISOString();
+    pausedCycle.resumedAt = now.toISOString();
     pausedCycle.resumedBy = actor.fullName;
+    pausedCycle.pausedAt = null; // IMPORTANT: Clear pausedAt to stop the clock on the pause
 
     if (pausedCycle.pauseHistory && pausedCycle.pauseHistory.length > 0) {
       pausedCycle.pauseHistory[0].resumedBy = actor.fullName;
-      pausedCycle.pauseHistory[0].resumedAt = new Date().toISOString();
+      pausedCycle.pauseHistory[0].resumedAt = pausedCycle.resumedAt;
       if (reason) pausedCycle.pauseHistory[0].resumeReason = reason;
+      pausedCycle.pauseHistory[0].pauseDurationSeconds = pauseDurationSeconds;
     }
 
     // Synchronize company operations status
     if (!db.company_operations_state) {
       db.company_operations_state = { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
     }
-    db.company_operations_state.status = 'Operational Mode';
+    db.company_operations_state.status = 'Active';
     if (db.company_operations_state.pauseHistory && db.company_operations_state.pauseHistory.length > 0) {
       db.company_operations_state.pauseHistory[0].resumedBy = actor.fullName;
       db.company_operations_state.pauseHistory[0].resumedAt = new Date().toISOString();
@@ -5868,13 +5997,22 @@ app.post('/api/operations/resume', authenticateSession, async (req, res) => {
     if (!db.cycles) db.cycles = [];
     const pausedCycle = db.cycles.find((c: any) => c.status === 'paused');
     if (pausedCycle) {
+      const nowTs = new Date();
+      const pauseStart = new Date(pausedCycle.pausedAt || nowTs);
+      const pauseDurationSeconds = Math.floor((nowTs.getTime() - pauseStart.getTime()) / 1000);
+      
+      // Canonical update: Add this pause period to the total accumulated paused time
+      pausedCycle.totalPausedSeconds = (pausedCycle.totalPausedSeconds || 0) + Math.max(0, pauseDurationSeconds);
       pausedCycle.status = 'active';
-      pausedCycle.resumedAt = new Date().toISOString();
+      pausedCycle.resumedAt = nowTs.toISOString();
       pausedCycle.resumedBy = actor.fullName;
+      pausedCycle.pausedAt = null; // IMPORTANT: Clear pausedAt to stop the clock on the pause
+
       if (pausedCycle.pauseHistory && pausedCycle.pauseHistory.length > 0) {
         pausedCycle.pauseHistory[0].resumedBy = actor.fullName;
-        pausedCycle.pauseHistory[0].resumedAt = new Date().toISOString();
+        pausedCycle.pauseHistory[0].resumedAt = nowTs.toISOString();
         if (reason) pausedCycle.pauseHistory[0].resumeReason = reason;
+        pausedCycle.pauseHistory[0].pauseDurationSeconds = pauseDurationSeconds;
       }
     }
 
