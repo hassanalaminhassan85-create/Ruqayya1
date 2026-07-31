@@ -59,7 +59,39 @@ function writeServerAuditLog(
   };
   
   db.audit_logs.unshift(log);
+
+  // Generate a notification for important system actions
+  const ignoredActions = ['AUTH_', 'READ_', 'LOGOUT', 'SESSION_', 'DEMO_', 'DIRECTOR_MONITORING'];
+  const shouldNotify = !ignoredActions.some(ignored => action.includes(ignored));
+  
+  if (shouldNotify) {
+    if (!db.notifications) db.notifications = [];
+    const notification = {
+      id: generateUUID(),
+      title_en: `System Action: ${action.replace(/_/g, ' ')}`,
+      title_ha: `Wani Abu Ya Faru: ${action.replace(/_/g, ' ')}`,
+      message_en: newVal || `An action was performed by ${userEmail}.`,
+      message_ha: newVal || `Mai amfani ${userEmail} ya yi wani aiki.`,
+      type: 'info',
+      category: 'system',
+      read_status: 0,
+      created_at: new Date().toISOString(),
+      user_id: userId,
+      target_role: userRole // The actor gets it, plus admins/directors get all
+    };
+    db.notifications.unshift(notification);
+  }
+
   saveDB(db);
+  
+  if (shouldNotify && typeof broadcastStateUpdate === 'function') {
+    // Fire and forget so we don't block
+    setTimeout(() => {
+      try {
+         broadcastStateUpdate();
+      } catch (e) {}
+    }, 100);
+  }
 }
 
 // Authentication Middleware with Stateless/Ephemeral Container Session Rehydration
@@ -1109,7 +1141,7 @@ app.post('/api/auth/register-driver', (req, res) => {
       role_id: 'role-driver',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      status: 'pending' // Pending approval workflow
+      status: 'active' // Active immediately upon registration
     };
 
     // B. Create Driver Profile
@@ -1118,7 +1150,7 @@ app.post('/api/auth/register-driver', (req, res) => {
     const agreedAmt = parseFloat(personal.agreedAmount) !== undefined && !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 300000;
     const vehPrice = parseFloat(personal.vehiclePurchasePrice) !== undefined && !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 15000000;
     const remBal = parseFloat(personal.remainingVehicleBalance) !== undefined && !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : vehPrice;
-    const compDrvId = personal.companyDriverId || `PEND-${generateUUID().substring(0, 4).toUpperCase()}`;
+    const compDrvId = personal.companyDriverId || `RTL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const newDriver = {
       id: driverId,
@@ -1152,7 +1184,7 @@ app.post('/api/auth/register-driver', (req, res) => {
       remainingVehicleBalance: remBal,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      status: 'pending' // Needs approval
+      status: 'approved' // Approved immediately upon registration
     };
 
     // C. Create Guarantor
@@ -1174,7 +1206,7 @@ app.post('/api/auth/register-driver', (req, res) => {
       status: 'active'
     };
 
-    // D. Create Vehicle (Link pending driver)
+    // D. Create Vehicle (Link assigned driver)
     const newVehicle = {
       id: vehicleId,
       driver_id: driverId,
@@ -1195,7 +1227,7 @@ app.post('/api/auth/register-driver', (req, res) => {
       capacity: vehicle.capacity || '30 Tons',
       mileage: 0,
       created_at: new Date().toISOString(),
-      status: 'idle'
+      status: 'assigned'
     };
 
     // Save driver documents mapping
@@ -1228,20 +1260,66 @@ app.post('/api/auth/register-driver', (req, res) => {
       created_at: new Date().toISOString()
     });
 
+    // Ensure active cycle exists and operations state is running so Pay Now and installments work instantly
+    if (!db.cycles) db.cycles = [];
+    const hasActiveCycle = db.cycles.some(c => c.status === 'active' || c.status === 'paused');
+    if (!hasActiveCycle) {
+      db.cycles.unshift({
+        id: 'CYC-2026-001',
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        endGoalTons: 200,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        created_by: 'System Bootstrap',
+        locked: false,
+        extendedDays: 0,
+        totalPausedSeconds: 0,
+        financials: [],
+        pauseHistory: []
+      });
+    }
+    db.company_operations_state = { status: 'Running', updated_at: new Date().toISOString() };
+
+    // Create session token so driver is automatically logged in
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const token = `tok_driver_${personal.email.split('@')[0]}_${generateUUID().replace(/-/g, '')}`;
+    const session = {
+      id: generateUUID(),
+      user_id: userId,
+      token,
+      expires_at: expiresAt,
+      user_ip: req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '127.0.0.1',
+      user_agent: req.headers['user-agent'] || 'Corporate API Consumer',
+      created_at: new Date().toISOString(),
+      status: 'active'
+    };
+    db.sessions.push(session);
+
     saveDB(db);
 
     // Server Audit Logs
     writeServerAuditLog(
-      null, 
+      userId, 
       personal.email, 
-      'public', 
+      'driver', 
       'DRIVER_SELF_REGISTRATION', 
       null, 
       `Registered driver ${personal.fullName} with vehicle ${vehicle.plateNumber}`, 
       req
     );
 
-    res.json({ success: true, message: 'Your registration was submitted successfully. Pending Admin review.' });
+    res.json({ 
+      success: true, 
+      token,
+      user: {
+        id: userId,
+        email: personal.email,
+        fullName: personal.fullName,
+        role: 'driver'
+      },
+      message: 'Registration successful. Welcome to Ruqayya Transport.' 
+    });
   } catch (error: any) {
     console.error('Driver self registration failure:', error);
     res.status(500).json({ error: `Internal registry compilation error: ${error.message}` });
@@ -7911,12 +7989,20 @@ async function sendPushForNotification(n: any) {
         }
 
         const results = await PushService.sendNotification(uid, payload);
-        console.log(`PushService: Dispatched targeted push to user ${uid}:`, results);
+        if (results.sentCount > 0 || results.failedCount > 0) {
+          console.log(`PushService: Dispatched targeted push to user ${uid}:`, results);
+        } else {
+          console.log(`PushService: No active web push subscriptions found for user ${uid}. Native push skipped.`);
+        }
       }
     } else if (!n.user_id && !n.driver_id && !n.admin_id && !n.target_role) {
       // Broadcast to all devices only if it's a generic announcement or global system alert
       const results = await PushService.broadcastNotification(payload);
-      console.log(`PushService: Broadcasted notification to all devices:`, results);
+      if (results.sentCount > 0 || results.failedCount > 0) {
+        console.log(`PushService: Broadcasted notification to all devices:`, results);
+      } else {
+        console.log(`PushService: No active web push subscriptions found for broadcast. Native push skipped.`);
+      }
     }
   } catch (err) {
     console.warn("sendPushForNotification failure:", err);

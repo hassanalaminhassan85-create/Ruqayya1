@@ -459,6 +459,13 @@ export const api = {
     });
   },
 
+  recordPayment: async (payload: { driverId: string; amount: number; installmentNumber?: number; outstandingAmount?: number; date?: string; receiptNumber?: string; referenceNumber?: string; paymentMethod?: string; remarks?: string }) => {
+    return api.request('/api/payments', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
   updatePaymentStatus: async (id: string, payload: { status: 'approved' | 'rejected'; remarks?: string }) => {
     return api.request(`/api/payments/${id}/status`, {
       method: 'PUT',

@@ -688,40 +688,42 @@ export const RecordPaymentModal: React.FC<{
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!driverId || !amount || isNaN(Number(amount))) return;
     
     setLoading(true);
     try {
-      const paymentItem = {
-        id: `pay-remit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      const receiptNo = `REM-${Math.floor(100000 + Math.random() * 900000)}`;
+      const payload = {
         driverId,
         amount: Number(amount),
+        installmentNumber: 1,
+        outstandingAmount: 0,
         date: new Date().toISOString().split('T')[0],
-        status: 'approved',
-        remarks: remarks || `Daily tricycle collection remittance`,
-        remittanceNumber: `REM-${Math.floor(100000 + Math.random() * 900000)}`
+        receiptNumber: receiptNo,
+        referenceNumber: receiptNo,
+        paymentMethod: 'bank_transfer',
+        remarks: remarks || `Daily tricycle collection remittance`
       };
 
-      const res = await api.request('/api/payments', {
-        method: 'POST',
-        body: JSON.stringify(paymentItem)
-      });
+      const res = await api.recordPayment(payload);
 
-      const lastState = (window as any).lastSSEState || {};
-      const currentPayments = lastState.driver_payments || lastState.payments || [];
-      window.dispatchEvent(new CustomEvent('db-change', {
-        detail: {
-          driver_payments: [paymentItem, ...currentPayments]
-        }
-      }));
-
-      setSuccess(true);
-    } catch (err) {
+      if (res && (res.success || res.payment)) {
+        const lastState = (window as any).lastSSEState || {};
+        const currentPayments = lastState.driver_payments || lastState.payments || [];
+        window.dispatchEvent(new CustomEvent('db-change', {
+          detail: {
+            driver_payments: [res.payment || payload, ...currentPayments]
+          }
+        }));
+        setSuccess(true);
+      } else {
+        throw new Error(res?.error || 'Failed to record payment transaction');
+      }
+    } catch (err: any) {
       console.error("Payment log failure:", err);
-      // local fallback
-      setSuccess(true);
+      alert(err.message || "Failed to record payment transaction.");
     } finally {
       setLoading(false);
     }
@@ -755,7 +757,7 @@ export const RecordPaymentModal: React.FC<{
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+          <form onSubmit={handlePayment} className="flex flex-col gap-3.5">
             <div className="flex flex-col gap-1">
               <label className="font-bold text-text-main">Select Driver Node</label>
               <select

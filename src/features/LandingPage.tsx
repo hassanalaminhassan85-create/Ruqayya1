@@ -401,9 +401,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     };
 
     try {
-      await api.registerDriver(payload);
+      const res = await api.registerDriver(payload);
       setRegSuccess(true);
       setRegLoading(false);
+
+      if (res && res.success && res.token) {
+        api.setToken(res.token);
+        onLoginAsDriver(payload.personal.fullName);
+        return;
+      }
       
       // Clear registration form
       setRegFullName('');

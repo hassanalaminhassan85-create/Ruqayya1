@@ -378,8 +378,30 @@ export const NotificationToastContainer: React.FC<{ lang: 'en' | 'ha'; currentRo
     };
 
     window.addEventListener('db-change', handleDBChange);
+
+    // Guarantee SSE connection for real-time push notifications across ALL dashboards/roles
+    let es: EventSource | null = null;
+    try {
+      const token = api.getToken();
+      if (token) {
+        es = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'db_update') {
+              // Dispatch to window so NotificationToast and other components catch it
+              window.dispatchEvent(new CustomEvent('db-change', { detail: data }));
+            }
+          } catch (e) {}
+        };
+      }
+    } catch (e) {}
+
     return () => {
       window.removeEventListener('db-change', handleDBChange);
+      if (es) {
+        es.close();
+      }
     };
   }, [currentRole]);
 
