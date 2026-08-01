@@ -119,7 +119,9 @@ export const api = {
             errMsg = await res.text();
           } catch (textErr) {}
         }
-        throw new Error(errMsg);
+        const apiError = new Error(errMsg) as any;
+        apiError.isApiError = true;
+        throw apiError;
       }
 
       try {
@@ -127,9 +129,10 @@ export const api = {
       } catch (e) {
         return null;
       }
-    } catch (networkError) {
+    } catch (networkError: any) {
       // In case a network failure happened while online (or transitioning) and it's a write request, queue as fallback!
-      if (isWrite) {
+      // Ensure we don't queue if it's an explicit API response error (e.g., 400, 500)
+      if (isWrite && !networkError.isApiError) {
         console.warn('API connection failed mid-flight, queuing request for background sync.', networkError);
         const body = options.body ? JSON.parse(options.body as string) : {};
         const desc = getSyncDescriptions(endpoint, body);

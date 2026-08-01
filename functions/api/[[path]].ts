@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { WorkersAIService } from '../../src/utils/ai_service';
 
 declare global {
@@ -955,9 +956,7 @@ class D1Manager {
 
       for (const n of newNotifications) {
         this.loadedNotificationIds.add(n.id);
-        sendPushForNotification(this.env, state, n).catch((err: any) => {
-          console.error("Failed to dispatch push notification in saveDB:", err);
-        });
+        await sendPushForNotification(this.env, state, n).catch((err: any) => { console.error(\"Failed to dispatch push notification in saveDB:\", err); });
       }
     }
 
@@ -1654,10 +1653,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 created_at: new Date().toISOString(),
                 status: 'active'
               });
-              hashPassword('director123').then(async (h) => {
-                user.password_hash = h;
-                await dbManager.saveDB(db);
-              });
+              user.password_hash = await hashPassword('director123');
+              await dbManager.saveDB(db);
             } else if (userKey === 'ADAM' || userKey === 'ABAKAKA') {
               user = {
                 id: userId,
@@ -1680,10 +1677,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 created_at: new Date().toISOString(),
                 status: 'active'
               });
-              hashPassword('admin123').then(async (h) => {
-                user.password_hash = h;
-                await dbManager.saveDB(db);
-              });
+              user.password_hash = await hashPassword('admin123');
+              await dbManager.saveDB(db);
             } else if (userKey === 'KABIR' || userKey === 'AMINA') {
               user = {
                 id: userId,
@@ -1706,10 +1701,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 created_at: new Date().toISOString(),
                 status: 'active'
               });
-              hashPassword('shareholder123').then(async (h) => {
-                user.password_hash = h;
-                await dbManager.saveDB(db);
-              });
+              user.password_hash = await hashPassword('shareholder123');
+              await dbManager.saveDB(db);
             } else {
               // Default Driver fallback
               user = {
@@ -1733,10 +1726,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 status: 'approved',
                 created_at: new Date().toISOString()
               });
-              hashPassword('driver123').then(async (h) => {
-                user.password_hash = h;
-                await dbManager.saveDB(db);
-              });
+              user.password_hash = await hashPassword('driver123');
+              await dbManager.saveDB(db);
             }
           }
 
@@ -1755,7 +1746,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               status: 'active'
             };
             db.sessions.push(session);
-            dbManager.saveDB(db); // non-blocking or concurrently handled save
+            await dbManager.saveDB(db); // now blocking to prevent CF Workers from killing it
           }
         }
       }
@@ -1913,7 +1904,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         driverPassportUrl = `/api/documents/preview/${fileId}.png`;
         if (env.R2_BUCKET) {
           const cleanBase64 = personal.passportPhoto.replace(/^data:.*?;base64,/, '');
-          const buffer = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0));
+          const buffer = new Uint8Array(Buffer.from(cleanBase64, 'base64'));
           await env.R2_BUCKET.put(`${fileId}.png`, buffer, { httpMetadata: { contentType: 'image/png' } });
         }
       }
@@ -1923,7 +1914,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         guarantorPassportUrl = `/api/documents/preview/${fileId}.png`;
         if (env.R2_BUCKET) {
           const cleanBase64 = guarantor.passport.replace(/^data:.*?;base64,/, '');
-          const buffer = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0));
+          const buffer = new Uint8Array(Buffer.from(cleanBase64, 'base64'));
           await env.R2_BUCKET.put(`${fileId}.png`, buffer, { httpMetadata: { contentType: 'image/png' } });
         }
       }
@@ -2073,10 +2064,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               created_at: new Date().toISOString(),
               status: 'active'
             });
-            hashPassword('director123').then(async (h) => {
-              user.password_hash = h;
+            user.password_hash = await hashPassword('director123');
               await dbManager.saveDB(db);
-            });
           } else if (userKey === 'ADAM' || userKey === 'ABAKAKA') {
             user = {
               id: userId,
@@ -2099,10 +2088,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               created_at: new Date().toISOString(),
               status: 'active'
             });
-            hashPassword('admin123').then(async (h) => {
-              user.password_hash = h;
+            user.password_hash = await hashPassword('admin123');
               await dbManager.saveDB(db);
-            });
           } else if (userKey === 'KABIR' || userKey === 'AMINA') {
             user = {
               id: userId,
@@ -2125,10 +2112,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               created_at: new Date().toISOString(),
               status: 'active'
             });
-            hashPassword('shareholder123').then(async (h) => {
-              user.password_hash = h;
+            user.password_hash = await hashPassword('shareholder123');
               await dbManager.saveDB(db);
-            });
           }
         }
 
