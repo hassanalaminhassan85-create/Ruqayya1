@@ -541,8 +541,12 @@ export default function App() {
     }
     if (currentRole === 'shareholder') {
       return items.filter(item => 
-        ['dashboard', 'ai-assistant', 'shareholders', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
-      );
+        ['dashboard', 'ai-assistant', 'payments', 'trips', 'notifications', 'pwa', 'settings', 'help'].includes(item.id)
+      ).map(item => {
+        if (item.id === 'payments') return { ...item, label: lang === 'en' ? "Ledger" : "Bilan" };
+        if (item.id === 'trips') return { ...item, label: lang === 'en' ? "Business Cycles" : "Tsarin Aiki" };
+        return item;
+      });
     }
     return items; // Director can view all
   };

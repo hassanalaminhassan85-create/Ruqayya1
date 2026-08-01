@@ -449,8 +449,12 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       company_documents: db.company_documents || []
     };
   } else if (role === 'shareholder') {
+    const totalInvested = (db.shareholders || []).reduce((sum: number, s: any) => sum + (parseFloat(s.investment_amount) || 0), 0);
     const cleanShareholders = (db.shareholders || []).map((s: any) => {
-      if (s.id === shareholderId) return s;
+      if (s.id === shareholderId) {
+        const equityPercentage = totalInvested > 0 ? ((parseFloat(s.investment_amount) || 0) / totalInvested * 100).toFixed(2) : '0';
+        return { ...s, equity_percentage: equityPercentage };
+      }
       return { id: s.id, full_name: s.full_name, status: s.status };
     });
 
@@ -4046,7 +4050,15 @@ ${JSON.stringify(cleanedContext, null, 2)}
     if (parts[0] === 'me' && method === 'GET') {
       const sh = db.shareholders.find((s: any) => s.user_id === user.id);
       if (!sh) return buildResponse({ error: 'Shareholder profile missing.' }, 404);
-      return buildResponse(sh);
+      
+      // Calculate equity percentage
+      const totalInvested = (db.shareholders || []).reduce((sum: number, s: any) => sum + (parseFloat(s.investment_amount) || 0), 0);
+      const equityPercentage = totalInvested > 0 ? ((parseFloat(sh.investment_amount) || 0) / totalInvested * 100).toFixed(2) : '0';
+      
+      return buildResponse({
+        ...sh,
+        equity_percentage: equityPercentage
+      });
     }
 
     if (parts.length === 1) {

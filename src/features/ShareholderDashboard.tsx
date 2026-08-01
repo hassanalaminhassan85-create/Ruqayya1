@@ -32,6 +32,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({
   const [shareholder, setShareholder] = useState<Shareholder | null>(null);
   const [financials, setFinancials] = useState<FinancialRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sseConnected, setSseConnected] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -48,6 +49,40 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({
 
   useEffect(() => {
     fetchData();
+    
+    // SSE connection for real-time updates
+    const token = api.getToken();
+    let es: EventSource | null = null;
+    if (token) {
+      try {
+        es = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);
+        es.onopen = () => setSseConnected(true);
+        es.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.type === 'db_update') {
+              if (data.shareholders) {
+                // Find self in shareholders list
+                // We don't have our own ID easily accessible here yet, 
+                // but we can match by what we already have or wait for the me call
+                const me = data.shareholders.find((s: any) => s.equity_percentage !== undefined);
+                if (me) setShareholder(me);
+              }
+              if (data.financials) setFinancials(data.financials);
+            }
+          } catch (err) {
+            console.error("SSE parse error:", err);
+          }
+        };
+        es.onerror = () => setSseConnected(false);
+      } catch (e) {
+        console.warn("SSE not supported");
+      }
+    }
+
+    return () => {
+      es?.close();
+    };
   }, []);
 
   if (loading && !shareholder) {
@@ -181,8 +216,14 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps> = ({
             {lang === 'en' ? "Investor Command" : "Bangaren Masu Hannun Jari"}
           </h1>
           <p className="text-sm text-slate-500">
-            {lang === 'en' ? "Managing assets for shareholder:" : "Kula da jarin:"} <span className="font-bold text-slate-900">{shareholder?.name}</span>
+            {lang === 'en' ? "Managing assets for shareholder:" : "Kula da jarin:"} <span className="font-bold text-slate-900">{shareholder?.full_name || shareholder?.name || 'N/A'}</span>
           </p>
+          <div className="flex items-center gap-1.5 mt-1">
+            <div className={`h-1.5 w-1.5 rounded-full ${sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+              {sseConnected ? (lang === 'en' ? 'Live Synchronized' : 'An Haɗa') : (lang === 'en' ? 'Offline/Polling' : 'Ba a haɗa ba')}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-2">
