@@ -3,42 +3,78 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
-import { initializeApp, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+/*
+  This file supports both Node (server) and non-Node (Edge) runtimes.
+  Node-specific modules (fs, path, crypto, firebase-admin) are required only when running in Node.
+  In Edge runtimes you should call the microservice for DB persistence and password hashing.
+*/
 
-// Initialize Firebase Admin for persistent storage
+const isNode = typeof process !== 'undefined' && (process as any).release && (process as any).release.name === 'node';
+
+let fs: any = null;
+let path: any = null;
+let nodeCrypto: any = null;
+let initializeApp: any = null;
+let getApps: any = null;
+let getFirestoreFn: any = null;
+let firebaseConfig: any = null;
+
+if (isNode) {
+  // Use require to avoid bundling Node-only modules into Edge bundles
+  fs = require('fs');
+  path = require('path');
+  nodeCrypto = require('crypto');
+  try {
+    const adminApp = require('firebase-admin/app');
+    initializeApp = adminApp.initializeApp;
+    getApps = adminApp.getApps;
+    const adminFirestore = require('firebase-admin/firestore');
+    getFirestoreFn = adminFirestore.getFirestore;
+  } catch (e) {
+    // firebase-admin might not be installed in some environments
+    initializeApp = null;
+    getApps = null;
+    getFirestoreFn = null;
+  }
+  try {
+    firebaseConfig = require('../../firebase-applet-config.json');
+  } catch (e) {
+    firebaseConfig = null;
+  }
+}
+
+// Initialize Firebase Admin for persistent storage (only in Node)
 export let firestore: any = null;
 export function setFirestore(val: any) {
   firestore = val;
 }
-try {
-  const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
-  
-  if (getApps().length === 0) {
-    if (firebaseConfig && (firebaseConfig as any).projectId) {
-      initializeApp({
-        projectId: (firebaseConfig as any).projectId
-      });
-      console.log(`Initialized Firebase Admin with projectId: ${(firebaseConfig as any).projectId}`);
-    } else {
-      initializeApp();
-    }
-  }
 
-  // Use the configured database ID
-  if (dbId) {
-    firestore = getFirestore(undefined, dbId);
-    console.log(`Initialized with database: ${dbId}`);
-  } else {
-    firestore = getFirestore();
-    console.log(`Initialized with default database`);
+if (isNode && getApps) {
+  try {
+    const dbId = (firebaseConfig as any)?.firestoreDatabaseId || (firebaseConfig as any)?.databaseId;
+    
+    if (getApps().length === 0 && initializeApp) {
+      if (firebaseConfig && (firebaseConfig as any).projectId) {
+        initializeApp({
+          projectId: (firebaseConfig as any).projectId
+        });
+        console.log(`Initialized Firebase Admin with projectId: ${(firebaseConfig as any).projectId}`);
+      } else {
+        initializeApp();
+      }
+    }
+
+    // Use the configured database ID
+    if (dbId && getFirestoreFn) {
+      firestore = getFirestoreFn(undefined, dbId);
+      console.log(`Initialized with database: ${dbId}`);
+    } else if (getFirestoreFn) {
+      firestore = getFirestoreFn();
+      console.log(`Initialized with default database`);
+    }
+  } catch (e) {
+    console.error("Firebase Admin initialization failed:", e);
   }
-} catch (e) {
-  console.error("Firebase Admin initialization failed:", e);
 }
 
 const CLOUD_DB_COLLECTION = 'system_state';
@@ -47,7 +83,10 @@ const CLOUD_DB_DOC = 'main_database';
 // Password hashing helpers
 export function hashPassword(password: string): string {
   const salt = 'ruqayya_erp_salt_2026';
-  return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  if (isNode && nodeCrypto) {
+    return nodeCrypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  }
+  throw new Error('hashPassword: Node crypto not available in this runtime. Use the async Web Crypto helper or the microservice.');
 }
 
 export function verifyPassword(password: string, hash: string): boolean {
@@ -55,19 +94,27 @@ export function verifyPassword(password: string, hash: string): boolean {
 }
 
 export function generateUUID(): string {
-  return crypto.randomUUID();
+  if (isNode && nodeCrypto && nodeCrypto.randomUUID) return nodeCrypto.randomUUID();
+  // Fallback UUID v4 (not cryptographically secure)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
-const STORAGE_DIR = path.join(process.cwd(), 'storage');
-const DB_FILE = path.join(STORAGE_DIR, 'db.json');
-const R2_DIR = path.join(STORAGE_DIR, 'r2');
+const STORAGE_DIR = isNode ? path.join(process.cwd(), 'storage') : '';
+const DB_FILE = isNode ? path.join(STORAGE_DIR, 'db.json') : '';
+const R2_DIR = isNode ? path.join(STORAGE_DIR, 'r2') : '';
 
 // Ensure storage directories exist
-if (!fs.existsSync(STORAGE_DIR)) {
-  fs.mkdirSync(STORAGE_DIR, { recursive: true });
-}
-if (!fs.existsSync(R2_DIR)) {
-  fs.mkdirSync(R2_DIR, { recursive: true });
+if (isNode && fs) {
+  if (!fs.existsSync(STORAGE_DIR)) {
+    fs.mkdirSync(STORAGE_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(R2_DIR)) {
+    fs.mkdirSync(R2_DIR, { recursive: true });
+  }
 }
 
 export interface DBState {
@@ -162,7 +209,9 @@ export async function initCloudPersistence() {
       const cloudData = docSnap.data() as DBState;
       console.log('Successfully loaded database state from Firestore.');
       // Update local file and cache
-      fs.writeFileSync(DB_FILE, JSON.stringify(cloudData, null, 2), 'utf8');
+      if (isNode && fs) {
+        try { fs.writeFileSync(DB_FILE, JSON.stringify(cloudData, null, 2), 'utf8'); } catch (e) { console.warn('Failed writing DB_FILE during initCloudPersistence:', e); }
+      }
       cachedDB = cloudData;
     } else {
       console.log('No existing database state found in Firestore. Starting fresh.');
@@ -181,7 +230,7 @@ export async function initCloudPersistence() {
 export function loadDB(): DBState {
   if (cachedDB) return cachedDB;
   try {
-    if (fs.existsSync(DB_FILE)) {
+    if (isNode && fs && fs.existsSync(DB_FILE)) {
       const data = fs.readFileSync(DB_FILE, 'utf8');
       const parsed = JSON.parse(data) as DBState;
       let changed = false;
@@ -244,7 +293,9 @@ export function saveDB(state: DBState): void {
     }
     
     cachedDB = state;
-    fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf8');
+    if (isNode && fs) {
+      fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf8');
+    }
     
     // Fire-and-forget sync to cloud
     if (firestore) {
@@ -255,11 +306,11 @@ export function saveDB(state: DBState): void {
         
         // Only fallback to the default database if the named database itself was NOT_FOUND (Code 5)
         if (err.code === 5 || err.message?.includes('NOT_FOUND')) {
-          const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
+          const dbId = (firebaseConfig as any)?.firestoreDatabaseId || (firebaseConfig as any)?.databaseId;
           if (dbId && dbId !== '(default)') {
             console.warn('Named database not found. Falling back to default database for future syncs.');
             try {
-              firestore = getFirestore();
+              firestore = getFirestoreFn();
             } catch (fallbackErr) {
               console.warn('Failed to fallback to default database:', fallbackErr);
             }
@@ -452,13 +503,13 @@ export function seedDBIfEmpty() {
 export function saveR2File(fileName: string, base64Content: string): string {
   try {
     const fileId = `${Date.now()}-${generateUUID().substring(0, 8)}`;
-    const extension = path.extname(fileName) || '.png';
+    const extension = isNode && path ? path.extname(fileName) : (fileName.includes('.') ? '.' + fileName.split('.').pop() : '.png');
     const savedName = `${fileId}${extension}`;
-    const filePath = path.join(R2_DIR, savedName);
+    const filePath = isNode && path ? path.join(R2_DIR, savedName) : savedName;
     
     // Parse base64
     const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
-    fs.writeFileSync(filePath, Buffer.from(cleanBase64, 'base64'));
+    if (isNode && fs) fs.writeFileSync(filePath, Buffer.from(cleanBase64, 'base64'));
     
     // Return relative preview path
     return `/api/documents/preview/${savedName}`;
@@ -469,5 +520,5 @@ export function saveR2File(fileName: string, base64Content: string): string {
 }
 
 export function getR2FilePath(savedName: string): string {
-  return path.join(R2_DIR, savedName);
+  return isNode && path ? path.join(R2_DIR, savedName) : savedName;
 }
