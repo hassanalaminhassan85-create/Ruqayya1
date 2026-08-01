@@ -25,6 +25,45 @@ interface Env {
   GEMINI_API_KEY?: string;
 }
 
+// Helper to retrieve or generate VAPID keys
+async function getVapidKeys(env: Env, db: any, dbManager: D1Manager): Promise<{ publicKey: string; privateKey: string } | null> {
+  // 1. Try Environment Variables
+  if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
+    return { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY };
+  }
+
+  // 2. Try D1 Collections
+  if (db && db.vapid_keys && db.vapid_keys.publicKey && db.vapid_keys.privateKey) {
+    return db.vapid_keys;
+  }
+
+  // 3. Generate new keys using Web Crypto (P-256)
+  try {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      true,
+      ['sign', 'verify']
+    );
+    const publicKey = await crypto.subtle.exportKey('raw', keyPair.publicKey);
+    const privateKey = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+    
+    const keys = {
+      publicKey: base64url(new Uint8Array(publicKey)),
+      privateKey: privateKey.d || ''
+    };
+
+    if (db) {
+      db.vapid_keys = keys;
+      await dbManager.saveDB(db);
+      console.log("[VAPID] Generated and persisted new VAPID keys to D1.");
+    }
+    return keys;
+  } catch (err) {
+    console.error("[VAPID ERROR] Failed to generate keys:", err);
+    return null;
+  }
+}
+
 // Global PBKDF2 password hashing helper (matches server_db.ts SHA-512)
 async function pbkdf2(password: string, salt: string, iterations: number, keyLen: number, digest: string): Promise<string> {
   const passwordBuffer = new TextEncoder().encode(password);
@@ -595,6 +634,97 @@ const getFirestoreDocUrl = () => {
   return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${firestoreDatabaseId}/documents/system_state/main_database`;
 };
 
+// --- Web Push Encryption Helpers (RFC 8291) ---
+async function encryptPushPayload(subscription: any, payload: string): Promise<{ body: ArrayBuffer; salt: string; dh: string }> {
+  const textEncoder = new TextEncoder();
+  const payloadBuffer = textEncoder.encode(payload);
+  
+  // 1. Parse subscription keys
+  const p256dh = decodeBase64url(subscription.keys.p256dh);
+  const auth = decodeBase64url(subscription.keys.auth);
+  
+  // 2. Generate ephemeral key pair
+  const ephemeralKeyPair = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveBits']
+  );
+  
+  const ephemeralPublicKey = await crypto.subtle.exportKey('raw', ephemeralKeyPair.publicKey);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  
+  // 3. Import recipient's public key
+  const recipientPublicKey = await crypto.subtle.importKey(
+    'raw',
+    p256dh,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    []
+  );
+  
+  // 4. Shared secret derivation
+  const sharedSecret = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: recipientPublicKey },
+    ephemeralKeyPair.privateKey,
+    256
+  );
+  
+  // 5. HKDF Implementation using Web Crypto
+  async function hkdf(salt: Uint8Array, ikm: Uint8Array, info: Uint8Array, length: number): Promise<Uint8Array> {
+    const key = await crypto.subtle.importKey('raw', salt, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const prk = await crypto.subtle.sign('HMAC', key, ikm);
+    const prkKey = await crypto.subtle.importKey('raw', prk, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    
+    let t = new Uint8Array(0);
+    let okm = new Uint8Array(0);
+    let i = 1;
+    while (okm.length < length) {
+      const stepInfo = new Uint8Array(t.length + info.length + 1);
+      stepInfo.set(t);
+      stepInfo.set(info, t.length);
+      stepInfo.set([i], t.length + info.length);
+      t = new Uint8Array(await crypto.subtle.sign('HMAC', prkKey, stepInfo));
+      const newOkm = new Uint8Array(okm.length + t.length);
+      newOkm.set(okm);
+      newOkm.set(t, okm.length);
+      okm = newOkm;
+      i++;
+    }
+    return okm.slice(0, length);
+  }
+
+  // PRK = HKDF-Extract(salt, IKM)
+  // info = "Content-Encoding: aes128gcm" || 0x00 || P-256 Receiver Public Key || P-256 Sender Public Key
+  const info = new Uint8Array([
+    ...textEncoder.encode("Content-Encoding: aes128gcm"),
+    0,
+    ...p256dh,
+    ...new Uint8Array(ephemeralPublicKey)
+  ]);
+  
+  const derivedKey = await hkdf(salt, new Uint8Array(sharedSecret), info, 16);
+  const nonce = await hkdf(salt, new Uint8Array(sharedSecret), info, 12);
+  
+  // 6. AES-GCM Encryption
+  // Payload must be padded: content || 0x02 || 0x00...
+  const paddedPayload = new Uint8Array(payloadBuffer.length + 1);
+  paddedPayload.set(payloadBuffer);
+  paddedPayload[payloadBuffer.length] = 2; // Delimiter
+
+  const aesKey = await crypto.subtle.importKey('raw', derivedKey, { name: 'AES-GCM' }, false, ['encrypt']);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce },
+    aesKey,
+    paddedPayload
+  );
+
+  return {
+    body: encrypted,
+    salt: base64url(salt),
+    dh: base64url(new Uint8Array(ephemeralPublicKey))
+  };
+}
+
 function firestoreToPlain(fields: any): any {
   if (!fields) return {};
   const plain: any = {};
@@ -709,78 +839,50 @@ class D1Manager {
   private env: Env;
   private memoryDb: any = null;
   private loadedNotificationIds: Set<string> = new Set();
+  private dbCache: any = null;
+  private initialHashes: Record<string, string> = {};
 
   constructor(env: Env) {
     this.env = env;
   }
 
   private getD1(): any {
-    if (this.env.DB && typeof this.env.DB.prepare === 'function') {
-      return this.env.DB;
-    }
-    if (this.env.ruqayya && typeof this.env.ruqayya.prepare === 'function') {
-      return this.env.ruqayya;
-    }
+    if (this.env.DB && typeof this.env.DB.prepare === 'function') return this.env.DB;
+    if (this.env.ruqayya && typeof this.env.ruqayya.prepare === 'function') return this.env.ruqayya;
     return null;
   }
 
   async getDB(): Promise<any> {
+    if (this.dbCache) return this.dbCache;
+    
     const d1 = this.getD1();
     let db: any = null;
     const startTime = Date.now();
     try {
       if (d1) {
-        console.log(`[D1 SQL DB QUERY] CREATE TABLE IF NOT EXISTS collections`);
-        await d1.prepare(`
-          CREATE TABLE IF NOT EXISTS collections (
-            name TEXT PRIMARY KEY,
-            data TEXT
-          )
-        `).run();
+        // Core initialization with optimized check
+        await d1.batch([
+          d1.prepare(`CREATE TABLE IF NOT EXISTS collections (name TEXT PRIMARY KEY, data TEXT)`),
+          d1.prepare(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`),
+          d1.prepare(`CREATE TABLE IF NOT EXISTS cycles (id TEXT PRIMARY KEY, user_id TEXT, start_time DATETIME, end_time DATETIME, duration INTEGER, status TEXT)`),
+          d1.prepare(`CREATE TABLE IF NOT EXISTS subscriptions (id TEXT PRIMARY KEY, user_id TEXT, endpoint TEXT UNIQUE, keys TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`)
+        ]);
 
-        await d1.prepare(`
-          CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          )
-        `).run();
-
-        await d1.prepare(`
-          CREATE TABLE IF NOT EXISTS cycles (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
-            start_time DATETIME,
-            end_time DATETIME,
-            duration INTEGER,
-            status TEXT
-          )
-        `).run();
-
-        await d1.prepare(`
-          CREATE TABLE IF NOT EXISTS subscriptions (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
-            endpoint TEXT UNIQUE,
-            keys TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          )
-        `).run();
-
-        console.log(`[D1 SQL DB QUERY] SELECT name, data FROM collections`);
         const dbResponse = await d1.prepare("SELECT name, data FROM collections").all();
         const results = dbResponse?.results || (Array.isArray(dbResponse) ? dbResponse : null);
+        
         if (results && results.length > 0) {
           const state: any = {};
           for (const row of results) {
             state[row.name] = JSON.parse(row.data);
+            // Store initial hash to detect changes
+            this.initialHashes[row.name] = row.data;
           }
           db = await this.ensureDefaults(state);
           console.log(`[D1 SQL DB SUCCESS] Loaded database state in ${Date.now() - startTime}ms`);
         } else {
           console.log(`[D1 SQL DB SEED] No collections found, preparing seed defaults...`);
           const seedState = await this.ensureDefaults({});
-          // Populate loaded IDs before first save to prevent seed push notifications
           if (seedState && seedState.notifications) {
             this.loadedNotificationIds = new Set(seedState.notifications.map((n: any) => n.id).filter(Boolean));
           }
@@ -802,98 +904,89 @@ class D1Manager {
         }
       }
 
-      // Populate loadedNotificationIds with historical IDs to prevent push loops
       if (db && db.notifications) {
         this.loadedNotificationIds = new Set(db.notifications.map((n: any) => n.id).filter(Boolean));
       }
+      this.dbCache = db;
+      return db;
     } catch (dbError) {
       console.error(`[DB RESOLUTION ERROR] Query failed or database connection broken:`, dbError);
       throw dbError;
     }
-
-      // Note: All state-modifying background maintenance (cycle expirations, contract completions, overdue penalties, and rest periods)
-      // are now strictly and safely handled in the dedicated background cron Worker (/workers/cycle-timer.ts).
-      // This prevents race conditions, write-write conflicts, and redundant write volume on the Cloudflare Pages API path.
-
-    if (db && db.notifications) {
-      this.loadedNotificationIds = new Set(db.notifications.map((n: any) => n.id).filter(Boolean));
-    }
-
-    return db;
   }
 
   async saveDB(state: any): Promise<void> {
+    this.dbCache = state;
+
     // Detect and dispatch new push notifications (non-blocking)
     if (state && state.notifications) {
       const nowMs = Date.now();
       const newNotifications = state.notifications.filter((n: any) => {
         if (!n || !n.id || this.loadedNotificationIds.has(n.id)) return false;
-        
-        // Secondary safety shield: only dispatch push if created within the last 30 seconds
         const createdAt = n.created_at || n.timestamp;
         if (!createdAt) return false;
         const createdMs = new Date(createdAt).getTime();
         if (isNaN(createdMs)) return false;
-        
         return (nowMs - createdMs) < 30000;
       });
 
-      if (newNotifications.length > 0) {
-        for (const n of newNotifications) {
-          this.loadedNotificationIds.add(n.id);
-          sendPushForNotification(this.env, state, n).catch((err: any) => {
-            console.error("Failed to dispatch push notification in saveDB:", err);
-          });
-        }
+      for (const n of newNotifications) {
+        this.loadedNotificationIds.add(n.id);
+        sendPushForNotification(this.env, state, n).catch((err: any) => {
+          console.error("Failed to dispatch push notification in saveDB:", err);
+        });
       }
     }
 
     const d1 = this.getD1();
     if (d1) {
       const statements = [];
+      const updatedKeys: string[] = [];
+      
       for (const [key, val] of Object.entries(state)) {
-        statements.push(
-          d1.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
-            .bind(key, JSON.stringify(val))
-        );
+        const dataStr = JSON.stringify(val);
+        // Only update if changed or new
+        if (this.initialHashes[key] !== dataStr) {
+          statements.push(
+            d1.prepare("INSERT OR REPLACE INTO collections (name, data) VALUES (?, ?)")
+              .bind(key, dataStr)
+          );
+          updatedKeys.push(key);
+          this.initialHashes[key] = dataStr;
+        }
       }
-      if (state.cycles && Array.isArray(state.cycles)) {
+
+      // Sync specific tables if they exist in state
+      if (updatedKeys.includes('cycles') && state.cycles && Array.isArray(state.cycles)) {
         for (const c of state.cycles) {
           statements.push(
             d1.prepare("INSERT OR REPLACE INTO cycles (id, user_id, start_time, end_time, duration, status) VALUES (?, ?, ?, ?, ?, ?)")
-              .bind(
-                c.id,
-                c.created_by || null,
-                c.startDate || c.created_at || null,
-                c.endDate || null,
-                c.duration || 0,
-                c.status || 'active'
-              )
+              .bind(c.id, c.created_by || null, c.startDate || c.created_at || null, c.endDate || null, c.duration || 0, c.status || 'active')
           );
         }
       }
-      if (state.push_subscriptions && Array.isArray(state.push_subscriptions)) {
+
+      if (updatedKeys.includes('push_subscriptions') && state.push_subscriptions && Array.isArray(state.push_subscriptions)) {
         for (const s of state.push_subscriptions) {
           if (s && s.subscription && s.subscription.endpoint) {
             statements.push(
               d1.prepare("INSERT OR REPLACE INTO subscriptions (id, user_id, endpoint, keys, created_at) VALUES (?, ?, ?, ?, ?)")
-                .bind(
-                  s.id || 'sub_' + Math.floor(Math.random() * 1000000),
-                  s.userId || 'anonymous',
-                  s.subscription.endpoint,
-                  JSON.stringify(s.subscription.keys || {}),
-                  s.createdAt || new Date().toISOString()
-                )
+                .bind(s.id || 'sub_' + Math.floor(Math.random() * 1000000), s.userId || 'anonymous', s.subscription.endpoint, JSON.stringify(s.subscription.keys || {}), s.createdAt || new Date().toISOString())
             );
           }
         }
       }
+
       if (statements.length > 0) {
-        await d1.batch(statements);
+        console.log(`[D1 SQL DB SAVE] Executing batch update for ${statements.length} statements. Collections: ${updatedKeys.join(', ')}`);
+        // Split into chunks of 100 to stay within D1 limits
+        for (let i = 0; i < statements.length; i += 100) {
+          await d1.batch(statements.slice(i, i + 100));
+        }
       }
     } else {
       this.memoryDb = state;
-      console.log(`[D1 Fallback] No D1 DB bound. Saving state to Firestore REST API...`);
+      console.log(`[D1 Fallback] Saving state to Firestore REST API...`);
       await saveToFirestore(state);
     }
   }
@@ -1189,12 +1282,13 @@ const buildResponse = (data: any, status = 200, headers = {}) => {
 };
 
 // Helper to sign and generate standard ES256 VAPID JWT header for Web Push using Web Crypto
-async function generateVapidHeader(env: Env, endpoint: string): Promise<string> {
-  const publicKey = env.VAPID_PUBLIC_KEY;
-  const privateKey = env.VAPID_PRIVATE_KEY;
-
+async function generateVapidHeader(env: Env, endpoint: string, db?: any, dbManager?: D1Manager): Promise<string> {
+  const keys = await getVapidKeys(env, db, dbManager);
+  const publicKey = keys?.publicKey || '';
+  const privateKey = keys?.privateKey || '';
+  
   if (!publicKey || !privateKey) {
-    throw new Error("VAPID keys not configured in environment bindings.");
+    throw new Error('VAPID keys not configured.');
   }
 
   function base64url(buffer: ArrayBuffer | Uint8Array): string {
@@ -1275,26 +1369,42 @@ async function sendPushNotification(
 ): Promise<{ success: boolean; expired?: boolean }> {
   try {
     const endpoint = subscription.endpoint;
-    if (!endpoint) {
-      return { success: false };
+    if (!endpoint) return { success: false };
+
+    const authHeader = await generateVapidHeader(env, endpoint, db, dbManager);
+
+    // Secure Web Push encryption (AES-128-GCM)
+    let body: any = payload;
+    let headers: any = {
+      'Authorization': authHeader,
+      'TTL': '2419200',
+      'Content-Type': 'application/json'
+    };
+
+    if (subscription.keys && subscription.keys.p256dh && subscription.keys.auth) {
+      try {
+        const encrypted = await encryptPushPayload(subscription, payload);
+        body = encrypted.body;
+        headers = {
+          ...headers,
+          'Content-Encoding': 'aes128gcm',
+          'Content-Type': 'application/octet-stream'
+        };
+        console.log(`[PUSH] Successfully encrypted payload for endpoint: ${endpoint}`);
+      } catch (encryptErr) {
+        console.warn(`[PUSH] Encryption failed, falling back to plaintext (unlikely to work in prod):`, encryptErr);
+      }
     }
 
-    const authHeader = await generateVapidHeader(env, endpoint);
-
-    // Try sending with payload body first (unencrypted JSON)
     let res = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Authorization': authHeader,
-        'TTL': '2419200',
-        'Content-Type': 'application/json'
-      },
-      body: payload
+      headers,
+      body
     });
 
-    // If push service (like FCM/Mozilla) rejects unencrypted payload, fallback to a secure silent push
-    if (res.status === 400 || res.status === 401 || res.status === 411) {
-      console.warn(`Push service rejected unencrypted body (${res.status}). Retrying with silent push...`);
+    // Fallback for push services that reject unencrypted payload
+    if (!res.ok && body !== null) {
+      console.warn(`Push service rejected payload (${res.status}). Retrying with silent push...`);
       res = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -1305,17 +1415,13 @@ async function sendPushNotification(
       });
     }
 
-    if (res.status === 200 || res.status === 201) {
-      return { success: true };
-    }
+    if (res.ok) return { success: true };
 
-    console.error(`Push subscription delivery failed with status ${res.status}`);
-    if (res.status === 410 || res.status === 404) {
-      return { success: false, expired: true };
-    }
+    console.error(`Push delivery failed with status ${res.status}`);
+    if (res.status === 410 || res.status === 404) return { success: false, expired: true };
     return { success: false };
   } catch (error: any) {
-    console.error("Error sending native push notification via Web Crypto:", error);
+    console.error("Error sending native push notification:", error);
     return { success: false };
   }
 }
@@ -1697,11 +1803,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // PUBLIC: VAPID Public Key Retrieval
   if (path === '/api/notifications/vapid-public-key' && method === 'GET') {
-    const publicKey = env.VAPID_PUBLIC_KEY || '';
-    if (!publicKey) {
-      return buildResponse({ error: 'VAPID_PUBLIC_KEY not configured.' }, 500);
+    const keys = await getVapidKeys(env, db, dbManager);
+    if (!keys || !keys.publicKey) {
+      return buildResponse({ error: 'VAPID keys not configured or generation failed.' }, 500);
     }
-    return buildResponse({ publicKey });
+    return buildResponse({ publicKey: keys.publicKey });
   }
 
   // PUBLIC/AUTHENTICATED: Push Subscription Enrollment
@@ -2863,44 +2969,43 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       }
 
       const fileId = `${Date.now()}-${generateUUID().substring(0, 8)}`;
-      const fileUrl = `/api/documents/preview/${fileId}.png`;
+      const filename = `${fileId}.png`;
+      const fileUrl = `/api/documents/preview/${filename}`;
 
       if (env.R2_BUCKET) {
-        const cleanBase64 = fileBase64.replace(/^data:.*?;base64,/, '');
-        const buffer = Uint8Array.from(atob(cleanBase64), c => c.charCodeAt(0));
-        await env.R2_BUCKET.put(`${fileId}.png`, buffer, { httpMetadata: { contentType: 'image/png' } });
+        try {
+          const cleanBase64 = fileBase64.replace(/^data:.*?;base64,/, '');
+          const binaryString = atob(cleanBase64);
+          const buffer = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            buffer[i] = binaryString.charCodeAt(i);
+          }
+          await env.R2_BUCKET.put(filename, buffer, { httpMetadata: { contentType: 'image/png' } });
+          console.log(`[R2] Successfully uploaded ${filename} to bucket.`);
+        } catch (r2Err) {
+          console.error(`[R2 ERROR] Failed to upload to bucket:`, r2Err);
+        }
       }
 
+      const docObj = {
+        id: generateUUID(),
+        title,
+        document_type: docType,
+        file_url: fileUrl,
+        created_at: new Date().toISOString(),
+        created_by: user.fullName,
+        status: 'active'
+      };
+
       if (vehicleId) {
-        db.vehicle_documents.push({
-          id: generateUUID(),
-          vehicle_id: vehicleId,
-          document_type: docType,
-          file_url: fileUrl,
-          created_at: new Date().toISOString(),
-          created_by: user.fullName,
-          status: 'active'
-        });
+        if (!db.vehicle_documents) db.vehicle_documents = [];
+        db.vehicle_documents.push({ ...docObj, vehicle_id: vehicleId });
       } else if (driverId) {
-        db.driver_documents.push({
-          id: generateUUID(),
-          driver_id: driverId,
-          document_type: docType,
-          file_url: fileUrl,
-          created_at: new Date().toISOString(),
-          created_by: user.fullName,
-          status: 'active'
-        });
+        if (!db.driver_documents) db.driver_documents = [];
+        db.driver_documents.push({ ...docObj, driver_id: driverId });
       } else {
-        db.company_documents.push({
-          id: generateUUID(),
-          title,
-          document_type: docType,
-          file_url: fileUrl,
-          created_at: new Date().toISOString(),
-          created_by: user.fullName,
-          status: 'active'
-        });
+        if (!db.company_documents) db.company_documents = [];
+        db.company_documents.push(docObj);
       }
 
       writeAuditLog(user.id, user.email, user.role, 'COMPANY_DOCUMENT_UPLOAD', null, `Uploaded doc: ${title}`, db);
@@ -2915,9 +3020,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // GET /api/documents/preview/:filename
   if (path.startsWith('/api/documents/preview/')) {
     const filename = path.replace('/api/documents/preview/', '');
-    
-    // Check token authentication parameter
     const tokenParam = url.searchParams.get('token');
+    
+    if (!db.sessions) db.sessions = [];
     const authSession = db.sessions.find((s: any) => s.token === tokenParam && s.status === 'active');
     
     if (!tokenParam || !authSession) {
@@ -2926,38 +3031,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     if (env.R2_BUCKET) {
       const object = await env.R2_BUCKET.get(filename);
-      if (!object) {
-        return new Response('File not found in storage bucket.', {
-          status: 404,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': '*',
-            'Access-Control-Allow-Methods': '*'
-          }
-        });
+      if (object) {
+        const headers = new Headers();
+        object.writeHttpMetadata(headers);
+        headers.set('Access-Control-Allow-Origin', '*');
+        headers.set('Access-Control-Allow-Headers', '*');
+        headers.set('Access-Control-Allow-Methods', '*');
+        headers.set('etag', object.httpEtag);
+        return new Response(object.body, { headers });
       }
-      const fileData = await object.arrayBuffer();
-      return new Response(fileData, {
-        headers: {
-          'Content-Type': filename.endsWith('.pdf') ? 'application/pdf' : 'image/png',
-          'Cache-Control': 'max-age=3600',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': '*',
-          'Access-Control-Allow-Methods': '*'
-        }
-      });
-    } else {
-      // Memory mock empty image for safety if no R2 bound
-      const mockPixel = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 108, 11, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 96, 64, 0, 0, 0, 2, 0, 1, 73, 175, 168, 116, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
-      return new Response(mockPixel, {
-        headers: {
-          'Content-Type': 'image/png',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': '*',
-          'Access-Control-Allow-Methods': '*'
-        }
-      });
     }
+    
+    return new Response('File not found in storage.', { status: 404 });
   }
 
   // 13. NOTIFICATIONS ENDPOINTS

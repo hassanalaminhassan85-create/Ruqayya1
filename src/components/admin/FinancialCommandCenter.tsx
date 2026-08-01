@@ -127,7 +127,9 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const [pendingCycleSelection, setPendingCycleSelection] = useState('1');
   const [userHasSelectedCycle, setUserHasSelectedCycle] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [isCapitalWithdrawOpen, setIsCapitalWithdrawOpen] = useState(false);
   const [isReinvestOpen, setIsReinvestOpen] = useState(false);
+  const [selectedDriverProfileModal, setSelectedDriverProfileModal] = useState<any | null>(null);
   const [shActionAmount, setShActionAmount] = useState('');
   const [shActionRemarks, setShActionRemarks] = useState('');
   const [shActionError, setShActionError] = useState('');
@@ -139,6 +141,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const [shFormFullName, setShFormFullName] = useState('');
   const [shFormPhone, setShFormPhone] = useState('');
   const [shFormEmail, setShFormEmail] = useState('');
+  const [shFormPassword, setShFormPassword] = useState('shareholder123');
   const [shFormAddress, setShFormAddress] = useState('');
   const [shFormInvestmentAmount, setShFormInvestmentAmount] = useState('');
   const [shFormInvestmentDate, setShFormInvestmentDate] = useState(new Date().toISOString().split('T')[0]);
@@ -153,6 +156,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     setShFormFullName('');
     setShFormPhone('');
     setShFormEmail('');
+    setShFormPassword('shareholder123');
     setShFormAddress('');
     setShFormInvestmentAmount('');
     setShFormInvestmentDate(new Date().toISOString().split('T')[0]);
@@ -168,6 +172,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     setShFormFullName(sh.full_name || '');
     setShFormPhone(sh.phone || '');
     setShFormEmail(sh.email || '');
+    setShFormPassword('');
     setShFormAddress(sh.address || '');
     setShFormInvestmentAmount((sh.investment_amount || 0).toString());
     setShFormInvestmentDate(sh.investment_date || new Date().toISOString().split('T')[0]);
@@ -227,6 +232,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           fullName: shFormFullName,
           phone: shFormPhone,
           email: shFormEmail,
+          password: shFormPassword,
           address: shFormAddress,
           investment_amount: parseFloat(shFormInvestmentAmount),
           investmentAmount: parseFloat(shFormInvestmentAmount),
@@ -659,6 +665,27 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   };
   const mainChartData = compileChartData();
 
+  const getDriverFin = (drv: any) => {
+    const agreed = drv.agreed_amount || 180000;
+    const instDue = agreed / 6;
+    const paid = (localPayments || [])
+      .filter((p: any) => p.driver_id === drv.id && p.status === 'approved')
+      .reduce((sum: number, p: any) => sum + p.amount, 0);
+    const remainingVeh = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : agreed;
+    const expenseDebits = (drv.expenseHistory || []).reduce((sum: number, ex: any) => sum + ex.amount, 0);
+    const currentInstNum = Math.min(6, Math.floor(paid / instDue) + 1);
+    const remainingInstBal = Math.max(0, instDue - (localPayments.filter(p => p.driver_id === drv.id && p.status === 'approved' && p.installment_number === currentInstNum).reduce((s, p) => s + p.amount, 0)));
+    return {
+      agreedAmount: agreed,
+      installmentDue: instDue,
+      totalPaid: paid,
+      currentInstallmentNumber: currentInstNum,
+      remainingInstallmentBalance: remainingInstBal,
+      remainingVehicleBalance: remainingVeh,
+      expenseDebits
+    };
+  };
+
   // DRIVER PAYMENT SPECIFIC MATHS & LOGIC
   const matchedDriver = drivers.find(d => d.id === selectedDriverId);
 
@@ -791,6 +818,44 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
       }, 1500);
     } catch (err: any) {
       setShActionError(err.message || "Failing to disburse dividend payment.");
+    }
+  };
+
+  // Process Shareholder Capital Stock Withdrawal (Principal Redemption)
+  const handleCapitalWithdrawSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setShActionError('');
+    setShActionSuccess('');
+
+    if (!activeShareholder || !shActionAmount || parseFloat(shActionAmount) <= 0) {
+      setShActionError("Please specify a valid capital withdrawal amount.");
+      return;
+    }
+
+    const withdrawAmt = parseFloat(shActionAmount);
+    const currentCapital = activeShareholder.investment_amount || 0;
+    if (withdrawAmt > currentCapital) {
+      setShActionError(`Withdrawal amount (₦${withdrawAmt.toLocaleString()}) cannot exceed current Capital Stock (₦${currentCapital.toLocaleString()}).`);
+      return;
+    }
+
+    try {
+      await api.request(`/api/director/shareholders/${activeShareholder.id}/investment`, {
+        method: 'PUT',
+        body: JSON.stringify({ investment_amount: Math.max(0, currentCapital - withdrawAmt) })
+      });
+
+      setShActionSuccess("Capital withdrawal of ₦" + withdrawAmt.toLocaleString() + " processed successfully! Capital stock updated.");
+      setShActionAmount('');
+      setShActionRemarks('');
+
+      setTimeout(() => {
+        setIsCapitalWithdrawOpen(false);
+        setActiveShareholder(null);
+        handleManualSync();
+      }, 1500);
+    } catch (err: any) {
+      setShActionError(err.message || "Failed to process capital withdrawal.");
     }
   };
 
@@ -1745,7 +1810,10 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         >
           {/* LEFT: LOG EXPENSE FORM */}
           <Card className="lg:col-span-5 p-5 h-fit">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">{t.recordExp}</h3>
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-2">{t.recordExp}</h3>
+            <p className="text-[11px] text-slate-500 mb-4">
+              Posting an expense with an associated driver automatically debits and adds the amount to the driver's remaining balance.
+            </p>
             
             <form onSubmit={handleRecordExpenseSubmit} className="flex flex-col gap-4 text-xs">
               <div className="flex flex-col gap-1.5">
@@ -1798,15 +1866,17 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="font-bold text-slate-700">Associated Tricycle Driver (Optional)</label>
+                <label className="font-bold text-slate-700">Associated Tricycle Driver (Optional - Adds to Driver Balance)</label>
                 <select
                   value={expDriverId}
                   onChange={(e) => setExpDriverId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs focus:outline-none font-medium text-slate-900"
                 >
-                  <option value="">-- No Association --</option>
+                  <option value="">-- No Driver Association --</option>
                   {drivers.map((d, idx) => (
-                    <option key={`${d.id}-${idx}`} value={d.id}>{d.fullName}</option>
+                    <option key={`${d.id}-${idx}`} value={d.id}>
+                      {d.fullName} ({d.vehicle?.plateNumber || 'No Plate'}) - Balance: ₦{(d.remaining_vehicle_balance || d.agreed_amount || 180000).toLocaleString()}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1817,55 +1887,124 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
               <Button
                 type="submit"
                 variant="primary"
-                className="w-full font-bold bg-rose-600 hover:bg-rose-700 text-white py-2 text-xs border-none"
+                className="w-full font-bold bg-rose-600 hover:bg-rose-700 text-white py-2.5 text-xs border-none shadow-sm"
               >
-                Post Ledger Expense
+                Post Ledger Expense & Update Driver Balance
               </Button>
             </form>
           </Card>
 
-          {/* RIGHT: EXPENSE LOG RECORDS HISTORY */}
-          <Card className="lg:col-span-7 p-5">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Operational Expenditures History</h3>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
-                    <th className="p-3">Reference ID</th>
-                    <th className="p-3">Category</th>
-                    <th className="p-3">Description</th>
-                    <th className="p-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-mono">
-                  {finance.filter(f => f.type === 'expense').length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="p-6 text-center text-text-muted font-sans">
-                        No expense logs found.
-                      </td>
+          {/* RIGHT: DRIVERS DIRECTORY & EXPENSE HISTORY */}
+          <div className="lg:col-span-7 flex flex-col gap-6">
+            <Card className="p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Driver Profiles & Financial Audits</h3>
+                <span className="text-[10px] text-slate-500 font-sans">Click any driver card to inspect financial calculations</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-1">
+                {drivers.map((drv) => {
+                  const fin = getDriverFin(drv);
+                  const isSelected = expDriverId === drv.id;
+                  return (
+                    <div 
+                      key={drv.id}
+                      onClick={() => setSelectedDriverProfileModal(drv)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 ${isSelected ? 'border-brand-gold bg-amber-50/40 ring-1 ring-brand-gold' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300'}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="font-extrabold text-slate-900 text-xs block">{drv.fullName}</span>
+                          <span className="text-[10px] text-slate-500 font-mono">{drv.vehicle?.plateNumber || drv.phone}</span>
+                        </div>
+                        <Badge variant={drv.status === 'approved' ? 'success' : 'warning'}>{drv.status}</Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] font-mono border-t border-slate-200/60 pt-2">
+                        <div>
+                          <span className="text-[9px] text-slate-400 block uppercase font-sans">Remaining Bal:</span>
+                          <span className="font-bold text-rose-600">₦{fin.remainingVehicleBalance.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-400 block uppercase font-sans">Total Paid:</span>
+                          <span className="font-bold text-emerald-600">₦{fin.totalPaid.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDriverProfileModal(drv);
+                          }}
+                          className="w-full text-[10px] py-1 h-auto font-bold"
+                        >
+                          View Financials
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpDriverId(drv.id);
+                          }}
+                          className={`w-full text-[10px] py-1 h-auto font-bold ${isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'}`}
+                        >
+                          {isSelected ? 'Selected' : 'Link Expense'}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Card className="p-5">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Operational Expenditures History</h3>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                      <th className="p-3">Reference ID</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3">Description</th>
+                      <th className="p-3 text-right">Amount</th>
                     </tr>
-                  ) : (
-                    finance
-                      .filter(f => f.type === 'expense')
-                      .slice(0, 15)
-                      .map((f, index) => (
-                        <tr key={f.id || index} className="hover:bg-slate-50/50">
-                          <td className="p-3 font-bold text-slate-900">{f.id}</td>
-                          <td className="p-3">
-                            <Badge variant="danger">{f.category?.toUpperCase()}</Badge>
-                          </td>
-                          <td className="p-3 font-sans font-medium text-slate-800">{f.description}</td>
-                          <td className="p-3 text-right font-bold font-mono text-rose-600">
-                            -₦{f.amount.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-mono">
+                    {finance.filter(f => f.type === 'expense').length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-6 text-center text-text-muted font-sans">
+                          No expense logs found.
+                        </td>
+                      </tr>
+                    ) : (
+                      finance
+                        .filter(f => f.type === 'expense')
+                        .slice(0, 15)
+                        .map((f, index) => (
+                          <tr key={f.id || index} className="hover:bg-slate-50/50">
+                            <td className="p-3 font-bold text-slate-900">{f.id}</td>
+                            <td className="p-3">
+                              <Badge variant="danger">{f.category?.toUpperCase()}</Badge>
+                            </td>
+                            <td className="p-3 font-sans font-medium text-slate-800">{f.description}</td>
+                            <td className="p-3 text-right font-bold font-mono text-rose-600">
+                              -₦{f.amount.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
         </motion.div>
       )}
 
@@ -2084,7 +2223,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                           </div>
 
                           {/* Actions Section */}
-                          <div className="p-4 bg-slate-50 grid grid-cols-2 gap-2">
+                          <div className="p-3 bg-slate-50 grid grid-cols-3 gap-1.5">
                             <Button
                               variant="primary"
                               disabled={availableWithdrawable <= 0}
@@ -2092,9 +2231,22 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                                 setActiveShareholder(sh);
                                 setIsWithdrawOpen(true);
                               }}
-                              className="w-full font-black bg-brand-gold hover:bg-amber-500 text-slate-900 py-2.5 text-[10px] uppercase border-none shadow-sm h-auto"
+                              className="w-full font-black bg-brand-gold hover:bg-amber-500 text-slate-900 py-2 text-[9px] uppercase border-none shadow-sm h-auto"
+                              title="Withdraw Dividends"
                             >
                               Withdraw
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setActiveShareholder(sh);
+                                setIsCapitalWithdrawOpen(true);
+                              }}
+                              className="w-full font-black border-rose-200 text-rose-700 hover:bg-rose-50 py-2 text-[9px] uppercase h-auto"
+                              title="Withdraw Principal Capital"
+                            >
+                              Cap. Out
                             </Button>
 
                             <Button
@@ -2104,7 +2256,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                                 setActiveShareholder(sh);
                                 setIsReinvestOpen(true);
                               }}
-                              className="w-full font-black border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white py-2.5 text-[10px] uppercase h-auto"
+                              className="w-full font-black border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white py-2 text-[9px] uppercase h-auto"
+                              title="Reinvest Dividends"
                             >
                               Reinvest
                             </Button>
@@ -2783,7 +2936,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold text-slate-700">{lang === 'en' ? "Email Address" : "Adireshin Imel"} *</label>
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Email Address (Login ID)" : "Adireshin Imel (Login)"} *</label>
               <input
                 type="email"
                 required
@@ -2795,6 +2948,20 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             </div>
 
             <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Login Password" : "Kalmar Sirri ta Shiga"} *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. shareholder123"
+                value={shFormPassword}
+                onChange={(e) => setShFormPassword(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
               <label className="font-bold text-slate-700">{lang === 'en' ? "Passport Number" : "Lambar Fasfot"} *</label>
               <input
                 type="text"
@@ -2805,17 +2972,17 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono uppercase"
               />
             </div>
-          </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="font-bold text-slate-700">{lang === 'en' ? "Home/Office Address" : "Adireshin Gida/Ofis"}</label>
-            <input
-              type="text"
-              placeholder={lang === 'en' ? "e.g. No 12 Airport Road, Kano" : "Misali No 12 Airport Road, Kano"}
-              value={shFormAddress}
-              onChange={(e) => setShFormAddress(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
-            />
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700">{lang === 'en' ? "Home/Office Address" : "Adireshin Gida/Ofis"}</label>
+              <input
+                type="text"
+                placeholder={lang === 'en' ? "e.g. No 12 Airport Road, Kano" : "Misali No 12 Airport Road, Kano"}
+                value={shFormAddress}
+                onChange={(e) => setShFormAddress(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3056,6 +3223,83 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
       </Modal>
 
       {/* ==============================================
+          MODAL: WITHDRAW SHAREHOLDER CAPITAL (PRINCIPAL)
+          ============================================== */}
+      <Modal
+        isOpen={isCapitalWithdrawOpen}
+        onClose={() => {
+          setIsCapitalWithdrawOpen(false);
+          setActiveShareholder(null);
+          setShActionError('');
+          setShActionSuccess('');
+        }}
+        title={`Withdraw Capital Stock: ${activeShareholder?.full_name}`}
+      >
+        <form onSubmit={handleCapitalWithdrawSubmit} className="flex flex-col gap-4 text-xs">
+          <Alert variant="warning" className="font-sans">
+            Withdrawing principal capital directly reduces the shareholder's Capital Stock reserve and ownership equity percentage in Ruqayya Transport Limited.
+          </Alert>
+
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs font-mono flex flex-col gap-1.5">
+            <div className="flex justify-between">
+              <span>Current Capital Stock:</span>
+              <span className="font-bold text-slate-900">₦{(activeShareholder?.investment_amount || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-200/60 pt-1.5">
+              <span>Ownership Equity:</span>
+              <span className="font-bold text-emerald-600">{activeShareholder?.equity_percentage || '0'}%</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="font-bold text-slate-700">Capital Withdrawal Amount (₦)</label>
+            <input
+              type="number"
+              placeholder="Enter capital amount to withdraw..."
+              value={shActionAmount}
+              onChange={(e) => setShActionAmount(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-rose-500 font-mono"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="font-bold text-slate-700">Withdrawal Reason / Remarks</label>
+            <input
+              type="text"
+              placeholder="e.g. Partial capital redemption / board resolution..."
+              value={shActionRemarks}
+              onChange={(e) => setShActionRemarks(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-rose-500"
+            />
+          </div>
+
+          {shActionError && <Alert variant="danger">{shActionError}</Alert>}
+          {shActionSuccess && <Alert variant="success">{shActionSuccess}</Alert>}
+
+          <div className="flex justify-end gap-2.5 mt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsCapitalWithdrawOpen(false);
+                setActiveShareholder(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              className="bg-rose-600 hover:bg-rose-700 text-white border-none font-bold"
+            >
+              Confirm Capital Payout
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ==============================================
           1. PREMIUM CYCLE SELECTOR POPUP MODAL
           ============================================== */}
       <AnimatePresence>
@@ -3217,7 +3461,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
                       <div className="mt-2">
                         <h4 className="font-extrabold text-xs text-slate-800">Installment {num}</h4>
-                        <p className="text-[9px] text-slate-400 mt-1 font-mono font-bold">₦41,666.67 Due</p>
+                        <p className="text-[9px] text-slate-400 mt-1 font-mono font-bold">₦{installmentDue.toLocaleString()} Due</p>
                       </div>
                     </motion.button>
                   );
@@ -3304,7 +3548,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
                   <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1">
                     {pendingDrivers.map((d, index) => {
-                      const overdueAmt = 41666.67; // standard installment
+                      const overdueAmt = ((d as any).agreed_amount || 180000) / 6; // live installment due
                       return (
                         <motion.div
                           key={d.id}
@@ -3368,6 +3612,104 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* ==============================================
+          MODAL: DRIVER FINANCIAL PROFILE & CALCULATIONS
+          ============================================== */}
+      <Modal
+        isOpen={!!selectedDriverProfileModal}
+        onClose={() => setSelectedDriverProfileModal(null)}
+        title={`Financial Profile: ${selectedDriverProfileModal?.fullName || 'Driver'}`}
+      >
+        {selectedDriverProfileModal && (() => {
+          const fin = getDriverFin(selectedDriverProfileModal);
+          return (
+            <div className="flex flex-col gap-4 text-xs">
+              <div className="bg-slate-900 text-slate-100 p-4 rounded-xl flex flex-col gap-2 font-mono">
+                <div className="flex justify-between items-center text-slate-400 text-[10px] uppercase">
+                  <span>Lease Agreement</span>
+                  <span className="text-brand-gold font-bold">{selectedDriverProfileModal.status}</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-sm">Agreed Principal:</span>
+                  <span className="text-base font-bold text-white">₦{fin.agreedAmount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-baseline border-t border-slate-800 pt-2">
+                  <span>Installment Due (per cycle):</span>
+                  <span className="text-sm font-bold text-brand-gold">₦{fin.installmentDue.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Total Paid (Remittances)</span>
+                  <span className="text-sm font-black text-emerald-600 font-mono mt-0.5 block">₦{fin.totalPaid.toLocaleString()}</span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Remaining Balance</span>
+                  <span className="text-sm font-black text-rose-600 font-mono mt-0.5 block">₦{fin.remainingVehicleBalance.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col gap-1.5 font-mono">
+                <div className="flex justify-between text-slate-700">
+                  <span>Current Installment #:</span>
+                  <span className="font-bold">Cycle #{fin.currentInstallmentNumber}</span>
+                </div>
+                <div className="flex justify-between text-slate-700">
+                  <span>Remaining Installment Balance:</span>
+                  <span className="font-bold text-amber-600">₦{fin.remainingInstallmentBalance.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-slate-700 border-t border-slate-200 pt-1.5">
+                  <span>Total Expense Debits:</span>
+                  <span className="font-bold text-rose-600">₦{fin.expenseDebits.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider mb-2">Driver Expense & Debit History</h4>
+                <div className="max-h-[150px] overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg p-2 font-mono text-[11px]">
+                  {(!selectedDriverProfileModal.expenseHistory || selectedDriverProfileModal.expenseHistory.length === 0) ? (
+                    <p className="text-slate-400 text-center py-2 font-sans">No expenses or debits charged to this driver.</p>
+                  ) : (
+                    selectedDriverProfileModal.expenseHistory.map((ex: any, idx: number) => (
+                      <div key={idx} className="py-1.5 flex justify-between items-center">
+                        <div>
+                          <span className="font-bold text-slate-900 block">{ex.description}</span>
+                          <span className="text-[9px] text-slate-500 font-sans">{ex.date} ({ex.category})</span>
+                        </div>
+                        <span className="font-bold text-rose-600">+₦{ex.amount.toLocaleString()}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedDriverProfileModal(null)}
+                >
+                  Close
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="bg-brand-navy text-white font-bold"
+                  onClick={() => {
+                    setExpDriverId(selectedDriverProfileModal.id);
+                    setSelectedDriverProfileModal(null);
+                  }}
+                >
+                  Select for Expense Posting
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
     </div>
   );
 };

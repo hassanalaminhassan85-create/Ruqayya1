@@ -644,6 +644,11 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
     return today >= start && today <= end;
   });
 
+  const nowMs = Date.now();
+  const cycleStartMs = startDate.getTime();
+  const elapsedDays = Math.max(1, Math.floor((nowMs - cycleStartMs) / (1000 * 60 * 60 * 24)) + 1);
+  const currentRealTimeInstallment = Math.min(6, Math.max(1, Math.ceil(elapsedDays / 5)));
+
   const installments = [];
   let carryForward = 0;
 
@@ -681,6 +686,8 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
       status = 'Overdue';
     }
 
+    const isCurrentRealTime = (k === currentRealTimeInstallment);
+
     installments.push({
       installmentNumber: k,
       dueAmount,
@@ -688,7 +695,8 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
       remainingAmount: Math.max(0, remaining),
       startDate: extendedStartDate.toISOString().split('T')[0],
       endDate: extendedEndDate.toISOString().split('T')[0],
-      status
+      status,
+      isCurrentRealTime
     });
   }
 
@@ -4968,14 +4976,11 @@ export function getDriverFinancials(driver: any, db: any) {
 app.get('/api/drivers/:id/installments', authenticateSession, (req, res) => {
   try {
     const db = loadDB();
-    const opsState = db.company_operations_state || { status: 'Setup Mode' };
-    if (opsState.status === 'Setup Mode') {
-      return res.json({ success: true, installments: [] });
-    }
     const actor = (req as any).user;
     const driver = db.drivers.find(d => d.id === req.params.id || d.user_id === req.params.id || (req.params.id === 'me' && d.user_id === actor?.id));
     if (!driver) return res.status(404).json({ error: 'Driver profile not found.' });
-    const activeCycle = db.cycles.find(c => c.status === 'active' || c.status === 'paused') || db.cycles[0];
+    if (!db.cycles) db.cycles = [];
+    const activeCycle = db.cycles.find(c => c.status === 'active' || c.status === 'paused') || db.cycles[0] || { startDate: new Date().toISOString() };
     const installments = calculateInstallmentsForDriver(driver, db, activeCycle);
     res.json({ success: true, installments });
   } catch (error: any) {
@@ -5183,10 +5188,16 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
     const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
     const newExtendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
 
-    activeCycle.status = 'paused'; 
-    activeCycle.pauseReason = reason;
-    activeCycle.pausedAt = new Date().toISOString();
-    activeCycle.pausedBy = actor.fullName;
+    if (daysToExtend > 0) {
+      activeCycle.status = 'active';
+      activeCycle.pausedAt = null;
+      activeCycle.pauseReason = '';
+    } else {
+      activeCycle.status = 'paused';
+      activeCycle.pauseReason = reason;
+      activeCycle.pausedAt = new Date().toISOString();
+      activeCycle.pausedBy = actor.fullName;
+    }
     activeCycle.extendedDays = newExtendedDays;
 
     // Extend end date automatically if extension days were specified
@@ -5954,24 +5965,27 @@ app.post('/api/operations/pause', authenticateSession, async (req, res) => {
       ...(state.auditLog || [])
     ];
 
-    // Synchronize active operating cycle status to paused
+    // Synchronize active operating cycle status to paused or active
     if (!db.cycles) db.cycles = [];
     const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
     if (activeCycle) {
-      activeCycle.status = 'paused';
-      activeCycle.pauseReason = reason;
-      activeCycle.pausedAt = new Date().toISOString();
-      activeCycle.pausedBy = actor.fullName;
-
       const newExtendedDays = (activeCycle.extendedDays || activeCycle.pauseDays || 0) + daysToExtend;
       activeCycle.pauseDays = newExtendedDays;
       activeCycle.extendedDays = newExtendedDays;
 
       if (daysToExtend > 0) {
+        activeCycle.status = 'active';
+        activeCycle.pausedAt = null;
+        activeCycle.pauseReason = '';
         const startMs = activeCycle.startDate ? new Date(activeCycle.startDate.includes('T') ? activeCycle.startDate : `${activeCycle.startDate}T00:00:00`).getTime() : new Date('2026-07-29T00:00:00').getTime();
         const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
         const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
         activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
+      } else {
+        activeCycle.status = 'paused';
+        activeCycle.pauseReason = reason;
+        activeCycle.pausedAt = new Date().toISOString();
+        activeCycle.pausedBy = actor.fullName;
       }
 
       if (!activeCycle.pauseHistory) {
@@ -7369,7 +7383,7 @@ app.post('/api/expenses', authenticateSession, (req, res) => {
 
     db.financial_records.unshift(expenseRecord);
 
-    // If driver linked and category is 'maintenance' or 'accident', update their specific records if helpful
+    // If driver linked, update their expense history and automatically add to their remaining balance
     if (driverId) {
       const drv = db.drivers.find(d => d.id === driverId);
       if (drv) {
@@ -7382,6 +7396,8 @@ app.post('/api/expenses', authenticateSession, (req, res) => {
           date,
           receipt_url: receiptUrl || ''
         });
+        const currentRemBalance = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : (drv.agreed_amount || 180000);
+        drv.remaining_vehicle_balance = currentRemBalance + parseFloat(amount);
       }
     }
 

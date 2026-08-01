@@ -146,13 +146,28 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       // Load installments for driver
       if (driverData) {
         const instRes = await api.request(`/api/drivers/${driverData.id}/installments${cycleToUse ? `?cycleId=${cycleToUse.id}` : ''}`).catch(() => ({ installments: [] }));
-        const list = instRes.installments || [];
+        let list = instRes.installments || [];
+        if (list.length === 0) {
+          const agreed = driverData.agreed_amount || 300000;
+          const perInst = Math.round(agreed / 6);
+          list = [1, 2, 3, 4, 5, 6].map(k => ({
+            installmentNumber: k,
+            dueAmount: perInst,
+            paidAmount: 0,
+            remainingAmount: perInst,
+            startDate: new Date().toISOString().split('T')[0],
+            endDate: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().split('T')[0],
+            status: 'Pending'
+          }));
+        }
         setInstallments(list);
         if (list.length > 0) {
-          // Default select first unpaid or pending installment
-          const nextUnpaid = list.find((i: any) => i.status !== 'Completed') || list[0];
-          setSelectedInstallment(nextUnpaid);
-          setPaymentAmount(nextUnpaid.remainingAmount || 50000);
+          // Default select real-time due installment (isCurrentRealTime) or first unpaid/pending installment
+          const realTimeInst = list.find((i: any) => i.isCurrentRealTime && i.status !== 'Completed') ||
+                               list.find((i: any) => i.status !== 'Completed') || 
+                               list[0];
+          setSelectedInstallment(realTimeInst);
+          setPaymentAmount(realTimeInst.remainingAmount || Math.round((driverData.agreed_amount || 300000) / 6));
         }
       }
     } catch (err) {
@@ -925,6 +940,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                                 <span className="font-extrabold text-brand-navy text-xs flex items-center gap-1">
                                   <Coins className="h-3.5 w-3.5 text-brand-gold" />
                                   Installment #{inst.installmentNumber}
+                                  {inst.isCurrentRealTime && (
+                                    <span className="ml-1 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-600 rounded text-[9px] font-black uppercase">
+                                      Live Due
+                                    </span>
+                                  )}
                                 </span>
                                 <Badge variant={inst.status === 'Completed' ? 'success' : inst.status === 'Overdue' ? 'danger' : 'warning'}>
                                   {inst.status}
