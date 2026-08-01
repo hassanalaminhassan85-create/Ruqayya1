@@ -634,8 +634,8 @@ const FIREBASE_CONFIG = {
 };
 
 const getFirestoreDocUrl = () => {
-  const { projectId, firestoreDatabaseId } = FIREBASE_CONFIG;
-  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${firestoreDatabaseId}/documents/system_state/main_database`;
+  const { projectId, firestoreDatabaseId, apiKey } = FIREBASE_CONFIG;
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${firestoreDatabaseId}/documents/system_state/main_database?key=${apiKey}`;
 };
 
 // --- Web Push Encryption Helpers (RFC 8291) ---
@@ -914,8 +914,27 @@ class D1Manager {
       this.dbCache = db;
       return db;
     } catch (dbError) {
-      console.error(`[DB RESOLUTION ERROR] Query failed or database connection broken:`, dbError);
-      throw dbError;
+      console.error(`[DB RESOLUTION ERROR] D1 query failed, falling back to Firestore/Memory:`, dbError);
+      try {
+        const firestoreDb = await fetchFromFirestore();
+        if (firestoreDb) {
+          db = await this.ensureDefaults(firestoreDb);
+          this.memoryDb = db;
+        } else {
+          if (!this.memoryDb) {
+            this.memoryDb = await this.ensureDefaults({});
+          }
+          db = this.memoryDb;
+        }
+        if (db && db.notifications) {
+          this.loadedNotificationIds = new Set(db.notifications.map((n: any) => n.id).filter(Boolean));
+        }
+        this.dbCache = db;
+        return db;
+      } catch (fallbackErr) {
+        console.error(`[FALLBACK ERROR] Firestore fallback also failed:`, fallbackErr);
+        throw dbError;
+      }
     }
   }
 
