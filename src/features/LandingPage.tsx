@@ -405,6 +405,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       setRegSuccess(true);
       setRegLoading(false);
 
+      window.dispatchEvent(new CustomEvent('db-change', { detail: res }));
+
       if (res && res.success && res.token) {
         api.setToken(res.token);
         onLoginAsDriver(payload.personal.fullName);

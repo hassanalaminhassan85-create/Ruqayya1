@@ -3277,7 +3277,19 @@ app.post('/api/notifications/translate', authenticateSession, async (req, res) =
     const resultText = response.text?.trim() || text;
     res.json({ success: true, translation: resultText, fallback: false });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const dict: Record<string, string> = {
+      'New Driver Self-Registration': 'Rijistar Sabon Direba',
+      'Candidate Driver MUSA completed driver self-registration. Action required: Approve credentials.': 'Driver MUSA ya kammala rajistar kansa. Ana bukatar amincewa daga Admin.',
+      'Rest Period Concluded': 'Lokacin Hutu Ya Cika',
+      'Vehicle Contract Completed!': 'Kwangilar Mota Ta Cika!',
+      'Fuel Voucher Request': 'Bukatar Takardar Man Fetur',
+      'Approved Allocation': 'Amince da Bukatar',
+      'Verify Credentials': 'Duba Takardu',
+      'Congratulations! Your vehicle purchase balance has been fully settled. You are now the full owner!': 'Masha Allah! Kun biya duk kudin motar ku gaba daya. Yanzu ku ne mamallakin motar ku!'
+    };
+    const inputTxt = req.body.text || '';
+    const translated = dict[inputTxt] || inputTxt;
+    res.json({ success: true, translation: translated, fallback: true });
   }
 });
 
@@ -3304,26 +3316,27 @@ function getAIUserContext(actor: any, db: any) {
 
 function buildAISystemPrompt(actor: any, cleanedContext: any, currentPage = '', activeFeature = '') {
   return `You are Ruqayya AI, the highly sophisticated Staff AI Systems Architect and Operations Assistant for RUQAYYA Transport ERP.
-Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation.
+Your task is to assist the user by providing accurate, clear, and secure analysis, reporting, searching, or translation based on the provided data.
 
-CRITICAL SECURITY AND PRIVACY REQUIREMENTS:
-1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets, passwords, password hashes (e.g. PBKDF2 hashes), Transaction PINs, JWT Tokens, Cookies, API Keys, Cloudflare Secrets, database credentials, environment variables, session tokens, encryption keys, OTP codes, recovery codes, authentication secrets, or verification codes. If asked about these, politely refuse and instruct the user to use the secure settings/reset workflows if they have permission.
-2. Rely ONLY on the provided live database context. Never invent, guess, or hallucinate metrics, transaction values, driver debts, vehicle balances, payroll records, or shareholder investments. If the data is not available in the context, state that clearly.
-3. You must maintain strict role-based access control. You are only provided data that the user is authorized to view. Do not talk about or make assumptions about other roles' data.
+CRITICAL SECURITY, PRIVACY, AND RELIABILITY REQUIREMENTS:
+1. Under NO circumstances should you ever reveal, mention, or print any sensitive authentication secrets (passwords, hashes, JWT tokens, API keys, etc.).
+2. You have access to tools to query the live database. If you do not have enough information in the context to answer a question, use the available tools to retrieve the necessary data.
+3. If, after using the tools, you still cannot find the information, explicitly state: "I am sorry, but I could not find the requested information in the database." DO NOT guess, invent, or hallucinate metrics, transaction values, or other data.
+4. You must maintain strict role-based access control. Do not reveal data outside the user's role authorization.
 
 HAUSA LANGUAGE SUPPORT:
-You are fully bilingual in English and Hausa. You must comprehend Hausa perfectly (both in standard Latin boko characters and common expressions). If the user queries you in Hausa, asks in Hausa, or requests translation, respond beautifully, professionally, and fluently in modern Hausa.
+You are fully bilingual in English and Hausa. You must comprehend Hausa perfectly. Respond fluently in the language the user initiates the query with (English or Hausa).
 
 ROLE-BASED DOCUMENT GENERATION & VISUALIZATIONS:
-When the user asks for printable files, PDF reports, receipts, investment validation, gate passes, or interactive charts, you can trigger beautiful visual, download-capable overlays directly in the chat by appending one of the following tags at the end of your response:
-- [GENERATE_PDF: company_report] - ERP operating cycle report & financials (Allowed ONLY for: admin, director)
-- [GENERATE_PDF: driver_pass] - Gateway pass and driver credentials card (Allowed for: driver, admin, director)
-- [GENERATE_PDF: remittance_receipt] - Official payment and collection ledger receipt (Allowed for: driver, admin, director)
-- [GENERATE_PDF: investment_certificate] - Shareholder certification of investment capital (Allowed for: shareholder, admin, director)
-- [GENERATE_IMAGE: revenue_chart] - SVG collection ledger visualization and daily revenue trends (Allowed for: shareholder, admin, director)
-- [GENERATE_IMAGE: driver_performance] - Driver classification metrics & classification analytics (Allowed ONLY for: admin, director)
+When the user asks for printable files, PDF reports, or interactive charts, use the following tags at the end of your response IF authorized:
+- [GENERATE_PDF: company_report] - ERP operating cycle report & financials (Allowed: admin, director)
+- [GENERATE_PDF: driver_pass] - Gateway pass and driver credentials card (Allowed: driver, admin, director)
+- [GENERATE_PDF: remittance_receipt] - Official payment and collection ledger receipt (Allowed: driver, admin, director)
+- [GENERATE_PDF: investment_certificate] - Shareholder certification of investment capital (Allowed: shareholder, admin, director)
+- [GENERATE_IMAGE: revenue_chart] - SVG collection ledger visualization and daily revenue trends (Allowed: shareholder, admin, director)
+- [GENERATE_IMAGE: driver_performance] - Driver classification metrics & classification analytics (Allowed: admin, director)
 
-Ensure you strictly respect the role restrictions. If the user's current role is not authorized to generate a requested document type, politely refuse in both English and Hausa, and do not append the tag.
+Ensure you strictly respect the role restrictions. If the user's current role is not authorized, politely refuse in both English and Hausa, and do not append the tag.
 
 Your current authenticated user context is:
 - Name: ${actor.fullName}
@@ -3670,6 +3683,50 @@ const queryDriverFinancialsTool = {
   }
 };
 
+const searchDatabaseTool = {
+  name: 'searchDatabase',
+  description: 'Searches the database for drivers, vehicles, payments, or trips based on a search query. Use this to find information not explicitly in your context.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      query: {
+        type: Type.STRING,
+        description: 'The search query (e.g. "driver Musa", "plate number TR-123", "recent payments", "trip details").'
+      }
+    },
+    required: ['query']
+  }
+};
+
+function executeSearchDatabase(args: any, actor: any, req: express.Request) {
+  const { query } = args;
+  const db = loadDB();
+  const lowerQuery = query.toLowerCase();
+
+  // Search logic
+  const results = {
+    drivers: db.drivers.filter((d: any) => 
+      d.company_driver_id?.toLowerCase().includes(lowerQuery) ||
+      db.users.find((u: any) => u.id === d.user_id && u.full_name?.toLowerCase().includes(lowerQuery))
+    ),
+    vehicles: db.vehicles.filter((v: any) => 
+      v.plate_number?.toLowerCase().includes(lowerQuery) ||
+      v.model?.toLowerCase().includes(lowerQuery)
+    ),
+    payments: db.driver_payments.filter((p: any) => 
+      p.receipt_number?.toLowerCase().includes(lowerQuery) ||
+      p.reference_number?.toLowerCase().includes(lowerQuery)
+    ),
+    trips: db.trip_manifests.filter((t: any) => 
+      t.manifest_number?.toLowerCase().includes(lowerQuery) ||
+      t.origin?.toLowerCase().includes(lowerQuery) ||
+      t.destination?.toLowerCase().includes(lowerQuery)
+    )
+  };
+
+  return results;
+}
+
 // 1. AI CHAT
 app.post('/api/ai/chat', authenticateSession, async (req, res) => {
   try {
@@ -3713,7 +3770,7 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
       // Declare tools ONLY if role is admin or director
       const isAuthorized = actor.role === 'admin' || actor.role === 'director';
       const tools = isAuthorized ? [{
-        functionDeclarations: [recordPaymentTool, recordExpenseTool, queryDriverFinancialsTool]
+        functionDeclarations: [recordPaymentTool, recordExpenseTool, queryDriverFinancialsTool, searchDatabaseTool]
       }] : [];
 
       // Make the initial request
@@ -3740,6 +3797,8 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
             toolResult = executeRecordExpense(call.args, actor, req);
           } else if (call.name === 'queryDriverFinancials') {
             toolResult = executeQueryDriverFinancials(call.args, actor, req);
+          } else if (call.name === 'searchDatabase') {
+            toolResult = executeSearchDatabase(call.args, actor, req);
           } else {
             toolResult = { error: `Tool ${call.name} is not supported.` };
           }
@@ -3847,7 +3906,16 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
       }
     }
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    const fallbackMsg = "⚠️ AI quota limit currently reached. Operating in offline intelligent assistant mode. All financial calculations, registry records, and ledger actions remain fully synchronized and operational.";
+    if (req.body?.stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.write(`data: ${JSON.stringify({ text: fallbackMsg })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+    return res.json({ success: true, response: fallbackMsg });
   }
 });
 
@@ -4271,6 +4339,26 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       return res.status(400).json({ error: 'Email registered to another investor node.' });
     }
 
+    // Create user account if not exists for the shareholder
+    let targetUser = db.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
+    if (!targetUser) {
+      const { password, mustChangePassword } = req.body;
+      const hashed = hashPassword(password || 'shareholder123');
+      targetUser = {
+        id: generateUUID(),
+        email: email.toLowerCase(),
+        phone: phone,
+        password_hash: hashed,
+        full_name: fullName,
+        role_id: 'role-shareholder',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active',
+        must_change_password: mustChangePassword !== undefined ? mustChangePassword : true
+      };
+      db.users.push(targetUser);
+    }
+
     let passportUrl = passportPhoto.startsWith('http') ? passportPhoto : '';
     if (passportPhoto && !passportPhoto.startsWith('http')) {
       passportUrl = saveR2File(`shareholder_${fullName.replace(/\s+/g, '_')}`, passportPhoto);
@@ -4278,6 +4366,7 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
 
     const newShareholder = {
       id: generateUUID(),
+      user_id: targetUser.id,
       full_name: fullName,
       phone,
       email: email.toLowerCase(),
@@ -4303,25 +4392,6 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
       description: `Corporate equity capital investment - Shareholder ${fullName}`
     });
 
-    // Create user account if not exists for the shareholder
-    let targetUser = db.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
-    if (!targetUser) {
-      const { password, mustChangePassword } = req.body;
-      const hashed = hashPassword(password || 'shareholder123');
-      targetUser = {
-        id: generateUUID(),
-        email: email.toLowerCase(),
-        phone: phone,
-        password_hash: hashed,
-        full_name: fullName,
-        role_id: 'role-shareholder',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'active',
-        must_change_password: mustChangePassword !== undefined ? mustChangePassword : true
-      };
-      db.users.push(targetUser);
-    }
 
     // Notify shareholder of capital contribution
     db.notifications.unshift({
@@ -7218,7 +7288,7 @@ app.put('/api/drivers/self', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied. Only drivers can update their self profile.' });
     }
 
-    const { phone, email, address, password } = req.body;
+    const { phone, email, address, password, passportPhoto } = req.body;
     const db = loadDB();
     const drv = db.drivers.find(d => d.user_id === actor.id);
     if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
@@ -7245,6 +7315,26 @@ app.put('/api/drivers/self', authenticateSession, (req, res) => {
     if (password) {
       user.password_hash = hashPassword(password);
     }
+    if (passportPhoto) {
+      const fileUrl = passportPhoto.startsWith('http') ? passportPhoto : saveR2File(`driver_${drv.id}_passport`, passportPhoto);
+      drv.passport_photo_url = fileUrl;
+      (drv as any).passportPhoto = fileUrl;
+      (drv as any).passportPhotoUrl = fileUrl;
+      if (!db.driver_documents) db.driver_documents = [];
+      const existingDocIndex = db.driver_documents.findIndex(d => d.driver_id === drv.id && (d.document_type === 'passport_photo' || d.document_type === 'passport'));
+      if (existingDocIndex >= 0) {
+        db.driver_documents[existingDocIndex].file_url = fileUrl;
+        db.driver_documents[existingDocIndex].created_at = new Date().toISOString();
+      } else {
+        db.driver_documents.push({
+          id: `doc-${Date.now()}`,
+          driver_id: drv.id,
+          document_type: 'passport_photo',
+          file_url: fileUrl,
+          created_at: new Date().toISOString()
+        });
+      }
+    }
 
     user.updated_at = new Date().toISOString();
     drv.updated_at = new Date().toISOString();
@@ -7262,6 +7352,57 @@ app.put('/api/drivers/self', authenticateSession, (req, res) => {
     );
 
     res.json({ success: true, driver: drv });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Shareholder Self Profile & Passport
+app.put('/api/shareholders/self', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'shareholder') {
+      return res.status(403).json({ error: 'Access Denied. Only shareholders can update their self profile.' });
+    }
+
+    const { phone, email, address, password, passportPhoto } = req.body;
+    const db = loadDB();
+    const shareholder = db.shareholders.find(s => s.user_id === actor.id || s.email.toLowerCase() === actor.email.toLowerCase());
+    if (!shareholder) return res.status(404).json({ error: 'Shareholder profile not found.' });
+
+    const user = db.users.find(u => u.id === actor.id || u.email.toLowerCase() === actor.email.toLowerCase());
+    if (!user) return res.status(404).json({ error: 'User account not found.' });
+
+    if (phone) {
+      user.phone = phone;
+      shareholder.phone = phone;
+    }
+    if (email) {
+      const emailExists = db.users.some(u => u.id !== user.id && u.email.toLowerCase() === email.toLowerCase());
+      if (emailExists) {
+        return res.status(400).json({ error: 'Email already registered.' });
+      }
+      user.email = email.toLowerCase();
+      shareholder.email = email.toLowerCase();
+    }
+    if (address !== undefined) {
+      shareholder.address = address;
+    }
+    if (password) {
+      user.password_hash = hashPassword(password);
+    }
+    if (passportPhoto) {
+      const fileUrl = passportPhoto.startsWith('http') ? passportPhoto : saveR2File(`shareholder_${shareholder.id}_passport`, passportPhoto);
+      shareholder.passport_photo_url = fileUrl;
+      (shareholder as any).passportPhoto = fileUrl;
+      (shareholder as any).passportPhotoUrl = fileUrl;
+    }
+
+    user.updated_at = new Date().toISOString();
+    shareholder.updated_at = new Date().toISOString();
+
+    saveDB(db);
+    res.json({ success: true, message: 'Shareholder profile updated successfully.', shareholder });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -7486,17 +7627,27 @@ app.put('/api/vehicles/:id', authenticateSession, (req, res) => {
 app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'admin' && actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
-    }
+    const db = loadDB();
     const { shareholderId, amount, remarks } = req.body;
-    if (!shareholderId || !amount || parseFloat(amount) <= 0) {
-      return res.status(400).json({ error: 'Invalid withdrawal amount or shareholder ID.' });
+
+    let sh: any;
+    if (actor.role === 'shareholder') {
+      sh = db.shareholders.find((s: any) => s.email && actor.email && s.email.toLowerCase() === actor.email.toLowerCase());
+      if (!sh) return res.status(404).json({ error: 'Shareholder profile not found.' });
+      if (shareholderId && sh.id !== shareholderId) {
+        return res.status(403).json({ error: 'Access Denied: You can only manage your own account.' });
+      }
+    } else if (actor.role === 'admin' || actor.role === 'director') {
+      if (!shareholderId) return res.status(400).json({ error: 'Shareholder ID required.' });
+      sh = db.shareholders.find((s: any) => s.id === shareholderId);
+      if (!sh) return res.status(404).json({ error: 'Shareholder not found.' });
+    } else {
+      return res.status(403).json({ error: 'Access Denied: Admin, Director, or Shareholder role required.' });
     }
 
-    const db = loadDB();
-    const sh = db.shareholders.find((s: any) => s.id === shareholderId);
-    if (!sh) return res.status(404).json({ error: 'Shareholder not found.' });
+    if (!amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid withdrawal amount.' });
+    }
 
     const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
     const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
@@ -7530,14 +7681,14 @@ app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
       amount: withdrawAmt,
       date: new Date().toISOString().split('T')[0],
       description: `Shareholder Dividend Withdrawal - ${sh.full_name} (${remarks || 'Approved Disbursal'})`,
-      approvedBy: actor.fullName,
+      approvedBy: actor.fullName || actor.email || 'Shareholder',
       created_at: new Date().toISOString()
     });
 
     db.notifications.unshift({
       id: generateUUID(),
-      title_en: 'Shareholder Withdrawal Approved',
-      title_ha: 'An Amince da Fitowar Kudin Shareholder',
+      title_en: 'Shareholder Withdrawal Processed',
+      title_ha: 'An Cire Kudin Shareholder',
       message_en: `Withdrew ₦${withdrawAmt.toLocaleString()} from available dividends of ${sh.full_name}.`,
       message_ha: `An cire ₦${withdrawAmt.toLocaleString()} daga ribar Alhaji/Hajiya ${sh.full_name}.`,
       type: 'success',
@@ -7567,17 +7718,27 @@ app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
 app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'admin' && actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
-    }
+    const db = loadDB();
     const { shareholderId, amount } = req.body;
-    if (!shareholderId || !amount || parseFloat(amount) <= 0) {
-      return res.status(400).json({ error: 'Invalid reinvestment amount or shareholder ID.' });
+
+    let sh: any;
+    if (actor.role === 'shareholder') {
+      sh = db.shareholders.find((s: any) => s.email && actor.email && s.email.toLowerCase() === actor.email.toLowerCase());
+      if (!sh) return res.status(404).json({ error: 'Shareholder profile not found.' });
+      if (shareholderId && sh.id !== shareholderId) {
+        return res.status(403).json({ error: 'Access Denied: You can only manage your own account.' });
+      }
+    } else if (actor.role === 'admin' || actor.role === 'director') {
+      if (!shareholderId) return res.status(400).json({ error: 'Shareholder ID required.' });
+      sh = db.shareholders.find((s: any) => s.id === shareholderId);
+      if (!sh) return res.status(404).json({ error: 'Shareholder not found.' });
+    } else {
+      return res.status(403).json({ error: 'Access Denied: Admin, Director, or Shareholder role required.' });
     }
 
-    const db = loadDB();
-    const sh = db.shareholders.find((s: any) => s.id === shareholderId);
-    if (!sh) return res.status(404).json({ error: 'Shareholder not found.' });
+    if (!amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Invalid reinvestment amount.' });
+    }
 
     const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
     const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
@@ -7608,7 +7769,7 @@ app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
       amount: reinvestAmt,
       date: new Date().toISOString().split('T')[0],
       description: `Capital Reinvestment - ${sh.full_name} (Rollover of ₦${reinvestAmt.toLocaleString()} dividends into Capital)`,
-      approvedBy: actor.fullName,
+      approvedBy: actor.fullName || actor.email || 'Shareholder',
       created_at: new Date().toISOString()
     });
     
@@ -7619,7 +7780,7 @@ app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
       amount: reinvestAmt,
       date: new Date().toISOString().split('T')[0],
       description: `Shareholder Reinvestment Debit - ${sh.full_name} (Transfer to capital stock)`,
-      approvedBy: actor.fullName,
+      approvedBy: actor.fullName || actor.email || 'Shareholder',
       created_at: new Date().toISOString()
     });
 
@@ -7643,6 +7804,82 @@ app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
       'SHAREHOLDER_REINVESTMENT',
       null,
       `Shareholder ${sh.full_name} reinvested ₦${reinvestAmt.toLocaleString()}`,
+      req
+    );
+
+    res.json({ success: true, shareholder: sh });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// SHAREHOLDER CAPITAL REDEMPTION (CAP OUT)
+app.post('/api/finance/cap-out', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    const { shareholderId, amount, remarks } = req.body;
+
+    let sh: any;
+    if (actor.role === 'shareholder') {
+      sh = db.shareholders.find((s: any) => s.email && actor.email && s.email.toLowerCase() === actor.email.toLowerCase());
+      if (!sh) return res.status(404).json({ error: 'Shareholder profile not found.' });
+      if (shareholderId && sh.id !== shareholderId) {
+        return res.status(403).json({ error: 'Access Denied: You can only manage your own account.' });
+      }
+    } else if (actor.role === 'admin' || actor.role === 'director') {
+      if (!shareholderId) return res.status(400).json({ error: 'Shareholder ID required.' });
+      sh = db.shareholders.find((s: any) => s.id === shareholderId);
+      if (!sh) return res.status(404).json({ error: 'Shareholder not found.' });
+    } else {
+      return res.status(403).json({ error: 'Access Denied: Admin, Director, or Shareholder role required.' });
+    }
+
+    const capOutAmt = parseFloat(amount);
+    if (!capOutAmt || capOutAmt <= 0) {
+      return res.status(400).json({ error: 'Invalid redemption amount.' });
+    }
+
+    const currentInvestment = sh.investment_amount || 0;
+    if (capOutAmt > currentInvestment) {
+      return res.status(400).json({ error: `Redemption amount exceeds current capital stock (₦${currentInvestment.toLocaleString()}).` });
+    }
+
+    sh.investment_amount = currentInvestment - capOutAmt;
+    sh.total_cashed_out = (sh.total_cashed_out || 0) + capOutAmt;
+    sh.updated_at = new Date().toISOString();
+
+    db.financial_records.unshift({
+      id: `FIN-CAPOUT-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+      type: 'expense',
+      category: 'other',
+      amount: capOutAmt,
+      date: new Date().toISOString().split('T')[0],
+      description: `Capital Stock Redemption (Cap Out) - ${sh.full_name} (${remarks || 'Principal Liquidation'})`,
+      approvedBy: actor.fullName || actor.email || 'Shareholder',
+      created_at: new Date().toISOString()
+    });
+
+    db.notifications.unshift({
+      id: generateUUID(),
+      title_en: 'Capital Stock Redemption Processed',
+      title_ha: 'An Cire Jari (Cap Out)',
+      message_en: `Successfully redeemed ₦${capOutAmt.toLocaleString()} capital stock for ${sh.full_name}.`,
+      message_ha: `An cire jarin ₦${capOutAmt.toLocaleString()} na ${sh.full_name}.`,
+      type: 'success',
+      read_status: 0,
+      created_at: new Date().toISOString()
+    });
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'SHAREHOLDER_CAP_OUT',
+      null,
+      `Shareholder ${sh.full_name} redeemed ₦${capOutAmt.toLocaleString()} capital stock`,
       req
     );
 

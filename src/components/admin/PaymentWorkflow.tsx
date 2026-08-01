@@ -95,6 +95,7 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [companySettings, setCompanySettings] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -139,10 +140,11 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
     try {
       const token = localStorage.getItem('ruqayya_token') || '';
       
-      const [drvRes, payRes, vehRes] = await Promise.all([
+      const [drvRes, payRes, vehRes, opsRes] = await Promise.all([
         fetch('/api/drivers', { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch('/api/payments', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/vehicles', { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null)
+        fetch('/api/vehicles', { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null),
+        fetch('/api/operations/state', { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => null)
       ]);
 
       const drvList = drvRes.ok ? await drvRes.json() : [];
@@ -151,6 +153,16 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
       const payList = payRes.ok ? await payRes.json() : [];
       const vehList = vehRes && vehRes.ok ? await vehRes.json() : [];
       setVehicles(vehList);
+
+      const opsData = opsRes && opsRes.ok ? await opsRes.json() : null;
+      if (opsData && opsData.state && opsData.state.company_settings) {
+        setCompanySettings(opsData.state.company_settings);
+      } else {
+        const lastSSE = (window as any).lastSSEState;
+        if (lastSSE && lastSSE.company_settings) {
+          setCompanySettings(lastSSE.company_settings);
+        }
+      }
 
       // Link payment records to driver profile and vehicle details
       const linkedList: PaymentRecord[] = payList.map((p: any) => {
@@ -174,17 +186,22 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
     }
   };
 
+  const token = localStorage.getItem('ruqayya_token') || '';
+  const getAuthorizedUrl = (urlPath: string) => {
+    if (!urlPath) return '';
+    if (urlPath.startsWith('/api/documents/preview/') && !urlPath.includes('token=')) {
+      return `${urlPath}?token=${encodeURIComponent(token)}`;
+    }
+    return urlPath;
+  };
+
   const getDriverPassport = (d: Driver | null | undefined, idx = 0) => {
-    if (!d) return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200';
+    if (!d) return '';
     const anyD = d as any;
-    return (
-      anyD.passport_photo_url ||
-      anyD.passportPhoto ||
-      anyD.passport_photo ||
-      anyD.passportPhotoUrl ||
-      d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url ||
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
-    );
+    const docUrl = anyD.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url;
+    const directUrl = anyD.passport_photo_url || anyD.passportPhoto || anyD.passport_photo || anyD.passportPhotoUrl || anyD.passport || '';
+    const url = docUrl || directUrl || '';
+    return url ? getAuthorizedUrl(url) : '';
   };
 
   const getReceiptProofImage = (p: PaymentRecord) => {
@@ -697,14 +714,21 @@ _Ruqayya Transport Fleet Operations Command_`;
                           onClick={() => setInspectPayment(p)}
                         >
                           <div className="relative shrink-0">
-                            <img
-                              src={driverPhoto}
-                              alt={p.driverName}
-                              className="h-10 w-10 rounded-xl object-cover border-2 border-border-main/80 group-hover:border-brand-gold transition-all shadow-xs"
-                              onError={(e: any) => {
-                                e.target.src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200';
-                              }}
-                            />
+                            {driverPhoto ? (
+                              <img
+                                src={driverPhoto}
+                                alt={p.driverName}
+                                className="h-10 w-10 rounded-xl object-cover border-2 border-border-main/80 group-hover:border-brand-gold transition-all shadow-xs"
+                                referrerPolicy="no-referrer"
+                                onError={(e: any) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextElementSibling?.classList.remove('hidden');
+                                }}
+                              />
+                            ) : null}
+                            <div className={`h-10 w-10 rounded-xl bg-slate-900 border-2 border-border-main/80 flex items-center justify-center font-black text-brand-gold text-xs shadow-xs ${driverPhoto ? 'hidden' : ''}`}>
+                              {p.driverName ? p.driverName.substring(0, 2).toUpperCase() : 'DR'}
+                            </div>
                             <div className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-bg-surface ${
                               p.status === 'approved' ? 'bg-emerald-500' :
                               p.status === 'rejected' ? 'bg-rose-500' : 'bg-amber-500'
@@ -1106,10 +1130,20 @@ _Ruqayya Transport Fleet Operations Command_`;
               
               {/* Action Toolbar Controls (Hidden during print!) */}
               <div className="flex justify-between items-center border-b border-border-main/50 pb-3 print:hidden">
-                <h3 className="text-sm font-black text-text-main flex items-center gap-1.5 font-mono">
-                  <FileText className="h-4 w-4 text-brand-gold" />
-                  {lang === 'en' ? "OFFICIAL CERTIFIED RECEIPT STATEMENT" : "TAKARDAR TABBATAR DA BIYAN KUDI"}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    size="xs" 
+                    variant="outline" 
+                    onClick={() => setSelectedReceipt(null)}
+                    className="font-bold flex items-center gap-1 cursor-pointer text-xs"
+                  >
+                    ← {lang === 'en' ? "Back" : "Baya"}
+                  </Button>
+                  <h3 className="text-sm font-black text-text-main flex items-center gap-1.5 font-mono">
+                    <FileText className="h-4 w-4 text-brand-gold" />
+                    {lang === 'en' ? "OFFICIAL RECEIPT" : "TAKARDAR BIYAN KUDI"}
+                  </h3>
+                </div>
 
                 <div className="flex items-center gap-2">
                   <a
@@ -1142,7 +1176,7 @@ _Ruqayya Transport Fleet Operations Command_`;
               </div>
 
               {/* --- PRINTABLE A4 CERTIFIED RECEIPT LAYOUT --- */}
-              <div className="flex flex-col gap-5 p-5 border border-border-main/80 rounded-2xl bg-white text-slate-950 font-sans print:border-none print:p-0 relative overflow-hidden shadow-inner">
+              <div className="flex flex-col gap-4 p-4 sm:p-5 border border-border-main/80 rounded-2xl bg-white text-slate-950 font-sans print:border-none print:p-0 relative overflow-hidden shadow-inner max-h-[75vh] overflow-y-auto">
                 
                 {/* Background Watermark Stamp */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none">
@@ -1150,27 +1184,32 @@ _Ruqayya Transport Fleet Operations Command_`;
                 </div>
 
                 {/* Receipt Header Banner */}
-                <div className="flex justify-between items-start border-b-2 border-slate-950 pb-4 relative z-10">
+                <div className="flex justify-between items-start border-b-2 border-slate-950 pb-3 relative z-10">
                   <div className="flex items-center gap-3">
-                    <CircularLogo size="lg" className="border-2 border-slate-950 shadow-md shrink-0" />
+                    <CircularLogo size="md" className="border-2 border-slate-950 shadow-sm shrink-0" />
                     <div>
-                      <h2 className="text-lg font-black tracking-tighter text-slate-950 uppercase font-mono">
-                        RUQAYYA TRANSPORT LIMITED
+                      <h2 className="text-base sm:text-lg font-black tracking-tighter text-slate-950 uppercase font-mono">
+                        {companySettings.companyName || 'RUQAYYA TRANSPORT LIMITED'}
                       </h2>
                       <span className="text-[10px] text-slate-600 font-bold block leading-relaxed uppercase tracking-wider">
                         Heavy Duty Carrier Logistics & Fleet Management Assets
                       </span>
                       <span className="text-[9px] text-slate-500 block font-medium">
-                        HQ: Plot 14, Kano-Zaria Expressway, Kano State, Nigeria.
+                        {companySettings.companyAddress || 'HQ: Plot 14, Kano-Zaria Expressway, Kano State, Nigeria.'}
                       </span>
+                      {(companySettings.phone || companySettings.email) && (
+                        <span className="text-[8px] text-slate-400 block font-mono mt-0.5">
+                          Tel: {companySettings.phone || '+234 803 123 4567'} | Email: {companySettings.email || 'info@ruqayyatransport.com'}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div className="text-right flex flex-col items-end">
-                    <span className="bg-slate-950 text-white text-[10px] font-black uppercase py-1 px-3 rounded font-mono tracking-wider">
+                  <div className="text-right flex flex-col items-end shrink-0">
+                    <span className="bg-slate-950 text-white text-[9px] font-black uppercase py-0.5 px-2.5 rounded font-mono tracking-wider">
                       OFFICIAL RECEIPT
                     </span>
-                    <span className="text-[11px] font-bold text-slate-800 block mt-2">
+                    <span className="text-[10px] font-bold text-slate-800 block mt-1.5">
                       Ref: <span className="font-mono font-black text-slate-950">{selectedReceipt.receipt_number}</span>
                     </span>
                     <span className="text-[9px] text-slate-500 font-bold block mt-0.5">
@@ -1280,17 +1319,27 @@ _Ruqayya Transport Fleet Operations Command_`;
 
               {/* Modal Footer Controls */}
               <div className="flex justify-between items-center border-t border-border-main/50 pt-3 print:hidden">
-                <span className="text-[10px] text-text-muted font-mono">
-                  Ruqayya Transport ERP • Serial Auth Verified
-                </span>
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={() => setSelectedReceipt(null)} 
-                  className="font-bold cursor-pointer"
+                  className="font-bold cursor-pointer text-xs"
                 >
-                  {lang === 'en' ? "Close View" : "Rufe"}
+                  ← {lang === 'en' ? "Back to Payments" : "Koma Baya"}
                 </Button>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-text-muted font-mono hidden sm:inline">
+                    Ruqayya Transport ERP • Serial Auth Verified
+                  </span>
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    onClick={() => setSelectedReceipt(null)} 
+                    className="font-bold cursor-pointer"
+                  >
+                    {lang === 'en' ? "Close View" : "Rufe"}
+                  </Button>
+                </div>
               </div>
 
             </motion.div>

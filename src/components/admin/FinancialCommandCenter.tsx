@@ -74,6 +74,7 @@ interface FinancialCommandCenterProps {
   shareholders?: Shareholder[];
   onSync: () => void;
   trips?: any[];
+  activeCycle?: any;
 }
 
 export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
@@ -84,10 +85,14 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   payments,
   shareholders = [],
   onSync,
-  trips = []
+  trips = [],
+  activeCycle: propActiveCycle
 }) => {
   // Navigation tabs
   const [subTab, setSubTab] = useState<'dashboard' | 'payments' | 'wallet' | 'expenses' | 'shareholders' | 'payroll' | 'reports' | 'audit'>('dashboard');
+  
+  const [localActiveCycle, setLocalActiveCycle] = useState<any>(null);
+  const activeCycle = propActiveCycle !== undefined ? propActiveCycle : localActiveCycle;
   
   // Localized data states
   const [localPayments, setLocalPayments] = useState<any[]>([]);
@@ -303,11 +308,13 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
       if (data) {
         const cycle = {
           id: data.cycleId,
+          cycleId: data.cycleId,
           startDate: data.startDate,
           endDate: data.endDate,
           status: data.status,
           isActive: data.isActive
         };
+        setLocalActiveCycle(cycle);
         setDbCycles(prev => {
           const exists = prev.find(c => c.id === cycle.id);
           if (exists) {
@@ -316,6 +323,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           return [...prev, cycle];
         });
       } else {
+        setLocalActiveCycle(null);
         setDbCycles(prev => prev.filter(c => !c.isActive));
       }
     });
@@ -349,7 +357,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
   // Auto-fetch additional records
   const fetchAuxRecords = async () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('ruqayya_token') || localStorage.getItem('token');
     if (!token) return;
     
     setIsFetching(true);
@@ -2163,13 +2171,20 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                             </div>
                             
                             <div className="flex items-center gap-3">
-                              <div className="h-14 w-14 rounded-2xl border-2 border-white shadow-lg overflow-hidden shrink-0 bg-slate-900 group-hover:rotate-3 transition-transform duration-500">
-                                <img 
-                                  src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
-                                  alt={sh.full_name} 
-                                  className="h-full w-full object-cover"
-                                  referrerPolicy="no-referrer"
+                              <div className="relative shrink-0 group">
+                                <motion.div 
+                                  className="absolute -inset-1 bg-gradient-to-r from-brand-gold to-brand-navy rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"
+                                  animate={{ scale: [1, 1.05, 1] }}
+                                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                                 />
+                                <div className="relative h-14 w-14 rounded-full border-2 border-white shadow-lg overflow-hidden bg-slate-900 transition-all duration-500 group-hover:scale-105 group-hover:rotate-3">
+                                  <img 
+                                    src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
+                                    alt={sh.full_name} 
+                                    className="h-full w-full object-cover rounded-full"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
                               </div>
                               <div className="flex-1 min-w-0">
                                 <h4 className="font-black text-slate-900 text-sm tracking-tight truncate">{sh.full_name}</h4>
@@ -2222,8 +2237,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                             </div>
                           </div>
 
-                          {/* Actions Section */}
-                          <div className="p-3 bg-slate-50 grid grid-cols-3 gap-1.5">
+                          {/* Actions Section - Mobile Responsive & Animated */}
+                          <div className="p-3 bg-slate-50 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-1.5">
                             <Button
                               variant="primary"
                               disabled={availableWithdrawable <= 0}
@@ -2231,7 +2246,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                                 setActiveShareholder(sh);
                                 setIsWithdrawOpen(true);
                               }}
-                              className="w-full font-black bg-brand-gold hover:bg-amber-500 text-slate-900 py-2 text-[9px] uppercase border-none shadow-sm h-auto"
+                              className="w-full font-black bg-brand-gold hover:bg-amber-500 text-slate-900 py-3 sm:py-2 text-[10px] sm:text-[9px] uppercase border-none shadow-sm h-auto transition-all hover:scale-[1.02] active:scale-95"
                               title="Withdraw Dividends"
                             >
                               Withdraw
@@ -2243,7 +2258,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                                 setActiveShareholder(sh);
                                 setIsCapitalWithdrawOpen(true);
                               }}
-                              className="w-full font-black border-rose-200 text-rose-700 hover:bg-rose-50 py-2 text-[9px] uppercase h-auto"
+                              className="w-full font-black border-rose-200 text-rose-700 hover:bg-rose-50 py-3 sm:py-2 text-[10px] sm:text-[9px] uppercase h-auto transition-all hover:scale-[1.02] active:scale-95"
                               title="Withdraw Principal Capital"
                             >
                               Cap. Out
@@ -2256,7 +2271,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                                 setActiveShareholder(sh);
                                 setIsReinvestOpen(true);
                               }}
-                              className="w-full font-black border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white py-2 text-[9px] uppercase h-auto"
+                              className="w-full font-black border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white py-3 sm:py-2 text-[10px] sm:text-[9px] uppercase h-auto transition-all hover:scale-[1.02] active:scale-95"
                               title="Reinvest Dividends"
                             >
                               Reinvest
@@ -2678,6 +2693,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             payments={payments}
             shareholders={shareholders || []}
             onSync={onSync}
+            activeCycle={activeCycle}
           />
         </motion.div>
       )}
@@ -2742,7 +2758,11 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         onClose={() => setIsConfirmPaymentOpen(false)}
         title="Verify Remittance Parameters"
       >
-        <div className="flex flex-col gap-4 text-xs font-mono">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col gap-4 text-xs font-mono w-full"
+        >
           <Alert variant="warning" className="flex items-start gap-2 text-slate-800">
             <AlertTriangle className="h-4.5 w-4.5 text-amber-600 shrink-0 mt-0.5" />
             <span className="font-sans">
@@ -2809,7 +2829,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
               Confirm & Post Ledger
             </Button>
           </div>
-        </div>
+        </motion.div>
       </Modal>
 
       {/* ==============================================

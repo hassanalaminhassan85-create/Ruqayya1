@@ -54,23 +54,52 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     return urlPath;
   };
 
+  const driverPassportUrl = getAuthorizedUrl(
+    (driver as any).passport_photo_url || 
+    (driver as any).passportPhoto || 
+    (driver as any).passport_photo || 
+    driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 
+    ''
+  );
+
+  const guarantorPassportUrl = driver.guarantor ? getAuthorizedUrl(
+    (driver.guarantor as any).passport_photo_url || 
+    (driver.guarantor as any).passportPhotoUrl || 
+    (driver.guarantor as any).passport_photo || 
+    (driver.guarantor as any).passport || 
+    ''
+  ) : '';
+
   // Tabs within Profile
   const [activeTab, setActiveTab] = useState<'info' | 'payments' | 'history' | 'docs'>('info');
   const [installments, setInstallments] = useState<any[]>([]);
   const [loadingInstallments, setLoadingInstallments] = useState(false);
+  const [selectedMilestone, setSelectedMilestone] = useState<any | null>(null);
+
+  const fetchDriverInstallmentsAndData = async () => {
+    if (!driver?.id) return;
+    setLoadingInstallments(true);
+    try {
+      const res = await api.request(`/api/drivers/${driver.id}/installments`);
+      if (res && res.success) {
+        setInstallments(res.installments || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch installments", err);
+    } finally {
+      setLoadingInstallments(false);
+    }
+  };
 
   useEffect(() => {
-    if (driver?.id) {
-      setLoadingInstallments(true);
-      api.request(`/api/drivers/${driver.id}/installments`)
-        .then((res: any) => {
-          if (res && res.success) {
-            setInstallments(res.installments || []);
-          }
-        })
-        .catch(err => console.error("Failed to fetch installments", err))
-        .finally(() => setLoadingInstallments(false));
-    }
+    fetchDriverInstallmentsAndData();
+
+    const handleDBChange = () => {
+      fetchDriverInstallmentsAndData();
+      if (onSync) onSync();
+    };
+    window.addEventListener('db-change', handleDBChange);
+    return () => window.removeEventListener('db-change', handleDBChange);
   }, [driver?.id, payments]);
   
   // Action Modals inside 360 View
@@ -196,6 +225,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
       setIsLogAccidentOpen(false);
       setAccDesc('');
       setAccEstimate('0');
+      window.dispatchEvent(new CustomEvent('db-change'));
       onSync();
     } catch (err: any) {
       setAccError(err.message || "Failed to log accident.");
@@ -219,6 +249,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
       });
       setIsLogRestOpen(false);
       setRestReason('');
+      window.dispatchEvent(new CustomEvent('db-change'));
       onSync();
     } catch (err: any) {
       setRestError(err.message || "Failed to log rest period.");
@@ -243,6 +274,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         status: editStatus
       });
       setIsEditProfileOpen(false);
+      window.dispatchEvent(new CustomEvent('db-change'));
       onSync();
     } catch (err: any) {
       setEditError(err.message || "Dossier update failed.");
@@ -261,13 +293,22 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         {/* Drawer Header Area */}
         <div className="flex items-center justify-between p-4 border-b border-border-main/50 bg-bg-base/40">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full border border-border-main overflow-hidden shrink-0">
-              <img 
-                src={getAuthorizedUrl((driver as any).passport_photo_url || (driver as any).passportPhoto || (driver as any).passport_photo || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300')} 
-                alt={driver.fullName} 
-                className="h-full w-full object-cover"
-                referrerPolicy="no-referrer"
-              />
+            <div className="h-10 w-10 rounded-full border border-border-main overflow-hidden shrink-0 bg-slate-900 flex items-center justify-center">
+              {driverPassportUrl ? (
+                <img 
+                  src={driverPassportUrl} 
+                  alt={driver.fullName} 
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={(e: any) => {
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <span className={`font-black text-brand-gold text-xs ${driverPassportUrl ? 'hidden' : ''}`}>
+                {driver.fullName ? driver.fullName.substring(0, 2).toUpperCase() : 'DR'}
+              </span>
             </div>
             <div>
               <h3 className="text-sm font-extrabold text-text-main uppercase tracking-tight flex items-center gap-1.5">
@@ -368,12 +409,21 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                     {/* Official Passport Photograph */}
                     <div className="flex flex-col items-center shrink-0 mx-auto sm:mx-0">
                       <div className="relative group overflow-hidden rounded-lg border border-border-main h-28 w-24 bg-slate-900 flex items-center justify-center shadow-md">
-                        <img 
-                          src={getAuthorizedUrl((driver as any).passport_photo_url || (driver as any).passportPhoto || (driver as any).passport_photo || driver.documents?.find((d: any) => d.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300')} 
-                          alt={driver.fullName} 
-                          className="h-full w-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
+                        {driverPassportUrl ? (
+                          <img 
+                            src={driverPassportUrl} 
+                            alt={driver.fullName} 
+                            className="h-full w-full object-cover"
+                            referrerPolicy="no-referrer"
+                            onError={(e: any) => {
+                              e.target.style.display = 'none';
+                              e.target.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div className={`flex flex-col items-center justify-center h-full w-full text-brand-gold font-black text-sm ${driverPassportUrl ? 'hidden' : ''}`}>
+                          {driver.fullName ? driver.fullName.substring(0, 2).toUpperCase() : 'DR'}
+                        </div>
                         <div className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[8px] font-mono font-extrabold text-brand-gold text-center py-0.5 uppercase tracking-tighter">
                           RTL PASSPORT
                         </div>
@@ -416,27 +466,32 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                         <Users className="h-3.5 w-3.5 text-blue-500" />
                         {labels.guarantor}
                       </span>
-                      {((driver.guarantor as any).passport_photo_url || (driver.guarantor as any).passportPhotoUrl || (driver.guarantor as any).passport) && (
-                        <span className="text-[8px] text-blue-500 font-mono font-bold bg-blue-500/10 px-1.5 py-0.5 rounded-full">PASSPORT SECURED</span>
-                      )}
+                      <span className="text-[8px] text-blue-500 font-mono font-bold bg-blue-500/10 px-1.5 py-0.5 rounded-full">PASSPORT SECURED</span>
                     </h4>
                     
                     <div className="flex flex-col sm:flex-row gap-4 items-start">
-                      {((driver.guarantor as any).passport_photo_url || (driver.guarantor as any).passportPhotoUrl || (driver.guarantor as any).passport) && (
-                        <div className="flex flex-col items-center shrink-0 mx-auto sm:mx-0">
-                          <div className="relative group overflow-hidden rounded-lg border border-border-main h-24 w-20 bg-slate-900 flex items-center justify-center shadow-md">
+                      <div className="flex flex-col items-center shrink-0 mx-auto sm:mx-0">
+                        <div className="relative group overflow-hidden rounded-lg border border-border-main h-24 w-20 bg-slate-900 flex items-center justify-center shadow-md">
+                          {guarantorPassportUrl ? (
                             <img 
-                              src={getAuthorizedUrl((driver.guarantor as any).passport_photo_url || (driver.guarantor as any).passportPhotoUrl || (driver.guarantor as any).passport)} 
+                              src={guarantorPassportUrl} 
                               alt="Guarantor Passport" 
                               className="h-full w-full object-cover"
                               referrerPolicy="no-referrer"
+                              onError={(e: any) => {
+                                e.target.style.display = 'none';
+                                e.target.nextElementSibling?.classList.remove('hidden');
+                              }}
                             />
-                            <div className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[7px] font-mono font-extrabold text-blue-400 text-center py-0.5 uppercase tracking-tighter">
-                              GUARANTOR
-                            </div>
+                          ) : null}
+                          <div className={`flex flex-col items-center justify-center h-full w-full text-blue-400 font-black text-xs ${guarantorPassportUrl ? 'hidden' : ''}`}>
+                            {driver.guarantor.fullName ? driver.guarantor.fullName.substring(0, 2).toUpperCase() : 'GR'}
+                          </div>
+                          <div className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[7px] font-mono font-extrabold text-blue-400 text-center py-0.5 uppercase tracking-tighter">
+                            GUARANTOR
                           </div>
                         </div>
-                      )}
+                      </div>
                       
                       <div className="grid grid-cols-2 gap-3 flex-1 w-full text-xs">
                         <div>
@@ -573,9 +628,14 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                       if (isPartial) badgeBg = 'bg-amber-500/10 text-amber-500 border-amber-500/20';
 
                       return (
-                        <div key={inst.installmentNumber} className="bg-bg-base/30 border border-border-main p-2.5 rounded-lg flex flex-col gap-1.5 hover:border-brand-gold/50 transition-colors">
+                        <div 
+                          key={inst.installmentNumber} 
+                          onClick={() => setSelectedMilestone(inst)}
+                          className="bg-bg-base/30 border border-border-main p-2.5 rounded-lg flex flex-col gap-1.5 hover:border-brand-gold/80 hover:bg-bg-base/50 transition-all cursor-pointer shadow-xs group"
+                          title="Click to inspect milestone breakdown"
+                        >
                           <div className="flex justify-between items-center">
-                            <span className="font-extrabold text-text-main font-mono text-[11px]">Milestone #{inst.installmentNumber}</span>
+                            <span className="font-extrabold text-text-main font-mono text-[11px] group-hover:text-brand-gold transition-colors">Milestone #{inst.installmentNumber}</span>
                             <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold border uppercase ${badgeBg}`}>
                               {inst.status === 'Completed' ? (lang === 'en' ? 'Paid' : 'An Biya') : inst.status}
                             </span>
@@ -608,6 +668,95 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Milestone Detail Inspection Modal */}
+              {selectedMilestone && (
+                <div className="absolute inset-0 bg-slate-950/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                  <div className="w-full max-w-lg bg-bg-surface border border-border-main rounded-2xl p-6 shadow-2xl flex flex-col gap-5 text-xs text-text-main">
+                    <div className="flex justify-between items-center border-b border-border-main/50 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-xl bg-brand-gold/10 border border-brand-gold/30 flex items-center justify-center text-brand-gold font-bold">
+                          #{selectedMilestone.installmentNumber}
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold uppercase text-sm tracking-tight text-text-main">
+                            Milestone #{selectedMilestone.installmentNumber} - Detailed Audit
+                          </h4>
+                          <span className="text-[10px] text-text-muted font-mono">
+                            5-Day Lease Contract Installment Cycle
+                          </span>
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedMilestone(null)} className="p-1.5 text-text-muted hover:text-text-main rounded-lg cursor-pointer">
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 bg-bg-base/40 p-3.5 rounded-xl border border-border-main/60 font-mono">
+                      <div>
+                        <span className="block text-[9px] text-text-muted font-bold uppercase">Total Due</span>
+                        <span className="text-sm font-black text-text-main">₦{(selectedMilestone.amountDue || selectedMilestone.totalDue || 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] text-text-muted font-bold uppercase">Amount Paid</span>
+                        <span className="text-sm font-black text-emerald-500">₦{(selectedMilestone.amountPaid || selectedMilestone.totalPaid || 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] text-text-muted font-bold uppercase">Balance</span>
+                        <span className="text-sm font-black text-brand-gold">₦{(selectedMilestone.remainingBalance || Math.max(0, (selectedMilestone.amountDue || selectedMilestone.totalDue || 0) - (selectedMilestone.amountPaid || selectedMilestone.totalPaid || 0))).toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5">
+                      <span className="font-extrabold uppercase text-[10px] text-text-muted tracking-wider">Milestone Lifecycle Schedule</span>
+                      <div className="grid grid-cols-2 gap-3 text-xs bg-bg-base/20 p-3 rounded-xl border border-border-main/40 font-mono">
+                        <div>
+                          <span className="text-text-muted block text-[10px]">Start Date:</span>
+                          <strong className="text-text-main">{selectedMilestone.startDate || 'N/A'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-text-muted block text-[10px]">Due Date (Deadline):</span>
+                          <strong className="text-rose-500">{selectedMilestone.dueDate || selectedMilestone.endDate || 'N/A'}</strong>
+                        </div>
+                        {selectedMilestone.paidDate && (
+                          <div className="col-span-2 border-t border-border-main/40 pt-1.5 mt-0.5">
+                            <span className="text-text-muted block text-[10px]">Settled On:</span>
+                            <strong className="text-emerald-500">{selectedMilestone.paidDate}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <span className="font-extrabold uppercase text-[10px] text-text-muted tracking-wider">Matched Remittance Transactions</span>
+                      <div className="max-h-40 overflow-y-auto flex flex-col gap-2 pr-1">
+                        {driverPayments.filter(p => p.installment_number === selectedMilestone.installmentNumber).length === 0 ? (
+                          <div className="p-3 text-center text-text-muted italic bg-bg-base/20 rounded-lg">
+                            No payment receipts logged specifically for Milestone #{selectedMilestone.installmentNumber} yet.
+                          </div>
+                        ) : (
+                          driverPayments.filter(p => p.installment_number === selectedMilestone.installmentNumber).map(p => (
+                            <div key={p.id} className="p-2.5 bg-bg-surface border border-border-main rounded-lg flex items-center justify-between font-mono text-[11px]">
+                              <div>
+                                <span className="font-bold text-brand-gold">{p.receipt_number}</span>
+                                <span className="text-[10px] text-text-muted block">{p.date} • {(p.payment_method || 'Transfer').toUpperCase()}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-extrabold text-emerald-500 block">₦{p.amount.toLocaleString()}</span>
+                                <Badge variant={p.status === 'approved' ? 'success' : 'warning'} className="text-[8px]">{p.status}</Badge>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t border-border-main/50">
+                      <Button size="sm" onClick={() => setSelectedMilestone(null)} className="font-bold">Close Details</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="overflow-x-auto border border-border-main rounded-xl">
                 <table className="w-full text-left text-xs border-collapse">

@@ -21,7 +21,8 @@ export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, cla
     success: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800",
     warning: "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-100 dark:border-amber-800",
     danger: "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 border border-rose-100 dark:border-rose-800",
-    gold: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-brand-gold border border-brand-gold/30"
+    gold: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-brand-gold border border-brand-gold/30",
+    neutral: "bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
   };
 
   return (

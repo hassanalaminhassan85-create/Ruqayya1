@@ -22,6 +22,7 @@ export const Badge: React.FC<BadgeProps> = ({
     outline: "text-text-main border-border-main",
     success: "bg-green-50 text-green-700 border-green-100",
     warning: "bg-orange-50 text-orange-700 border-orange-100",
+    neutral: "bg-slate-50 text-slate-500 border-slate-200",
   };
 
   return (

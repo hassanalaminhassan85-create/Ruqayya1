@@ -296,8 +296,10 @@ export default function App() {
 
     const hydrateSession = async () => {
       setAuthLoading(true);
+      console.log('DIAGNOSTIC: Starting hydrateSession...');
       try {
         const token = api.getToken();
+        console.log('DIAGNOSTIC: Token retrieved:', token ? 'exists' : 'null');
         if (!token) {
           setAuthToken(null);
           setCurrentRole('public');
@@ -306,6 +308,7 @@ export default function App() {
 
         // Bypass backend if it is a local fallback session token for offline/static compatibility
         if (token.startsWith('tok_fallback_')) {
+          console.log('DIAGNOSTIC: Using fallback token');
           const parts = token.split('_');
           const userKey = parts[2] || '';
           let fallbackRole: Role = 'driver';
@@ -342,7 +345,9 @@ export default function App() {
         }
 
         try {
+          console.log('DIAGNOSTIC: Calling api.getMe()...');
           const payload = await api.getMe();
+          console.log('DIAGNOSTIC: api.getMe() payload:', payload);
           if (payload && payload.user) {
             const userRole = payload.user.role;
             setAuthToken(token);
@@ -353,11 +358,13 @@ export default function App() {
               setDriverName('');
             }
           } else {
+            console.log('DIAGNOSTIC: api.getMe() returned no user, clearing token.');
             api.clearToken();
             setAuthToken(null);
             setCurrentRole('public');
           }
         } catch (e) {
+          console.error('DIAGNOSTIC: api.getMe() error:', e);
           api.clearToken();
           setAuthToken(null);
           setCurrentRole('public');
@@ -625,7 +632,7 @@ export default function App() {
     if (currentRole === 'driver') {
       let driverTabValue = driverTab;
       // Force tab based on section if they were navigated via sidebar or quick action
-      if (activeSection === 'dashboard') driverTabValue = 'overview';
+      if (activeSection === 'dashboard' && driverTab !== 'pay-now') driverTabValue = 'overview';
       else if (activeSection === 'fleet') driverTabValue = 'vehicle';
       else if (activeSection === 'payments') driverTabValue = 'payments';
       else if (activeSection === 'trips') driverTabValue = 'history';
@@ -781,6 +788,7 @@ export default function App() {
           lang={lang}
           dictionary={dictionary}
           activeTab={shareholderTabValue}
+          authToken={authToken}
           setActiveTab={(tab) => {
             setShareholderTab(tab);
             if (tab === 'overview') setActiveSection('dashboard');

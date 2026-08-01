@@ -291,6 +291,10 @@ export const api = {
     return api.request('/api/finance');
   },
 
+  fetchShareholderLedger: async () => {
+    return api.request('/api/finance');
+  },
+
   postFinanceRecord: async (payload: { type: 'revenue' | 'expense'; category: string; amount: number; date: string; description: string }) => {
     return api.request('/api/finance', {
       method: 'POST',
@@ -492,6 +496,13 @@ export const api = {
 
   postShareholderReinvestment: async (payload: { shareholderId: string; amount: number }) => {
     return api.request('/api/finance/reinvest', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  postShareholderCapOut: async (payload: { shareholderId: string; amount: number; remarks?: string }) => {
+    return api.request('/api/finance/cap-out', {
       method: 'POST',
       body: JSON.stringify(payload)
     });

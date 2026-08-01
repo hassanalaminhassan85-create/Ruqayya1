@@ -23,6 +23,30 @@
       "created_at": "2026-07-20T12:10:36.127Z",
       "updated_at": "2026-07-20T12:10:36.127Z",
       "status": "active"
+    },
+    {
+      "id": "99e7f37c-b4e5-4db3-83e3-957347d5f0dc",
+      "username": "KABIR",
+      "email": "kabir.m@ruqayyatransport.com",
+      "phone": "+234 803 555 0001",
+      "password_hash": "5c53323d04059d0c99cc75b8010b78e03a04c089a55044002882055d7507f2e171824cdfb09821f896b162efb103caa8a040ff56773bc0ec82197ab3e8e2042c",
+      "full_name": "Alhaji Kabir Mohammed",
+      "role_id": "role-shareholder",
+      "created_at": "2026-08-01T13:48:59.244Z",
+      "updated_at": "2026-08-01T13:48:59.244Z",
+      "status": "active"
+    },
+    {
+      "id": "a6f3a796-a5f0-4a3a-a473-0e6fa093ebb2",
+      "username": "AMINA",
+      "email": "amina.g@ruqayyatransport.com",
+      "phone": "+234 803 555 0002",
+      "password_hash": "5c53323d04059d0c99cc75b8010b78e03a04c089a55044002882055d7507f2e171824cdfb09821f896b162efb103caa8a040ff56773bc0ec82197ab3e8e2042c",
+      "full_name": "Hajiya Amina Garba",
+      "role_id": "role-shareholder",
+      "created_at": "2026-08-01T13:48:59.245Z",
+      "updated_at": "2026-08-01T13:48:59.245Z",
+      "status": "active"
     }
   ],
   "directors": [
@@ -46,7 +70,48 @@
     }
   ],
   "drivers": [],
-  "shareholders": [],
+  "shareholders": [
+    {
+      "id": "SH-2026-001",
+      "user_id": "99e7f37c-b4e5-4db3-83e3-957347d5f0dc",
+      "full_name": "Alhaji Kabir Mohammed",
+      "fullName": "Alhaji Kabir Mohammed",
+      "phone": "+234 803 555 0001",
+      "email": "kabir.m@ruqayyatransport.com",
+      "address": "Plot 12 Commercial Layout, Kano, Nigeria",
+      "investment_amount": 12000000,
+      "investmentAmount": 12000000,
+      "investment_date": "2026-01-15",
+      "investmentDate": "2026-01-15",
+      "passport_photo_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+      "passportPhoto": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+      "ownership_percentage": 60,
+      "total_withdrawn": 0,
+      "total_reinvested": 0,
+      "created_at": "2026-08-01T13:48:59.245Z",
+      "status": "active"
+    },
+    {
+      "id": "SH-2026-002",
+      "user_id": "a6f3a796-a5f0-4a3a-a473-0e6fa093ebb2",
+      "full_name": "Hajiya Amina Garba",
+      "fullName": "Hajiya Amina Garba",
+      "phone": "+234 803 555 0002",
+      "email": "amina.g@ruqayyatransport.com",
+      "address": "No 45 GRA Maiduguri, Borno State, Nigeria",
+      "investment_amount": 8000000,
+      "investmentAmount": 8000000,
+      "investment_date": "2026-02-01",
+      "investmentDate": "2026-02-01",
+      "passport_photo_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150",
+      "passportPhoto": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150",
+      "ownership_percentage": 40,
+      "total_withdrawn": 0,
+      "total_reinvested": 0,
+      "created_at": "2026-08-01T13:48:59.245Z",
+      "status": "active"
+    }
+  ],
   "guarantors": [],
   "vehicles": [],
   "vehicle_documents": [],
@@ -465,7 +530,7 @@
     "companyAddress": "No 14 Zaria Road, Kano, Nigeria",
     "phone": "+234 803 123 4567",
     "email": "info@ruqayyatransport.com",
-    "currency": "₦",
+    "currency": "\u20a6",
     "timeZone": "Africa/Lagos",
     "languageDefault": "en",
     "themeDefault": "light",
@@ -478,7 +543,7 @@
   "company_operations_state": {
     "status": "Operational Mode",
     "currentCycle": "CYC-050",
-    "currentDay": 1,
+    "currentDay": 4,
     "startedBy": "Operations Admin ADAM",
     "startedAt": "2026-07-29T07:44:42.563Z",
     "pauseHistory": [

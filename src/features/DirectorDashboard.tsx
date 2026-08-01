@@ -98,9 +98,16 @@ export const DirectorDashboard: React.FC<{
         es.onmessage = (e) => {
           const data = JSON.parse(e.data);
           if (data.type === 'db_update') {
-            setVehicles(data.vehicles || []);
-            setDrivers(data.drivers || []);
-            setFinancials(data.financials || []);
+            if (data.vehicles) setVehicles(data.vehicles);
+            if (data.drivers) setDrivers(data.drivers);
+            if (data.financials) setFinancials(data.financials);
+            if (data.trip_manifests) setTrips(data.trip_manifests);
+            if (data.shareholders) setShareholders(data.shareholders);
+            if (data.driver_payments) setPayments(data.driver_payments);
+            if (data.audit_logs) setLogs(data.audit_logs);
+            if (data.notifications) setNotifications(data.notifications);
+            if (data.cycles) setCycles(data.cycles);
+            if (data.admins) setAdmins(data.admins);
           }
         };
         es.onerror = () => setSseConnected(false);
@@ -193,6 +200,7 @@ export const DirectorDashboard: React.FC<{
           shareholders={shareholders}
           onSync={syncData}
           trips={trips}
+          activeCycle={activeCycle}
         />
       )}
 
@@ -202,7 +210,11 @@ export const DirectorDashboard: React.FC<{
           drivers={drivers}
           vehicles={vehicles}
           finance={financials}
+          payments={payments}
+          shareholders={shareholders}
+          onSync={syncData}
           trips={trips}
+          activeCycle={activeCycle}
         />
       )}
 

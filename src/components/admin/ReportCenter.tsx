@@ -12,6 +12,9 @@ import {
   Printer, 
   Download, 
   Share2, 
+  Eye,
+  X,
+  Loader2,
   CheckCircle, 
   XCircle, 
   Lock, 
@@ -51,7 +54,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Layers,
-  Building
+  Building,
+  History
 } from 'lucide-react';
 
 import { Card } from '../ui/Card';
@@ -59,6 +63,7 @@ import { Button } from '../ui/Button';
 import { Badge, Alert, Modal } from '../ui/SharedComponents';
 import { Driver, Vehicle, FinancialRecord, Shareholder } from '../../types';
 import { api } from '../../utils/api';
+import { HistoricalTrendChart } from './HistoricalTrendChart';
 
 // Official WhatsApp Icon SVG Component
 const WhatsAppIcon: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
@@ -76,6 +81,7 @@ interface ReportCenterProps {
   shareholders: Shareholder[];
   onSync: () => void;
   trips?: any[];
+  activeCycle?: any;
 }
 
 interface SavedReport {
@@ -108,7 +114,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   payments = [],
   shareholders = [],
   onSync,
-  trips = []
+  trips = [],
+  activeCycle = null
 }) => {
   // Navigation tabs inside Report Center
   const [reportTab, setReportTab] = useState<'financial' | 'driver' | 'shareholder' | 'payroll' | 'expense' | 'collection' | 'wallet' | 'company' | 'audit' | 'all'>('financial');
@@ -116,11 +123,24 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   // Date configuration & filter states
   const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly' | 'custom' | 'cycle' | 'annual'>('monthly');
   const [dateFrom, setDateFrom] = useState<string>(() => {
+    if (activeCycle?.startDate) return activeCycle.startDate.split('T')[0];
     const d = new Date();
     d.setDate(d.getDate() - 30);
     return d.toISOString().split('T')[0];
   });
-  const [dateTo, setDateTo] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [dateTo, setDateTo] = useState<string>(() => {
+    if (activeCycle?.endDate) return activeCycle.endDate.split('T')[0];
+    return new Date().toISOString().split('T')[0];
+  });
+
+  // Sync dates when activeCycle changes or reportType is set to 'cycle'
+  useEffect(() => {
+    if (reportType === 'cycle' && activeCycle) {
+      if (activeCycle.startDate) setDateFrom(activeCycle.startDate.split('T')[0]);
+      if (activeCycle.endDate) setDateTo(activeCycle.endDate.split('T')[0]);
+      if (activeCycle.cycleId) setSelectedCycleId(activeCycle.cycleId);
+    }
+  }, [reportType, activeCycle]);
   const [filterDriverId, setFilterDriverId] = useState<string>('all');
   const [filterShareholderId, setFilterShareholderId] = useState<string>('all');
   const [filterCycle, setFilterCycle] = useState<string>('all');
@@ -156,10 +176,12 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   const [prepRole, setPrepRole] = useState('Executive Director & Operations');
   const [prepSign, setPrepSign] = useState('MMR');
   const [prepDate, setPrepDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [prepAvatar, setPrepAvatar] = useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150');
+  const [prepID, setPrepID] = useState('RTL/ADM/2026/085');
 
-  const [apprName, setApprName] = useState('');
+  const [apprName, setApprName] = useState('Dr. Ruqayya Muhammad');
   const [apprRole, setApprRole] = useState('Managing Director & CEO');
-  const [apprSign, setApprSign] = useState('');
+  const [apprSign, setApprSign] = useState('Dr. Ruqayya M.');
   const [apprDate, setApprDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // Company Stamps & Seals
@@ -168,6 +190,10 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   // QR Verification States
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [activeReportHash, setActiveReportHash] = useState('8f9c3d2e1a4b5c6d7e8f9a0b1c2d3e4f');
+
+  // Preview Modal state
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
 
   // Historical Saved Reports (LocalStorage backed to make it truly immutable & professional)
   const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
@@ -179,35 +205,162 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   const reportRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
-  // PDF Generation
+  // PDF Generation States
+  const [isExporting, setIsExporting] = useState(false);
+
   const handleDownloadPDF = async () => {
     if (!reportRef.current) return;
+    setIsExporting(true);
     
-    const canvas = await html2canvas(reportRef.current, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`RUQAYYA_REPORT_${reportTab.toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`);
+    try {
+      const canvas = await html2canvas(reportRef.current, { 
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        onclone: (clonedDoc) => {
+          // Fix oklch and oklab colors in style tags which html2canvas 1.4.1 doesn't support
+          const styleTags = clonedDoc.getElementsByTagName('style');
+          for (let i = 0; i < styleTags.length; i++) {
+            try {
+              let css = styleTags[i].innerHTML;
+              if (css.includes('oklch') || css.includes('oklab')) {
+                styleTags[i].innerHTML = css.replace(/(oklch|oklab)\([^)]+\)/g, '#64748b');
+              }
+            } catch (e) {
+              console.warn("Could not modify style tag:", e);
+            }
+          }
+
+          // Fix oklch and oklab colors in inline styles
+          const elements = clonedDoc.getElementsByTagName('*');
+          for (let i = 0; i < elements.length; i++) {
+            const el = elements[i] as HTMLElement;
+            if (el.style) {
+              ['color', 'backgroundColor', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'fill', 'stroke'].forEach(prop => {
+                const value = el.style.getPropertyValue(prop);
+                if (value && (value.includes('oklch') || value.includes('oklab'))) {
+                  el.style.setProperty(prop, prop === 'color' ? '#0F172A' : (prop === 'backgroundColor' ? '#FFFFFF' : '#E5E7EB'), 'important');
+                }
+              });
+            }
+          }
+        }
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      // Handle multi-page if report is very long
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let heightLeft = pdfHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`RUQAYYA_REPORT_${reportTab.toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert(lang === 'en' ? "Failed to generate PDF. Please try again or use the Print option." : "An kasa samar da PDF. Da fatan za a sake gwadawa ko amfani da hanyar bugawa.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // PDF Generation for All Reports
   const fullReportRef = useRef<HTMLDivElement>(null);
   const handleDownloadAllPDF = async () => {
     if (!fullReportRef.current) return;
+    setIsExporting(true);
     
-    const canvas = await html2canvas(fullReportRef.current, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`RUQAYYA_FULL_REPORT_${new Date().toISOString().split('T')[0]}.pdf`);
+    try {
+      // Temporarily make the hidden container visible but off-screen for html2canvas
+      const container = fullReportRef.current.parentElement;
+      if (container) {
+        container.style.display = 'block';
+        container.style.position = 'fixed';
+        container.style.top = '-99999px';
+        container.style.left = '-99999px';
+      }
+
+      const canvas = await html2canvas(fullReportRef.current, { 
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        onclone: (clonedDoc) => {
+          // Fix oklch and oklab colors in style tags which html2canvas 1.4.1 doesn't support
+          const styleTags = clonedDoc.getElementsByTagName('style');
+          for (let i = 0; i < styleTags.length; i++) {
+            try {
+              let css = styleTags[i].innerHTML;
+              if (css.includes('oklch') || css.includes('oklab')) {
+                styleTags[i].innerHTML = css.replace(/(oklch|oklab)\([^)]+\)/g, '#64748b');
+              }
+            } catch (e) {
+              console.warn("Could not modify style tag:", e);
+            }
+          }
+
+          // Fix oklch and oklab colors in inline styles
+          const elements = clonedDoc.getElementsByTagName('*');
+          for (let i = 0; i < elements.length; i++) {
+            const el = elements[i] as HTMLElement;
+            if (el.style) {
+              ['color', 'backgroundColor', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'fill', 'stroke'].forEach(prop => {
+                const value = el.style.getPropertyValue(prop);
+                if (value && (value.includes('oklch') || value.includes('oklab'))) {
+                  el.style.setProperty(prop, prop === 'color' ? '#0F172A' : (prop === 'backgroundColor' ? '#FFFFFF' : '#E5E7EB'), 'important');
+                }
+              });
+            }
+          }
+        }
+      });
+      
+      // Re-hide
+      if (container) {
+        container.style.display = 'none';
+      }
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let heightLeft = pdfHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`RUQAYYA_FULL_REPORT_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      console.error("All Reports PDF failed:", err);
+      alert(lang === 'en' ? "Full report generation failed." : "An kasa samar da cikakken rahoto.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Initialize history
@@ -367,12 +520,16 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
     return matchesDate && matchesDriver && matchesStatus;
   });
 
-  // METRICS COMPILER
-  const totalInflows = filteredFinance.filter(f => f && f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0) +
-                       filteredPayments.reduce((sum, p) => sum + (p && p.amount ? p.amount : 0), 0);
+  // METRICS COMPILER (Aligned with Financial Command Center SSE logic)
+  // We use finance prop which already includes approved driver_payments as 'revenue'
+  const totalInflows = filteredFinance.filter(f => f && f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0);
                        
   const totalOutflows = filteredFinance.filter(f => f && f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
   const netEarningsProfit = totalInflows - totalOutflows;
+
+  // Total Company Wallet (Total In - Total Out for all time/filtered)
+  const totalCompanyWallet = finance.filter(f => f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0) - 
+                             finance.filter(f => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
 
   // Additional stats
   const activeDriversCount = drivers.filter(d => d && (d.status === 'approved' || d.status === 'available' || d.status === 'on-trip')).length;
@@ -412,8 +569,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   })();
   const totalOutstandingBalance = drivers.reduce((sum, d) => sum + (d && d.remaining_vehicle_balance ? d.remaining_vehicle_balance : 0), 0);
   
-  // Continuous 2% shareholder pool math
-  const accumulatedShareholderPool = netEarningsProfit > 0 ? (netEarningsProfit * 0.02) : 0;
+  // Continuous 2% shareholder pool math - based on total company profit (wallet balance)
+  const accumulatedShareholderPool = totalCompanyWallet > 0 ? (totalCompanyWallet * 0.02) : 0;
   const totalInvestmentStocks = shareholders.reduce((sum, s) => sum + (s && s.investment_amount ? s.investment_amount : 0), 0);
 
   // Active Team Payroll formula: count * salary
@@ -422,6 +579,671 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   const fieldSal1 = activeVehiclesCount * 1000;
   const fieldSal2 = activeVehiclesCount * 1000;
   const totalCurrentPayroll = barristerSal + managerSal + fieldSal1 + fieldSal2;
+  const totalPayrollLiability = totalCurrentPayroll;
+
+  const getCycleForDate = (date: string) => {
+    const d = new Date(date);
+    const cycle = availableCycles.find(c => {
+      const start = new Date(c.startDate);
+      const end = c.endDate ? new Date(c.endDate) : new Date();
+      return d >= start && d <= end;
+    });
+    return cycle ? `Cycle ${cycle.id.split('-').pop()}` : 'N/A';
+  };
+
+  const renderReportDocument = () => (
+    <>
+      {/* DOCUMENT HEADER */}
+      <div className="flex flex-col items-center text-center border-b-2 border-slate-900 pb-5 mb-6">
+        {/* RTL CUSTOM LOGO */}
+        <div className="h-20 w-20 bg-white flex items-center justify-center rounded-2xl shadow-sm mb-4 border border-slate-200 overflow-hidden">
+          <img src="/src/assets/images/ruqayya_logo_1783430629037.jpg" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
+        </div>
+        <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 uppercase font-serif">RUQAYYA TRANSPORT LIMITED</h1>
+        <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest mt-1">Enterprise Resource Planning (ERP)</p>
+        <motion.p 
+          initial={{ color: '#64748b' }}
+          animate={{ color: ['#64748b', '#b45309', '#64748b'] }}
+          transition={{ duration: 3, repeat: Infinity }}
+          className="text-[10px] font-mono mt-2 max-w-lg"
+        >
+          No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria • muhdadam573@gmail.com
+        </motion.p>
+      </div>
+
+      {/* OFFICER PROFILE & CERTIFICATION BLOCK */}
+      <div className="mb-8 p-5 bg-slate-50 rounded-3xl border border-slate-200 flex flex-col sm:flex-row items-center gap-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-[0.03] rotate-12">
+          <Award className="h-32 w-32 text-slate-900" />
+        </div>
+        
+        {/* PASSPORT AVATAR */}
+        <div className="relative">
+          <div className="h-24 w-24 rounded-2xl border-4 border-white shadow-xl overflow-hidden bg-slate-200">
+            <img src={prepAvatar} alt="Officer Passport" className="h-full w-full object-cover" />
+          </div>
+          <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-white p-1 rounded-full shadow-lg border-2 border-white">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+        </div>
+
+        <div className="flex-1 text-center sm:text-left z-10">
+          <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 mb-1">
+            <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">{prepName}</h2>
+            <span className="text-[9px] font-mono bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-bold">{prepID}</span>
+          </div>
+          <p className="text-xs font-bold text-brand-gold uppercase tracking-widest mb-3">{prepRole}</p>
+          
+          <div className="grid grid-cols-2 gap-4 text-[10px]">
+            <div className="flex items-center gap-2 text-slate-500">
+              <Calendar className="h-3 w-3" />
+              <span className="font-bold uppercase">Audit Date:</span>
+              <span className="text-slate-900 font-black">{new Date(prepDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-500">
+              <Clock className="h-3 w-3" />
+              <span className="font-bold uppercase">Status:</span>
+              <span className="text-emerald-600 font-black uppercase">Certified Verified</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden sm:block w-px h-16 bg-slate-200 mx-2" />
+
+        <div className="text-center sm:text-right">
+          <p className="text-[9px] text-slate-400 font-black uppercase mb-1">Document Hash</p>
+          <p className="text-[10px] font-mono text-slate-600 bg-white px-3 py-1 rounded-lg border border-slate-100 shadow-sm">
+            {activeReportHash.substring(0, 16)}...
+          </p>
+        </div>
+      </div>
+
+      {/* FINANCIAL SUMMARY VIEW */}
+      {reportTab === 'financial' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-100 pb-2">
+            <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">I. Executive Financial Statement & Cash Inflows</h2>
+            <p className="text-[10px] text-slate-500">General Ledger and Cash flows statement from {dateFrom} to {dateTo} for {selectedCycleId || 'Active Operating Cycle'}.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-[11px] text-slate-800">
+            <div className="flex justify-between border-b border-slate-100 py-1.5 font-bold text-slate-950">
+              <span>A. Operating Income Revenues</span>
+              <span>₦{totalInflows.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 py-1.5 font-bold text-slate-950">
+              <span>B. Operating Expenses</span>
+              <span>(₦{totalOutflows.toLocaleString()})</span>
+            </div>
+            <div className="flex justify-between border-b-2 border-slate-900 py-2 text-xs font-black text-emerald-700 bg-emerald-50 px-2 rounded">
+              <span>NET EARNINGS / LOSS (NP)</span>
+              <span>₦{netEarningsProfit.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between border-b-2 border-slate-900 py-2 text-xs font-black text-amber-700 bg-amber-50 px-2 rounded">
+              <span>ACCUMULATED WALLET BALANCE</span>
+              <span>₦{totalCompanyWallet.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <h3 className="text-[11px] font-black uppercase text-slate-950 mb-3 border-l-4 border-slate-900 pl-2">II. Asset Allocation & Compliance Stats</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Active Fleet</span>
+                <span className="text-sm font-black text-slate-900">{activeDriversCount} Units</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Stock Value</span>
+                <span className="text-sm font-black text-slate-900">₦{totalInvestmentStocks.toLocaleString()}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Shareholder Pool</span>
+                <span className="text-sm font-black text-brand-gold">₦{accumulatedShareholderPool.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* DRIVER REPORTS */}
+      {reportTab === 'driver' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-100 pb-2">
+            <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Driver Performance & Remittance Report</h2>
+            <p className="text-[10px] text-slate-500">Summary of driver financial standings as of {new Date().toLocaleDateString()}.</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px] text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-slate-400 uppercase font-bold border-b border-slate-200">
+                  <th className="p-2 whitespace-nowrap">Driver ID</th>
+                  <th className="p-2">Name</th>
+                  <th className="p-2">Status</th>
+                  <th className="p-2 text-right">Total Remitted</th>
+                  <th className="p-2 text-right">Pending Balance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {drivers.filter(d => filterDriverId === 'all' || d.id === filterDriverId).map((d, index) => (
+                  <tr key={`${d.id}-${index}`}>
+                    <td className="p-2 font-mono font-bold text-slate-900">{d.id.substring(0, 8)}</td>
+                    <td className="p-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center">
+                          {d.passportPhotoUrl ? (
+                            <img src={d.passportPhotoUrl} className="h-full w-full object-cover" />
+                          ) : (
+                            <User className="h-3 w-3 text-slate-400" />
+                          )}
+                        </div>
+                        <span className="font-bold">{d.fullName}</span>
+                      </div>
+                    </td>
+                    <td className="p-2 capitalize">{d.status}</td>
+                    <td className="p-2 text-right">₦{(d.total_amount_paid || 0).toLocaleString()}</td>
+                    <td className="p-2 text-right font-bold text-brand-gold">₦{(d.remaining_vehicle_balance || 0).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+      )}
+
+      {/* SHAREHOLDER REPORTS */}
+      {reportTab === 'shareholder' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-100 pb-2 flex justify-between items-end">
+            <div>
+              <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Shareholder Equity & Dividend Statement</h2>
+              <p className="text-[10px] text-slate-500">Certified shareholder registry and accumulated dividend pools.</p>
+            </div>
+            <div className="text-right">
+              <span className="text-[9px] font-mono text-slate-400 block uppercase">Total Capitalization</span>
+              <span className="text-sm font-black text-slate-900">₦{totalInvestmentStocks.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* ANALYTICS VISUALIZATION */}
+          <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden relative">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <TrendingUp className="h-3 w-3 text-emerald-500" />
+                  Equity Lifecycle Analytics
+                </h3>
+                <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Historical trends of reinvestment vs withdrawal cycle performance</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-[8px] font-black text-slate-500 uppercase">Growth</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-rose-500" />
+                  <span className="text-[8px] font-black text-slate-500 uppercase">Liquidity</span>
+                </div>
+              </div>
+            </div>
+            
+            <HistoricalTrendChart 
+              finance={finance} 
+              cycles={availableCycles} 
+              shareholderId={filterShareholderId}
+              lang={lang} 
+            />
+
+            <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-3 w-3 text-brand-gold" />
+                <span className="text-[8px] font-bold text-slate-400 uppercase">Real-Time SSE Database Synchronized</span>
+              </div>
+              <div className="text-[8px] font-mono text-slate-300">REF: RTL/SEC/ANLYTC-2026</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {shareholders.filter(s => filterShareholderId === 'all' || s.id === filterShareholderId).map((s, idx) => {
+              const transactions = finance.filter(f => f.referenceId === s.id);
+              const totalWithdrawn = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+              const totalReinvested = transactions.filter(t => t.type === 'revenue' && t.category === 'other').reduce((sum, t) => sum + t.amount, 0);
+
+              return (
+                <div key={`${s.id}-${idx}`} className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-5">
+                  <div className="flex flex-col sm:flex-row justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <motion.div 
+                        whileHover={{ scale: 1.05 }}
+                        className="h-16 w-16 rounded-full border-2 border-slate-100 shadow-sm overflow-hidden bg-slate-50 flex items-center justify-center relative group"
+                      >
+                        {s.passport_photo_url || s.passport_photo ? (
+                          <img src={s.passport_photo_url || s.passport_photo} alt={s.full_name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <User className="h-6 w-6 text-slate-300" />
+                            <span className="text-[8px] font-bold text-slate-400 mt-0.5">{s.full_name?.substring(0, 2).toUpperCase()}</span>
+                          </div>
+                        )}
+                        <div className="absolute top-0 right-0 bg-emerald-500 h-3 w-3 rounded-full border-2 border-white shadow-sm" />
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 text-white text-[10px] p-3 rounded-xl shadow-xl z-50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                          <p className="font-bold mb-1">{s.full_name}</p>
+                          <p className="opacity-70">Joined: {s.investment_date ? new Date(s.investment_date).toLocaleDateString() : 'N/A'}</p>
+                          <p className="opacity-70">Status: {s.status || 'Active'}</p>
+                        </div>
+                      </motion.div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="font-black text-slate-950 text-sm uppercase tracking-tight">{s.full_name}</p>
+                          <Badge variant="outline" className="text-[8px] py-0 px-1.5 font-bold uppercase whitespace-nowrap">Active Investor</Badge>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-[10px] text-slate-500 font-medium">
+                          <span className="flex items-center gap-1"><Mail className="h-2.5 w-2.5" /> {s.email}</span>
+                          <span className="flex items-center gap-1 whitespace-nowrap"><Phone className="h-2.5 w-2.5" /> {s.phone}</span>
+                        </div>
+                        <p className="text-[9px] text-slate-400 font-mono mt-1 uppercase tracking-tighter">ID: {s.id}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-8 text-right sm:border-l border-slate-100 sm:pl-8">
+                      <div>
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block tracking-widest mb-1">Stock Value</span>
+                        <span className="text-sm font-black text-slate-900">₦{(s.investment_amount || 0).toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-brand-gold font-bold uppercase block tracking-widest mb-1">Wallet</span>
+                        <span className="text-sm font-black text-emerald-600">₦{(s.wallet_balance || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-3 bg-slate-50 rounded-2xl border border-slate-100/50">
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Date Joined</p>
+                      <p className="text-[10px] font-bold text-slate-700">{s.investment_date ? new Date(s.investment_date).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Total Withdrawn</p>
+                      <p className="text-[10px] font-bold text-rose-600">₦{totalWithdrawn.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Total Reinvested</p>
+                      <p className="text-[10px] font-bold text-emerald-600">₦{totalReinvested.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase mb-0.5">Investment Cycle</p>
+                      <p className="text-[10px] font-bold text-slate-700">Cycle {activeCycle?.cycleId?.split('-').pop() || '01'}</p>
+                    </div>
+                  </div>
+
+                  {/* TRANSACTION HISTORY FOR SHAREHOLDER */}
+                  <div className="mt-4">
+                    <h4 className="text-[8px] font-black text-slate-950 uppercase mb-2 flex items-center gap-1.5">
+                      <History className="h-2.5 w-2.5" />
+                      Audited Financial Activity (Dividends & Capital)
+                    </h4>
+                    <div className="border border-slate-100 rounded-xl overflow-hidden">
+                      <table className="w-full text-[9px] text-left border-collapse">
+                        <thead className="bg-slate-50 text-slate-400 font-bold uppercase tracking-tighter">
+                          <tr>
+                            <th className="px-3 py-1.5">Event Date</th>
+                            <th className="px-3 py-1.5">Type</th>
+                            <th className="px-3 py-1.5">Operating Cycle</th>
+                            <th className="px-3 py-1.5">Admin / Approver</th>
+                            <th className="px-3 py-1.5 text-right">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {transactions.length > 0 ? transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((t, tIdx) => (
+                            <tr key={t.id || tIdx}>
+                              <td className="px-3 py-1.5 font-bold text-slate-900">{new Date(t.date).toLocaleDateString()}</td>
+                              <td className="px-3 py-1.5 capitalize">
+                                <span className={t.type === 'revenue' ? 'text-emerald-600' : 'text-rose-600'}>
+                                  {t.description.includes('Reinvestment') ? 'Reinvestment' : (t.description.includes('Withdrawal') ? 'Withdrawal' : (t.description.includes('Redemption') ? 'Cap-Out' : t.category))}
+                                </span>
+                              </td>
+                              <td className="px-3 py-1.5 font-mono text-slate-500 uppercase">{getCycleForDate(t.date)}</td>
+                              <td className="px-3 py-1.5 flex items-center gap-1.5">
+                                <ShieldCheck className="h-2.5 w-2.5 text-emerald-500" />
+                                <span className="font-bold">{t.approvedBy || 'SYSTEM'}</span>
+                              </td>
+                              <td className={`px-3 py-1.5 text-right font-black ${t.type === 'revenue' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                {t.type === 'revenue' ? '+' : '-'}₦{t.amount.toLocaleString()}
+                              </td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={5} className="px-3 py-4 text-center text-slate-400 italic font-medium">
+                                No verified equity transactions recorded in current audit period.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* PAYROLL REPORTS */}
+      {reportTab === 'payroll' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-100 pb-2">
+            <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Monthly Staff Payroll Liability</h2>
+            <p className="text-[10px] text-slate-500">Operational staff compensation and management salary summaries.</p>
+          </div>
+
+          <div className="p-6 bg-slate-900 rounded-3xl text-white shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <Briefcase className="h-20 w-20" />
+            </div>
+            <div className="relative z-10">
+              <p className="text-[10px] font-black text-brand-gold uppercase tracking-[0.2em] mb-1">Total Payroll Exposure</p>
+              <h3 className="text-2xl font-black">₦{totalPayrollLiability.toLocaleString()}</h3>
+              <div className="mt-4 flex gap-4 border-t border-white/10 pt-4">
+                <div>
+                  <span className="text-[9px] text-slate-400 block uppercase">Management</span>
+                  <span className="text-xs font-bold">₦120,000</span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-400 block uppercase">Support Staff</span>
+                  <span className="text-xs font-bold">₦30,000</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* EXPENSE REPORTS */}
+      {reportTab === 'expense' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-100 pb-2">
+            <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Operational Expense Breakdown</h2>
+            <p className="text-[10px] text-slate-500">Breakdown of repair costs, maintenance, and administrative overhead.</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            {filteredFinance.filter(f => f.type === 'expense').map((e, idx) => (
+              <div key={`${e.id}-${idx}`} className="flex justify-between items-center p-3 border-b border-slate-50">
+                <div>
+                  <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{e.category}</p>
+                  <p className="text-[9px] text-slate-400 italic">{e.description}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-black text-rose-600">₦{e.amount.toLocaleString()}</p>
+                  <p className="text-[8px] text-slate-300 font-mono uppercase">{e.date?.split('T')[0]}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* COLLECTION REPORTS */}
+      {reportTab === 'collection' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-100 pb-2">
+            <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Daily Collection Summary</h2>
+            <p className="text-[10px] text-slate-500">Real-time inflows of remittances from active tricycle units.</p>
+          </div>
+
+          <div className="space-y-4">
+            {filteredPayments.slice(0, 15).map((p, idx) => (
+              <div key={`${p.id}-${idx}`} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <div>
+                    <p className="text-[10px] font-black text-slate-900 uppercase">Collection Ref: {p.id.substring(0, 8)}</p>
+                    <p className="text-[9px] text-slate-500">Mode: {p.method?.toUpperCase() || 'CASH'}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-black text-emerald-600">+₦{p.amount.toLocaleString()}</p>
+                  <p className="text-[8px] text-slate-400 font-mono uppercase">{p.date?.split('T')[0]}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* WALLET REPORTS */}
+      {reportTab === 'wallet' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-100 pb-2">
+            <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Company Master Wallet Summary</h2>
+            <p className="text-[10px] text-slate-500">Consolidated standing of all company assets and liquidity pools.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="p-6 bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl text-white shadow-2xl relative overflow-hidden">
+              <p className="text-[10px] font-black text-brand-gold uppercase tracking-widest mb-1">Available Liquidity</p>
+              <h3 className="text-3xl font-black">₦{totalCompanyWallet.toLocaleString()}</h3>
+            </div>
+            <div className="p-6 bg-white rounded-3xl border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Shareholder Pool (2%)</p>
+              <h3 className="text-2xl font-black text-brand-gold">₦{accumulatedShareholderPool.toLocaleString()}</h3>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* COMPANY DIRECTORY REPORTS */}
+      {reportTab === 'company' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-100 pb-2">
+            <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">System Revision Logs & Integrity Data</h2>
+            <p className="text-[10px] text-slate-500">Historical snapshots of generated compliance certificates.</p>
+          </div>
+
+          <div className="overflow-hidden border border-slate-100 rounded-2xl">
+            <table className="w-full text-[10px] text-left border-collapse">
+              <thead className="bg-slate-50 text-slate-400 uppercase font-bold">
+                <tr>
+                  <th className="p-2.5">Report No</th>
+                  <th className="p-2.5">Certified Date</th>
+                  <th className="p-2.5">Inspector</th>
+                  <th className="p-2.5">Cryptographic Fingerprint</th>
+                  <th className="p-2.5 text-right">Revision No</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {savedReports.map((r, index) => (
+                  <tr key={`${r.id}-${index}`} className="hover:bg-slate-50">
+                    <td className="p-2.5 font-bold text-slate-900">{r.reportNumber}</td>
+                    <td className="p-2.5 text-slate-500">{r.generatedDate}</td>
+                    <td className="p-2.5 font-sans">{r.preparedByName}</td>
+                    <td className="p-2.5 text-slate-400 truncate max-w-[120px]">{r.hash}</td>
+                    <td className="p-2.5 text-right font-bold text-slate-900">Rev {r.revisionNumber}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+      )}
+
+      {/* DUAL SIGNATURE BOX & STAMPS (INTERACTIVE) */}
+      <div className="mt-12 border-t border-slate-200 pt-6 relative">
+        
+        {/* COMPANY SEAL OVERLAY */}
+        {sealType !== 'none' && (
+          <div className="absolute right-6 -top-12 z-20 pointer-events-none print:right-2 print:-top-16">
+            {sealType === 'seal' && (
+              <div className="h-28 w-28 rounded-full border-4 border-double border-amber-500 flex flex-col items-center justify-center text-center p-2 text-amber-500 font-black text-[9px] uppercase tracking-wider rotate-12 bg-white/60 shadow-xs">
+                <span>RUQAYYA CO.</span>
+                <div className="h-px w-full bg-amber-500 my-1" />
+                <span>OFFICIAL SEAL</span>
+                <div className="h-px w-full bg-amber-500 my-1" />
+                <span>MAIDUGURI HQ</span>
+              </div>
+            )}
+            {sealType === 'digital' && (
+              <div className="h-20 w-40 border-2 border-emerald-500 bg-white/40 flex flex-col items-center justify-center p-2 text-emerald-600 font-mono -rotate-6 shadow-sm">
+                <ShieldCheck className="h-6 w-6 mb-1" />
+                <span className="text-[10px] font-black uppercase tracking-tighter">Certified Digital Copy</span>
+                <span className="text-[7px] text-emerald-400 uppercase">Verification ID: RTL-SEC-902</span>
+              </div>
+            )}
+            {sealType === 'approval' && (
+              <div className="bg-rose-500 text-white px-4 py-2 rounded font-black text-xs uppercase tracking-widest rotate-[-15deg] shadow-lg flex items-center gap-2">
+                <CheckCircle className="h-4 w-4" />
+                <span>APPROVED</span>
+              </div>
+            )}
+            {sealType === 'qr' && (
+              <div className="p-2 bg-white border border-slate-200 shadow-xl rounded-xl rotate-3">
+                <QrCode className="h-20 w-20 text-slate-900" />
+                <p className="text-[7px] font-mono text-center mt-1 text-slate-400">SCAN TO VERIFY</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-10">
+          
+          {/* PREPARED BY */}
+          <div className="flex flex-col gap-4 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+            <div className="flex items-center gap-2 mb-1">
+              <PenTool className="h-3 w-3 text-slate-400" />
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Digital Authentication: Preparer</p>
+            </div>
+            
+            <div className="h-20 border-b-2 border-slate-900 relative bg-white/40 rounded-t-lg flex items-center justify-center overflow-hidden">
+              {prepSign ? (
+                <div className="flex items-center justify-center">
+                  {prepSign.startsWith('data:') ? (
+                    <img src={prepSign} alt="Signature" className="h-16 object-contain mix-blend-multiply" />
+                  ) : (
+                    <span className="font-serif italic text-3xl text-slate-800 opacity-80 select-none">{prepSign}</span>
+                  )}
+                </div>
+              ) : (
+                <div className="text-slate-200 font-mono text-[9px] uppercase tracking-[0.3em] font-black italic">
+                  Awaiting Certification
+                </div>
+              )}
+              <button 
+                onClick={() => {
+                  setSignRole('prepared');
+                  setIsSignModalOpen(true);
+                }}
+                className="absolute right-2 top-2 p-1.5 bg-slate-900 text-brand-gold rounded-lg hover:bg-slate-800 text-[9px] font-black cursor-pointer shadow-lg transition-all print:hidden active:scale-95"
+              >
+                AUTHORIZE
+              </button>
+            </div>
+            
+            <div className="flex items-start gap-3 mt-1">
+              <div className="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0">
+                <img src={prepAvatar} alt="" className="h-full w-full object-cover" />
+              </div>
+              <div className="flex flex-col gap-0.5 flex-1">
+                <input
+                  type="text"
+                  value={prepName}
+                  onChange={(e) => setPrepName(e.target.value)}
+                  className="font-black text-slate-950 bg-transparent border-none p-0 focus:ring-0 text-[11px] w-full uppercase tracking-tight"
+                  placeholder="Enter Preparer Name"
+                />
+                <input
+                  type="text"
+                  value={prepRole}
+                  onChange={(e) => setPrepRole(e.target.value)}
+                  className="text-brand-gold bg-transparent border-none p-0 focus:ring-0 text-[9px] w-full font-bold uppercase tracking-wider"
+                  placeholder="Job Title"
+                />
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Calendar className="h-2.5 w-2.5 text-slate-400" />
+                  <input
+                    type="date"
+                    value={prepDate}
+                    onChange={(e) => setPrepDate(e.target.value)}
+                    className="text-slate-500 font-mono bg-transparent border-none p-0 focus:ring-0 text-[9px] w-full"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* APPROVED BY */}
+          <div className="flex flex-col gap-4 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+            <div className="flex items-center gap-2 mb-1">
+              <ShieldCheck className="h-3 w-3 text-slate-400" />
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Executive Certification: Approver</p>
+            </div>
+            
+            <div className="h-20 border-b-2 border-slate-900 relative bg-white/40 rounded-t-lg flex items-center justify-center overflow-hidden">
+              {apprSign ? (
+                <div className="flex items-center justify-center">
+                  {apprSign.startsWith('data:') ? (
+                    <img src={apprSign} alt="Signature" className="h-16 object-contain mix-blend-multiply" />
+                  ) : (
+                    <span className="font-serif italic text-3xl text-slate-800 opacity-80 select-none">{apprSign}</span>
+                  )}
+                </div>
+              ) : (
+                <div className="text-slate-200 font-mono text-[9px] uppercase tracking-[0.3em] font-black italic">
+                  Executive Review Required
+                </div>
+              )}
+              <button 
+                onClick={() => {
+                  setSignRole('approved');
+                  setIsSignModalOpen(true);
+                }}
+                className="absolute right-2 top-2 p-1.5 bg-slate-900 text-brand-gold rounded-lg hover:bg-slate-800 text-[9px] font-black cursor-pointer shadow-lg transition-all print:hidden active:scale-95"
+              >
+                EXEC. SIGN
+              </button>
+            </div>
+            
+            <div className="flex items-start gap-3 mt-1">
+              <div className="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0 bg-slate-100 flex items-center justify-center">
+                <User className="h-6 w-6 text-slate-300" />
+              </div>
+              <div className="flex flex-col gap-0.5 flex-1">
+                <input
+                  type="text"
+                  value={apprName}
+                  onChange={(e) => setApprName(e.target.value)}
+                  className="font-black text-slate-950 bg-transparent border-none p-0 focus:ring-0 text-[11px] w-full uppercase tracking-tight"
+                  placeholder="Enter Approver Name"
+                />
+                <input
+                  type="text"
+                  value={apprRole}
+                  onChange={(e) => setApprRole(e.target.value)}
+                  className="text-emerald-600 bg-transparent border-none p-0 focus:ring-0 text-[9px] w-full font-bold uppercase tracking-wider"
+                  placeholder="Officer Position"
+                />
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Calendar className="h-2.5 w-2.5 text-slate-400" />
+                  <input
+                    type="date"
+                    value={apprDate}
+                    onChange={(e) => setApprDate(e.target.value)}
+                    className="text-slate-500 font-mono bg-transparent border-none p-0 focus:ring-0 text-[9px] w-full"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* DOCUMENT FOOTER */}
+      <div className="mt-12 border-t border-slate-200 pt-6 text-center text-[9px] text-slate-400 font-mono flex flex-col sm:flex-row justify-between gap-2">
+        <span>CONFIDENTIAL • RUQAYYA TRANSPORT COMPLIANCE DOCUMENT</span>
+        <span>SYSTEM-GENERATED CRYPTOGRAPHIC HASH CODE: RTL-SEC-2026</span>
+      </div>
+    </>
+  );
 
   // HANDLERS FOR SIGNATURE PAD DRAWING
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -939,6 +1761,16 @@ _Generated via Ruqayya Transport Limited ERP System_`;
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setIsPreviewModalOpen(true)}
+                className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-indigo-950 border-indigo-800 text-indigo-200 hover:text-white cursor-pointer whitespace-nowrap"
+              >
+                <Eye className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                <span className="whitespace-nowrap">{lang === 'en' ? 'Preview Report' : 'Duba Rahoto'}</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={triggerPrint}
                 className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-slate-950 border-slate-800 text-slate-200 hover:text-white cursor-pointer whitespace-nowrap"
               >
@@ -950,6 +1782,7 @@ _Generated via Ruqayya Transport Limited ERP System_`;
                 variant="outline"
                 size="sm"
                 onClick={handleDownloadPDF}
+                isLoading={isExporting}
                 className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-slate-950 border-slate-800 text-slate-200 hover:text-white cursor-pointer whitespace-nowrap"
               >
                 <Download className="h-3.5 w-3.5 text-blue-400 shrink-0" />
@@ -960,6 +1793,7 @@ _Generated via Ruqayya Transport Limited ERP System_`;
                 variant="outline"
                 size="sm"
                 onClick={handleDownloadAllPDF}
+                isLoading={isExporting}
                 className="font-bold flex items-center gap-1.5 text-[10px] sm:text-[11px] h-8 px-3 bg-emerald-950 border-emerald-800 text-emerald-200 hover:text-white cursor-pointer whitespace-nowrap"
               >
                 <Download className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
@@ -996,588 +1830,38 @@ _Generated via Ruqayya Transport Limited ERP System_`;
             transition={{ duration: 0.35 }}
             className="w-full max-w-[210mm] min-h-[297mm] mx-auto bg-white border border-slate-300 rounded-2xl p-4 sm:p-10 md:p-14 shadow-2xl text-slate-900 font-sans relative overflow-hidden print:border-none print:shadow-none print:p-0 print:max-w-full"
           >
-            
-            {/* DOCUMENT HEADER */}
-            <div className="flex flex-col items-center text-center border-b-2 border-slate-900 pb-5 mb-6">
-              {/* RTL CUSTOM LOGO */}
-              <div className="h-20 w-20 bg-white flex items-center justify-center rounded-2xl shadow-sm mb-4 border border-slate-200 overflow-hidden">
-                <img src="/src/assets/images/ruqayya_logo_1783430629037.jpg" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
-              </div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 uppercase font-serif">RUQAYYA TRANSPORT LIMITED</h1>
-              <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest mt-1">Enterprise Resource Planning (ERP)</p>
-              <motion.p 
-                initial={{ color: '#64748b' }}
-                animate={{ color: ['#64748b', '#b45309', '#64748b'] }}
-                transition={{ duration: 3, repeat: Infinity }}
-                className="text-[10px] font-mono mt-2 max-w-lg"
-              >
-                No. 38, Off Bolori Market Junction, Near Traffic Light, Baga Road, Maiduguri, Borno State, Nigeria • muhdadam573@gmail.com
-              </motion.p>
-            </div>
-
-            {/* FINANCIAL SUMMARY VIEW */}
-            {reportTab === 'financial' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">I. Executive Financial Statement & Cash Inflows</h2>
-                  <p className="text-[10px] text-slate-500">General Ledger and Cash flows statement from {dateFrom} to {dateTo} for {selectedCycleId || 'Active Operating Cycle'}.</p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-[11px] text-slate-800">
-                  <div className="flex justify-between border-b border-slate-100 py-1.5 font-bold text-slate-950">
-                    <span>A. Operating Income Revenues</span>
-                    <span>₦{totalInflows.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">1. Driver Installment Receipts</span>
-                    <span>₦{filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">2. Miscellaneous Ledger Inflows</span>
-                    <span>₦{filteredFinance.filter(f => f.type === 'revenue' && f.category !== 'remittance').reduce((sum, f) => sum + f.amount, 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5 font-bold text-slate-950">
-                    <span>B. Total Operating Expenses</span>
-                    <span className="text-rose-600">-₦{totalOutflows.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">1. Spare Parts & Repair Spends</span>
-                    <span>-₦{filteredFinance.filter(f => f.type === 'expense' && f.category === 'maintenance').reduce((sum, f) => sum + f.amount, 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">2. Fuel Vouchers Disbursements</span>
-                    <span>-₦{filteredFinance.filter(f => f.type === 'expense' && f.category === 'fuel').reduce((sum, f) => sum + f.amount, 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">3. Wages & Payroll Disbursals</span>
-                    <span>-₦{totalCurrentPayroll.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b-2 border-slate-900 py-1.5 font-black text-slate-950 text-xs bg-slate-50 px-2 rounded">
-                    <span>C. NET CORPORATE SURPLUS PROFIT (EBITDA)</span>
-                    <span className="text-emerald-600">₦{netEarningsProfit.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="border-b border-slate-100 pb-2 mt-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">II. Balance Sheet & Capital Equity Structure</h2>
-                  <p className="text-[10px] text-slate-500">Capital valuation and investment pool distributions.</p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-[11px] text-slate-800">
-                  <div className="flex justify-between border-b border-slate-100 py-1.5 font-bold text-slate-950">
-                    <span>Total Liquid & Capital Assets</span>
-                    <span>₦{(netEarningsProfit + totalOutstandingBalance).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">1. Liquid Cash Surplus Wallet</span>
-                    <span>₦{netEarningsProfit.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">2. Driver Amortized Backlogs</span>
-                    <span>₦{totalOutstandingBalance.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5 font-bold text-slate-950">
-                    <span>Shareholder Equities & Reserves</span>
-                    <span>₦{(totalInvestmentStocks + accumulatedShareholderPool).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">1. Capital Stocks</span>
-                    <span>₦{totalInvestmentStocks.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-slate-100 py-1.5">
-                    <span className="pl-3 text-slate-500">2. Dividends Pools Accumulated</span>
-                    <span>₦{accumulatedShareholderPool.toLocaleString()}</span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {/* DRIVER REPORTS VIEW WITH AVATARS AND FULL DETAILS */}
-            {reportTab === 'driver' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Certified Driver Lease Status Statement</h2>
-                  <p className="text-[10px] text-slate-500">Comprehensive driver dossiers, passports, active tricycles, and payment balances for {selectedCycleId || 'Active Operating Cycle'}.</p>
-                </div>
-
-                <div className="flex flex-col gap-4">
-                  {drivers.map((d, index) => (
-                    <div key={`${d.id}-${index}`} className="border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center bg-slate-50/50">
-                      {/* Driver passport image (High fidelity portrait) */}
-                      <div className="h-16 w-16 bg-slate-200 rounded-xl overflow-hidden shrink-0 border border-slate-300 shadow-xs">
-                        <img 
-                          src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || driverPortraits[index % driverPortraits.length]} 
-                          alt={d.fullName} 
-                          className="h-full w-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-
-                      <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] font-mono text-slate-700 w-full min-w-0">
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Driver Name & ID</span>
-                          <span className="font-sans font-extrabold text-slate-900 block truncate">{d.fullName}</span>
-                          <span className="text-[9px] text-slate-500">{d.company_driver_id || 'RTL-DRV-00' + (index + 1)}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Contact & Passport</span>
-                          <span className="block truncate">{d.phone || '+234 803 000 0000'}</span>
-                          <span className="text-[9px] text-slate-400">P.NO: {d.passport_no || 'N/A'}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Tricycle & Cycle</span>
-                          <span className="font-bold text-slate-900 block truncate">{d.assignedVehicleId || 'V-778 Kano'}</span>
-                          <span className="text-[9px] text-brand-navy font-bold">{selectedCycleId || 'CYC-ACTIVE'}</span>
-                        </div>
-                        <div className="flex flex-col items-start sm:items-end justify-between min-w-0">
-                          <span className="text-[9px] text-slate-400 block font-bold uppercase">Lease Balance</span>
-                          <span className="font-bold text-rose-600 text-xs">₦{(d.remaining_vehicle_balance || 0).toLocaleString()}</span>
-                          <Badge variant={d.status === 'approved' ? 'success' : 'warning'} className="mt-1">{d.status.toUpperCase()}</Badge>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {/* SHAREHOLDER REPORTS VIEW WITH AVATARS AND FULL DETAILS */}
-            {reportTab === 'shareholder' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Shareholder Equity Distributions</h2>
-                  <p className="text-[10px] text-slate-500">Paid-up capital weights, passports, contacts, and withdrawals summary for {selectedCycleId || 'Active Operating Cycle'}.</p>
-                </div>
-
-                <div className="space-y-4">
-                  {shareholders.map((s, idx) => {
-                    const stakePct = ((s.investment_amount || 0) / (totalInvestmentStocks || 1)) * 100;
-                    const availableDiv = ((s.investment_amount || 0) / (totalInvestmentStocks || 1)) * accumulatedShareholderPool;
-                    return (
-                      <motion.div 
-                        key={`${s.id}-${idx}`}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                        className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full overflow-hidden shrink-0 border border-slate-300 bg-slate-200">
-                            <img src={s.passport_photo_url || s.passportPhoto || s.passport_photo || s.passport || shareholderPortraits[idx % shareholderPortraits.length]} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-sans font-bold text-slate-900 text-sm truncate">{s.full_name}</p>
-                            <p className="text-[10px] text-slate-500 truncate">{s.email || 'shareholder@ruqayyatransport.com'}</p>
-                            <p className="text-[10px] font-bold text-slate-800">{s.phone || '+234 803 000 0000'}</p>
-                            <p className="text-[9px] text-slate-400">Passport: {s.passport_no || 'PASSPORT-OK'}</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono border-t border-slate-200 pt-3">
-                          <div className="flex flex-col"><span className="text-slate-500 uppercase">Investment</span><span className="font-bold text-slate-900">₦{(s.investment_amount || 0).toLocaleString()}</span></div>
-                          <div className="flex flex-col"><span className="text-slate-500 uppercase">Withdrawn</span><span className="font-bold text-rose-600">₦{(s.total_withdrawn || 0).toLocaleString()}</span></div>
-                          <div className="flex flex-col"><span className="text-slate-500 uppercase">Reinvested</span><span className="font-bold text-emerald-600">₦{(s.total_reinvested || 0).toLocaleString()}</span></div>
-                          <div className="flex flex-col items-start gap-0.5">
-                            <span className="text-slate-500 uppercase text-[9px]">Stake & Div.</span>
-                            <span className="font-black text-brand-navy text-[11px]">₦{availableDiv.toLocaleString()}</span>
-                            <Badge variant="gold" className="text-[8px] px-1.5 py-0.5 rounded-md whitespace-nowrap">{stakePct.toFixed(2)}% Stake</Badge>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* PAYROLL REPORTS VIEW */}
-            {reportTab === 'payroll' && (
-              <div className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Active Operations Payroll Statement</h2>
-                  <p className="text-[10px] text-slate-500">Automated staff salaries calculated dynamically by active tricycle fleet count.</p>
-                </div>
-
-                <div className="w-full">
-                  <div className="block sm:hidden flex flex-col gap-3">
-                    {[
-                      { name: 'BARRISTER', formula: '₦1,000 / Active Vehicle', salary: barristerSal },
-                      { name: 'MANAGER', formula: '₦500 / Active Vehicle', salary: managerSal },
-                      { name: 'ADAM', formula: '₦1,000 / Active Vehicle', salary: fieldSal1 },
-                      { name: 'ABAKAKA', formula: '₦1,000 / Active Vehicle', salary: fieldSal2 },
-                    ].map((staff) => (
-                      <div key={staff.name} className="flex flex-col gap-1 p-3 border rounded-lg bg-white shadow-sm">
-                        <div className="font-bold text-slate-950 text-sm">{staff.name}</div>
-                        <div className="text-[11px] text-slate-500">{staff.formula}</div>
-                        <div className="font-black text-slate-950 text-sm mt-1">₦{staff.salary.toLocaleString()}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="hidden sm:block w-full overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-sm font-sans text-slate-900">
-                      <thead>
-                        <tr className="bg-slate-100 text-slate-800 font-black uppercase border-b border-slate-300">
-                          <th className="p-3">Staff Employee</th>
-                          <th className="p-3">Salary Formula</th>
-                          <th className="p-3 text-right">Disbursed Wage</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {[
-                          { name: 'BARRISTER', formula: '₦1,000 / Active Vehicle', salary: barristerSal },
-                          { name: 'MANAGER', formula: '₦500 / Active Vehicle', salary: managerSal },
-                          { name: 'ADAM', formula: '₦1,000 / Active Vehicle', salary: fieldSal1 },
-                          { name: 'ABAKAKA', formula: '₦1,000 / Active Vehicle', salary: fieldSal2 },
-                        ].map((staff) => (
-                          <tr key={staff.name} className="hover:bg-slate-50">
-                            <td className="p-3 font-bold text-slate-950">{staff.name}</td>
-                            <td className="p-3">{staff.formula}</td>
-                            <td className="p-3 text-right font-black">₦{staff.salary.toLocaleString()}</td>
-                          </tr>
-                        ))}
-                        <tr className="bg-slate-100 font-black">
-                          <td colSpan={2} className="p-3 text-left text-sm">Total Payroll Liability</td>
-                          <td className="p-3 text-right text-sm">₦{totalCurrentPayroll.toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* EXPENSE REPORTS VIEW */}
-            {reportTab === 'expense' && (
-              <div className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Operational Expense Breakdown</h2>
-                  <p className="text-[10px] text-slate-500">A4 certified expenditure ledger.</p>
-                </div>
-
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-sm font-sans text-slate-900">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-800 font-black uppercase border-b border-slate-300">
-                        <th className="p-3">Date</th>
-                        <th className="p-3">Category</th>
-                        <th className="p-3">Description</th>
-                        <th className="p-3">Inspector</th>
-                        <th className="p-3 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {filteredFinance.filter(f => f.type === 'expense').map((f, index) => (
-                        <tr key={`${f.id}-${index}`} className="hover:bg-slate-50">
-                          <td className="p-3 text-slate-700">{f.date?.slice(0, 10)}</td>
-                          <td className="p-3 uppercase font-bold text-slate-950">{f.category}</td>
-                          <td className="p-3 font-sans text-sm text-slate-700">{f.description}</td>
-                          <td className="p-3 font-sans text-slate-700">{f.approvedBy || 'Operations Admin'}</td>
-                          <td className="p-3 text-right text-rose-700 font-black">-₦{f.amount.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-slate-100 font-black">
-                        <td colSpan={4} className="p-3 text-left text-sm">Total Spends</td>
-                        <td className="p-3 text-right text-sm text-rose-700">-₦{totalOutflows.toLocaleString()}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* COLLECTION REPORTS VIEW */}
-            {reportTab === 'collection' && (
-              <div className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Driver Collections Ledger</h2>
-                  <p className="text-[10px] text-slate-500">Remittance transaction logs.</p>
-                </div>
-
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-sm font-sans text-slate-900">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-800 font-black uppercase border-b border-slate-300">
-                        <th className="p-3">Receipt No</th>
-                        <th className="p-3">Date</th>
-                        <th className="p-3">Driver ID</th>
-                        <th className="p-3 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {filteredPayments.map((p, index) => (
-                        <tr key={`${p.id}-${index}`} className="hover:bg-slate-50">
-                          <td className="p-3 font-bold text-slate-950">{p.receipt_number || p.id.slice(0, 8).toUpperCase()}</td>
-                          <td className="p-3 text-slate-700">{p.date?.slice(0, 10)}</td>
-                          <td className="p-3 text-slate-700">{p.driver_id || 'System'}</td>
-                          <td className="p-3 text-right text-emerald-700 font-black">+₦{(p.amount || 0).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-slate-100 font-black">
-                        <td colSpan={3} className="p-3 text-left text-sm">Total Collections</td>
-                        <td className="p-3 text-right text-sm text-emerald-700">₦{filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* WALLET / GENERAL TRANSACTION LEDGER */}
-            {reportTab === 'wallet' && (
-              <div className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Corporate General Ledger</h2>
-                  <p className="text-[10px] text-slate-500">Real-time inflows & outflows bookkeeping.</p>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-[11px] font-mono">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-300">
-                        <th className="p-2.5">ID</th>
-                        <th className="p-2.5">Date</th>
-                        <th className="p-2.5">Type</th>
-                        <th className="p-2.5">Allocation</th>
-                        <th className="p-2.5">Description</th>
-                        <th className="p-2.5 text-right">Weight</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredFinance.map((f, index) => (
-                        <tr key={`${f.id}-${index}`} className="hover:bg-slate-50">
-                          <td className="p-2.5 text-brand-gold font-bold">{f.id.slice(0, 8).toUpperCase()}</td>
-                          <td className="p-2.5 text-slate-500">{f.date?.slice(0, 10)}</td>
-                          <td className="p-2.5">
-                            <Badge variant={f.type === 'revenue' ? 'success' : 'danger'}>{f.type.toUpperCase()}</Badge>
-                          </td>
-                          <td className="p-2.5 uppercase font-bold text-slate-900">{f.category}</td>
-                          <td className="p-2.5 font-sans text-xs text-slate-600">{f.description}</td>
-                          <td className={`p-2.5 text-right font-black ${f.type === 'revenue' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {f.type === 'revenue' ? '+' : '-'}₦{f.amount.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* COMPANY REPORTS TAB */}
-            {reportTab === 'company' && (
-              <div className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Corporate Fleet Compliance Overview</h2>
-                  <p className="text-[10px] text-slate-500">General vehicle registration, active status and driver tracking.</p>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Drivers Pool</span>
-                    <span className="text-xl font-mono font-black text-slate-900">{activeDriversCount}</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Active Vehicles</span>
-                    <span className="text-xl font-mono font-black text-slate-900">{activeVehiclesCount}</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Outstanding Balances</span>
-                    <span className="text-md font-mono font-black text-rose-600">₦{totalOutstandingBalance.toLocaleString()}</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                    <span className="text-[10px] text-slate-400 block font-bold uppercase">Archived Compliance Recs</span>
-                    <span className="text-xl font-mono font-black text-slate-900">{savedReports.length}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* AUDIT TIMELINE IN PAPER */}
-            {reportTab === 'audit' && (
-              <div className="flex flex-col gap-6">
-                <div className="border-b border-slate-100 pb-2">
-                  <h2 className="text-sm font-black uppercase text-slate-900 tracking-tight">Report Authenticity Audit</h2>
-                  <p className="text-[10px] text-slate-500">Cryptographical hash validation ledger.</p>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-[11px] font-mono">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-300">
-                        <th className="p-2.5">Report ID</th>
-                        <th className="p-2.5">Certified Date</th>
-                        <th className="p-2.5">Inspector</th>
-                        <th className="p-2.5">Cryptographic Fingerprint</th>
-                        <th className="p-2.5 text-right">Revision No</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {savedReports.map((r, index) => (
-                        <tr key={`${r.id}-${index}`} className="hover:bg-slate-50">
-                          <td className="p-2.5 font-bold text-slate-900">{r.reportNumber}</td>
-                          <td className="p-2.5 text-slate-500">{r.generatedDate}</td>
-                          <td className="p-2.5 font-sans">{r.preparedByName}</td>
-                          <td className="p-2.5 text-slate-400 truncate max-w-[120px]">{r.hash}</td>
-                          <td className="p-2.5 text-right font-bold text-slate-900">Rev {r.revisionNumber}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* DUAL SIGNATURE BOX & STAMPS (INTERACTIVE) */}
-            <div className="mt-12 border-t border-slate-200 pt-6 relative">
-              
-              {/* COMPANY SEAL OVERLAY */}
-              {sealType !== 'none' && (
-                <div className="absolute right-6 -top-12 z-20 pointer-events-none print:right-2 print:-top-16">
-                  {sealType === 'seal' && (
-                    <div className="h-28 w-28 rounded-full border-4 border-double border-amber-500 flex flex-col items-center justify-center text-center p-2 text-amber-500 font-black text-[9px] uppercase tracking-wider rotate-12 bg-white/60 shadow-xs">
-                      <span>RUQAYYA CO.</span>
-                      <Award className="h-5 w-5 text-amber-500 my-1" />
-                      <span>OFFICIAL SEAL</span>
-                    </div>
-                  )}
-                  {sealType === 'digital' && (
-                    <div className="h-28 w-28 rounded-xl border-4 border-dashed border-emerald-600 flex flex-col items-center justify-center text-center p-2 text-emerald-600 font-black text-[9px] uppercase tracking-wider -rotate-6 bg-white/60 shadow-xs">
-                      <ShieldCheck className="h-6 w-6 text-emerald-600 mb-1" />
-                      <span>AUDIT VERIFIED</span>
-                      <span className="text-[7px] text-slate-500 mt-1">2026 ERP NODE</span>
-                    </div>
-                  )}
-                  {sealType === 'approval' && (
-                    <div className="h-24 w-36 border-4 border-rose-600 flex flex-col items-center justify-center text-center p-2 text-rose-600 font-black text-[10px] uppercase tracking-widest rotate-6 bg-white/60 shadow-xs">
-                      <span>APPROVED BY BOARD</span>
-                      <div className="h-0.5 w-full bg-rose-600 my-1" />
-                      <span className="text-[8px] text-slate-600 font-mono">HASH VERIFICATION OK</span>
-                    </div>
-                  )}
-                  {sealType === 'qr' && (
-                    <div 
-                      onClick={() => setIsQrModalOpen(true)}
-                      className="cursor-pointer pointer-events-auto h-24 w-24 border border-slate-300 p-2 bg-white rounded-lg flex flex-col items-center justify-center shadow-xs text-center"
-                    >
-                      <QrCode className="h-12 w-12 text-slate-900" />
-                      <span className="text-[8px] text-slate-500 mt-1 font-bold">CLICK TO VERIFY</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-xs font-sans text-slate-800">
-                
-                {/* Prepared By */}
-                <div className="flex flex-col gap-2 p-3 bg-slate-50/50 rounded-lg border border-slate-100">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t.preparedBy}</span>
-                  
-                  <div className="h-14 border-b border-slate-300 flex items-center justify-center relative bg-white/60 rounded">
-                    {prepSign ? (
-                      prepSign.startsWith('data:image') ? (
-                        <img src={prepSign} alt="Signature" className="h-full object-contain" />
-                      ) : (
-                        <span className="font-serif italic text-lg text-slate-800 font-bold tracking-wide">{prepSign}</span>
-                      )
-                    ) : (
-                      <span className="text-slate-300 text-[10px]">No signature applied</span>
-                    )}
-
-                    <button
-                      onClick={() => openSignModal('prepared')}
-                      className="absolute right-1 top-1 p-1 bg-slate-900 text-brand-gold rounded hover:bg-slate-800 text-[9px] font-bold cursor-pointer print:hidden"
-                    >
-                      Edit Sign
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-0.5 mt-1">
-                    <input
-                      type="text"
-                      value={prepName}
-                      onChange={(e) => setPrepName(e.target.value)}
-                      className="font-extrabold text-slate-900 bg-transparent border-none p-0 focus:ring-0 text-xs w-full"
-                      placeholder="Officer Name"
-                    />
-                    <input
-                      type="text"
-                      value={prepRole}
-                      onChange={(e) => setPrepRole(e.target.value)}
-                      className="text-slate-500 bg-transparent border-none p-0 focus:ring-0 text-[10px] w-full"
-                      placeholder="Officer Position"
-                    />
-                    <input
-                      type="date"
-                      value={prepDate}
-                      onChange={(e) => setPrepDate(e.target.value)}
-                      className="text-slate-400 font-mono bg-transparent border-none p-0 focus:ring-0 text-[9px] w-full mt-1"
-                    />
-                  </div>
-                </div>
-
-                {/* Approved By */}
-                <div className="flex flex-col gap-2 p-3 bg-slate-50/50 rounded-lg border border-slate-100">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t.approvedBy}</span>
-                  
-                  <div className="h-14 border-b border-slate-300 flex items-center justify-center relative bg-white/60 rounded">
-                    {apprSign ? (
-                      apprSign.startsWith('data:image') ? (
-                        <img src={apprSign} alt="Signature" className="h-full object-contain" />
-                      ) : (
-                        <span className="font-serif italic text-lg text-slate-800 font-bold tracking-wide">{apprSign}</span>
-                      )
-                    ) : (
-                      <span className="text-slate-300 text-[10px]">No signature applied</span>
-                    )}
-
-                    <button
-                      onClick={() => openSignModal('approved')}
-                      className="absolute right-1 top-1 p-1 bg-slate-900 text-brand-gold rounded hover:bg-slate-800 text-[9px] font-bold cursor-pointer print:hidden"
-                    >
-                      Edit Sign
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col gap-0.5 mt-1">
-                    <input
-                      type="text"
-                      value={apprName}
-                      onChange={(e) => setApprName(e.target.value)}
-                      className="font-extrabold text-slate-900 bg-transparent border-none p-0 focus:ring-0 text-xs w-full"
-                      placeholder="Enter Admin Name"
-                    />
-                    <input
-                      type="text"
-                      value={apprRole}
-                      onChange={(e) => setApprRole(e.target.value)}
-                      className="text-slate-500 bg-transparent border-none p-0 focus:ring-0 text-[10px] w-full"
-                      placeholder="Officer Position"
-                    />
-                    <input
-                      type="date"
-                      value={apprDate}
-                      onChange={(e) => setApprDate(e.target.value)}
-                      className="text-slate-400 font-mono bg-transparent border-none p-0 focus:ring-0 text-[9px] w-full mt-1"
-                    />
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* DOCUMENT FOOTER */}
-            <div className="mt-12 border-t border-slate-200 pt-6 text-center text-[9px] text-slate-400 font-mono flex flex-col sm:flex-row justify-between gap-2">
-              <span>CONFIDENTIAL • RUQAYYA TRANSPORT COMPLIANCE DOCUMENT</span>
-              <span>SYSTEM-GENERATED CRYPTOGRAPHIC HASH CODE: RTL-SEC-2026</span>
-            </div>
-
+            {renderReportDocument()}
           </motion.div>
         </div>
 
         {/* HIDDEN CONTAINER FOR ALL REPORTS PDF */}
         <div style={{ display: 'none' }}>
             <div ref={fullReportRef} className="p-10 bg-white text-slate-900 font-sans">
-                <h1 className="text-3xl font-black uppercase text-center mb-10">GENERAL REPORT: ALL SECTIONS</h1>
+                {/* PROFESSIONAL HEADER */}
+                <div className="flex flex-col items-center text-center border-b-2 border-slate-900 pb-5 mb-6">
+                    <div className="h-20 w-20 bg-white flex items-center justify-center rounded-2xl shadow-sm mb-4 border border-slate-200 overflow-hidden">
+                        <img src="/src/assets/images/ruqayya_logo_1783430629037.jpg" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
+                    </div>
+                    <h1 className="text-2xl font-black tracking-tight text-slate-950 uppercase font-serif">RUQAYYA TRANSPORT LIMITED</h1>
+                    <p className="text-xs text-slate-600 font-bold uppercase tracking-widest mt-1">Consolidated Enterprise Audit Report</p>
+                </div>
+
+                {/* OFFICER PROFILE */}
+                <div className="mb-8 p-5 bg-slate-50 rounded-3xl border border-slate-200 flex items-center gap-6">
+                    <div className="h-20 w-20 rounded-2xl border-4 border-white shadow-lg overflow-hidden bg-slate-200">
+                        <img src={prepAvatar} alt="Officer Passport" className="h-full w-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                        <div className="flex items-baseline gap-2">
+                            <h2 className="text-lg font-black text-slate-900 uppercase">{prepName}</h2>
+                            <span className="text-[9px] font-mono bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-bold">{prepID}</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-brand-gold uppercase tracking-widest">{prepRole}</p>
+                        <p className="text-[10px] text-slate-500 mt-1 uppercase font-bold">Audit Date: {new Date(prepDate).toLocaleDateString()}</p>
+                    </div>
+                </div>
+
+                <h1 className="text-xl font-black uppercase text-center mb-10 bg-slate-900 text-white py-2 rounded">GENERAL REPORT: ALL SECTIONS</h1>
                 
                 {/* Financial Summary */}
                 <div className="mb-10">
@@ -1601,14 +1885,118 @@ _Generated via Ruqayya Transport Limited ERP System_`;
 
                 {/* Shareholder Reports */}
                 <div className="mb-10">
-                    <h2 className="text-xl font-bold uppercase mb-4 border-b pb-2">Shareholder Reports</h2>
-                    <div className="space-y-4">
-                        {shareholders.map(s => (
-                            <div key={s.id} className="border-b pb-2">
-                                <p className="font-bold">{s.full_name}</p>
-                                <p className="text-sm">Investment: ₦{s.investment_amount?.toLocaleString()}</p>
-                            </div>
-                        ))}
+                    <h2 className="text-xl font-black uppercase mb-6 border-b-2 border-slate-900 pb-2 flex items-center gap-3">
+                        <Users className="h-5 w-5" />
+                        Shareholder Equity & Audit Records
+                    </h2>
+
+                    <div className="mb-10 p-6 border border-slate-200 rounded-3xl bg-slate-50/50">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Historical Equity Flow Visualization</p>
+                        <HistoricalTrendChart 
+                            finance={finance} 
+                            cycles={availableCycles} 
+                            shareholderId="all"
+                            lang={lang} 
+                        />
+                    </div>
+
+                    <div className="space-y-12">
+                        {shareholders.map(s => {
+                            const transactions = finance.filter(f => f.referenceId === s.id);
+                            
+                            return (
+                                <div key={s.id} className="page-break-inside-avoid border border-slate-200 rounded-3xl p-6 bg-slate-50/30">
+                                    {/* INVESTOR PROFILE HEADER */}
+                                    <div className="flex items-start justify-between mb-6">
+                                        <div className="flex items-center gap-5">
+                                            <div className="h-20 w-20 rounded-2xl border-4 border-white shadow-xl overflow-hidden bg-slate-200">
+                                                {s.passport_photo_url ? (
+                                                    <img src={s.passport_photo_url} alt="" className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <div className="h-full w-full flex items-center justify-center text-slate-400 font-black text-2xl uppercase">
+                                                        {s.full_name?.substring(0, 2)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-black uppercase text-slate-950 tracking-tight leading-none mb-1">{s.full_name}</h3>
+                                                <p className="text-[10px] font-bold text-brand-gold uppercase tracking-[0.2em] mb-2">Registered Principal Investor</p>
+                                                <div className="flex gap-4 text-[9px] text-slate-500 font-bold uppercase">
+                                                    <span>ID: {s.id}</span>
+                                                    <span>Joined: {s.investment_date ? new Date(s.investment_date).toLocaleDateString() : 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="bg-slate-900 text-white px-4 py-2 rounded-2xl shadow-lg">
+                                                <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Equity Value</p>
+                                                <p className="text-xl font-black">₦{s.investment_amount?.toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* CONTACT DETAILS */}
+                                    <div className="grid grid-cols-3 gap-6 mb-8 p-4 bg-white rounded-2xl border border-slate-100">
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase mb-1">Phone Number</span>
+                                            <span className="text-xs font-bold text-slate-800">{s.phone}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase mb-1">Email Address</span>
+                                            <span className="text-xs font-bold text-slate-800">{s.email}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase mb-1">Mailing Address</span>
+                                            <span className="text-xs font-bold text-slate-800 truncate">{s.address}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* TRANSACTION AUDIT TRAIL */}
+                                    <div className="mt-6">
+                                        <h4 className="text-[10px] font-black uppercase text-slate-900 mb-3 flex items-center gap-2">
+                                            <RefreshCw className="h-3 w-3 text-brand-gold" />
+                                            Financial Activity & Dividend Payouts
+                                        </h4>
+                                        <table className="w-full text-left text-[9px]">
+                                            <thead>
+                                                <tr className="border-b border-slate-900 bg-slate-900 text-white uppercase tracking-tighter font-black">
+                                                    <th className="px-3 py-1.5">Date</th>
+                                                    <th className="px-3 py-1.5">Description / Action</th>
+                                                    <th className="px-3 py-1.5">Cycle</th>
+                                                    <th className="px-3 py-1.5">Handled By</th>
+                                                    <th className="px-3 py-1.5 text-right">Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 bg-white">
+                                                {transactions.length > 0 ? (
+                                                    transactions.map((t, tidx) => (
+                                                        <tr key={t.id || tidx}>
+                                                            <td className="px-3 py-2 font-mono">{t.date?.split('T')[0]}</td>
+                                                            <td className="px-3 py-2 font-bold uppercase">{t.description}</td>
+                                                            <td className="px-3 py-2 font-black text-slate-400">{getCycleForDate(t.date)}</td>
+                                                            <td className="px-3 py-2 text-slate-500 font-bold uppercase italic">{t.approvedBy || 'Admin System'}</td>
+                                                            <td className={`px-3 py-2 text-right font-black ${t.type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                                {t.type === 'expense' ? '-' : '+'}₦{t.amount.toLocaleString()}
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={5} className="px-3 py-4 text-center text-slate-400 italic">No registered withdrawals or reinvestment activities for this period.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* COMPLIANCE FOOTER */}
+                                    <div className="mt-4 flex justify-between items-center text-[8px] text-slate-400 font-mono uppercase">
+                                        <span>System Verified Certificate • RTL/SDR/{s.id.substring(0,6)}</span>
+                                        <span>Authentication Hash: {activeReportHash.substring(0, 12)}...</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -1904,6 +2292,80 @@ _Generated via Ruqayya Transport Limited ERP System_`;
           </Button>
         </div>
       </Modal>
+
+      {/* REPORT PREVIEW MODAL */}
+      <AnimatePresence>
+        {isPreviewModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-10">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsPreviewModalOpen(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-5xl h-[90vh] bg-slate-100 rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-white/20"
+            >
+              {/* Toolbar */}
+              <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shadow-sm z-10">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-slate-900 rounded-xl flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-brand-gold" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 uppercase tracking-tight text-sm">Report Preview</h3>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                      {reportTab.toUpperCase()} REPORT • {dateFrom} - {dateTo}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadPDF}
+                    isLoading={isExporting}
+                    className="font-bold flex items-center gap-1.5 text-[10px] h-9 px-4 bg-slate-950 border-slate-800 text-slate-200 hover:text-white"
+                  >
+                    <Download className="h-3.5 w-3.5 text-blue-400" />
+                    <span>Export as PDF</span>
+                  </Button>
+                  
+                  <button
+                    onClick={() => setIsPreviewModalOpen(false)}
+                    className="h-9 w-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable Document Content */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-8 md:p-12 bg-slate-200/50">
+                <div className="mx-auto w-full max-w-[210mm] shadow-2xl bg-white rounded-sm pointer-events-none origin-top transition-transform duration-300">
+                  <div className="p-8 sm:p-14 text-slate-900 font-sans min-h-[297mm]">
+                    {renderReportDocument()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Notice */}
+              <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-center">
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                  <ShieldCheck className="h-3 w-3 inline mr-1 text-emerald-500" />
+                  Verified secure preview • RTL Cryptographic Hash: {activeReportHash.substring(0, 12)}...
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

@@ -257,7 +257,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             setTrips(data.trip_manifests || []);
             setFinance(data.financials || []);
             setPayments(data.driver_payments || []);
+            if (data.shareholders) setShareholders(data.shareholders);
             if (data.audit_logs) setLogs(data.audit_logs);
+            if (data.cycles) setLocalActiveCycle(data.cycles.find((c: any) => c.isActive) || null);
             
             const revTotal = (data.financials || [])
               .filter((f: any) => f.type === 'revenue')
@@ -1110,6 +1112,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 shareholders={shareholders}
                 onSync={syncAllData}
                 trips={trips}
+                activeCycle={activeCycle}
               />
             )}
 

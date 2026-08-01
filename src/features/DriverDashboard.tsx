@@ -135,6 +135,18 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     setReferenceNumber(`TRX-${Date.now().toString().slice(-6)}`);
     try {
       setIsLoadingInstallments(true);
+      let currentDriver = driverData;
+      if (!currentDriver) {
+        const me = await api.getMe();
+        if (me) {
+          const d = await api.getDriverById('me');
+          if (d) {
+            currentDriver = d;
+            setDriverData(d);
+          }
+        }
+      }
+
       // Load operational cycles
       const cyclesRes = await api.request('/api/director/cycles').catch(() => ({ cycles: [] }));
       const cyclesList = cyclesRes.cycles || [];
@@ -144,11 +156,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       if (!selectedCycle) setSelectedCycle(cycleToUse);
 
       // Load installments for driver
-      if (driverData) {
-        const instRes = await api.request(`/api/drivers/${driverData.id}/installments${cycleToUse ? `?cycleId=${cycleToUse.id}` : ''}`).catch(() => ({ installments: [] }));
+      if (currentDriver) {
+        const instRes = await api.request(`/api/drivers/${currentDriver.id}/installments${cycleToUse ? `?cycleId=${cycleToUse.id}` : ''}`).catch(() => ({ installments: [] }));
         let list = instRes.installments || [];
         if (list.length === 0) {
-          const agreed = driverData.agreed_amount || 300000;
+          const agreed = currentDriver.agreed_amount || currentDriver.agreedAmount || 300000;
           const perInst = Math.round(agreed / 6);
           list = [1, 2, 3, 4, 5, 6].map(k => ({
             installmentNumber: k,
@@ -167,7 +179,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                                list.find((i: any) => i.status !== 'Completed') || 
                                list[0];
           setSelectedInstallment(realTimeInst);
-          setPaymentAmount(realTimeInst.remainingAmount || Math.round((driverData.agreed_amount || 300000) / 6));
+          setPaymentAmount(realTimeInst.remainingAmount || Math.round((currentDriver.agreed_amount || 300000) / 6));
         }
       }
     } catch (err) {
@@ -246,11 +258,47 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   }
 
   // Passport photo URL resolution
-  const passportUrl = driverData?.passport_photo_url || 
-    driverData?.passportPhoto || 
-    driverData?.passportPhotoUrl || 
-    (driverData as any)?.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 
-    '';
+  const passportUrl = (() => {
+    const doc = (driverData as any)?.documents?.find((d: any) => 
+      d.document_type === 'passport_photo' || 
+      d.document_type === 'passport' || 
+      d.documentType === 'passport_photo' ||
+      d.documentType === 'passport'
+    );
+    const docUrl = doc?.file_url || doc?.fileUrl || doc?.url;
+    const directUrl = driverData?.passport_photo_url || 
+      driverData?.passportPhoto || 
+      driverData?.passportPhotoUrl || 
+      (driverData as any)?.passport ||
+      (driverData as any)?.avatar ||
+      (driverData as any)?.passport_photo ||
+      '';
+    return docUrl || directUrl || '';
+  })();
+
+  const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (uploadEvent) => {
+      const base64 = uploadEvent.target?.result as string;
+      try {
+        const res = await api.request('/api/drivers/self', {
+          method: 'PUT',
+          body: JSON.stringify({ passportPhoto: base64 })
+        });
+        if (res && res.success) {
+          alert(lang === 'en' ? "Passport photo updated successfully!" : "An sabunta hoton fasfo cikin nasara!");
+          await fetchData();
+        } else {
+          alert(res.error || "Failed to update passport photo.");
+        }
+      } catch (err: any) {
+        alert(err.message || "Failed to update passport photo.");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Render Animated Passport Avatar
   const renderAnimatedAvatar = (size: 'sm' | 'md' | 'lg' = 'md') => {
@@ -287,10 +335,15 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
               alt={driverData?.fullName || driverName}
               className="h-full w-full object-cover rounded-full"
               referrerPolicy="no-referrer"
+              onError={(e: any) => {
+                e.target.style.display = 'none';
+                e.target.nextElementSibling?.classList.remove('hidden');
+              }}
             />
-          ) : (
-            <User className={`${iconSizes[size]} text-brand-gold`} />
-          )}
+          ) : null}
+          <div className={`flex flex-col items-center justify-center bg-slate-900 text-brand-gold font-black text-sm h-full w-full ${passportUrl ? 'hidden' : ''}`}>
+            {(driverData?.fullName || driverName || 'Driver').substring(0, 2).toUpperCase()}
+          </div>
         </div>
         {/* Animated Active Driver Badge Dot */}
         <motion.div
@@ -556,6 +609,62 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     </Card>
   );
 
+  const renderPayNowTab = () => (
+    <Card className="bg-bg-surface p-6 space-y-6">
+      <CardHeader className="p-0 pb-4 mb-4 border-b border-border-main flex flex-row items-center justify-between flex-wrap gap-2">
+        <div>
+          <CardTitle className="text-lg font-black flex items-center gap-2">
+            <CreditCard className="h-6 w-6 text-brand-gold" />
+            {lang === 'en' ? "Remittance & Payment Engine" : "Tsarin Biyan Kudi"}
+          </CardTitle>
+          <CardDescription className="text-xs text-text-muted mt-1">
+            {lang === 'en' 
+              ? "Manage your operational cycle remittances, select installment schedules, and submit payments to build vehicle ownership."
+              : "Sarrafa biyan kudinka da kuma mallakar motarka."}
+          </CardDescription>
+        </div>
+        <Button
+          onClick={openPayNowModal}
+          className="bg-brand-gold hover:bg-amber-400 text-slate-950 font-black px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 cursor-pointer"
+        >
+          <CreditCard className="h-5 w-5" />
+          {lang === 'en' ? "Launch Pay Now Wizard 💳" : "Fara Biyan Kudi 💳"}
+        </Button>
+      </CardHeader>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-4 bg-bg-base/60 rounded-2xl border border-border-main/50 space-y-2">
+          <span className="text-[10px] font-bold text-text-muted uppercase">Vehicle Purchase Price</span>
+          <p className="text-xl font-mono font-black text-text-main">₦{vehiclePurchasePrice.toLocaleString()}</p>
+        </div>
+        <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/30 space-y-2">
+          <span className="text-[10px] font-bold text-emerald-600 uppercase">Total Amount Paid</span>
+          <p className="text-xl font-mono font-black text-emerald-600">₦{totalPaid.toLocaleString()}</p>
+        </div>
+        <div className="p-4 bg-blue-500/10 rounded-2xl border border-blue-500/30 space-y-2">
+          <span className="text-[10px] font-bold text-blue-500 uppercase">Remaining Balance</span>
+          <p className="text-xl font-mono font-black text-blue-500">₦{currentBalance.toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="p-6 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-brand-gold uppercase tracking-wider">Active Cycle & Installments</span>
+          <Badge variant="success">READY FOR REMITTANCE</Badge>
+        </div>
+        <p className="text-slate-300 text-xs">
+          Click the button above to launch the 3-step payment wizard where you can choose your active operating cycle, select installment numbers (1 to 6), calculate live vehicle equity percentages, and submit your payment slip for instant audit approval.
+        </p>
+        <Button
+          onClick={openPayNowModal}
+          className="bg-gradient-to-r from-brand-gold via-amber-500 to-amber-600 text-slate-950 font-black px-6 py-3 rounded-xl shadow-md w-full md:w-auto cursor-pointer"
+        >
+          Open Pay Now Workflow Now 💳
+        </Button>
+      </div>
+    </Card>
+  );
+
   const renderPaymentsTab = () => (
     <Card className="bg-bg-surface p-6">
       <CardHeader className="p-0 pb-4 mb-4 border-b border-border-main flex flex-row items-center justify-between flex-wrap gap-2">
@@ -630,6 +739,40 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
             <div><span className="text-text-muted font-bold block">Residential Address:</span> <span className="text-text-main">{driverData?.address || 'N/A'}</span></div>
             <div><span className="text-text-muted font-bold block">NIN Number:</span> <span className="font-mono text-text-main">{driverData?.nin || 'N/A'}</span></div>
             <div><span className="text-text-muted font-bold block">Driver's License:</span> <span className="font-mono text-text-main">{driverData?.licenseNumber || driverData?.license_number || 'N/A'} (Exp: {driverData?.licenseExpiry || driverData?.license_expiry || 'N/A'})</span></div>
+            
+            <div className="pt-4 border-t border-border-main/40 mt-4 space-y-2">
+              <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider block">Real Passport Photograph</span>
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-brand-gold bg-slate-900 flex-shrink-0 shadow-md">
+                  {passportUrl ? (
+                    <img src={passportUrl} alt="Passport" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-brand-gold font-bold text-xs">
+                      {(driverData?.fullName || driverName).substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    id="driver-passport-upload-input" 
+                    className="hidden" 
+                    onChange={handlePassportUpload} 
+                  />
+                  <Button 
+                    size="sm" 
+                    onClick={() => document.getElementById('driver-passport-upload-input')?.click()}
+                    className="bg-brand-gold hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer"
+                  >
+                    {lang === 'en' ? "Upload / Change Passport 📷" : "Canza Hoton Fasfo 📷"}
+                  </Button>
+                  <p className="text-[10px] text-text-muted mt-1 leading-relaxed">
+                    {lang === 'en' ? "Upload your real passport photo to display it on your avatar and profile." : "Sanya ainihin hoton fasfoka don nuna shi a avatar da bayanan martaba."}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -733,7 +876,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       {/* Active Tab View */}
       <div className="mt-2">
         {activeTab === 'overview' && renderOverview()}
-        {activeTab === 'pay-now' && renderOverview()}
+        {activeTab === 'pay-now' && renderPayNowTab()}
         {activeTab === 'vehicle' && renderVehicleTab()}
         {activeTab === 'payments' && renderPaymentsTab()}
         {activeTab === 'profile' && renderProfileTab()}
@@ -757,6 +900,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       {/* ========================================================================= */}
       {isPayNowModalOpen && (
         <Modal 
+          isOpen={true}
           onClose={() => {
             setIsPayNowModalOpen(false);
             if (activeTab === 'pay-now') setActiveTab('overview');
@@ -766,9 +910,13 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           <div className="flex flex-col gap-5 p-1 max-w-2xl text-text-main">
             {/* Success Receipt Popup */}
             {paymentSuccessReceipt ? (
-              <div className="flex flex-col items-center text-center p-6 bg-emerald-500/5 border border-emerald-500/30 rounded-2xl space-y-4">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col items-center text-center p-4 md:p-6 bg-emerald-500/5 border border-emerald-500/30 rounded-2xl space-y-4 w-full"
+              >
                 <div className="h-16 w-16 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500 border border-emerald-500/40">
-                  <CheckCircle2 className="h-10 w-10 animate-bounce" />
+                  <CheckCircle2 className="h-10 w-10 animate-pulse" />
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-emerald-600">Remittance Payment Submitted!</h3>
@@ -807,7 +955,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                 >
                   Done & View Payments Log
                 </Button>
-              </div>
+              </motion.div>
             ) : (
               <>
                 {/* Step Indicator Bar */}

@@ -734,7 +734,13 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                       <div>
                         <div className="flex items-center gap-3 mb-3">
                           {/* Avatar Display */}
-                          <div className={`h-11 w-11 rounded-full flex items-center justify-center font-bold text-xs border ${getAvatarBg(person.fullName || person.full_name || '')}`}>
+                          <motion.div 
+                            animate={activeTab === 'shareholders' ? { 
+                              boxShadow: ["0 0 0 0px rgba(234, 179, 8, 0)", "0 0 0 4px rgba(234, 179, 8, 0.2)", "0 0 0 0px rgba(234, 179, 8, 0)"] 
+                            } : {}}
+                            transition={{ duration: 2, repeat: Infinity }}
+                            className={`h-11 w-11 rounded-full flex items-center justify-center font-bold text-xs border ${getAvatarBg(person.fullName || person.full_name || '')}`}
+                          >
                             {person.passport_photo_url || person.passportPhoto || person.passport_photo || person.passport ? (
                               <img 
                                 src={person.passport_photo_url || person.passportPhoto || person.passport_photo || person.passport} 
@@ -745,7 +751,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                             ) : (
                               getInitials(person.fullName || person.full_name || '')
                             )}
-                          </div>
+                          </motion.div>
 
                           <div className="min-w-0 flex-1">
                             <span className="text-[10px] text-text-muted font-mono font-bold block">{companyId}</span>
@@ -854,7 +860,13 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
 
               {/* Profile Overview Header */}
               <div className="flex items-start gap-4 flex-wrap border-b border-border-main/50 pb-5 mb-5">
-                <div className={`h-16 w-16 rounded-full flex items-center justify-center font-bold text-lg border-2 ${getAvatarBg(selectedPerson.fullName || selectedPerson.full_name || '')}`}>
+                <motion.div 
+                  animate={activeTab === 'shareholders' ? { 
+                    boxShadow: ["0 0 0 0px rgba(234, 179, 8, 0)", "0 0 0 6px rgba(234, 179, 8, 0.2)", "0 0 0 0px rgba(234, 179, 8, 0)"] 
+                  } : {}}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className={`h-16 w-16 rounded-full flex items-center justify-center font-bold text-lg border-2 ${getAvatarBg(selectedPerson.fullName || selectedPerson.full_name || '')}`}
+                >
                   {selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport ? (
                     <img 
                       src={selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport} 
@@ -865,7 +877,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                   ) : (
                     getInitials(selectedPerson.fullName || selectedPerson.full_name || '')
                   )}
-                </div>
+                </motion.div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-lg font-extrabold text-text-main leading-tight">{selectedPerson.fullName || selectedPerson.full_name}</h2>
