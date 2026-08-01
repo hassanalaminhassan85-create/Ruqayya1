@@ -1,0 +1,18 @@
+{
+  "name": "ruqayya-microservice",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "ts-node ./microservice/index.ts",
+    "build": "tsc -p tsconfig.microservice.json"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.1",
+    "typescript": "^5.4.2"
+  }
+}
