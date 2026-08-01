@@ -956,7 +956,7 @@ class D1Manager {
 
       for (const n of newNotifications) {
         this.loadedNotificationIds.add(n.id);
-        await sendPushForNotification(this.env, state, n).catch((err: any) => { console.error(\"Failed to dispatch push notification in saveDB:\", err); });
+        await sendPushForNotification(this.env, state, n).catch((err: any) => { console.error("Failed to dispatch push notification in saveDB:", err); });
       }
     }
 
