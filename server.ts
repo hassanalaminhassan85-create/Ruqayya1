@@ -4400,9 +4400,10 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
 
     // Create user account if not exists for the shareholder
     let targetUser = db.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
+    const { password, mustChangePassword } = req.body;
+    const hashed = hashPassword(password || 'shareholder123');
+
     if (!targetUser) {
-      const { password, mustChangePassword } = req.body;
-      const hashed = hashPassword(password || 'shareholder123');
       targetUser = {
         id: generateUUID(),
         email: email.toLowerCase(),
@@ -4416,6 +4417,18 @@ app.post('/api/shareholders', authenticateSession, (req, res) => {
         must_change_password: mustChangePassword !== undefined ? mustChangePassword : true
       };
       db.users.push(targetUser);
+    } else {
+      if (password) {
+        targetUser.password_hash = hashed;
+      }
+      targetUser.full_name = fullName;
+      targetUser.phone = phone;
+      targetUser.role_id = 'role-shareholder';
+      targetUser.status = 'active';
+      if (mustChangePassword !== undefined) {
+        targetUser.must_change_password = mustChangePassword;
+      }
+      targetUser.updated_at = new Date().toISOString();
     }
 
     let passportUrl = passportPhoto.startsWith('http') ? passportPhoto : '';

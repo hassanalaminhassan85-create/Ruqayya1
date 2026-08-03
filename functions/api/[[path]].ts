@@ -4387,33 +4387,66 @@ ${JSON.stringify(cleanedContext, null, 2)}
         if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
         try {
           const payload = await request.json() as any;
-          const uId = generateUUID();
-          const shareholderPassword = payload.password || payload.pass || 'shareholder123';
-          const hashedShareholderPassword = await hashPassword(shareholderPassword);
+          const email = (payload.email || '').toLowerCase();
+          const fullName = payload.full_name || payload.fullName;
+          const phone = payload.phone;
+          const address = payload.address || '';
+          const rawAmount = payload.investmentAmount !== undefined ? payload.investmentAmount : payload.investment_amount;
+          const investmentAmount = parseFloat(rawAmount) || 0;
+          const investmentDate = payload.investmentDate || payload.investment_date || new Date().toISOString().split('T')[0];
+          const passportPhoto = payload.passportPhoto || payload.passport_photo_url || '';
+          const password = payload.password || payload.pass;
 
-          db.users.push({
-            id: uId,
-            email: payload.email,
-            phone: payload.phone,
-            password_hash: hashedShareholderPassword,
-            full_name: payload.full_name,
-            role_id: 'role-shareholder',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            status: 'active',
-            must_change_password: payload.mustChangePassword !== undefined ? payload.mustChangePassword : true
-          });
+          if (!fullName || !phone || !email || !investmentAmount) {
+            return buildResponse({ error: 'Full name, phone, email, and investment amount are mandatory.' }, 400);
+          }
+
+          if (db.shareholders.some((s: any) => s.email && s.email.toLowerCase() === email)) {
+            return buildResponse({ error: 'Email registered to another investor node.' }, 400);
+          }
+
+          let targetUser = db.users.find((u: any) => u.email && u.email.toLowerCase() === email);
+          const uId = targetUser ? targetUser.id : generateUUID();
+          const hashedShareholderPassword = await hashPassword(password || 'shareholder123');
+
+          if (!targetUser) {
+            targetUser = {
+              id: uId,
+              email: email,
+              phone: phone,
+              password_hash: hashedShareholderPassword,
+              full_name: fullName,
+              role_id: 'role-shareholder',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              status: 'active',
+              must_change_password: payload.mustChangePassword !== undefined ? payload.mustChangePassword : true
+            };
+            db.users.push(targetUser);
+          } else {
+            if (password) {
+              targetUser.password_hash = hashedShareholderPassword;
+            }
+            targetUser.full_name = fullName;
+            targetUser.phone = phone;
+            targetUser.role_id = 'role-shareholder';
+            targetUser.status = 'active';
+            if (payload.mustChangePassword !== undefined) {
+              targetUser.must_change_password = payload.mustChangePassword;
+            }
+            targetUser.updated_at = new Date().toISOString();
+          }
 
           const newShareholder = {
             id: generateUUID(),
             user_id: uId,
-            full_name: payload.full_name,
-            phone: payload.phone,
-            email: payload.email,
-            address: payload.address || '',
-            investment_amount: parseFloat(payload.investment_amount),
-            investment_date: payload.investment_date || new Date().toISOString().split('T')[0],
-            passport_photo_url: payload.passport_photo_url || payload.passportPhoto || '',
+            full_name: fullName,
+            phone: phone,
+            email: email,
+            address: address,
+            investment_amount: investmentAmount,
+            investment_date: investmentDate,
+            passport_photo_url: passportPhoto || '',
             passport_number: payload.passport_number || '',
             created_at: new Date().toISOString(),
             status: 'active'
