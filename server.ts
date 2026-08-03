@@ -1278,8 +1278,8 @@ app.post('/api/auth/register-driver', (req, res) => {
     if (!hasActiveCycle) {
       db.cycles.unshift({
         id: 'CYC-2026-001',
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
         endGoalTons: 200,
         status: 'active',
         created_at: new Date().toISOString(),
@@ -5198,10 +5198,28 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
       cycleId = generateNextSequentialCycleId(db.cycles || []);
     }
 
+    const nowIso = new Date().toISOString();
+    let exactStartDate = startDate;
+    if (startDate && !startDate.includes('T')) {
+      const todayStr = nowIso.split('T')[0];
+      if (startDate === todayStr) {
+        exactStartDate = nowIso;
+      } else {
+        exactStartDate = `${startDate}T00:00:00.000Z`;
+      }
+    }
+    
+    let exactEndDate = endDate;
+    if (!exactEndDate) {
+      exactEndDate = new Date(new Date(exactStartDate).getTime() + 30 * 24 * 3600 * 1000).toISOString();
+    } else if (!exactEndDate.includes('T')) {
+      exactEndDate = `${exactEndDate}T00:00:00.000Z`;
+    }
+
     const newCycle = {
       id: cycleId,
-      startDate,
-      endDate: endDate || new Date(new Date(startDate).getTime() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
+      startDate: exactStartDate,
+      endDate: exactEndDate,
       endGoalTons: parseFloat(endGoalTons) || 200,
       status: 'active',
       created_at: new Date().toISOString(),
@@ -5792,8 +5810,8 @@ app.put('/api/director/shareholder-settings', authenticateSession, (req, res) =>
 app.put('/api/director/company-settings', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
     }
 
     const { companyName, companyLogo, companyAddress, phone, email, currency, timeZone, languageDefault, themeDefault } = req.body;
@@ -5998,8 +6016,8 @@ app.post('/api/operations/start', authenticateSession, async (req, res) => {
 
       db.cycles.unshift({
         id: cycleId,
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: null,
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
         endGoalTons: 200,
         status: 'active',
         created_at: new Date().toISOString(),
@@ -6503,7 +6521,7 @@ app.delete('/api/director/admins/:id', authenticateSession, (req, res) => {
 app.post('/api/director/directors', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
+    if (actor.role !== 'director' && actor.role !== 'admin') {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 
@@ -6574,7 +6592,7 @@ app.post('/api/director/directors', authenticateSession, (req, res) => {
 app.put('/api/director/directors/:id', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
+    if (actor.role !== 'director' && actor.role !== 'admin') {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 
@@ -6632,7 +6650,7 @@ app.put('/api/director/directors/:id', authenticateSession, (req, res) => {
 app.delete('/api/director/directors/:id', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
+    if (actor.role !== 'director' && actor.role !== 'admin') {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 

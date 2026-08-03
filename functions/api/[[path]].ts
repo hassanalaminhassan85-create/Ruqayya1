@@ -172,6 +172,105 @@ function writeAuditLog(userId: string | null, email: string, userRole: string, a
   db.audit_logs.unshift(log);
 }
 
+// Replaces background Interval/Cron checks in serverless env
+function syncCyclesOnRequest(db: any): boolean {
+  if (!db) return false;
+  if (!db.cycles) db.cycles = [];
+  if (!db.company_operations_state) {
+    db.company_operations_state = {
+      status: 'Setup Mode',
+      currentCycle: '',
+      currentDay: 1,
+      startedBy: null,
+      startedAt: null,
+      pauseHistory: [],
+      auditLog: []
+    };
+  }
+
+  const opsState = db.company_operations_state;
+  let dbChanged = false;
+
+  const canonical = getCanonicalCycleStatus(db);
+  const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+  
+  if (activeCycle && canonical.isActive) {
+    const daysElapsed = canonical.currentDay;
+    const currentDayInDB = opsState.currentDay || 1;
+    const totalAllowedDays = canonical.totalCycleDays;
+
+    if (daysElapsed !== currentDayInDB && daysElapsed <= totalAllowedDays) {
+      opsState.currentDay = daysElapsed;
+      dbChanged = true;
+    }
+
+    // End-of-cycle distribution trigger
+    if (canonical.totalSecondsRemaining <= 0 && activeCycle.status !== 'completed') {
+      const endDate = new Date().toISOString();
+      activeCycle.status = 'completed';
+      activeCycle.endDate = endDate;
+      activeCycle.locked = true;
+
+      const totalRevenue = (db.financial_records || [])
+        .filter((f: any) => f.type === 'revenue' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
+        .reduce((sum: number, f: any) => sum + f.amount, 0);
+
+      const totalExpenses = (db.financial_records || [])
+        .filter((f: any) => f.type === 'expense' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
+        .reduce((sum: number, f: any) => sum + f.amount, 0);
+
+      const netGeneratedAmount = totalRevenue - totalExpenses;
+      const distPercentage = db.shareholder_settings?.distributionPercentage || 2;
+      const distributionPool = Math.max(0, netGeneratedAmount * (distPercentage / 100));
+
+      activeCycle.metrics = {
+        totalRevenue,
+        totalExpenses,
+        netGeneratedAmount,
+        distributionPercentage: distPercentage,
+        distributionPool,
+        activeDrivers: (db.drivers || []).filter((d: any) => d.status === 'approved' || d.status === 'active').length,
+        totalFleetCount: (db.vehicles || []).length
+      };
+
+      const totalInvestment = (db.shareholders || [])
+        .filter((s: any) => s.status === 'approved' || s.status === 'active')
+        .reduce((sum: number, s: any) => sum + (s.investment_amount || 0), 0);
+
+      if (totalInvestment > 0 && distributionPool > 0) {
+        (db.shareholders || []).forEach((sh: any) => {
+          if (sh.status === 'approved' || sh.status === 'active') {
+            const shareRatio = (sh.investment_amount || 0) / totalInvestment;
+            const payoutAmount = Math.round(distributionPool * shareRatio);
+            if (payoutAmount > 0) {
+              if (!sh.payout_history) sh.payout_history = [];
+              sh.payout_history.unshift({
+                id: `PAY-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+                cycleId: activeCycle.id,
+                amount: payoutAmount,
+                date: endDate,
+                status: 'pending'
+              });
+              sh.total_earned = (sh.total_earned || 0) + payoutAmount;
+              sh.last_payout_amount = payoutAmount;
+              sh.last_payout_date = endDate;
+            }
+          }
+        });
+      }
+
+      opsState.status = 'Setup Mode';
+      opsState.currentCycle = '';
+      opsState.currentDay = 1;
+
+      writeAuditLog(null, 'SYSTEM', 'SYSTEM', 'CYCLE_COMPLETED_AUTO', null, `Operating cycle ${activeCycle.id} ended. Revenue: ₦${totalRevenue}, Expenses: ₦${totalExpenses}, Net: ₦${netGeneratedAmount}, Pool: ₦${distributionPool}`, db);
+      dbChanged = true;
+    }
+  }
+
+  return dbChanged;
+}
+
 // Financial calculations matching server.ts
 function getDriverFinancials(driver: any, db: any) {
   const purchasePrice = parseFloat(driver.vehicle_purchase_price) || 15000000;
@@ -1628,6 +1727,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const dbManager = new D1Manager(env);
   const db = await dbManager.getDB();
 
+  // Passive sync cycles on every request (replaces server background interval)
+  const dbSyncChanged = syncCyclesOnRequest(db);
+  if (dbSyncChanged) {
+    await dbManager.saveDB(db);
+  }
+
   // Helper to check authentication with stateless/ephemeral session rehydration matching server.ts
   const authenticate = async () => {
     let token = '';
@@ -1914,6 +2019,94 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           message: 'Push subscription stored successfully in D1 DB.' 
         });
       }
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  // 1.5. PUBLIC/AUTH: Register Director
+  if (path === '/api/auth/register-director' && method === 'POST') {
+    try {
+      const { fullName, email, phone, password, companyId, passportPhoto } = await request.json() as any;
+      if (!fullName || !email || !phone || !password || !companyId) {
+        return buildResponse({ error: 'All fields are mandatory for Director authentication.' }, 400);
+      }
+
+      const hasExistingDirectors = db.users.some((u: any) => u.role_id === 'role-director');
+
+      if (hasExistingDirectors) {
+        const authHeader = request.headers.get('authorization');
+        if (!authHeader) {
+          return buildResponse({ error: 'Executive director setup already bootstrapped. Authorization required to spawn additional nodes.' }, 403);
+        }
+
+        const token = authHeader.replace('Bearer ', '').trim();
+        const session = db.sessions.find((s: any) => s.token === token && s.status === 'active');
+        if (!session) {
+          return buildResponse({ error: 'Invalid executive session token.' }, 401);
+        }
+
+        const creator = db.users.find((u: any) => u.id === session.user_id);
+        if (!creator || creator.role_id !== 'role-director') {
+          return buildResponse({ error: 'Only authorized directors can spawn secondary director nodes.' }, 403);
+        }
+      }
+
+      if (db.users.some((u: any) => u.email.toLowerCase() === email.toLowerCase())) {
+        return buildResponse({ error: 'Email already mapped to an active ERP credential.' }, 400);
+      }
+
+      let passportUrl = '';
+      if (passportPhoto) {
+        const cleanBase64 = passportPhoto.replace(/^data:.*?;base64,/, '');
+        const filename = `director_${fullName.replace(/\s+/g, '_')}_${Date.now()}.png`;
+        passportUrl = `/api/documents/preview/${filename}`;
+        
+        if (env.R2_BUCKET) {
+          try {
+            const binaryString = atob(cleanBase64);
+            const buffer = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              buffer[i] = binaryString.charCodeAt(i);
+            }
+            await env.R2_BUCKET.put(filename, buffer, { httpMetadata: { contentType: 'image/png' } });
+          } catch (r2Err) {
+            console.error(`[R2 ERROR] Failed to upload director photo:`, r2Err);
+          }
+        }
+      }
+
+      const userId = generateUUID();
+      const newUser = {
+        id: userId,
+        email: email.toLowerCase(),
+        phone,
+        password_hash: await hashPassword(password),
+        full_name: fullName,
+        role_id: 'role-director',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active'
+      };
+
+      if (!db.users) db.users = [];
+      if (!db.directors) db.directors = [];
+
+      db.users.push(newUser);
+      db.directors.push({
+        id: generateUUID(),
+        user_id: userId,
+        company_id: companyId,
+        passport_photo_url: passportUrl,
+        created_at: new Date().toISOString(),
+        status: 'active'
+      });
+
+      await dbManager.saveDB(db);
+
+      writeAuditLog(userId, email, 'director', 'DIRECTOR_CREATION', null, `Created Director User: ${fullName} (${companyId})`, db);
+
+      return buildResponse({ success: true, message: 'Director registered successfully.' });
     } catch (err: any) {
       return buildResponse({ error: err.message }, 500);
     }
@@ -5535,6 +5728,389 @@ ${JSON.stringify(cleanedContext, null, 2)}
         return buildResponse({ error: err.message }, 500);
       }
     }
+  }
+
+  // =====================================================================
+  // ADDED AUTHENTICATED CORPORATE & ADMINISTRATIVE ENDPOINTS (GAP SYNC)
+  // =====================================================================
+
+  if (path === '/api/auth/register-admin' && method === 'POST') {
+    if (user.role !== 'director' && user.role !== 'admin') {
+      return buildResponse({ error: 'Access Denied: Directors-only credential endpoint.' }, 403);
+    }
+    try {
+      const { fullName, email, phone, password, companyId, passportPhoto } = await request.json() as any;
+      if (!fullName || !email || !phone || !password || !companyId) {
+        return buildResponse({ error: 'Complete all parameters.' }, 400);
+      }
+
+      if (db.users.some((u: any) => u.email.toLowerCase() === email.toLowerCase())) {
+        return buildResponse({ error: 'This email is already registered.' }, 400);
+      }
+
+      let passportUrl = '';
+      if (passportPhoto) {
+        const cleanBase64 = passportPhoto.replace(/^data:.*?;base64,/, '');
+        const filename = `admin_${fullName.replace(/\s+/g, '_')}_${Date.now()}.png`;
+        passportUrl = `/api/documents/preview/${filename}`;
+        
+        if (env.R2_BUCKET) {
+          try {
+            const binaryString = atob(cleanBase64);
+            const buffer = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              buffer[i] = binaryString.charCodeAt(i);
+            }
+            await env.R2_BUCKET.put(filename, buffer, { httpMetadata: { contentType: 'image/png' } });
+          } catch (r2Err) {
+            console.error(`[R2 ERROR] Failed to upload admin photo:`, r2Err);
+          }
+        }
+      }
+
+      const userId = generateUUID();
+      const newUser = {
+        id: userId,
+        email: email.toLowerCase(),
+        phone,
+        password_hash: await hashPassword(password),
+        full_name: fullName,
+        role_id: 'role-admin',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active'
+      };
+
+      if (!db.users) db.users = [];
+      if (!db.admins) db.admins = [];
+
+      db.users.push(newUser);
+      db.admins.push({
+        id: generateUUID(),
+        user_id: userId,
+        company_id: companyId,
+        passport_photo_url: passportUrl,
+        created_at: new Date().toISOString(),
+        status: 'active'
+      });
+
+      await dbManager.saveDB(db);
+
+      writeAuditLog(user.id, user.email, user.role, 'ADMIN_CREATION', null, `Created Admin User: ${fullName} (${companyId})`, db);
+
+      return buildResponse({ success: true, message: 'Operator/Admin registered successfully.' });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/auth/change-password-first-login' && method === 'POST') {
+    try {
+      const { newPassword } = await request.json() as any;
+      if (!newPassword || newPassword.length < 6) {
+        return buildResponse({ error: 'Please submit a secure password (minimum 6 characters).' }, 400);
+      }
+
+      const userRec = db.users.find((u: any) => u.id === user.id);
+      if (!userRec) {
+        return buildResponse({ error: 'User account not found.' }, 404);
+      }
+
+      userRec.password_hash = await hashPassword(newPassword);
+      userRec.must_change_password = false;
+      userRec.updated_at = new Date().toISOString();
+
+      await dbManager.saveDB(db);
+
+      writeAuditLog(userRec.id, userRec.email, user.role, 'FIRST_LOGIN_PASSWORD_CHANGE', null, `User successfully performed mandatory first-login password change.`, db);
+
+      return buildResponse({ success: true, message: 'Password updated successfully. Access unlocked.' });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/finance/cap-out' && method === 'POST') {
+    try {
+      const { shareholderId, amount, remarks } = await request.json() as any;
+
+      let sh: any;
+      if (user.role === 'shareholder') {
+        sh = db.shareholders.find((s: any) => s.email && user.email && s.email.toLowerCase() === user.email.toLowerCase());
+        if (!sh) return buildResponse({ error: 'Shareholder profile not found.' }, 404);
+        if (shareholderId && sh.id !== shareholderId) {
+          return buildResponse({ error: 'Access Denied: You can only manage your own account.' }, 403);
+        }
+      } else if (user.role === 'admin' || user.role === 'director') {
+        if (!shareholderId) return buildResponse({ error: 'Shareholder ID required.' }, 400);
+        sh = db.shareholders.find((s: any) => s.id === shareholderId);
+        if (!sh) return buildResponse({ error: 'Shareholder not found.' }, 404);
+      } else {
+        return buildResponse({ error: 'Access Denied: Admin, Director, or Shareholder role required.' }, 403);
+      }
+
+      const capOutAmt = parseFloat(amount);
+      if (!capOutAmt || capOutAmt <= 0) {
+        return buildResponse({ error: 'Invalid redemption amount.' }, 400);
+      }
+
+      const currentInvestment = sh.investment_amount || 0;
+      sh.investment_amount = currentInvestment - capOutAmt;
+      sh.total_cashed_out = (sh.total_cashed_out || 0) + capOutAmt;
+      sh.updated_at = new Date().toISOString();
+
+      if (!db.financial_records) db.financial_records = [];
+      db.financial_records.unshift({
+        id: `FIN-CAPOUT-${Date.now()}-${generateUUID().substring(0,4).toUpperCase()}`,
+        type: 'expense',
+        category: 'other',
+        amount: capOutAmt,
+        date: new Date().toISOString().split('T')[0],
+        description: `Capital Stock Redemption (Cap Out) - ${sh.full_name} (${remarks || 'Principal Liquidation'})`,
+        approvedBy: user.fullName || user.email || 'Shareholder',
+        created_at: new Date().toISOString()
+      });
+
+      if (!db.notifications) db.notifications = [];
+      db.notifications.unshift({
+        id: generateUUID(),
+        user_id: sh.user_id,
+        title_en: 'Capital Stock Redemption Processed',
+        title_ha: 'An Cire Jari (Cap Out)',
+        message_en: `Successfully redeemed ₦${capOutAmt.toLocaleString()} capital stock for ${sh.full_name}.`,
+        message_ha: `An cire jarin ₦${capOutAmt.toLocaleString()} na ${sh.full_name}.`,
+        type: 'success',
+        read_status: 0,
+        created_at: new Date().toISOString()
+      });
+
+      await dbManager.saveDB(db);
+
+      writeAuditLog(user.id, user.email, user.role, 'SHAREHOLDER_CAPOUT', null, `Shareholder ${sh.full_name} capital redemption of ₦${capOutAmt.toLocaleString()}`, db);
+
+      return buildResponse({ success: true, shareholder: sh });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/documents/replace' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Admins or Directors only.' }, 403);
+    }
+    try {
+      const { docId, category, title, fileBase64 } = await request.json() as any;
+      if (!docId || !category || !fileBase64) {
+        return buildResponse({ error: 'Missing mandatory replacement arguments.' }, 400);
+      }
+
+      let docList: any[] = [];
+      if (category === 'vehicle') docList = db.vehicle_documents || [];
+      else if (category === 'driver') docList = db.driver_documents || [];
+      else if (category === 'company') docList = db.company_documents || [];
+      else return buildResponse({ error: 'Invalid document category.' }, 400);
+
+      const doc = docList.find((d: any) => d.id === docId);
+      if (!doc) {
+        return buildResponse({ error: 'Original document not found.' }, 404);
+      }
+
+      if (!doc.version) doc.version = 1;
+      if (!doc.versions) doc.versions = [];
+
+      doc.versions.push({
+        version: doc.version,
+        file_url: doc.file_url,
+        created_at: doc.created_at,
+        created_by: doc.created_by || 'Unknown',
+        title: doc.title || title || doc.document_type
+      });
+
+      const docTitle = title || doc.title || doc.document_type || 'Replaced_Doc';
+      const fileId = `${Date.now()}-${generateUUID().substring(0, 8)}`;
+      const filename = `${fileId}.png`;
+      const newFileUrl = `/api/documents/preview/${filename}`;
+
+      if (env.R2_BUCKET) {
+        try {
+          const cleanBase64 = fileBase64.replace(/^data:.*?;base64,/, '');
+          const binaryString = atob(cleanBase64);
+          const buffer = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            buffer[i] = binaryString.charCodeAt(i);
+          }
+          await env.R2_BUCKET.put(filename, buffer, { httpMetadata: { contentType: 'image/png' } });
+        } catch (r2Err) {
+          console.error(`[R2 ERROR] Failed to replace doc file:`, r2Err);
+        }
+      }
+
+      doc.file_url = newFileUrl;
+      doc.created_at = new Date().toISOString();
+      doc.created_by = user.fullName;
+      doc.version += 1;
+
+      await dbManager.saveDB(db);
+
+      writeAuditLog(user.id, user.email, user.role, 'DOCUMENT_REPLACED_VERSIONED', docId, `Replaced document ${docId} (${docTitle}) creating version ${doc.version}`, db);
+
+      return buildResponse({ success: true, doc, message: 'Document version updated successfully in R2 archive.' });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (pathParts.length === 5 && pathParts[1] === 'api' && pathParts[2] === 'documents' && method === 'DELETE') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Admins or Directors only.' }, 403);
+    }
+    try {
+      const category = pathParts[3];
+      const id = pathParts[4];
+
+      let docListKey: 'vehicle_documents' | 'driver_documents' | 'company_documents';
+      if (category === 'vehicle') docListKey = 'vehicle_documents';
+      else if (category === 'driver') docListKey = 'driver_documents';
+      else if (category === 'company') docListKey = 'company_documents';
+      else return buildResponse({ error: 'Invalid category.' }, 400);
+
+      const list = db[docListKey] || [];
+      const originalLength = list.length;
+      db[docListKey] = list.filter((d: any) => d.id !== id);
+
+      if (db[docListKey].length === originalLength) {
+        return buildResponse({ error: 'Document not found.' }, 404);
+      }
+
+      await dbManager.saveDB(db);
+
+      writeAuditLog(user.id, user.email, user.role, 'DOCUMENT_DELETED', id, `Permanently deleted document ${id} from ${category} archive`, db);
+
+      return buildResponse({ success: true, message: 'Document permanently deleted from corporate archive.' });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/admin/admins' && method === 'GET') {
+    if (user.role !== 'director' && user.role !== 'admin') {
+      return buildResponse({ error: 'Access Denied: Administrative role required.' }, 403);
+    }
+    try {
+      const mappedAdmins = (db.admins || []).map((adm: any) => {
+        const u = db.users.find((x: any) => x.id === adm.user_id);
+        return {
+          ...adm,
+          fullName: u?.full_name || adm.fullName || 'Admin User',
+          email: u?.email || adm.email || '',
+          phone: u?.phone || adm.phone || '',
+          status: adm.status || 'active'
+        };
+      });
+      return buildResponse(mappedAdmins);
+    } catch (err: any) {
+      return buildResponse({ error: `Failed to fetch admins: ${err.message}` }, 500);
+    }
+  }
+
+  if (path === '/api/admin/audit-logs' && method === 'GET') {
+    if (user.role !== 'director' && user.role !== 'admin') {
+      return buildResponse({ error: 'Access Denied: Administrative role required.' }, 403);
+    }
+    return buildResponse(db.audit_logs || []);
+  }
+
+  if (path === '/api/admin/reset-test-data' && method === 'POST') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Admin or Director role required.' }, 403);
+    }
+    try {
+      const { confirmationText } = await request.json() as any;
+      if (confirmationText !== 'RESET RUQAYYA ERP') {
+        return buildResponse({ error: 'Invalid confirmation text. Must match RESET RUQAYYA ERP.' }, 400);
+      }
+
+      db.drivers = [];
+      db.shareholders = [];
+      db.guarantors = [];
+      db.vehicles = [];
+      db.vehicle_documents = [];
+      db.driver_documents = [];
+      db.company_documents = [];
+      db.financial_records = [];
+      db.trip_manifests = [];
+      db.cycles = [];
+      db.driver_payments = [];
+      db.messages = [];
+      db.announcements = [];
+      db.notifications = [];
+
+      db.company_operations_state = {
+        status: 'Setup Mode',
+        currentCycle: '',
+        currentDay: 1,
+        startedBy: null,
+        startedAt: null,
+        pauseHistory: [],
+        auditLog: []
+      };
+
+      const adminsAndDirectors = db.users.filter((u: any) => {
+        const isCoreAdmin = u.username === 'ADAM' || u.username === 'MMR';
+        const isAdminOrDirectorRole = u.role_id === 'role-director' || u.role_id === 'role-admin' || u.role === 'director' || u.role === 'admin';
+        return isCoreAdmin || isAdminOrDirectorRole;
+      });
+      db.users = adminsAndDirectors;
+
+      const keptUserIds = new Set(adminsAndDirectors.map((u: any) => u.id));
+      db.admins = (db.admins || []).filter((a: any) => keptUserIds.has(a.user_id));
+      db.directors = (db.directors || []).filter((d: any) => keptUserIds.has(d.user_id));
+
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const currentToken = authHeader.substring(7);
+        db.sessions = (db.sessions || []).filter((s: any) => s.token === currentToken);
+      } else {
+        db.sessions = [];
+      }
+
+      db.audit_logs = [
+        {
+          id: `AUD-${Date.now()}-RESET`,
+          user_id: user.id,
+          user_email: user.email,
+          user_role: user.role,
+          action: 'SYSTEM_RESET_OPERATIONAL_DATA',
+          previous_value: 'Active test operational data environment.',
+          new_value: `Operational data reset executed. All vehicles, drivers, vouchers, financial records, and logs successfully purged. Configuration preserved.`,
+          ip_address: '127.0.0.1',
+          created_at: new Date().toISOString()
+        }
+      ];
+
+      await dbManager.saveDB(db);
+
+      return buildResponse({ success: true, message: 'All operational test data has been successfully reset.' });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/admin/backup-data' && method === 'GET') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Admin or Director role required.' }, 403);
+    }
+    const backup = JSON.stringify(db, null, 2);
+    return new Response(backup, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Disposition': 'attachment; filename="ruqayya-erp-backup.json"',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Methods': '*'
+      }
+    });
   }
 
   // Fallback 404 for unmatched endpoints

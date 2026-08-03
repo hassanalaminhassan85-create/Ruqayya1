@@ -51,6 +51,21 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   health = 'N/A',
   cycleDay = '0'
 }) => {
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString(lang === 'ha' ? 'ha-NG' : 'en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   // Determine if cycle is truly active based on props
   const cycleIsActive = isActive && status !== 'inactive' && status !== 'completed';
 
@@ -156,7 +171,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
                 {lang === 'ha' ? 'LOKACIN FARA' : 'START TIME'}
               </span>
               <span className="font-extrabold text-slate-800 font-mono text-[11px] leading-none mt-1 block">
-                {startDate}
+                {formatDate(startDate) || 'N/A'}
               </span>
             </div>
           </div>
@@ -170,7 +185,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
                 {lang === 'ha' ? 'RANAR KAMMALAWA' : 'SCHEDULED END'}
               </span>
               <span className="font-extrabold text-slate-800 font-mono text-[11px] leading-none mt-1 block">
-                {endDate}
+                {formatDate(endDate) || 'N/A'}
               </span>
             </div>
           </div>
@@ -270,7 +285,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
               {lang === 'ha' ? 'LOKACIN FARA' : 'START TIME'}
             </span>
             <span className="font-extrabold text-slate-800 font-mono text-[11px] leading-none mt-1 block">
-              {startDate}
+              {formatDate(startDate) || 'N/A'}
             </span>
           </div>
         </div>
@@ -284,7 +299,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
               {lang === 'ha' ? 'RANAR KAMMALAWA' : 'SCHEDULED END'}
             </span>
             <span className="font-extrabold text-slate-800 font-mono text-[11px] leading-none mt-1 block">
-              {endDate}
+              {formatDate(endDate) || 'N/A'}
             </span>
           </div>
         </div>
