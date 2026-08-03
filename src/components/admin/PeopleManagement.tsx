@@ -2325,8 +2325,9 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
         <Driver360Modal
           lang={lang}
           driver={selectedDriverFor360}
+          drivers={drivers}
           vehicles={vehicles}
-          payments={[]}
+          payments={payments}
           onClose={() => setSelectedDriverFor360(null)}
           onSync={onSync}
         />

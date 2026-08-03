@@ -317,7 +317,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           userKey = 'MMR';
         } else if (lowerEmail === 'admin@ruqayyatransport.com') {
           fallbackRole = 'admin';
-          fullName = 'Ibrahim Ahmad';
+          fullName = 'Operations Admin ADAM';
           userKey = 'ADAM';
         }
 

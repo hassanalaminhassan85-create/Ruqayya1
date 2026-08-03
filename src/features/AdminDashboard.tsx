@@ -88,7 +88,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [logs, setLogs] = useState<any[]>([]);
 
   // Admin profile & avatar states
-  const [adminName, setAdminName] = useState('Ibrahim Ahmad');
+  const [adminName, setAdminName] = useState('Operations Admin');
   const [adminAvatar, setAdminAvatar] = useState('');
   const [adminId, setAdminId] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -1749,6 +1749,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         <Driver360Modal
           lang={lang}
           driver={selected360Driver}
+          drivers={drivers}
           payments={payments.filter(p => p.driverId === selected360Driver.id)}
           vehicles={vehicles}
           onClose={() => setSelected360Driver(null)}

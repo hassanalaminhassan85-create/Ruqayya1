@@ -1763,16 +1763,29 @@ app.post('/api/auth/login', (req, res) => {
             });
           }
         } else if (trimmedUsername === 'ADAM' || trimmedUsername === 'ABAKAKA') {
+          const adamUser = db.users.find(u => u.username === 'ADAM');
+          const abakakaUser = db.users.find(u => u.username === 'ABAKAKA');
           const existingAdmins = db.users.filter(u => u.role_id === 'role-admin');
-          if (trimmedUsername === 'ADAM' && existingAdmins[0]) {
-            user = existingAdmins[0];
-            user.username = 'ADAM';
-            user.full_name = 'Ibrahim Ahmad';
-          } else if (trimmedUsername === 'ABAKAKA' && existingAdmins[1]) {
-            user = existingAdmins[1];
-            user.username = 'ABAKAKA';
-            user.full_name = 'Ibrahim Ahmad';
-          } else {
+
+          if (trimmedUsername === 'ADAM') {
+            user = adamUser || existingAdmins.find(u => u.username === 'ADAM') || existingAdmins[0];
+            if (user) {
+              user.username = 'ADAM';
+              if (!user.full_name || user.full_name === 'Ibrahim Ahmad') {
+                user.full_name = 'Operations Admin ADAM';
+              }
+            }
+          } else if (trimmedUsername === 'ABAKAKA') {
+            user = abakakaUser || existingAdmins.find(u => u.username === 'ABAKAKA') || existingAdmins[1];
+            if (user) {
+              user.username = 'ABAKAKA';
+              if (!user.full_name || user.full_name === 'Ibrahim Ahmad') {
+                user.full_name = 'Operations Admin ABAKAKA';
+              }
+            }
+          }
+          
+          if (!user) {
             const adminId = generateUUID();
             user = {
               id: adminId,
@@ -1780,7 +1793,7 @@ app.post('/api/auth/login', (req, res) => {
               email: `${trimmedUsername.toLowerCase()}@ruqayyatransport.com`,
               phone: '+234 803 222 0002',
               password_hash: hashPassword('admin123'),
-              full_name: 'Ibrahim Ahmad',
+              full_name: trimmedUsername === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
               role_id: 'role-admin',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -1809,7 +1822,8 @@ app.post('/api/auth/login', (req, res) => {
         return res.status(400).json({ error: 'Please submit both email and password validation credentials.' });
       }
 
-      user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      const cleanEmail = email.trim().toLowerCase();
+      user = db.users.find(u => u.email && u.email.trim().toLowerCase() === cleanEmail);
       if (!user) {
         writeServerAuditLog(null, email, 'public', 'AUTH_FAILURE', `Attempt with unregistered email`, null, req);
         return res.status(401).json({ error: 'Access Denied: Unregistered email or invalid passwords.' });

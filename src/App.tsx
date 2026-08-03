@@ -1045,7 +1045,7 @@ export default function App() {
                 {!sidebarCollapsed && (
                   <div className="min-w-0 flex-1">
                     <span className="text-xs font-bold text-slate-200 block truncate leading-tight">
-                      {currentRole === 'driver' ? (driverName || 'Authenticated Driver') : currentRole === 'admin' ? (localStorage.getItem('ruqayya_admin_name') || 'Ibrahim Ahmad') : (localStorage.getItem('ruqayya_director_name') || 'General Director')}
+                      {currentRole === 'driver' ? (driverName || 'Authenticated Driver') : currentRole === 'admin' ? (localStorage.getItem('ruqayya_admin_name') || 'Operations Admin') : (localStorage.getItem('ruqayya_director_name') || 'General Director')}
                     </span>
                     <span className="text-[10px] text-brand-gold block font-mono font-bold leading-none mt-1 truncate">
                       {dictionary.roles[currentRole]}
@@ -1303,7 +1303,7 @@ export default function App() {
         onClose={() => setAiCopilotOpen(false)}
         lang={lang}
         currentRole={currentRole}
-        userName={driverName || (currentRole === 'driver' ? 'Authenticated Driver' : currentRole === 'admin' ? 'Ibrahim Ahmad' : currentRole === 'director' ? 'General Director' : 'Shareholder')}
+        userName={driverName || (currentRole === 'driver' ? 'Authenticated Driver' : currentRole === 'admin' ? (localStorage.getItem('ruqayya_admin_name') || 'Operations Admin') : currentRole === 'director' ? 'General Director' : 'Shareholder')}
         activeCycleId={activeCycle?.cycleId}
       />
     </div>

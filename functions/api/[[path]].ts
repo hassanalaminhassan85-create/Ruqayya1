@@ -2127,7 +2127,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
       }
 
-      if (db.users.some((u: any) => u.email.toLowerCase() === email.toLowerCase())) {
+      if (db.users.some((u: any) => u.email && u.email.toLowerCase() === email.toLowerCase())) {
         return buildResponse({ error: 'Email already mapped to an active ERP credential.' }, 400);
       }
 
@@ -2195,7 +2195,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         return buildResponse({ error: 'Missing registration details.' }, 400);
       }
 
-      const emailExists = db.users.some((u: any) => u.email.toLowerCase() === personal.email.toLowerCase());
+      const emailExists = db.users.some((u: any) => u.email && u.email.toLowerCase() === personal.email.toLowerCase());
       if (emailExists) {
         return buildResponse({ error: 'This email address is already registered inside our fleet.' }, 400);
       }
@@ -2244,23 +2244,36 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         role_id: 'role-driver',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        status: 'pending'
+        status: 'active'
       };
 
       const driverId = generateUUID();
+      const vehicleId = generateUUID();
       const newDriver = {
         id: driverId,
         user_id: userId,
+        userId: userId,
         company_driver_id: personal.companyDriverId || `PEND-${generateUUID().substring(0, 4).toUpperCase()}`,
+        companyDriverId: personal.companyDriverId || `PEND-${generateUUID().substring(0, 4).toUpperCase()}`,
+        full_name: personal.fullName,
+        fullName: personal.fullName,
+        email: personal.email.toLowerCase(),
+        phone: personal.phone,
         address: personal.address,
         nin: personal.nin,
         license_number: personal.licenseNumber || `LIC-${generateUUID().substring(0, 5).toUpperCase()}`,
+        licenseNumber: personal.licenseNumber || `LIC-${generateUUID().substring(0, 5).toUpperCase()}`,
         license_expiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        licenseExpiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        vehicle_id: vehicleId,
+        vehicleId: vehicleId,
+        passport_photo_url: driverPassportUrl,
+        passportPhotoUrl: driverPassportUrl,
         classification: 'Assisted',
         rating: 5.0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        status: 'pending'
+        status: 'active'
       };
 
       const guarantorId = generateUUID();
@@ -2388,7 +2401,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               email: `${userKey.toLowerCase()}@ruqayyatransport.com`,
               phone: '+234 803 222 0002',
               password_hash: '', // updated asynchronously
-              full_name: 'Ibrahim Ahmad',
+              full_name: userKey === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
               role_id: roleId,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -2442,7 +2455,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           return buildResponse({ error: 'Please enter both corporate email and security password.' }, 400);
         }
 
-        user = db.users.find((u: any) => u.email.toLowerCase() === email.trim().toLowerCase() && u.status === 'active');
+        const cleanEmail = email.trim().toLowerCase();
+        user = db.users.find((u: any) => u.email && u.email.trim().toLowerCase() === cleanEmail && u.status === 'active');
         if (!user) {
           return buildResponse({ error: 'Access Denied: Non-existent active user profile.' }, 401);
         }
@@ -2486,6 +2500,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         success: true,
         token,
         expiresAt,
+        mustChangePassword: !!user.must_change_password,
         user: {
           id: user.id,
           email: user.email,
@@ -2876,8 +2891,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     // GET/PUT /api/drivers/:id
     if (parts.length === 1) {
-      const targetDriverId = parts[0];
-      const drv = db.drivers.find((d: any) => d.id === targetDriverId);
+      let targetDriverId = parts[0];
+      let drv = db.drivers.find((d: any) => d.id === targetDriverId || d.user_id === targetDriverId);
+      if (!drv && (user.role === 'driver' || targetDriverId === 'me' || targetDriverId === 'self')) {
+        drv = db.drivers.find((d: any) => d.user_id === user.id || d.id === user.id);
+      }
       if (!drv) return buildResponse({ error: 'Driver profile not found.' }, 404);
 
       if (method === 'GET') {
@@ -3047,7 +3065,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     // GET /api/drivers/:id/contract-lookup
     if (parts.length === 2 && parts[1] === 'contract-lookup' && method === 'GET') {
-      const drv = db.drivers.find((d: any) => d.id === parts[0]);
+      const targetId = parts[0];
+      const drv = db.drivers.find((d: any) => d.id === targetId || d.user_id === targetId || (targetId === 'me' && d.user_id === user.id) || (targetId === 'self' && d.user_id === user.id) || (user.role === 'driver' && d.user_id === user.id));
       if (!drv) return buildResponse({ error: 'Driver profile not found.' }, 404);
 
       const vehicle = db.vehicles.find((v: any) => v.driver_id === drv.id);
@@ -3057,7 +3076,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     // GET /api/drivers/:id/installments
     if (parts.length === 2 && parts[1] === 'installments' && method === 'GET') {
-      const drv = db.drivers.find((d: any) => d.id === parts[0]);
+      const targetId = parts[0];
+      const drv = db.drivers.find((d: any) => d.id === targetId || d.user_id === targetId || (targetId === 'me' && d.user_id === user.id) || (targetId === 'self' && d.user_id === user.id) || (user.role === 'driver' && d.user_id === user.id));
       if (!drv) return buildResponse({ error: 'Driver profile not found.' }, 404);
 
       const activeCycle = db.cycles.find((c: any) => c.status === 'active');
@@ -5886,7 +5906,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
         return buildResponse({ error: 'Complete all parameters.' }, 400);
       }
 
-      if (db.users.some((u: any) => u.email.toLowerCase() === email.toLowerCase())) {
+      if (db.users.some((u: any) => u.email && u.email.toLowerCase() === email.toLowerCase())) {
         return buildResponse({ error: 'This email is already registered.' }, 400);
       }
 
@@ -5966,7 +5986,18 @@ ${JSON.stringify(cleanedContext, null, 2)}
 
       writeAuditLog(userRec.id, userRec.email, user.role, 'FIRST_LOGIN_PASSWORD_CHANGE', null, `User successfully performed mandatory first-login password change.`, db);
 
-      return buildResponse({ success: true, message: 'Password updated successfully. Access unlocked.' });
+      const roleName = db.roles.find((r: any) => r.id === userRec.role_id)?.name || user.role || 'public';
+      return buildResponse({
+        success: true,
+        message: 'Password updated successfully. Access unlocked.',
+        user: {
+          id: userRec.id,
+          email: userRec.email,
+          fullName: userRec.full_name,
+          phone: userRec.phone,
+          role: roleName
+        }
+      });
     } catch (err: any) {
       return buildResponse({ error: err.message }, 500);
     }
