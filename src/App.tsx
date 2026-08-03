@@ -264,10 +264,10 @@ export default function App() {
           fullName = 'Executive Director MMR';
         } else if (userKey === 'ADAM') {
           fallbackRole = 'admin';
-          fullName = 'Ibrahim Ahmad';
+          fullName = 'Operations Admin ADAM';
         } else if (userKey === 'ABAKAKA') {
           fallbackRole = 'admin';
-          fullName = 'Ibrahim Ahmad';
+          fullName = 'Operations Admin ABAKAKA';
         } else if (userKey === 'KABIR') {
           fallbackRole = 'shareholder';
           fullName = 'Shareholder KABIR';

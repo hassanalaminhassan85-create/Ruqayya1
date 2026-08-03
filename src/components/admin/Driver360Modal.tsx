@@ -256,16 +256,19 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     );
   }, [livePayments, activeDriver]);
   
-  const totalPaid = driverPayments
-    .filter(p => p.status === 'approved' || p.status === 'Approved' || p.status === 'completed')
+  const totalPaid = (activeDriver as any).financials?.totalAmountPaid ?? (activeDriver as any).totalAmountPaid ?? (activeDriver as any).total_amount_paid ?? driverPayments
+    .filter(p => {
+      const st = (p.status || '').toLowerCase();
+      return st === 'approved' || st === 'completed' || st === 'pending';
+    })
     .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
-  const agreedTotal = (activeDriver as any).agreed_amount || (activeDriver as any).agreedAmount || 300000;
+  const agreedTotal = (activeDriver as any).agreed_amount || (activeDriver as any).agreedAmount || (activeDriver as any).financials?.agreedAmount || 300000;
   const outstandingInstallment = Math.max(0, agreedTotal - totalPaid);
   const vehicleAssigned = vehicles.find(v => v.id === activeDriver.assignedVehicleId || v.id === activeDriver.vehicle_id || v.driver_id === activeDriver.id) || (activeDriver as any).vehicle;
   
-  const vehiclePurchasePrice = (activeDriver as any).vehicle_purchase_price || (activeDriver as any).vehiclePurchasePrice || 15000000;
-  const remainingVehicleBalance = (activeDriver as any).remaining_vehicle_balance || (activeDriver as any).remainingVehicleBalance || Math.max(0, vehiclePurchasePrice - totalPaid);
+  const vehiclePurchasePrice = (activeDriver as any).vehicle_purchase_price || (activeDriver as any).vehiclePurchasePrice || (activeDriver as any).financials?.vehiclePurchasePrice || 15000000;
+  const remainingVehicleBalance = (activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? (activeDriver as any).financials?.remainingVehicleBalance ?? Math.max(0, vehiclePurchasePrice - totalPaid);
 
   // Non-null asset identification fallback for Chassis and Engine numbers
   const chassisNum = vehicleAssigned?.chassisNumber || vehicleAssigned?.chassis_number || `CHAS-2026-${(activeDriver.company_driver_id || activeDriver.id).substring(0, 6).toUpperCase()}`;

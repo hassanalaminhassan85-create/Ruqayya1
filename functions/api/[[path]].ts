@@ -343,21 +343,37 @@ function syncCyclesOnRequest(db: any): boolean {
 
 // Financial calculations matching server.ts
 function getDriverFinancials(driver: any, db: any) {
-  const purchasePrice = parseFloat(driver.vehicle_purchase_price) || 15000000;
-  const agreedAmount = parseFloat(driver.agreed_amount) || 180000;
+  const purchasePrice = parseFloat(driver.vehicle_purchase_price) || parseFloat(driver.vehiclePurchasePrice) || 15000000;
+  const agreedAmount = parseFloat(driver.agreed_amount) || parseFloat(driver.agreedAmount) || 300000;
   
+  const validIds = new Set([
+    driver.id,
+    driver.user_id,
+    driver.userId,
+    driver.company_driver_id,
+    driver.companyDriverId,
+    driver.fullName,
+    driver.full_name
+  ].filter(Boolean));
+
+  const isApprovedPayment = (p: any) => {
+    if (!p) return false;
+    const matchesDriver = validIds.has(p.driver_id) || validIds.has(p.driverId) || validIds.has(p.driver_name) || validIds.has(p.driverName);
+    if (!matchesDriver) return false;
+    const st = (p.status || '').toLowerCase();
+    return st === 'approved' || st === 'completed' || st === 'active' || st === 'paid' || st === 'pending';
+  };
+
+  const approvedPaymentsInERP = (db.driver_payments || []).filter(isApprovedPayment);
+  const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+  const countErpPaid = approvedPaymentsInERP.length;
+
   if (driver.opening_balance && driver.opening_balance.is_imported) {
     const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance) || 0;
     const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date) || 0;
-    
-    const approvedPaymentsInERP = (db.driver_payments || [])
-      .filter((p: any) => p.driver_id === driver.id && p.status === 'approved');
-    const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const countErpPaid = approvedPaymentsInERP.length;
-    
     const totalAmountPaid = openingPaid + totalErpPaid;
     const remainingVehicleBalance = Math.max(0, openingRemaining - totalErpPaid);
-    
+
     return {
       vehiclePurchasePrice: purchasePrice,
       totalAmountPaid,
@@ -367,14 +383,11 @@ function getDriverFinancials(driver: any, db: any) {
       openingBalance: driver.opening_balance
     };
   } else {
-    const approvedPaymentsInERP = (db.driver_payments || [])
-      .filter((p: any) => p.driver_id === driver.id && p.status === 'approved');
-    const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const countErpPaid = approvedPaymentsInERP.length;
-    
     const totalAmountPaid = totalErpPaid;
-    const remainingVehicleBalance = Math.max(0, purchasePrice - totalErpPaid);
-    
+    const remainingVehicleBalance = (driver.remaining_vehicle_balance !== undefined && driver.remaining_vehicle_balance !== null)
+      ? parseFloat(driver.remaining_vehicle_balance)
+      : Math.max(0, purchasePrice - totalErpPaid);
+
     return {
       vehiclePurchasePrice: purchasePrice,
       totalAmountPaid,
@@ -1307,7 +1320,19 @@ class D1Manager {
           email: 'admin@ruqayyatransport.com',
           phone: '+234 803 222 0002',
           password_hash: await hashPassword('admin123'),
-          full_name: 'Ibrahim Ahmad',
+          full_name: 'Operations Admin ADAM',
+          role_id: 'role-admin',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          status: 'active'
+        },
+        {
+          id: generateUUID(),
+          username: 'ABAKAKA',
+          email: 'abakaka@ruqayyatransport.com',
+          phone: '+234 803 222 0003',
+          password_hash: await hashPassword('admin123'),
+          full_name: 'Operations Admin ABAKAKA',
           role_id: 'role-admin',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -1855,6 +1880,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             u.email?.toLowerCase().startsWith(userKey.toLowerCase())
           );
 
+          if (user) {
+            if (userKey === 'ADAM' && (!user.full_name || user.full_name.includes('Ibrahim'))) {
+              user.full_name = 'Operations Admin ADAM';
+            } else if (userKey === 'ABAKAKA' && (!user.full_name || user.full_name.includes('Ibrahim'))) {
+              user.full_name = 'Operations Admin ABAKAKA';
+            }
+          }
+
           // If the user doesn't exist, seed them dynamically to match default credentials
           if (!user) {
             const userId = generateUUID();
@@ -1889,7 +1922,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 email: `${userKey.toLowerCase()}@ruqayyatransport.com`,
                 phone: '+234 803 222 0002',
                 password_hash: '', // updated asynchronously
-                full_name: 'Ibrahim Ahmad',
+                full_name: userKey === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
                 role_id: roleId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
@@ -1992,6 +2025,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const user = db.users.find((u: any) => u.id === session.user_id);
     if (!user) {
       return { authenticated: false, error: 'Associated user record not found.', status: 401 };
+    }
+
+    if (user.username === 'ADAM' && (!user.full_name || user.full_name.includes('Ibrahim'))) {
+      user.full_name = 'Operations Admin ADAM';
+    } else if (user.username === 'ABAKAKA' && (!user.full_name || user.full_name.includes('Ibrahim'))) {
+      user.full_name = 'Operations Admin ABAKAKA';
     }
 
     const role = db.roles.find((r: any) => r.id === user.role_id)?.name || 'public';
@@ -2445,7 +2484,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           }
         }
 
-        if (!user) {
+        if (user) {
+          if (user.username === 'ADAM' && (!user.full_name || user.full_name.includes('Ibrahim'))) {
+            user.full_name = 'Operations Admin ADAM';
+          } else if (user.username === 'ABAKAKA' && (!user.full_name || user.full_name.includes('Ibrahim'))) {
+            user.full_name = 'Operations Admin ABAKAKA';
+          }
+        } else {
           return buildResponse({ error: 'Access Denied: Invalid enterprise username.' }, 401);
         }
 
@@ -2750,6 +2795,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             engine_number: v.engine_number || v.engineNumber || '',
             capacity: v.capacity || ''
           } : null,
+          agreed_amount: drv.agreed_amount ?? drv.agreedAmount ?? financials.agreedAmount,
+          agreedAmount: drv.agreed_amount ?? drv.agreedAmount ?? financials.agreedAmount,
+          vehicle_purchase_price: drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice ?? financials.vehiclePurchasePrice,
+          vehiclePurchasePrice: drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice ?? financials.vehiclePurchasePrice,
+          remaining_vehicle_balance: drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance ?? financials.remainingVehicleBalance,
+          remainingVehicleBalance: drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance ?? financials.remainingVehicleBalance,
+          totalAmountPaid: financials.totalAmountPaid,
+          total_amount_paid: financials.totalAmountPaid,
           financials,
           documents,
           passport_photo_url,
@@ -2946,6 +2999,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             engine_number: v.engine_number || v.engineNumber || '',
             capacity: v.capacity || ''
           } : null,
+          agreed_amount: drv.agreed_amount ?? drv.agreedAmount ?? financials.agreedAmount,
+          agreedAmount: drv.agreed_amount ?? drv.agreedAmount ?? financials.agreedAmount,
+          vehicle_purchase_price: drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice ?? financials.vehiclePurchasePrice,
+          vehiclePurchasePrice: drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice ?? financials.vehiclePurchasePrice,
+          remaining_vehicle_balance: drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance ?? financials.remainingVehicleBalance,
+          remainingVehicleBalance: drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance ?? financials.remainingVehicleBalance,
+          totalAmountPaid: financials.totalAmountPaid,
+          total_amount_paid: financials.totalAmountPaid,
           financials,
           documents,
           passport_photo_url,
@@ -2960,25 +3021,58 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           const payload = await request.json() as any;
           const u = db.users.find((usr: any) => usr.id === drv.user_id);
 
-          if (payload.fullName && u) u.full_name = payload.fullName;
-          if (payload.phone && u) u.phone = payload.phone;
-          if (payload.address) drv.address = payload.address;
-          if (payload.nin) drv.nin = payload.nin;
-          if (payload.licenseNumber) drv.license_number = payload.licenseNumber;
-          if (payload.licenseExpiry) drv.license_expiry = payload.licenseExpiry;
-          if (payload.agreedAmount !== undefined) drv.agreed_amount = payload.agreedAmount;
-          if (payload.remainingVehicleBalance !== undefined) {
-            drv.remaining_vehicle_balance = payload.remainingVehicleBalance;
-            if (drv.opening_balance) {
-              drv.opening_balance.remaining_vehicle_balance = payload.remainingVehicleBalance;
+          if (payload.passportPhoto) {
+            drv.passport_photo_url = payload.passportPhoto;
+            if (!db.driver_documents) db.driver_documents = [];
+            const existingDoc = db.driver_documents.find((d: any) => d.driver_id === drv.id && d.document_type === 'passport_photo');
+            if (existingDoc) {
+              existingDoc.file_url = payload.passportPhoto;
+              existingDoc.created_at = new Date().toISOString();
+              existingDoc.created_by = user.fullName;
+            } else {
+              db.driver_documents.push({
+                id: generateUUID(),
+                driver_id: drv.id,
+                document_type: 'passport_photo',
+                file_url: payload.passportPhoto,
+                created_at: new Date().toISOString(),
+                created_by: user.fullName,
+                status: 'active'
+              });
             }
           }
-          if (payload.status) drv.status = payload.status;
+
+          if (payload.fullName && u) u.full_name = payload.fullName;
+          if (payload.phone && u) u.phone = payload.phone;
+          if (payload.address !== undefined) drv.address = payload.address;
+          if (payload.nin !== undefined) drv.nin = payload.nin;
+          if (payload.licenseNumber !== undefined) drv.license_number = payload.licenseNumber;
+          if (payload.licenseExpiry !== undefined) drv.license_expiry = payload.licenseExpiry;
+          if (payload.agreedAmount !== undefined) drv.agreed_amount = parseFloat(payload.agreedAmount);
+          if (payload.remainingVehicleBalance !== undefined) {
+            const approvedPaymentsInERP = (db.driver_payments || [])
+              .filter((p: any) => p.driver_id === drv.id && p.status === 'approved');
+            const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
+            drv.vehicle_purchase_price = parseFloat(payload.remainingVehicleBalance) + totalErpPaid;
+            drv.remaining_vehicle_balance = parseFloat(payload.remainingVehicleBalance);
+            if (drv.opening_balance) {
+              drv.opening_balance.remaining_vehicle_balance = parseFloat(payload.remainingVehicleBalance);
+            }
+          }
+          if (payload.status) {
+            drv.status = payload.status;
+            if (u) {
+              u.status = payload.status === 'approved' || payload.status === 'available' ? 'active' : payload.status;
+            }
+          }
+
+          drv.updated_at = new Date().toISOString();
+          drv.updated_by = user.fullName;
 
           writeAuditLog(user.id, user.email, user.role, 'DRIVER_ADMIN_FORCE_EDIT', null, `Admin updated driver profile ${drv.id}`, db);
           await dbManager.saveDB(db);
 
-          return buildResponse({ success: true, message: 'Driver details updated successfully.' });
+          return buildResponse({ success: true, message: 'Driver details updated successfully.', driver: drv });
         } catch (err: any) {
           return buildResponse({ error: err.message }, 500);
         }
@@ -3163,10 +3257,25 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     // GET /api/payments
     if (parts.length === 0 && method === 'GET') {
-      const dId = url.searchParams.get('driverId');
+      const dId = url.searchParams.get('driverId') || url.searchParams.get('driver_id');
       let payments = db.driver_payments || [];
       if (dId) {
-        payments = payments.filter((p: any) => p.driver_id === dId);
+        const drv = (db.drivers || []).find((d: any) => d.id === dId || d.user_id === dId || d.company_driver_id === dId);
+        const validIds = new Set([
+          dId,
+          drv?.id,
+          drv?.user_id,
+          drv?.company_driver_id,
+          drv?.fullName,
+          drv?.full_name
+        ].filter(Boolean));
+
+        payments = payments.filter((p: any) => 
+          validIds.has(p.driver_id) || 
+          validIds.has(p.driverId) || 
+          validIds.has(p.driver_name) || 
+          validIds.has(p.driverName)
+        );
       }
       return buildResponse(payments);
     }
@@ -3175,19 +3284,28 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (parts.length === 0 && method === 'POST') {
       try {
         const payload = await request.json() as any;
+        const initialStatus = (user.role === 'admin' || user.role === 'director') ? 'approved' : 'pending';
         const newPayment = {
           id: generateUUID(),
           driver_id: payload.driverId,
+          driverId: payload.driverId,
           amount: parseFloat(payload.amount),
-          installment_number: parseInt(payload.installmentNumber),
-          receipt_number: payload.receiptNumber || `RCP-${generateUUID().substring(0, 6).toUpperCase()}`,
+          installment_number: parseInt(payload.installmentNumber) || 1,
+          installmentNumber: parseInt(payload.installmentNumber) || 1,
+          receipt_number: payload.receiptNumber || payload.referenceNumber || `RCP-${generateUUID().substring(0, 6).toUpperCase()}`,
+          receiptNumber: payload.receiptNumber || payload.referenceNumber || `RCP-${generateUUID().substring(0, 6).toUpperCase()}`,
           date: payload.date || new Date().toISOString().split('T')[0],
           remarks: payload.remarks || '',
-          status: 'pending',
+          status: initialStatus,
           created_at: new Date().toISOString()
         };
 
         db.driver_payments.push(newPayment);
+
+        const targetDrv = db.drivers.find((d: any) => d.id === payload.driverId || d.user_id === payload.driverId || d.company_driver_id === payload.driverId);
+        if (targetDrv && payload.outstandingAmount !== undefined) {
+          targetDrv.remaining_vehicle_balance = parseFloat(payload.outstandingAmount);
+        }
 
         db.notifications.unshift({
           id: generateUUID(),
@@ -3203,7 +3321,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         writeAuditLog(user.id, user.email, user.role, 'PAYMENT_SUBMITTED', null, `Payment submitted: ₦${payload.amount}`, db);
         await dbManager.saveDB(db);
 
-        return buildResponse(newPayment);
+        return buildResponse({ success: true, payment: newPayment });
       } catch (err: any) {
         return buildResponse({ error: err.message }, 500);
       }
@@ -3214,23 +3332,23 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (parts.length === 2 && parts[1] === 'archive' && method === 'PUT') {
       try {
         if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
-        const drv = db.drivers.find((d: any) => d.id === parts[0]);
-        if (!drv) return buildResponse({ error: 'Driver not found.' }, 404);
-        drv.status = 'archived';
-        writeAuditLog(user.id, user.email, user.role, 'DRIVER_ARCHIVED', parts[0], `Archived driver ${drv.full_name || drv.fullName}`, db);
+        const pay = db.driver_payments.find((p: any) => p.id === parts[0]);
+        if (!pay) return buildResponse({ error: 'Payment not found.' }, 404);
+        pay.status = 'archived';
+        writeAuditLog(user.id, user.email, user.role, 'PAYMENT_ARCHIVED', parts[0], `Archived payment ${pay.id}`, db);
         await dbManager.saveDB(db);
-        return buildResponse({ success: true, message: 'Driver archived' });
+        return buildResponse({ success: true, message: 'Payment archived' });
       } catch (err: any) { return buildResponse({ error: err.message }, 500); }
     }
     if (parts.length === 2 && parts[1] === 'restore' && method === 'PUT') {
       try {
         if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
-        const drv = db.drivers.find((d: any) => d.id === parts[0]);
-        if (!drv) return buildResponse({ error: 'Driver not found.' }, 404);
-        drv.status = 'active';
-        writeAuditLog(user.id, user.email, user.role, 'DRIVER_RESTORED', parts[0], `Restored driver ${drv.full_name || drv.fullName}`, db);
+        const pay = db.driver_payments.find((p: any) => p.id === parts[0]);
+        if (!pay) return buildResponse({ error: 'Payment not found.' }, 404);
+        pay.status = 'pending';
+        writeAuditLog(user.id, user.email, user.role, 'PAYMENT_RESTORED', parts[0], `Restored payment ${pay.id}`, db);
         await dbManager.saveDB(db);
-        return buildResponse({ success: true, message: 'Driver restored' });
+        return buildResponse({ success: true, message: 'Payment restored' });
       } catch (err: any) { return buildResponse({ error: err.message }, 500); }
     }
     if (parts.length === 2 && parts[1] === 'status' && method === 'PUT') {
@@ -4518,6 +4636,45 @@ ${JSON.stringify(cleanedContext, null, 2)}
       });
     }
 
+    if (parts[0] === 'self' && method === 'PUT') {
+      const sh = db.shareholders.find((s: any) => s.user_id === user.id || (s.email && user.email && s.email.toLowerCase() === user.email.toLowerCase()));
+      if (!sh) return buildResponse({ error: 'Shareholder profile missing.' }, 404);
+
+      try {
+        const { phone, email, address, password, passportPhoto } = await request.json() as any;
+        const u = db.users.find((usr: any) => usr.id === user.id || (usr.email && user.email && usr.email.toLowerCase() === user.email.toLowerCase()));
+        if (!u) return buildResponse({ error: 'User account not found.' }, 404);
+
+        if (phone) {
+          u.phone = phone;
+          sh.phone = phone;
+        }
+        if (email) {
+          const emailExists = db.users.some((usr: any) => usr.id !== u.id && usr.email && usr.email.toLowerCase() === email.toLowerCase());
+          if (emailExists) return buildResponse({ error: 'Email already registered.' }, 400);
+          u.email = email.toLowerCase();
+          sh.email = email.toLowerCase();
+        }
+        if (address !== undefined) sh.address = address;
+        if (password) u.password_hash = await hashPassword(password);
+        if (passportPhoto) {
+          sh.passport_photo_url = passportPhoto;
+          sh.passportPhoto = passportPhoto;
+          sh.passportPhotoUrl = passportPhoto;
+        }
+
+        u.updated_at = new Date().toISOString();
+        sh.updated_at = new Date().toISOString();
+
+        writeAuditLog(user.id, user.email, user.role, 'SHAREHOLDER_SELF_UPDATE', null, 'Shareholder updated self profile', db);
+        await dbManager.saveDB(db);
+
+        return buildResponse({ success: true, message: 'Profile updated successfully.' });
+      } catch (err: any) {
+        return buildResponse({ error: err.message }, 500);
+      }
+    }
+
     if (parts.length === 1) {
       const sh = db.shareholders.find((s: any) => s.id === parts[0]);
       if (!sh) return buildResponse({ error: 'Shareholder not found.' }, 404);
@@ -4944,6 +5101,124 @@ ${JSON.stringify(cleanedContext, null, 2)}
         db.users = db.users.filter((u: any) => u.id !== id);
         await dbManager.saveDB(db);
         return buildResponse({ success: true, message: 'Admin deleted' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+
+    if (ctrl.startsWith('drivers/') && ctrl.endsWith('/add-accident') && method === 'POST') {
+      try {
+        const idParts = ctrl.split('/');
+        const driverId = idParts[1];
+        const driver = db.drivers.find((d: any) => d.id === driverId);
+        if (!driver) return buildResponse({ error: 'Driver profile not found.' }, 404);
+
+        const { date, description, damageEstimate, severity } = await request.json() as any;
+        if (!date || !description) return buildResponse({ error: 'Date and description parameters are required.' }, 400);
+
+        if (!driver.accidentHistory) driver.accidentHistory = [];
+
+        const accident = {
+          id: generateUUID().substring(0, 8).toUpperCase(),
+          date,
+          description,
+          damageEstimate: parseFloat(damageEstimate) || 0,
+          severity: severity || 'minor',
+          created_at: new Date().toISOString()
+        };
+
+        driver.accidentHistory.unshift(accident);
+
+        if (parseFloat(damageEstimate) > 0) {
+          if (!db.financial_records) db.financial_records = [];
+          db.financial_records.unshift({
+            id: generateUUID(),
+            type: 'expense',
+            category: 'maintenance',
+            amount: parseFloat(damageEstimate),
+            date,
+            description: `Accident repair layout - Driver ${driver.company_driver_id || 'unassigned'}`,
+            approvedBy: user.fullName,
+            created_at: new Date().toISOString()
+          });
+        }
+
+        writeAuditLog(user.id, user.email, user.role, 'DRIVER_ACCIDENT_LOGGED', null, `Logged accident for driver: ${driver.id}. Damage: ₦${parseFloat(damageEstimate).toLocaleString()}`, db);
+        await dbManager.saveDB(db);
+
+        return buildResponse({ success: true, accident });
+      } catch (err: any) {
+        return buildResponse({ error: err.message }, 500);
+      }
+    }
+
+    if (ctrl.startsWith('drivers/') && ctrl.endsWith('/add-rest') && method === 'POST') {
+      try {
+        const idParts = ctrl.split('/');
+        const driverId = idParts[1];
+        const driver = db.drivers.find((d: any) => d.id === driverId);
+        if (!driver) return buildResponse({ error: 'Driver profile not found.' }, 404);
+
+        const { startDate, endDate, reason } = await request.json() as any;
+        if (!startDate || !endDate) return buildResponse({ error: 'Start and end dates are required.' }, 400);
+
+        if (!driver.restHistory) driver.restHistory = [];
+
+        const rest = {
+          id: generateUUID().substring(0, 8).toUpperCase(),
+          startDate,
+          endDate,
+          reason: reason || 'Routine physical rest guidelines',
+          created_at: new Date().toISOString()
+        };
+
+        driver.restHistory.unshift(rest);
+        driver.status = 'off-duty';
+
+        writeAuditLog(user.id, user.email, user.role, 'DRIVER_REST_PERIOD_SCHEDULED', null, `Scheduled rest period for driver: ${driver.id} (${startDate} to ${endDate})`, db);
+        await dbManager.saveDB(db);
+
+        return buildResponse({ success: true, rest });
+      } catch (err: any) {
+        return buildResponse({ error: err.message }, 500);
+      }
+    }
+
+    if (ctrl === 'directors' && method === 'POST') {
+      try {
+        const { full_name, email, password, pin } = await request.json() as any;
+        if (db.users.some((u: any) => u.email === email)) return buildResponse({ error: 'Email already exists' }, 400);
+        const hashedPassword = await generateHash(password);
+        const hashedPin = await generateHash(pin || '1234');
+        const newDirector = { id: `DIR-${Date.now()}`, full_name, email, role: 'director', password_hash: hashedPassword, pin_hash: hashedPin, status: 'active', created_at: new Date().toISOString() };
+        db.users.push(newDirector);
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Director created' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+
+    if (ctrl.startsWith('directors/') && method === 'PUT') {
+      try {
+        const id = ctrl.split('/')[1];
+        const updates = await request.json() as any;
+        const dirUser = db.users.find((u: any) => u.id === id);
+        if (dirUser) {
+          if (updates.full_name) dirUser.full_name = updates.full_name;
+          if (updates.email) dirUser.email = updates.email;
+          if (updates.password) dirUser.password_hash = await generateHash(updates.password);
+          if (updates.pin) dirUser.pin_hash = await generateHash(updates.pin);
+          if (updates.status) dirUser.status = updates.status;
+          await dbManager.saveDB(db);
+          return buildResponse({ success: true, message: 'Director updated' });
+        }
+        return buildResponse({ error: 'Not found' }, 404);
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+
+    if (ctrl.startsWith('directors/') && method === 'DELETE') {
+      try {
+        const id = ctrl.split('/')[1];
+        db.users = db.users.filter((u: any) => u.id !== id);
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Director deleted' });
       } catch (err: any) { return buildResponse({ error: err.message }, 500); }
     }
 

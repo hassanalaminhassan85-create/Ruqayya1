@@ -5080,15 +5080,31 @@ export function getDriverFinancials(driver: any, db: any) {
   const purchasePrice = parseFloat(driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice) || 15000000;
   const agreedAmount = parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 300000;
   
+  const validIds = new Set([
+    driver.id,
+    driver.user_id,
+    driver.userId,
+    driver.company_driver_id,
+    driver.companyDriverId,
+    driver.fullName,
+    driver.full_name
+  ].filter(Boolean));
+
+  const isApprovedPayment = (p: any) => {
+    if (!p) return false;
+    const matchesDriver = validIds.has(p.driver_id) || validIds.has(p.driverId) || validIds.has(p.driver_name) || validIds.has(p.driverName);
+    if (!matchesDriver) return false;
+    const st = (p.status || '').toLowerCase();
+    return st === 'approved' || st === 'completed' || st === 'active' || st === 'paid' || st === 'pending';
+  };
+
+  const approvedPaymentsInERP = (db.driver_payments || []).filter(isApprovedPayment);
+  const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+  const countErpPaid = approvedPaymentsInERP.length;
+
   if (driver.opening_balance && driver.opening_balance.is_imported) {
     const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance ?? driver.opening_balance.remainingVehicleBalance) || 0;
     const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date ?? driver.opening_balance.totalPaidToDate) || 0;
-    
-    // Sum of all approved payments in ERP
-    const approvedPaymentsInERP = (db.driver_payments || [])
-      .filter((p: any) => p.driver_id === driver.id && p.status === 'approved');
-    const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const countErpPaid = approvedPaymentsInERP.length;
     
     const totalAmountPaid = openingPaid + totalErpPaid;
     const remainingVehicleBalance = Math.max(0, openingRemaining - totalErpPaid);
@@ -5103,11 +5119,6 @@ export function getDriverFinancials(driver: any, db: any) {
     };
   } else {
     // New Driver
-    const approvedPaymentsInERP = (db.driver_payments || [])
-      .filter((p: any) => p.driver_id === driver.id && p.status === 'approved');
-    const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
-    const countErpPaid = approvedPaymentsInERP.length;
-    
     const totalAmountPaid = totalErpPaid;
     const rawInitialRemaining = driver.remaining_vehicle_balance !== undefined ? driver.remaining_vehicle_balance : driver.remainingVehicleBalance;
     const initialRemaining = rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining))

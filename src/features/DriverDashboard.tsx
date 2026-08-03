@@ -358,9 +358,9 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     );
   };
 
-  const vehiclePurchasePrice = driverData?.vehiclePurchasePrice || driverData?.vehicle_purchase_price || 15000000;
-  const totalPaid = driverData?.total_amount_paid || driverData?.totalAmountPaid || payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const currentBalance = driverData?.remaining_vehicle_balance || driverData?.remainingVehicleBalance || Math.max(0, vehiclePurchasePrice - totalPaid);
+  const vehiclePurchasePrice = driverData?.vehiclePurchasePrice || driverData?.vehicle_purchase_price || driverData?.financials?.vehiclePurchasePrice || 15000000;
+  const totalPaid = driverData?.financials?.totalAmountPaid ?? driverData?.total_amount_paid ?? driverData?.totalAmountPaid ?? payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const currentBalance = driverData?.financials?.remainingVehicleBalance ?? driverData?.remaining_vehicle_balance ?? driverData?.remainingVehicleBalance ?? Math.max(0, vehiclePurchasePrice - totalPaid);
 
   // Live real-time calculations as driver changes payment amount
   const livePaymentVal = paymentAmount || 0;
