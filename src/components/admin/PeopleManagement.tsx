@@ -1326,7 +1326,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                           </td>
                           <td className="p-4 text-center">
                             <span className="font-black font-mono text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded text-[11px] border border-emerald-100">
-                              {weight.toFixed(2)}%
+                              {(Number(weight) || 0).toFixed(2)}%
                             </span>
                           </td>
                           <td className="p-4 text-center">
@@ -1722,7 +1722,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                     <label className="text-[10px] font-bold block text-text-muted mb-0.5">GUARANTOR FULL NAME *</label>
                     <input
                       type="text"
-                      placeholder="e.g. Mallam Ibrahim Bello"
+                      placeholder="e.g. Mallam Ibrahim Ahmad"
                       value={gFullName}
                       onChange={(e) => setGFullName(e.target.value)}
                       className="w-full bg-bg-base border border-border-main text-text-main px-3 py-1.5 text-xs rounded-lg focus:outline-none"
@@ -2344,7 +2344,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
               <div className="text-right">
                 <span className="text-[10px] font-mono uppercase text-slate-300 font-bold block">Equity Holding</span>
                 <span className="text-lg font-black text-emerald-400 mt-1 block font-mono">
-                  {((selectedShareholderLedger.investment_amount / totalShareholderCapital) * 100).toFixed(2)}%
+                  {((Number(selectedShareholderLedger.investment_amount) / (Number(totalShareholderCapital) || 1)) * 100).toFixed(2)}%
                 </span>
               </div>
             </div>

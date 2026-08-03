@@ -2199,7 +2199,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                           <div className="p-4 bg-gradient-to-br from-slate-50 to-white border-b border-slate-100 flex flex-col gap-3">
                             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
                               <Badge variant={availableWithdrawable > 0 ? 'success' : 'neutral'} className="font-mono text-[9px] font-black uppercase">
-                                {weightStake.toFixed(2)}% Stake
+                                {(Number(weightStake) || 0).toFixed(2)}% Stake
                               </Badge>
                               <button
                                 onClick={() => openEditShareholder(sh)}
@@ -2576,7 +2576,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                                     <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase mt-0.5">Management Tier</p>
                                   </div>
                                   <Badge variant="default" className="text-[8px] sm:text-[9px] font-black font-mono shrink-0">
-                                    {percentage.toFixed(0)}%
+                                    {(Number(percentage) || 0).toFixed(0)}%
                                   </Badge>
                                 </div>
                                 

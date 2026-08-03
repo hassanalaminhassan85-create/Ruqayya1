@@ -1000,7 +1000,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                         <span>LEASING COMPLETION PROGRESS</span>
                         <span>
                           {selectedPerson.total_amount_paid && selectedPerson.vehicle_purchase_price
-                            ? `${((selectedPerson.total_amount_paid / selectedPerson.vehicle_purchase_price) * 100).toFixed(1)}%`
+                            ? `${((Number(selectedPerson.total_amount_paid) / (Number(selectedPerson.vehicle_purchase_price) || 1)) * 100).toFixed(1)}%`
                             : '0%'}
                         </span>
                       </div>
@@ -1062,7 +1062,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                       <div className="bg-bg-surface p-2.5 border border-border-main rounded-lg">
                         <span className="text-[10px] text-text-muted block">ESTIMATED EQUITY</span>
                         <span className="text-sm font-extrabold text-emerald-500 block mt-1">
-                          {selectedPerson.investment_amount ? `${((selectedPerson.investment_amount / 225000000) * 100).toFixed(2)}%` : '0%'}
+                          {selectedPerson.investment_amount ? `${((Number(selectedPerson.investment_amount) / 225000000) * 100).toFixed(2)}%` : '0%'}
                         </span>
                       </div>
                       <div className="bg-bg-surface p-2.5 border border-border-main rounded-lg">
@@ -1206,7 +1206,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                     className="w-full bg-bg-base text-text-main border border-border-main px-3 py-2 rounded-lg focus:outline-none"
-                    placeholder="e.g. Alhaji Ibrahim Bello"
+                    placeholder="e.g. Alhaji Ibrahim Ahmad"
                   />
                 </div>
 

@@ -93,6 +93,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [mustChangePasswordMode, setMustChangePasswordMode] = useState(false);
+  const [tempToken, setTempToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
 
   // Driver Registration Form States (Multi-step)
   const [regStep, setRegStep] = useState(1);
@@ -257,6 +262,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       const res = await api.login({ email, password });
       
+      if (res && (res.mustChangePassword || res.must_change_password)) {
+        setTempToken(res.token);
+        setMustChangePasswordMode(true);
+        setLoginLoading(false);
+        return;
+      }
+
       if (!res || !res.success || !res.user || !res.user.role) {
         throw new Error(lang === 'en' ? "Server returned empty or invalid validation. Attempting local profile fallback." : "Sabar ta dawo da gurbataccen sakamako. Ana kokarin sashi na gida.");
       }
@@ -305,7 +317,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           userKey = 'MMR';
         } else if (lowerEmail === 'admin@ruqayyatransport.com') {
           fallbackRole = 'admin';
-          fullName = 'Operations Admin ADAM';
+          fullName = 'Ibrahim Ahmad';
           userKey = 'ADAM';
         }
 
@@ -325,6 +337,47 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       setLoginLoading(false);
       setLoginError(err.message || (lang === 'en' ? "Access Denied: Invalid credentials." : "An hana shiga: Bayanan shiga ba daidai ba ne."));
+    }
+  };
+
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    
+    if (newPassword !== confirmPassword) {
+      setLoginError(lang === 'en' ? "Passwords do not match." : "Kalmomin sirri ba su dace ba.");
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      setLoginError(lang === 'en' ? "Password must be at least 6 characters." : "Dole ne kalmar sirri ta kasance akalla haruffa 6.");
+      return;
+    }
+
+    setChangePasswordLoading(true);
+    try {
+      // Use the temp token for this request
+      api.setToken(tempToken);
+      const res = await api.changePasswordFirstLogin(newPassword);
+      
+      if (res.success) {
+        setMustChangePasswordMode(false);
+        setLoginSuccess(true);
+        setTimeout(() => {
+          setChangePasswordLoading(false);
+          const userRole = res.user.role;
+          if (userRole === 'driver') {
+            onLoginAsDriver(res.user.fullName);
+          } else {
+            onNavigateToRole(userRole);
+          }
+        }, 800);
+      } else {
+        throw new Error(res.error || "Failed to update password");
+      }
+    } catch (err: any) {
+      setChangePasswordLoading(false);
+      setLoginError(err.message || "Failed to change password.");
     }
   };
 
@@ -1668,45 +1721,112 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       onSubmit={handleStandardLoginSubmit}
                       className="flex flex-col gap-5 text-left"
                     >
-                      <div className="flex flex-col">
-                        <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-2">{lang === 'en' ? 'Corporate Email' : 'Imel Na Ma\'aikata'}</label>
-                        <div className="relative flex items-center h-[54px] rounded-2xl border transition-all bg-slate-950/40 border-white/10 focus-within:border-[#D4AF37]">
-                          <User className="h-5 w-5 absolute left-4 text-slate-400" />
-                          <input 
-                            type="email" 
-                            required 
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder={publicTab === 'driver' ? "driver@ruqayyatransport.com" : "shareholder@ruqayyatransport.com"}
-                            className="w-full h-full pl-12 pr-4 bg-transparent border-0 text-white font-semibold text-sm focus:outline-none"
-                          />
-                        </div>
-                      </div>
+                      {mustChangePasswordMode ? (
+                        <div className="flex flex-col gap-5 animate-fadeIn">
+                          <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex items-start gap-3">
+                            <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs font-bold text-amber-500">{lang === 'en' ? 'Security Update Required' : 'Ana Bukatar Sabunta Tsaro'}</p>
+                              <p className="text-[10px] text-amber-400/80 leading-relaxed mt-0.5">
+                                {lang === 'en' 
+                                  ? 'As this is your first time connecting, you must create a new private password to secure your corporate records.' 
+                                  : 'Domin wannan ne karo na farko da kake shiga, dole ne ka samar da sabuwar kalmar sirri don kare bayananka.'}
+                              </p>
+                            </div>
+                          </div>
 
-                      <div className="flex flex-col">
-                        <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-2">{lang === 'en' ? 'Validation Password' : 'Kalmar Sirri'}</label>
-                        <div className="relative flex items-center h-[54px] rounded-2xl border transition-all bg-slate-950/40 border-white/10 focus-within:border-[#D4AF37]">
-                          <KeyRound className="h-5 w-5 absolute left-4 text-slate-400" />
-                          <input 
-                            type="password" 
-                            required 
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••" 
-                            className="w-full h-full pl-12 pr-4 bg-transparent border-0 text-white font-semibold text-sm focus:outline-none"
-                          />
-                        </div>
-                      </div>
+                          <div className="flex flex-col">
+                            <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-2">{lang === 'en' ? 'New Secure Password' : 'Sabuwar Kalmar Sirri'}</label>
+                            <div className="relative flex items-center h-[54px] rounded-2xl border transition-all bg-slate-950/40 border-white/10 focus-within:border-[#D4AF37]">
+                              <KeyRound className="h-5 w-5 absolute left-4 text-slate-400" />
+                              <input 
+                                type="password" 
+                                required 
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="••••••••" 
+                                className="w-full h-full pl-12 pr-4 bg-transparent border-0 text-white font-semibold text-sm focus:outline-none"
+                              />
+                            </div>
+                          </div>
 
-                      <Button 
-                        type="submit" 
-                        variant="secondary"
-                        isLoading={loginLoading}
-                        className="w-full h-12 rounded-2xl text-slate-950 font-black text-xs uppercase tracking-widest bg-gradient-to-r from-[#D4AF37] to-amber-500 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
-                      >
-                        <span>{lang === 'en' ? 'Acknowledge & Connect' : 'Shiga Sashi'}</span>
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
+                          <div className="flex flex-col">
+                            <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-2">{lang === 'en' ? 'Confirm Password' : 'Tabbatar da Kalmar Sirri'}</label>
+                            <div className="relative flex items-center h-[54px] rounded-2xl border transition-all bg-slate-950/40 border-white/10 focus-within:border-[#D4AF37]">
+                              <ShieldCheck className="h-5 w-5 absolute left-4 text-slate-400" />
+                              <input 
+                                type="password" 
+                                required 
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="••••••••" 
+                                className="w-full h-full pl-12 pr-4 bg-transparent border-0 text-white font-semibold text-sm focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <Button 
+                            type="button"
+                            onClick={handleChangePasswordSubmit}
+                            variant="secondary"
+                            isLoading={changePasswordLoading}
+                            className="w-full h-12 rounded-2xl text-slate-950 font-black text-xs uppercase tracking-widest bg-gradient-to-r from-[#D4AF37] to-amber-500 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
+                          >
+                            <span>{lang === 'en' ? 'Secure My Account' : 'Kare Akalina'}</span>
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+
+                          <button 
+                            type="button"
+                            onClick={() => setMustChangePasswordMode(false)}
+                            className="text-[10px] text-slate-500 hover:text-white font-bold uppercase tracking-wider text-center transition-colors cursor-pointer"
+                          >
+                            {lang === 'en' ? 'Back to Login' : 'Koma Baya'}
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex flex-col">
+                            <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-2">{lang === 'en' ? 'Corporate Email' : 'Imel Na Ma\'aikata'}</label>
+                            <div className="relative flex items-center h-[54px] rounded-2xl border transition-all bg-slate-950/40 border-white/10 focus-within:border-[#D4AF37]">
+                              <User className="h-5 w-5 absolute left-4 text-slate-400" />
+                              <input 
+                                type="email" 
+                                required 
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder={publicTab === 'driver' ? "driver@ruqayyatransport.com" : "shareholder@ruqayyatransport.com"}
+                                className="w-full h-full pl-12 pr-4 bg-transparent border-0 text-white font-semibold text-sm focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col">
+                            <label className="text-[11px] font-extrabold uppercase text-slate-400 tracking-wider mb-2">{lang === 'en' ? 'Validation Password' : 'Kalmar Sirri'}</label>
+                            <div className="relative flex items-center h-[54px] rounded-2xl border transition-all bg-slate-950/40 border-white/10 focus-within:border-[#D4AF37]">
+                              <KeyRound className="h-5 w-5 absolute left-4 text-slate-400" />
+                              <input 
+                                type="password" 
+                                required 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••" 
+                                className="w-full h-full pl-12 pr-4 bg-transparent border-0 text-white font-semibold text-sm focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <Button 
+                            type="submit" 
+                            variant="secondary"
+                            isLoading={loginLoading}
+                            className="w-full h-12 rounded-2xl text-slate-950 font-black text-xs uppercase tracking-widest bg-gradient-to-r from-[#D4AF37] to-amber-500 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
+                          >
+                            <span>{lang === 'en' ? 'Acknowledge & Connect' : 'Shiga Sashi'}</span>
+                            <ArrowRight className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </motion.form>
                   )}
                 </AnimatePresence>

@@ -366,7 +366,7 @@ export function seedDBIfEmpty() {
         email: 'admin@ruqayyatransport.com',
         phone: '+234 803 222 0002',
         password_hash: hashPassword('admin123'),
-        full_name: 'Operations Admin ADAM',
+        full_name: 'Ibrahim Ahmad',
         role_id: 'role-admin',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

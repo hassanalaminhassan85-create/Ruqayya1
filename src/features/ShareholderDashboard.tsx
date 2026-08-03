@@ -203,7 +203,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
             <div className="p-5 bg-gradient-to-br from-slate-50 to-white border-b border-slate-100">
               <div className="flex items-center justify-between mb-4">
                 <Badge variant="success" className="font-mono text-[10px] font-black uppercase px-3 py-1">
-                  {equityWeight.toFixed(2)}% Stake
+                  {(Number(equityWeight) || 0).toFixed(2)}% Stake
                 </Badge>
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>

@@ -1767,11 +1767,11 @@ app.post('/api/auth/login', (req, res) => {
           if (trimmedUsername === 'ADAM' && existingAdmins[0]) {
             user = existingAdmins[0];
             user.username = 'ADAM';
-            user.full_name = 'Operations Admin ADAM';
+            user.full_name = 'Ibrahim Ahmad';
           } else if (trimmedUsername === 'ABAKAKA' && existingAdmins[1]) {
             user = existingAdmins[1];
             user.username = 'ABAKAKA';
-            user.full_name = 'Operations Admin ABAKAKA';
+            user.full_name = 'Ibrahim Ahmad';
           } else {
             const adminId = generateUUID();
             user = {
@@ -1780,7 +1780,7 @@ app.post('/api/auth/login', (req, res) => {
               email: `${trimmedUsername.toLowerCase()}@ruqayyatransport.com`,
               phone: '+234 803 222 0002',
               password_hash: hashPassword('admin123'),
-              full_name: trimmedUsername === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
+              full_name: 'Ibrahim Ahmad',
               role_id: 'role-admin',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),

@@ -88,7 +88,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [logs, setLogs] = useState<any[]>([]);
 
   // Admin profile & avatar states
-  const [adminName, setAdminName] = useState('Operations Admin');
+  const [adminName, setAdminName] = useState('Ibrahim Ahmad');
   const [adminAvatar, setAdminAvatar] = useState('');
   const [adminId, setAdminId] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -99,13 +99,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     api.getMe().then(payload => {
       if (payload && payload.user) {
         setAdminId(payload.user.id);
+        
+        // Priority 1: Backend server user data (The Source of Truth)
+        // Priority 2: Stored preference for custom name override
+        // Priority 3: Hardcoded fallback
+        const backendName = payload.user.full_name || payload.user.fullName;
         const savedName = localStorage.getItem(`ruqayya_admin_name_${payload.user.id}`);
+        
+        const finalName = backendName || savedName || 'Operations Admin';
+        setAdminName(finalName);
+        setTempAdminName(finalName);
+        
         const savedAvatar = localStorage.getItem(`ruqayya_admin_avatar_${payload.user.id}`);
-        
-        const fallbackName = savedName || payload.user.full_name || payload.user.fullName || 'Operations Admin';
-        setAdminName(fallbackName);
-        setTempAdminName(fallbackName);
-        
         const fallbackAvatar = savedAvatar || localStorage.getItem('ruqayya_admin_avatar') || '';
         setAdminAvatar(fallbackAvatar);
         setTempAdminAvatar(fallbackAvatar);

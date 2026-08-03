@@ -1307,7 +1307,7 @@ class D1Manager {
           email: 'admin@ruqayyatransport.com',
           phone: '+234 803 222 0002',
           password_hash: await hashPassword('admin123'),
-          full_name: 'Operations Admin ADAM',
+          full_name: 'Ibrahim Ahmad',
           role_id: 'role-admin',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -1889,7 +1889,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                 email: `${userKey.toLowerCase()}@ruqayyatransport.com`,
                 phone: '+234 803 222 0002',
                 password_hash: '', // updated asynchronously
-                full_name: userKey === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
+                full_name: 'Ibrahim Ahmad',
                 role_id: roleId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
@@ -2388,7 +2388,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               email: `${userKey.toLowerCase()}@ruqayyatransport.com`,
               phone: '+234 803 222 0002',
               password_hash: '', // updated asynchronously
-              full_name: userKey === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
+              full_name: 'Ibrahim Ahmad',
               role_id: roleId,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),

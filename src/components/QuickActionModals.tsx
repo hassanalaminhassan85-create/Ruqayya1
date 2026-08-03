@@ -767,7 +767,7 @@ export const RecordPaymentModal: React.FC<{
                 className="w-full px-3 py-2 bg-bg-base border border-border-main rounded-xl focus:outline-none text-xs text-text-main"
               >
                 <option value="">{lang === 'en' ? '-- Select Certified Driver --' : '-- Zabi Direba --'}</option>
-                <option value="drv-1">Ibrahim Sani (RTL-DRV-102)</option>
+                <option value="drv-1">Ibrahim Ahmad (RTL-DRV-102)</option>
                 <option value="drv-2">Aminu Yusuf (RTL-DRV-103)</option>
                 <option value="drv-3">Garba Abdullahi (RTL-DRV-104)</option>
               </select>
