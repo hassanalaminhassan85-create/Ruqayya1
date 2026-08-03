@@ -2327,7 +2327,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
           driver={selectedDriverFor360}
           drivers={drivers}
           vehicles={vehicles}
-          payments={payments}
+          payments={[]}
           onClose={() => setSelectedDriverFor360(null)}
           onSync={onSync}
         />

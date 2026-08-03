@@ -2290,9 +2290,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         status: 'active'
       };
 
-      const vehicleId = generateUUID();
+      const newVehicleId = vehicleId;
       const newVehicle = {
-        id: vehicleId,
+        id: newVehicleId,
         driver_id: driverId,
         brand: vehicle.brand,
         model: vehicle.model,
