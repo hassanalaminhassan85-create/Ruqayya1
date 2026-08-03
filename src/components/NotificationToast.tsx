@@ -197,7 +197,7 @@ export const NotificationToastCard: React.FC<NotificationToastProps> = ({
         <div className="shrink-0 flex flex-col items-center justify-center">
           {notification.relatedPhoto ? (
             <div className="h-10 w-10 rounded-full border-1.5 border-brand-gold overflow-hidden bg-slate-100 shadow-xs">
-              <img
+              <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
                 src={notification.relatedPhoto}
                 alt={notification.relatedPersonName || 'Avatar'}
                 className="h-full w-full object-cover"

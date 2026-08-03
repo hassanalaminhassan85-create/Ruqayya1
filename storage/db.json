@@ -83,8 +83,8 @@
       "investmentAmount": 12000000,
       "investment_date": "2026-01-15",
       "investmentDate": "2026-01-15",
-      "passport_photo_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
-      "passportPhoto": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+      "passport_photo_url": "",
+      "passportPhoto": "",
       "ownership_percentage": 60,
       "total_withdrawn": 0,
       "total_reinvested": 0,
@@ -103,8 +103,8 @@
       "investmentAmount": 8000000,
       "investment_date": "2026-02-01",
       "investmentDate": "2026-02-01",
-      "passport_photo_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150",
-      "passportPhoto": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150",
+      "passport_photo_url": "",
+      "passportPhoto": "",
       "ownership_percentage": 40,
       "total_withdrawn": 0,
       "total_reinvested": 0,
@@ -197,9 +197,31 @@
       "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
       "created_at": "2026-07-29T08:28:18.785Z",
       "status": "active"
+    },
+    {
+      "id": "5b2f7acf-bd9c-4716-83c7-30727284607d",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "token": "tok_admin_ADAM_d149d829c2d248a6b787c55d8c864dc1",
+      "expires_at": "2026-08-31T20:07:34.703Z",
+      "user_ip": "102.91.96.40, 169.254.169.126",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "created_at": "2026-08-01T20:07:34.703Z",
+      "status": "active"
     }
   ],
   "audit_logs": [
+    {
+      "id": "AUD-1785616903695-8BEE7C15",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_role": "admin",
+      "action": "COMPANY_OPERATIONS_PAUSE",
+      "previous_value": "Operational Mode",
+      "new_value": "Suspended company operations: Ok",
+      "ip_address": "102.91.93.217, 169.254.169.126",
+      "created_at": "2026-08-01T20:41:43.695Z",
+      "status": "active"
+    },
     {
       "id": "AUD-1785315808209-DC49283D",
       "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
@@ -346,6 +368,19 @@
   ],
   "notifications": [
     {
+      "id": "052c0ee6-d7cc-4a7e-8a90-a1c8a2db35d2",
+      "title_en": "System Action: COMPANY OPERATIONS PAUSE",
+      "title_ha": "Wani Abu Ya Faru: COMPANY OPERATIONS PAUSE",
+      "message_en": "Suspended company operations: Ok",
+      "message_ha": "Suspended company operations: Ok",
+      "type": "info",
+      "category": "system",
+      "read_status": 0,
+      "created_at": "2026-08-01T20:41:43.695Z",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "target_role": "admin"
+    },
+    {
       "id": "d5c6b592-62d0-4f63-b4fd-d5f7352abde3",
       "title_en": "Operating Cycle Resumed",
       "title_ha": "An Dawo da Zagayen Sufuri",
@@ -460,17 +495,25 @@
     {
       "id": "CYC-050",
       "startDate": "2026-07-29",
-      "endDate": null,
+      "endDate": "2026-08-30",
       "endGoalTons": 200,
       "status": "active",
       "created_at": "2026-07-29T07:44:42.563Z",
       "created_by": "Operations Admin ADAM",
       "locked": false,
       "financials": [],
-      "pauseReason": "Jj",
-      "pausedAt": "2026-07-29T09:03:17.870Z",
+      "pauseReason": "",
+      "pausedAt": null,
       "pausedBy": "Operations Admin ADAM",
       "pauseHistory": [
+        {
+          "id": "cacf0fb2-8f9f-4f60-aaa9-005319c3f9ed",
+          "pausedBy": "Operations Admin ADAM",
+          "pausedAt": "2026-08-01T20:41:43.692Z",
+          "reason": "Ok",
+          "pauseDays": 2,
+          "extendedEndDate": "2026-08-30"
+        },
         {
           "id": "bfbae93f-27f2-4b57-9c78-c35b09f21118",
           "pausedBy": "Operations Admin ADAM",
@@ -500,7 +543,9 @@
         }
       ],
       "resumedAt": "2026-07-29T09:03:28.205Z",
-      "resumedBy": "Operations Admin ADAM"
+      "resumedBy": "Operations Admin ADAM",
+      "pauseDays": 2,
+      "extendedDays": 2
     }
   ],
   "driver_payments": [],
@@ -541,12 +586,18 @@
     "distributionPercentage": 2
   },
   "company_operations_state": {
-    "status": "Operational Mode",
+    "status": "Paused",
     "currentCycle": "CYC-050",
     "currentDay": 4,
     "startedBy": "Operations Admin ADAM",
     "startedAt": "2026-07-29T07:44:42.563Z",
     "pauseHistory": [
+      {
+        "id": "0dec47cc-e79c-418d-bc2c-d906124828c8",
+        "pausedBy": "Operations Admin ADAM",
+        "pausedAt": "2026-08-01T20:41:43.692Z",
+        "reason": "Ok"
+      },
       {
         "id": "5620f83c-4b85-4fb3-88fc-4f0c7c5983f7",
         "pausedBy": "Operations Admin ADAM",
@@ -576,6 +627,16 @@
       }
     ],
     "auditLog": [
+      {
+        "id": "f77551b5-6721-4c6b-b848-61bc59e8f41c",
+        "action": "Pause Operations",
+        "user": "Operations Admin ADAM",
+        "timestamp": "2026-08-01T20:41:43.692Z",
+        "reason": "Ok",
+        "ip": "127.0.0.1",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "browser": "Chrome"
+      },
       {
         "id": "0569bd13-4bc5-460c-a653-81357264a172",
         "action": "Pause Operations",

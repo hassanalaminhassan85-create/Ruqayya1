@@ -98,6 +98,11 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const [localPayments, setLocalPayments] = useState<any[]>([]);
   const [localShareholders, setLocalShareholders] = useState<Shareholder[]>([]);
   const [localAuditLogs, setLocalAuditLogs] = useState<any[]>([]);
+  const [distributionPercentage, setDistributionPercentage] = useState(2);
+  const [isUpdatePercentageOpen, setIsUpdatePercentageOpen] = useState(false);
+  const [newPercentage, setNewPercentage] = useState('');
+  const [percentageUpdateLoading, setPercentageUpdateLoading] = useState(false);
+  const [percentageUpdateError, setPercentageUpdateError] = useState('');
   const [isFetching, setIsFetching] = useState(false);
 
   // Modal / Interaction states
@@ -243,8 +248,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           investmentAmount: parseFloat(shFormInvestmentAmount),
           investment_date: shFormInvestmentDate,
           investmentDate: shFormInvestmentDate,
-          passport_photo_url: shFormPassportPhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
-          passportPhoto: shFormPassportPhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
+          passport_photo_url: shFormPassportPhoto || '',
+          passportPhoto: shFormPassportPhoto || '',
           passport_number: shFormPassportNumber
         };
         await api.addShareholder(payload);
@@ -362,11 +367,12 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     
     setIsFetching(true);
     try {
-      const [pList, sList, aList, cyList] = await Promise.all([
+      const [pList, sList, aList, cyList, shSettings] = await Promise.all([
         api.getPayments().catch(() => []),
         api.getShareholders().catch(() => []),
         api.getAuditLogs().catch(() => []),
-        api.request('/api/director/cycles').catch(() => ({ cycles: [] }))
+        api.request('/api/director/cycles').catch(() => ({ cycles: [] })),
+        api.getShareholderSettings().catch(() => ({ distributionPercentage: 2 }))
       ]);
       setLocalPayments(pList || []);
       if (sList && sList.length > 0) {
@@ -377,6 +383,11 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         setLocalShareholders([]);
       }
       setLocalAuditLogs(aList || []);
+      
+      if (shSettings && shSettings.distributionPercentage !== undefined) {
+        setDistributionPercentage(shSettings.distributionPercentage);
+      }
+
       // Merge cycles, preferring Firestore active cycle
       setDbCycles(prev => {
         const newCycles = cyList?.cycles || [];
@@ -403,6 +414,26 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const handleManualSync = async () => {
     await fetchAuxRecords();
     onSync();
+  };
+
+  const handleUpdatePercentage = async () => {
+    const val = parseFloat(newPercentage);
+    if (isNaN(val) || val < 0 || val > 100) {
+      setPercentageUpdateError(lang === 'en' ? 'Enter a valid percentage (0-100).' : 'Sanya lamba mai inganci (0-100).');
+      return;
+    }
+    setPercentageUpdateLoading(true);
+    setPercentageUpdateError('');
+    try {
+      await api.updateShareholderSettings({ distributionPercentage: val });
+      setDistributionPercentage(val);
+      setIsUpdatePercentageOpen(false);
+      onSync();
+    } catch (err: any) {
+      setPercentageUpdateError(err.message || 'Failed to update.');
+    } finally {
+      setPercentageUpdateLoading(false);
+    }
   };
 
   // Translations
@@ -525,7 +556,6 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const outstandingDriverReceivables = drivers.reduce((sum, d) => sum + (d.remaining_vehicle_balance || 0), 0);
 
   // Shareholder Dividend calculations
-  const distributionPercentage = 2; // Fixed 2% accumulation continuous pool
   const continuousDividendPool = companyWalletBalance > 0 ? (companyWalletBalance * (distributionPercentage / 100)) : 0;
   const totalInvestmentsSum = localShareholders.reduce((sum, sh) => sum + (sh.investment_amount || 0), 0);
 
@@ -564,7 +594,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     }
 
     // Secondary fallback
-    return vehicles.filter(v => v.status === 'active' || v.status === 'assigned' || v.status === 'idle').length || vehicles.length || 5;
+    return vehicles.filter(v => v.status === 'active' || v.status === 'assigned' || v.status === 'idle').length || vehicles.length || 0;
   })();
   const barristerSal = activeTricyclesCount * 1000;
   const managerSal = activeTricyclesCount * 500;
@@ -1349,8 +1379,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                       }`}
                     >
                       <div className="h-8 w-8 rounded-full bg-slate-200 overflow-hidden shrink-0">
-                        <img 
-                          src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100'} 
+                        <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
+                          src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || undefined} 
                           alt="" 
                           className="h-full w-full object-cover"
                           referrerPolicy="no-referrer"
@@ -1382,8 +1412,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                   <div className="flex items-center gap-3">
                     <div className="h-12 w-12 rounded-full border border-slate-200 overflow-hidden bg-slate-100 shrink-0">
-                      <img 
-                        src={matchedDriver.passport_photo_url || matchedDriver.passportPhoto || matchedDriver.passport_photo || matchedDriver.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'} 
+                      <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
+                        src={matchedDriver.passport_photo_url || matchedDriver.passportPhoto || matchedDriver.passport_photo || matchedDriver.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || undefined} 
                         alt="" 
                         className="h-full w-full object-cover"
                         referrerPolicy="no-referrer"
@@ -2102,6 +2132,16 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
               <div className="absolute inset-0 bg-emerald-100/50 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500" />
               <TrendingUp className="h-4 w-4 relative z-10" />
               <span className="text-xs font-black relative z-10">Active Equity Yielding: {distributionPercentage}% Growth</span>
+              <button 
+                onClick={() => {
+                  setNewPercentage(distributionPercentage.toString());
+                  setIsUpdatePercentageOpen(true);
+                }} 
+                className="ml-2 relative z-10 p-1 bg-emerald-200/50 hover:bg-emerald-300 text-emerald-800 rounded-md transition-colors"
+                title={lang === 'en' ? 'Adjust Percentage' : 'Gyara Kashi'}
+              >
+                <Edit3 className="h-3 w-3" />
+              </button>
             </div>
           </div>
 
@@ -2178,8 +2218,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                                 />
                                 <div className="relative h-14 w-14 rounded-full border-2 border-white shadow-lg overflow-hidden bg-slate-900 transition-all duration-500 group-hover:scale-105 group-hover:rotate-3">
-                                  <img 
-                                    src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'} 
+                                  <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
+                                    src={sh.passport_photo_url || sh.passportPhoto || sh.passport_photo || sh.passport || undefined} 
                                     alt={sh.full_name} 
                                     className="h-full w-full object-cover rounded-full"
                                     referrerPolicy="no-referrer"
@@ -2833,6 +2873,54 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
       </Modal>
 
       {/* ==============================================
+          MODAL: UPDATE SHAREHOLDER DISTRIBUTION PERCENTAGE
+          ============================================== */}
+      <Modal
+        isOpen={isUpdatePercentageOpen}
+        onClose={() => setIsUpdatePercentageOpen(false)}
+        title={lang === 'en' ? "Adjust Dividend Pool %" : "Gyara Kashi na Rabon Jari"}
+      >
+        <div className="flex flex-col gap-4 text-xs font-sans">
+          <p className="text-slate-600 leading-relaxed text-[11px]">
+            {lang === 'en' ? "Update the percentage of the company's net generated cash surplus allocated to the continuous shareholder dividend pool." : "Sabunta kaso na ribar kamfani da ake warewa ga asusun rabon jari."}
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <label className="font-bold text-slate-700">{lang === 'en' ? "Percentage (%)" : "Kashi (%)"} *</label>
+            <input
+              type="number"
+              step="0.01"
+              required
+              value={newPercentage}
+              onChange={(e) => setNewPercentage(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+            />
+          </div>
+          {percentageUpdateError && <Alert variant="danger">{percentageUpdateError}</Alert>}
+          
+          <div className="flex justify-end gap-2.5 mt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsUpdatePercentageOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleUpdatePercentage}
+              disabled={percentageUpdateLoading}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white border-none"
+            >
+              {percentageUpdateLoading ? 'Updating...' : 'Save Settings'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ==============================================
           MODAL: RECORD OPERATIONAL EXPENSE
           ============================================== */}
       <Modal
@@ -3035,7 +3123,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div className="h-20 w-20 rounded-2xl border-2 border-white shadow-md overflow-hidden bg-slate-900 shrink-0">
                 {shFormPassportPhoto ? (
-                  <img
+                  <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
                     src={shFormPassportPhoto}
                     alt="Passport Preview"
                     className="h-full w-full object-cover"
@@ -3066,21 +3154,21 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setShFormPassportPhoto('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150')}
+                    onClick={() => setShFormPassportPhoto('')}
                     className="px-2 py-1 text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded"
                   >
                     Preset 1 (Male)
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShFormPassportPhoto('https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150')}
+                    onClick={() => setShFormPassportPhoto('')}
                     className="px-2 py-1 text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded"
                   >
                     Preset 2 (Female)
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShFormPassportPhoto('https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150')}
+                    onClick={() => setShFormPassportPhoto('')}
                     className="px-2 py-1 text-[9px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded"
                   >
                     Preset 3 (Male)
@@ -3587,8 +3675,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="h-9 w-9 rounded-full bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                              <img
-                                src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100'}
+                              <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
+                                src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || undefined}
                                 alt=""
                                 className="h-full w-full object-cover"
                                 referrerPolicy="no-referrer"

@@ -172,16 +172,15 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
   
   // Signature store
-  const [prepName, setPrepName] = useState('Executive Director MMR');
-  const [prepRole, setPrepRole] = useState('Executive Director & Operations');
-  const [prepSign, setPrepSign] = useState('MMR');
+  const [prepName, setPrepName] = useState('');
+  const [prepRole, setPrepRole] = useState('Operations Manager');
+  const [prepSign, setPrepSign] = useState('');
   const [prepDate, setPrepDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [prepAvatar, setPrepAvatar] = useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150');
-  const [prepID, setPrepID] = useState('RTL/ADM/2026/085');
+    const [prepID, setPrepID] = useState('RTL/ADM/2026/085');
 
-  const [apprName, setApprName] = useState('Dr. Ruqayya Muhammad');
-  const [apprRole, setApprRole] = useState('Managing Director & CEO');
-  const [apprSign, setApprSign] = useState('Dr. Ruqayya M.');
+  const [apprName, setApprName] = useState('');
+  const [apprRole, setApprRole] = useState('Chief Executive Officer');
+  const [apprSign, setApprSign] = useState('');
   const [apprDate, setApprDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // Company Stamps & Seals
@@ -373,30 +372,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
         console.error(e);
       }
     } else {
-      // Seed initial mock archived report
-      const initialReport: SavedReport = {
-        id: "REP-2026-001",
-        reportNumber: "RTL-FIN-2026-091",
-        reportType: "Monthly Statement",
-        category: "Financial Core Report",
-        generatedDate: "2026-06-30",
-        generatedBy: "hassanalaminhassan85@gmail.com",
-        filtersUsed: "June 2026 • All Cycles • Approved Only",
-        revisionNumber: 1,
-        isLocked: true,
-        preparedByName: "Executive Director MMR",
-        preparedByPosition: "Executive Director & Operations",
-        preparedBySignature: "MMR",
-        preparedByDate: "2026-06-30",
-        approvedByName: "Dr. Ruqayya Muhammad",
-        approvedByPosition: "Managing Director & CEO",
-        approvedBySignature: "Dr. Ruqayya M.",
-        approvedByDate: "2026-06-30",
-        sealType: "seal",
-        hash: "b0b3e7f9a12c8d4e5f6e8b2c9a3d4f5e"
-      };
-      setSavedReports([initialReport]);
-      localStorage.setItem('ruqayya_saved_reports', JSON.stringify([initialReport]));
+      setSavedReports([]);
+      localStorage.setItem('ruqayya_saved_reports', JSON.stringify([]));
     }
   }, []);
 
@@ -476,16 +453,16 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
   // Helper lists of custom high-fidelity profiles for pass_photos
   const driverPortraits = [
-    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
-    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150",
-    "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150",
-    "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=150"
+    "",
+    "",
+    "",
+    ""
   ];
 
   const shareholderPortraits = [
-    "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=150",
-    "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150",
-    "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=150"
+    "",
+    "",
+    ""
   ];
 
   // FILTER LOGIC
@@ -565,7 +542,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
       return allTripVehicleIds.size;
     }
 
-    return vehicles.filter(v => v && (v.status === 'active' || v.status === 'assigned')).length || vehicles.length || 5;
+    return vehicles.filter(v => v && (v.status === 'active' || v.status === 'assigned')).length || vehicles.length || 0;
   })();
   const totalOutstandingBalance = drivers.reduce((sum, d) => sum + (d && d.remaining_vehicle_balance ? d.remaining_vehicle_balance : 0), 0);
   
@@ -597,7 +574,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
       <div className="flex flex-col items-center text-center border-b-2 border-slate-900 pb-5 mb-6">
         {/* RTL CUSTOM LOGO */}
         <div className="h-20 w-20 bg-white flex items-center justify-center rounded-2xl shadow-sm mb-4 border border-slate-200 overflow-hidden">
-          <img src="/src/assets/images/ruqayya_logo_1783430629037.jpg" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
+          <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%230f172a'/><text x='50' y='55' font-family='serif' font-weight='bold' font-size='28' fill='%23d4a359' text-anchor='middle' dominant-baseline='middle'>RTL</text></svg>"; }} src="/logo.png" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
         </div>
         <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 uppercase font-serif">RUQAYYA TRANSPORT LIMITED</h1>
         <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest mt-1">Enterprise Resource Planning (ERP)</p>
@@ -617,15 +594,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
           <Award className="h-32 w-32 text-slate-900" />
         </div>
         
-        {/* PASSPORT AVATAR */}
-        <div className="relative">
-          <div className="h-24 w-24 rounded-2xl border-4 border-white shadow-xl overflow-hidden bg-slate-200">
-            <img src={prepAvatar} alt="Officer Passport" className="h-full w-full object-cover" />
-          </div>
-          <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-white p-1 rounded-full shadow-lg border-2 border-white">
-            <ShieldCheck className="h-4 w-4" />
-          </div>
-        </div>
+        
 
         <div className="flex-1 text-center sm:text-left z-10">
           <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 mb-1">
@@ -732,7 +701,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       <div className="flex items-center gap-2">
                         <div className="h-6 w-6 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center">
                           {d.passportPhotoUrl ? (
-                            <img src={d.passportPhotoUrl} className="h-full w-full object-cover" />
+                            <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={d.passportPhotoUrl} className="h-full w-full object-cover" />
                           ) : (
                             <User className="h-3 w-3 text-slate-400" />
                           )}
@@ -818,7 +787,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                         className="h-16 w-16 rounded-full border-2 border-slate-100 shadow-sm overflow-hidden bg-slate-50 flex items-center justify-center relative group"
                       >
                         {s.passport_photo_url || s.passport_photo ? (
-                          <img src={s.passport_photo_url || s.passport_photo} alt={s.full_name} className="h-full w-full object-cover" />
+                          <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={s.passport_photo_url || s.passport_photo} alt={s.full_name} className="h-full w-full object-cover" />
                         ) : (
                           <div className="flex flex-col items-center">
                             <User className="h-6 w-6 text-slate-300" />
@@ -1118,7 +1087,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
               {prepSign ? (
                 <div className="flex items-center justify-center">
                   {prepSign.startsWith('data:') ? (
-                    <img src={prepSign} alt="Signature" className="h-16 object-contain mix-blend-multiply" />
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={prepSign} alt="Signature" className="h-16 object-contain mix-blend-multiply" />
                   ) : (
                     <span className="font-serif italic text-3xl text-slate-800 opacity-80 select-none">{prepSign}</span>
                   )}
@@ -1140,9 +1109,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
             </div>
             
             <div className="flex items-start gap-3 mt-1">
-              <div className="h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0">
-                <img src={prepAvatar} alt="" className="h-full w-full object-cover" />
-              </div>
+              
               <div className="flex flex-col gap-0.5 flex-1">
                 <input
                   type="text"
@@ -1182,7 +1149,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
               {apprSign ? (
                 <div className="flex items-center justify-center">
                   {apprSign.startsWith('data:') ? (
-                    <img src={apprSign} alt="Signature" className="h-16 object-contain mix-blend-multiply" />
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={apprSign} alt="Signature" className="h-16 object-contain mix-blend-multiply" />
                   ) : (
                     <span className="font-serif italic text-3xl text-slate-800 opacity-80 select-none">{apprSign}</span>
                   )}
@@ -1481,8 +1448,8 @@ _Generated via Ruqayya Transport Limited ERP System_`;
         >
           <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-full p-1.5 bg-gradient-to-tr from-brand-gold via-amber-400 to-amber-600 shadow-2xl shadow-amber-500/30 flex items-center justify-center">
             <div className="h-full w-full rounded-full overflow-hidden bg-white border-2 border-slate-950 flex items-center justify-center">
-              <img 
-                src="/src/assets/images/ruqayya_logo_1783430629037.jpg" 
+              <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%230f172a'/><text x='50' y='55' font-family='serif' font-weight='bold' font-size='28' fill='%23d4a359' text-anchor='middle' dominant-baseline='middle'>RTL</text></svg>"; }} 
+                src="/logo.png" 
                 alt="Ruqayya Transport Limited Official Logo" 
                 className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
               />
@@ -1840,7 +1807,7 @@ _Generated via Ruqayya Transport Limited ERP System_`;
                 {/* PROFESSIONAL HEADER */}
                 <div className="flex flex-col items-center text-center border-b-2 border-slate-900 pb-5 mb-6">
                     <div className="h-20 w-20 bg-white flex items-center justify-center rounded-2xl shadow-sm mb-4 border border-slate-200 overflow-hidden">
-                        <img src="/src/assets/images/ruqayya_logo_1783430629037.jpg" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
+                        <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%230f172a'/><text x='50' y='55' font-family='serif' font-weight='bold' font-size='28' fill='%23d4a359' text-anchor='middle' dominant-baseline='middle'>RTL</text></svg>"; }} src="/logo.png" alt="Ruqayya Transport Logo" className="h-full w-full object-contain" />
                     </div>
                     <h1 className="text-2xl font-black tracking-tight text-slate-950 uppercase font-serif">RUQAYYA TRANSPORT LIMITED</h1>
                     <p className="text-xs text-slate-600 font-bold uppercase tracking-widest mt-1">Consolidated Enterprise Audit Report</p>
@@ -1848,9 +1815,7 @@ _Generated via Ruqayya Transport Limited ERP System_`;
 
                 {/* OFFICER PROFILE */}
                 <div className="mb-8 p-5 bg-slate-50 rounded-3xl border border-slate-200 flex items-center gap-6">
-                    <div className="h-20 w-20 rounded-2xl border-4 border-white shadow-lg overflow-hidden bg-slate-200">
-                        <img src={prepAvatar} alt="Officer Passport" className="h-full w-full object-cover" />
-                    </div>
+                    
                     <div className="flex-1">
                         <div className="flex items-baseline gap-2">
                             <h2 className="text-lg font-black text-slate-900 uppercase">{prepName}</h2>
@@ -1911,7 +1876,7 @@ _Generated via Ruqayya Transport Limited ERP System_`;
                                         <div className="flex items-center gap-5">
                                             <div className="h-20 w-20 rounded-2xl border-4 border-white shadow-xl overflow-hidden bg-slate-200">
                                                 {s.passport_photo_url ? (
-                                                    <img src={s.passport_photo_url} alt="" className="h-full w-full object-cover" />
+                                                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={s.passport_photo_url} alt="" className="h-full w-full object-cover" />
                                                 ) : (
                                                     <div className="h-full w-full flex items-center justify-center text-slate-400 font-black text-2xl uppercase">
                                                         {s.full_name?.substring(0, 2)}

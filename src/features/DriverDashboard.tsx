@@ -745,7 +745,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
               <div className="flex items-center gap-4">
                 <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-brand-gold bg-slate-900 flex-shrink-0 shadow-md">
                   {passportUrl ? (
-                    <img src={passportUrl} alt="Passport" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={passportUrl} alt="Passport" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-brand-gold font-bold text-xs">
                       {(driverData?.fullName || driverName).substring(0, 2).toUpperCase()}

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export async function checkDatabaseConnection(): Promise<{ success: boolean; message: string; timestamp?: string }> {
+export async function checkDatabaseConnection(retries = 3): Promise<{ success: boolean; message: string; timestamp?: string }> {
   try {
     const res = await fetch('/api/db-diagnostic', {
       method: 'GET',
@@ -22,6 +22,11 @@ export async function checkDatabaseConnection(): Promise<{ success: boolean; mes
       timestamp: data.timestamp || new Date().toISOString()
     };
   } catch (err: any) {
+    if (retries > 0) {
+      console.warn(`[DB Diagnostic] Connection check failed, retrying... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      return checkDatabaseConnection(retries - 1);
+    }
     console.error('[DB Diagnostic] Connection check failed:', err);
     return {
       success: false,

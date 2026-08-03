@@ -87,7 +87,7 @@ export const CircularLogo: React.FC<CircularLogoProps> = ({
           }
         }}
       >
-        <img
+        <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
           src="/logo.png"
           alt="Ruqayya Transport Official Logo"
           className="h-full w-full object-cover rounded-full"

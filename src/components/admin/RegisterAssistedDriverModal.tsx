@@ -439,7 +439,7 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
                     <div className="flex items-center gap-3 p-2.5 border border-dashed border-border-main rounded-lg bg-bg-base/50">
                       {passportPhoto ? (
                         <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-border-main bg-bg-base flex-shrink-0">
-                          <img src={passportPhoto} alt="Passport Preview" className="w-full h-full object-cover" />
+                          <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={passportPhoto} alt="Passport Preview" className="w-full h-full object-cover" />
                         </div>
                       ) : (
                         <div className="w-10 h-10 rounded-lg border border-dashed border-border-main bg-bg-base flex items-center justify-center text-text-muted flex-shrink-0">
@@ -504,7 +504,7 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
                   <div className="flex items-center gap-3 p-2.5 border border-dashed border-border-main rounded-lg bg-bg-base/50">
                     {guarantorPhoto ? (
                       <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-border-main bg-bg-base flex-shrink-0">
-                        <img src={guarantorPhoto} alt="Guarantor Preview" className="w-full h-full object-cover" />
+                        <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={guarantorPhoto} alt="Guarantor Preview" className="w-full h-full object-cover" />
                       </div>
                     ) : (
                       <div className="w-10 h-10 rounded-lg border border-dashed border-border-main bg-bg-base flex items-center justify-center text-text-muted flex-shrink-0">

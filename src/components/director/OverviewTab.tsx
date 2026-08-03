@@ -266,7 +266,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-brand-gold via-amber-400 to-purple-500 opacity-75 blur-xs group-hover:opacity-100 animate-spin" style={{ animationDuration: '6s' }} />
             <div className="relative h-16 w-16 rounded-full bg-slate-900 border-2 border-brand-gold overflow-hidden flex items-center justify-center shadow-lg">
               {directorAvatar ? (
-                <img src={directorAvatar} alt={directorName} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={directorAvatar} alt={directorName} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 <span className="text-brand-gold font-black text-sm">{directorName.split(' ').map(n => n[0]).join('').substring(0, 2)}</span>
               )}
@@ -337,7 +337,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                     value={tempDirectorAvatar}
                     onChange={(e) => setTempDirectorAvatar(e.target.value)}
                     className="flex-1 p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-brand-gold"
-                    placeholder="https://images.unsplash.com/... or image URL"
+                    placeholder=""
                   />
                   <label className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors">
                     <Camera className="h-4 w-4 text-brand-gold" />
@@ -364,7 +364,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               {tempDirectorAvatar && (
                 <div className="flex items-center gap-3 p-3 bg-slate-850 border border-slate-750 rounded-xl">
                   <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-brand-gold shrink-0">
-                    <img src={tempDirectorAvatar} alt="Preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={tempDirectorAvatar} alt="Preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-white">Avatar Preview</p>
@@ -406,7 +406,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               <Clock className="h-3.5 w-3.5 text-brand-gold shrink-0" />
               {activeCycle ? (
                 <span className={activeCycle.status === 'paused' ? 'text-amber-500 font-extrabold' : 'text-emerald-500 font-extrabold'}>
-                  {activeCycle.status === 'paused' ? (lang === 'en' ? 'PAUSED' : 'AN DAKATAR') : (lang === 'en' ? 'ACTIVE' : 'A-AIKI')} ({activeCycle.id.substring(0, 5)})
+                  {activeCycle.status === 'paused' ? (lang === 'en' ? 'PAUSED' : 'AN DAKATAR') : (lang === 'en' ? 'ACTIVE' : 'A-AIKI')} ({(activeCycle.id || activeCycle.cycleId || 'CYC01').substring(0, 5)})
                 </span>
               ) : (
                 <span className="text-slate-400">Inactive</span>

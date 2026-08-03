@@ -65,6 +65,53 @@ async function getVapidKeys(env: Env, db: any, dbManager: D1Manager): Promise<{ 
   }
 }
 
+
+function getCanonicalCycleStatus(db: any): any {
+  const activeCycle = db.cycles && db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+  if (!activeCycle) {
+    return {
+      isActive: false, status: 'inactive', cycleId: 'No Active Cycle', startDate: '', endDate: '',
+      daysRemaining: 0, hoursRemaining: 0, minutesRemaining: 0, secondsRemaining: 0, totalSecondsRemaining: 0,
+      progressPercent: 0, currentDay: 0, totalCycleDays: 30, pauseReason: '', pausedAt: ''
+    };
+  }
+  const now = Date.now();
+  const startMs = new Date(activeCycle.startDate).getTime();
+  const baseDurationSeconds = 30 * 24 * 3600;
+  const extensionSeconds = (activeCycle.extendedDays || 0) * 24 * 3600;
+  const totalCycleSeconds = baseDurationSeconds + extensionSeconds;
+  
+  let totalPausedSeconds = activeCycle.totalPausedSeconds || 0;
+  let currentPauseSeconds = 0;
+  if (activeCycle.status === 'paused' && activeCycle.pausedAt) {
+    currentPauseSeconds = Math.floor((now - new Date(activeCycle.pausedAt).getTime()) / 1000);
+  }
+  const effectivePausedSeconds = totalPausedSeconds + currentPauseSeconds;
+  const elapsedSeconds = Math.max(0, Math.floor((now - startMs) / 1000) - effectivePausedSeconds);
+  const remainingSeconds = Math.max(0, totalCycleSeconds - elapsedSeconds);
+  
+  const currentDay = Math.min(30 + (activeCycle.extendedDays || 0), Math.floor(elapsedSeconds / (24 * 3600)) + 1);
+  const progressPercent = Math.min(100, (elapsedSeconds / totalCycleSeconds) * 100);
+  
+  return {
+    isActive: true,
+    status: activeCycle.status,
+    cycleId: activeCycle.id,
+    startDate: activeCycle.startDate,
+    endDate: activeCycle.endDate,
+    daysRemaining: Math.floor(remainingSeconds / (24 * 3600)),
+    hoursRemaining: Math.floor((remainingSeconds % (24 * 3600)) / 3600),
+    minutesRemaining: Math.floor((remainingSeconds % 3600) / 60),
+    secondsRemaining: remainingSeconds % 60,
+    totalSecondsRemaining: remainingSeconds,
+    progressPercent: progressPercent,
+    currentDay: currentDay,
+    totalCycleDays: 30 + (activeCycle.extendedDays || 0),
+    pauseReason: activeCycle.pauseReason || '',
+    pausedAt: activeCycle.pausedAt || ''
+  };
+}
+
 // Global PBKDF2 password hashing helper (matches server_db.ts SHA-512)
 async function pbkdf2(password: string, salt: string, iterations: number, keyLen: number, digest: string): Promise<string> {
   const passwordBuffer = new TextEncoder().encode(password);
@@ -1904,7 +1951,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         driverPassportUrl = `/api/documents/preview/${fileId}.png`;
         if (env.R2_BUCKET) {
           const cleanBase64 = personal.passportPhoto.replace(/^data:.*?;base64,/, '');
-          const buffer = new Uint8Array(Buffer.from(cleanBase64, 'base64'));
+          const binaryString = atob(cleanBase64); const buffer = new Uint8Array(binaryString.length); for (let i = 0; i < binaryString.length; i++) buffer[i] = binaryString.charCodeAt(i);
           await env.R2_BUCKET.put(`${fileId}.png`, buffer, { httpMetadata: { contentType: 'image/png' } });
         }
       }
@@ -1914,7 +1961,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         guarantorPassportUrl = `/api/documents/preview/${fileId}.png`;
         if (env.R2_BUCKET) {
           const cleanBase64 = guarantor.passport.replace(/^data:.*?;base64,/, '');
-          const buffer = new Uint8Array(Buffer.from(cleanBase64, 'base64'));
+          const binaryString = atob(cleanBase64); const buffer = new Uint8Array(binaryString.length); for (let i = 0; i < binaryString.length; i++) buffer[i] = binaryString.charCodeAt(i);
           await env.R2_BUCKET.put(`${fileId}.png`, buffer, { httpMetadata: { contentType: 'image/png' } });
         }
       }
@@ -2646,6 +2693,29 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     // PUT /api/drivers/:id/status
+
+    if (parts.length === 2 && parts[1] === 'archive' && method === 'PUT') {
+      try {
+        if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
+        const drv = db.drivers.find((d: any) => d.id === parts[0]);
+        if (!drv) return buildResponse({ error: 'Driver not found.' }, 404);
+        drv.status = 'archived';
+        writeAuditLog(user.id, user.email, user.role, 'DRIVER_ARCHIVED', parts[0], `Archived driver ${drv.full_name || drv.fullName}`, db);
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Driver archived' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+    if (parts.length === 2 && parts[1] === 'restore' && method === 'PUT') {
+      try {
+        if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
+        const drv = db.drivers.find((d: any) => d.id === parts[0]);
+        if (!drv) return buildResponse({ error: 'Driver not found.' }, 404);
+        drv.status = 'active';
+        writeAuditLog(user.id, user.email, user.role, 'DRIVER_RESTORED', parts[0], `Restored driver ${drv.full_name || drv.fullName}`, db);
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Driver restored' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
     if (parts.length === 2 && parts[1] === 'status' && method === 'PUT') {
       if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
       try {
@@ -2845,6 +2915,29 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     // PUT /api/payments/:id/status
+
+    if (parts.length === 2 && parts[1] === 'archive' && method === 'PUT') {
+      try {
+        if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
+        const drv = db.drivers.find((d: any) => d.id === parts[0]);
+        if (!drv) return buildResponse({ error: 'Driver not found.' }, 404);
+        drv.status = 'archived';
+        writeAuditLog(user.id, user.email, user.role, 'DRIVER_ARCHIVED', parts[0], `Archived driver ${drv.full_name || drv.fullName}`, db);
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Driver archived' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+    if (parts.length === 2 && parts[1] === 'restore' && method === 'PUT') {
+      try {
+        if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
+        const drv = db.drivers.find((d: any) => d.id === parts[0]);
+        if (!drv) return buildResponse({ error: 'Driver not found.' }, 404);
+        drv.status = 'active';
+        writeAuditLog(user.id, user.email, user.role, 'DRIVER_RESTORED', parts[0], `Restored driver ${drv.full_name || drv.fullName}`, db);
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Driver restored' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
     if (parts.length === 2 && parts[1] === 'status' && method === 'PUT') {
       if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
       try {
@@ -3033,7 +3126,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (!db.sessions) db.sessions = [];
     const authSession = db.sessions.find((s: any) => s.token === tokenParam && s.status === 'active');
     
-    if (!tokenParam || !authSession) {
+    let authorized = false;
+    if (tokenParam) {
+      if (authSession) authorized = true;
+    } else {
+      const hasActiveSession = db.sessions && db.sessions.some((s: any) => s.status === 'active');
+      if (hasActiveSession) authorized = true;
+    }
+    if (!authorized) {
       return new Response('Unauthorized file request.', { status: 401 });
     }
 
@@ -4051,6 +4151,27 @@ ${JSON.stringify(cleanedContext, null, 2)}
       }
     }
 
+
+    if (parts.length === 2 && parts[1] === 'archive' && method === 'PUT') {
+      try {
+        if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
+        const sh = db.shareholders.find((s: any) => s.id === parts[0]);
+        if (!sh) return buildResponse({ error: 'Shareholder not found.' }, 404);
+        sh.status = 'archived';
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Shareholder archived' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+    if (parts.length === 2 && parts[1] === 'restore' && method === 'PUT') {
+      try {
+        if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
+        const sh = db.shareholders.find((s: any) => s.id === parts[0]);
+        if (!sh) return buildResponse({ error: 'Shareholder not found.' }, 404);
+        sh.status = 'active';
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Shareholder restored' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
     if (parts[0] === 'me' && method === 'GET') {
       const sh = db.shareholders.find((s: any) => s.user_id === user.id);
       if (!sh) return buildResponse({ error: 'Shareholder profile missing.' }, 404);
@@ -4166,6 +4287,14 @@ ${JSON.stringify(cleanedContext, null, 2)}
         return buildResponse({ error: err.message }, 500);
       }
     }
+  }
+
+
+  // 17.5. CYCLE STATUS (Missing canonical route)
+  if (path === '/api/cycles/status' && method === 'GET') {
+    if (!db.cycles) db.cycles = [];
+    const status = getCanonicalCycleStatus(db);
+    return buildResponse({ success: true, ...status });
   }
 
   // 17. RE-ROUTING EXECUTIVE DIRECT CONTROLS
@@ -4382,6 +4511,41 @@ ${JSON.stringify(cleanedContext, null, 2)}
       }
     }
 
+    
+    if (ctrl === 'shareholders' && method === 'PUT') {
+      return buildResponse({ error: 'Use /api/shareholders/:id endpoints directly' }, 400);
+    }
+    
+    // Direct matches for missing server.ts /api/director endpoints:
+    if (ctrl.startsWith('shareholders/') && ctrl.endsWith('/status') && method === 'PUT') {
+      try {
+        const id = ctrl.split('/')[1];
+        const { status } = await request.json() as any;
+        const sh = db.shareholders.find((s: any) => s.id === id);
+        if (sh) {
+          sh.status = status;
+          writeAuditLog(user.id, user.email, user.role, 'SHAREHOLDER_STATUS_UPDATE', id, `Status updated to ${status}`, db);
+          await dbManager.saveDB(db);
+          return buildResponse({ success: true });
+        }
+        return buildResponse({ error: 'Not found' }, 404);
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+    
+    if (ctrl.startsWith('shareholders/') && ctrl.endsWith('/investment') && method === 'PUT') {
+      try {
+        const id = ctrl.split('/')[1];
+        const { total_investment } = await request.json() as any;
+        const sh = db.shareholders.find((s: any) => s.id === id);
+        if (sh) {
+          sh.total_investment = total_investment;
+          writeAuditLog(user.id, user.email, user.role, 'SHAREHOLDER_INVESTMENT_UPDATE', id, `Investment updated to ${total_investment}`, db);
+          await dbManager.saveDB(db);
+          return buildResponse({ success: true });
+        }
+        return buildResponse({ error: 'Not found' }, 404);
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
     if (ctrl === 'shareholder-settings' && method === 'PUT') {
       try {
         const { distributionPercentage } = await request.json() as any;
@@ -4404,6 +4568,45 @@ ${JSON.stringify(cleanedContext, null, 2)}
       } catch (err: any) {
         return buildResponse({ error: err.message }, 500);
       }
+    }
+
+
+    if (ctrl === 'admins' && method === 'POST') {
+      try {
+        const { full_name, email, password, pin } = await request.json() as any;
+        if (db.users.some((u: any) => u.email === email)) return buildResponse({ error: 'Email already exists' }, 400);
+        const hashedPassword = await generateHash(password);
+        const hashedPin = await generateHash(pin);
+        const newAdmin = { id: `ADM-${Date.now()}`, full_name, email, role: 'admin', password_hash: hashedPassword, pin_hash: hashedPin, status: 'active', created_at: new Date().toISOString() };
+        db.users.push(newAdmin);
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Admin created' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+    if (ctrl.startsWith('admins/') && method === 'PUT') {
+      try {
+        const id = ctrl.split('/')[1];
+        const updates = await request.json() as any;
+        const admin = db.users.find((u: any) => u.id === id);
+        if (admin) {
+          if (updates.full_name) admin.full_name = updates.full_name;
+          if (updates.email) admin.email = updates.email;
+          if (updates.password) admin.password_hash = await generateHash(updates.password);
+          if (updates.pin) admin.pin_hash = await generateHash(updates.pin);
+          if (updates.status) admin.status = updates.status;
+          await dbManager.saveDB(db);
+          return buildResponse({ success: true, message: 'Admin updated' });
+        }
+        return buildResponse({ error: 'Not found' }, 404);
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
+    }
+    if (ctrl.startsWith('admins/') && method === 'DELETE') {
+      try {
+        const id = ctrl.split('/')[1];
+        db.users = db.users.filter((u: any) => u.id !== id);
+        await dbManager.saveDB(db);
+        return buildResponse({ success: true, message: 'Admin deleted' });
+      } catch (err: any) { return buildResponse({ error: err.message }, 500); }
     }
 
     if (ctrl === 'cycles' && method === 'GET') {

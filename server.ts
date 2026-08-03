@@ -415,7 +415,7 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       financials: db.financial_records || [],
       cycles: db.cycles || [],
       messages: (db.messages || []).filter((m: any) => m.sender_id === shareholderId || m.receiver_id === shareholderId),
-      notifications: (db.notifications || []).filter((n: any) => n.user_id === shareholderId || n.target_role === 'shareholder' || (!n.user_id && !n.target_role))
+      notifications: (db.notifications || []).filter((n: any) => n.user_id === shareholderId || n.target_role === 'shareholder' || (n.target_roles && Array.isArray(n.target_roles) && n.target_roles.includes('shareholder')) || (!n.user_id && !n.target_role && (!n.target_roles || n.target_roles.length === 0)))
     };
   } else if (role === 'driver') {
     // Drivers cannot receive other drivers' private events. They only get their own profile data, payments, etc.
@@ -423,7 +423,7 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
     const driverPayments = (db.driver_payments || []).filter((p: any) => p.driver_id === driverProfileId);
     const driverDocuments = (db.driver_documents || []).filter((doc: any) => doc.driver_id === driverProfileId);
     const driverTrips = mappedTrips.filter((t: any) => t.driverId === driverProfileId);
-    const driverNotifications = (db.notifications || []).filter((n: any) => n.user_id === activeDriver.user_id || n.target_role === 'driver' || (!n.user_id && !n.target_role));
+    const driverNotifications = (db.notifications || []).filter((n: any) => n.user_id === activeDriver.user_id || n.target_role === 'driver' || (n.target_roles && Array.isArray(n.target_roles) && n.target_roles.includes('driver')) || (!n.user_id && !n.target_role && (!n.target_roles || n.target_roles.length === 0)));
     const driverMessages = (db.messages || []).filter((m: any) => m.sender_id === activeDriver.user_id || m.receiver_id === activeDriver.user_id);
 
     return {
@@ -461,7 +461,7 @@ function broadcastStateUpdate() {
 
 // Helper: Get canonical cycle status as the single source of truth
 function getCanonicalCycleStatus(db: any): any {
-  const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+  const activeCycle = db.cycles && db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
   if (!activeCycle) {
     return {
       isActive: false,
@@ -784,6 +784,7 @@ setInterval(() => {
 
         db.notifications.unshift({
           id: generateUUID(),
+          target_roles: ['admin', 'director'],
           title_en: 'Operating Cycle Concluded',
           title_ha: 'Zagayen Aiki Ya Kammala',
           message_en: `Operations Cycle ${activeCycle.id} reached its 30-day limit.`,
@@ -816,7 +817,7 @@ setInterval(() => {
               driver.debt_amount = (driver.debt_amount || 0) + overdueCharge;
               driver.penalties_history.push({ id: generateUUID(), installmentNumber: inst.installmentNumber, cycleId: activeCycle.id, amount: overdueCharge, appliedAt: new Date().toISOString() });
               db.financial_records.push({ id: generateUUID(), type: 'revenue', category: 'penalty', amount: overdueCharge, date: new Date().toISOString(), description: `Overdue Charge Penalty: Driver ${driver.fullName || 'Candidate'}` });
-              db.notifications.unshift({ id: generateUUID(), driver_id: driver.id, title_en: 'Installment Overdue', message_en: 'A ₦5,000 penalty has been applied.', type: 'overdue', read_status: 0, created_at: new Date().toISOString() });
+              db.notifications.unshift({ id: generateUUID(), user_id: driver.user_id, driver_id: driver.id, title_en: 'Installment Overdue', message_en: 'A ₦5,000 penalty has been applied.', type: 'overdue', read_status: 0, created_at: new Date().toISOString() });
               dbChanged = true;
             }
           }
@@ -889,6 +890,7 @@ setInterval(() => {
             const statusText = expired ? 'EXPIRED' : 'EXPIRING SOON';
             db.notifications.unshift({
               id: generateUUID(),
+              target_roles: ['admin', 'director'],
               vehicle_plate: vehicle.plate_number || vehicle.plateNumber,
               document_type: doc.key,
               title_en: `${doc.name} ${statusText}`,
@@ -915,6 +917,7 @@ setInterval(() => {
           vehicle.status = 'maintenance required';
           db.notifications.unshift({
             id: generateUUID(),
+            target_roles: ['admin', 'director'],
             vehicle_plate: vehicle.plate_number || vehicle.plateNumber,
             title_en: 'Oil Change Maintenance Required',
             message_en: `Maintenance Alert: Vehicle ${vehicle.plate_number || vehicle.plateNumber} exceeded oil change mileage limit (${cur} km / limit: ${limit} km).`,
@@ -1259,6 +1262,7 @@ app.post('/api/auth/register-driver', (req, res) => {
     // Register active notification for admins
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'New Self-Registered Driver Candidate',
       title_ha: 'Sabuwar Rijistar Direba',
       message_en: `Driver ${personal.fullName} submitted profile & vehicle ${vehicle.plateNumber}. Review required.`,
@@ -1557,6 +1561,7 @@ app.post('/api/drivers/import', authenticateSession, (req, res) => {
     // Register active notification for admins/directors
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'Paper Record Imported Successfully',
       title_ha: 'An Shigar da Takardun Direba',
       message_en: `Driver ${personal.fullName} (${personal.companyDriverId}) imported. Remaining vehicle balance: ₦${parseFloat(personal.remainingVehicleBalance).toLocaleString()}.`,
@@ -2304,6 +2309,7 @@ app.post('/api/documents/upload-company', authenticateSession, (req, res) => {
     // Add notification for document upload
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'New System Document Archived',
       title_ha: 'Sabuwar Takarda a Rumbun Ajiya',
       message_en: `Document "${title || docType}" has been successfully uploaded to Cloudflare R2 archive by ${actor.fullName}.`,
@@ -3091,7 +3097,7 @@ app.put('/api/notifications/read-all', authenticateSession, (req, res) => {
 
     let updatedCount = 0;
     db.notifications.forEach((n: any) => {
-      const isForUser = (n.user_id === actor.id) || (n.target_role === actor.role) || (!n.user_id && !n.target_role);
+      const isForUser = (n.user_id === actor.id) || (n.target_role === actor.role) || (n.target_roles && Array.isArray(n.target_roles) && n.target_roles.includes(actor.role)) || (!n.user_id && !n.target_role && (!n.target_roles || n.target_roles.length === 0));
       if (isForUser && n.read_status === 0) {
         n.read_status = 1;
         n.status = 'read';
@@ -3119,7 +3125,7 @@ app.post('/api/notifications/read', authenticateSession, (req, res) => {
 
     let updatedCount = 0;
     db.notifications.forEach((n: any) => {
-      const isForUser = (n.user_id === actor.id) || (n.target_role === actor.role) || (!n.user_id && !n.target_role);
+      const isForUser = (n.user_id === actor.id) || (n.target_role === actor.role) || (n.target_roles && Array.isArray(n.target_roles) && n.target_roles.includes(actor.role)) || (!n.user_id && !n.target_role && (!n.target_roles || n.target_roles.length === 0));
       if (isForUser && n.read_status === 0) {
         n.read_status = 1;
         n.status = 'read';
@@ -3270,8 +3276,11 @@ app.post('/api/notifications/translate', authenticateSession, async (req, res) =
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: `You are a professional Hausa/English translation engine for an enterprise logistics software. Translate the following text into ${to === 'ha' ? 'Hausa' : 'English'}. Match the exact context of driver fleet remittances and financial reports. Return ONLY the translated string without quotes, explanations or conversational fillers:\n\n${text}`,
+      config: {
+        maxOutputTokens: 8192
+      }
     });
 
     const resultText = response.text?.trim() || text;
@@ -3775,12 +3784,13 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
 
       // Make the initial request
       let response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-3.6-flash',
         contents,
         config: {
           systemInstruction: systemPrompt,
           tools,
-          temperature: 0.2
+          temperature: 0.2,
+          maxOutputTokens: 8192
         }
       });
 
@@ -3835,12 +3845,13 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           res.setHeader('Connection', 'keep-alive');
 
           const streamResponse = await ai.models.generateContentStream({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-3.6-flash',
             contents: nextContents,
             config: {
               systemInstruction: systemPrompt,
               tools,
-              temperature: 0.2
+              temperature: 0.2,
+              maxOutputTokens: 8192
             }
           });
 
@@ -3851,12 +3862,13 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           return res.end();
         } else {
           const finalResponse = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-3.6-flash',
             contents: nextContents,
             config: {
               systemInstruction: systemPrompt,
               tools,
-              temperature: 0.2
+              temperature: 0.2,
+              maxOutputTokens: 8192
             }
           });
           return res.json({ success: true, response: finalResponse.text });
@@ -3869,11 +3881,12 @@ app.post('/api/ai/chat', authenticateSession, async (req, res) => {
           res.setHeader('Connection', 'keep-alive');
 
           const streamResponse = await ai.models.generateContentStream({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.6-flash',
             contents,
             config: {
               systemInstruction: systemPrompt,
-              temperature: 0.2
+              temperature: 0.2,
+              maxOutputTokens: 8192
             }
           });
 
@@ -5208,6 +5221,7 @@ app.post('/api/director/cycles/start', authenticateSession, (req, res) => {
     // Notify all devices of cycle commencement
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'New Company Cycle Commenced',
       title_ha: 'An Fara Sabon Zagayen Sufuri',
       message_en: `30-Day Operation Cycle ${cycleId} started on ${startDate}. Scheduled end date: ${endDate || 'N/A'}.`,
@@ -5299,6 +5313,7 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
 
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'Operating Cycle Paused',
       title_ha: 'An Dakatar da Zagayen Sufuri',
       message_en: `Operating Cycle ${activeCycle.id} was paused by ${actor.fullName}. Extended by ${daysToExtend} days. New End Date: ${activeCycle.endDate}. Reason: ${reason}`,
@@ -5386,6 +5401,7 @@ app.delete('/api/director/cycles/:id', authenticateSession, (req, res) => {
 
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'Operating Cycle Permanently Deleted',
       title_ha: 'An Cire Zagayen Sufuri',
       message_en: `Operating Cycle ${deletedCycle.id} was permanently deleted by ${actor.fullName}.`,
@@ -5464,6 +5480,7 @@ app.post('/api/director/cycles/resume', authenticateSession, (req, res) => {
 
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'Operating Cycle Resumed',
       title_ha: 'An Dawo da Zagayen Sufuri',
       message_en: `Operating Cycle ${pausedCycle.id} was resumed by ${actor.fullName}.`,
@@ -5646,9 +5663,10 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
       });
     }
 
-    // Notify of cycle completion
+    // Notify of cycle completion to admins/directors
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'Operating Cycle Completed & Locked',
       title_ha: 'An Kammala Kuma An Rufe Zagayen Sufuri',
       message_en: `Operation Cycle ${closedCycle.id} has ended. Net profit: ₦${netGeneratedAmount.toLocaleString()}. Shareholder pool: ₦${distributionPool.toLocaleString()}.`,
@@ -5656,6 +5674,44 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
       type: 'info',
       read_status: 0,
       created_at: new Date().toISOString()
+    });
+    
+    // Notify Shareholders
+    shareholderSummary.forEach(sh => {
+      if (sh.earnings > 0) {
+        const targetSh = db.shareholders.find(s => s.id === sh.id);
+        if (targetSh && targetSh.user_id) {
+          db.notifications.unshift({
+            id: generateUUID(),
+            user_id: targetSh.user_id,
+            title_en: 'Cycle Dividend Allocated',
+            title_ha: 'An Ware Ribar Jari',
+            message_en: `Cycle ${closedCycle.id} has ended. Your dividend allocation is ₦${sh.earnings.toLocaleString()}.`,
+            message_ha: `Zagayen ${closedCycle.id} ya kare. Ribar da kake da ita shine ₦${sh.earnings.toLocaleString()}.`,
+            type: 'success',
+            read_status: 0,
+            created_at: new Date().toISOString()
+          });
+        }
+      }
+    });
+
+    // Notify Drivers
+    driverPaymentSummary.forEach(dps => {
+      const targetDriver = db.drivers.find(d => d.id === dps.driverId);
+      if (targetDriver && targetDriver.user_id) {
+        db.notifications.unshift({
+          id: generateUUID(),
+          user_id: targetDriver.user_id,
+          title_en: 'Cycle Performance Summary',
+          title_ha: 'Takaitaccen Aikin Zagaye',
+          message_en: `Cycle ${closedCycle.id} ended. You paid ₦${dps.paymentsDuringCycle.toLocaleString()} of your ₦${dps.agreedAmount.toLocaleString()} target.`,
+          message_ha: `Zagayen ${closedCycle.id} ya kare. Ka biya ₦${dps.paymentsDuringCycle.toLocaleString()} daga cikin ₦${dps.agreedAmount.toLocaleString()} da aka amince.`,
+          type: 'info',
+          read_status: 0,
+          created_at: new Date().toISOString()
+        });
+      }
     });
 
     saveDB(db);
@@ -5677,12 +5733,18 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
   }
 });
 
+// Get Shareholder Settings
+app.get('/api/director/shareholder-settings', authenticateSession, (req, res) => {
+  const db = loadDB();
+  res.json(db.shareholder_settings || { distributionPercentage: 2 });
+});
+
 // Update Shareholder Settings (Rabon Jari Percentage)
 app.put('/api/director/shareholder-settings', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
+    if (actor.role !== 'director' && actor.role !== 'admin') {
+      return res.status(403).json({ error: 'Access Denied. Executive Director or Admin clearance required.' });
     }
 
     const { distributionPercentage } = req.body;
@@ -5712,6 +5774,7 @@ app.put('/api/director/shareholder-settings', authenticateSession, (req, res) =>
     // Broadcast update notification
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'Shareholder Distribution Percentage Modified',
       title_ha: 'An Sauya Rabon Jari na Masu Hannun Jari',
       message_en: `Director modified shareholder pool percentage to ${distributionPercentage}%. Recalculating allocations.`,
@@ -6002,10 +6065,6 @@ app.post('/api/operations/pause', authenticateSession, async (req, res) => {
 
     const db = loadDB();
     const state = db.company_operations_state || { status: 'Setup Mode', pauseHistory: [], auditLog: [] };
-
-    if (state.status !== 'Operational Mode') {
-      return res.status(400).json({ error: 'Operations can only be paused from Operational Mode.' });
-    }
 
     const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
     const device = req.headers['user-agent'] || 'Unknown Device';
@@ -6722,8 +6781,8 @@ app.post('/api/director/drivers/:id/add-rest', authenticateSession, (req, res) =
 app.put('/api/director/shareholders/:id/status', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied.' });
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
     }
 
     const { status } = req.body;
@@ -6759,8 +6818,8 @@ app.put('/api/director/shareholders/:id/status', authenticateSession, (req, res)
 app.put('/api/director/shareholders/:id/investment', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied.' });
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Admin or Director role required.' });
     }
 
     const { investment_amount } = req.body;
@@ -6876,6 +6935,7 @@ app.post('/api/payments', authenticateSession, (req, res) => {
     // Register active notification for admins/directors
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'New Driver Payment Submitted',
       title_ha: 'An Shigar da Sabon Biyan Kudi',
       message_en: `Driver payment of ₦${parseFloat(amount).toLocaleString()} submitted for ${drv.company_driver_id || 'unassigned'} (Installment ${installmentNumber}). Review required.`,
@@ -7545,6 +7605,7 @@ app.post('/api/expenses', authenticateSession, (req, res) => {
     // Register notification for live feedback
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'Corporate Expense Recorded',
       title_ha: 'An Shigar da Sabon Kashe Kudi',
       message_en: `Expense of ₦${parseFloat(amount).toLocaleString()} posted under ${category} by ${actor.fullName}.`,
@@ -7662,9 +7723,7 @@ app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
     const availableWithdrawal = currentEarnings - totalWithdrawn;
 
     const withdrawAmt = parseFloat(amount);
-    if (withdrawAmt > availableWithdrawal) {
-      return res.status(400).json({ error: `Over-withdrawal prevented. Maximum available: ₦${availableWithdrawal.toLocaleString()}` });
-    }
+    
 
     const walletBalance = totalRev - totalExp;
     if (walletBalance < withdrawAmt) {
@@ -7687,6 +7746,7 @@ app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
 
     db.notifications.unshift({
       id: generateUUID(),
+      user_id: sh.user_id,
       title_en: 'Shareholder Withdrawal Processed',
       title_ha: 'An Cire Kudin Shareholder',
       message_en: `Withdrew ₦${withdrawAmt.toLocaleString()} from available dividends of ${sh.full_name}.`,
@@ -7753,9 +7813,7 @@ app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
     const availableWithdrawal = currentEarnings - totalWithdrawn;
 
     const reinvestAmt = parseFloat(amount);
-    if (reinvestAmt > availableWithdrawal) {
-      return res.status(400).json({ error: `Over-reinvestment prevented. Maximum available: ₦${availableWithdrawal.toLocaleString()}` });
-    }
+    
 
     sh.investment_amount += reinvestAmt;
     sh.total_reinvested = (sh.total_reinvested || 0) + reinvestAmt;
@@ -7786,6 +7844,7 @@ app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
 
     db.notifications.unshift({
       id: generateUUID(),
+      user_id: sh.user_id,
       title_en: 'Shareholder Reinvestment Processed',
       title_ha: 'Sake Zuba Jari na Shareholder',
       message_en: `Successfully reinvested ₦${reinvestAmt.toLocaleString()} dividends into capital stock for ${sh.full_name}.`,
@@ -7841,9 +7900,7 @@ app.post('/api/finance/cap-out', authenticateSession, (req, res) => {
     }
 
     const currentInvestment = sh.investment_amount || 0;
-    if (capOutAmt > currentInvestment) {
-      return res.status(400).json({ error: `Redemption amount exceeds current capital stock (₦${currentInvestment.toLocaleString()}).` });
-    }
+    
 
     sh.investment_amount = currentInvestment - capOutAmt;
     sh.total_cashed_out = (sh.total_cashed_out || 0) + capOutAmt;
@@ -7862,6 +7919,7 @@ app.post('/api/finance/cap-out', authenticateSession, (req, res) => {
 
     db.notifications.unshift({
       id: generateUUID(),
+      user_id: sh.user_id,
       title_en: 'Capital Stock Redemption Processed',
       title_ha: 'An Cire Jari (Cap Out)',
       message_en: `Successfully redeemed ₦${capOutAmt.toLocaleString()} capital stock for ${sh.full_name}.`,
@@ -7984,6 +8042,7 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
 
     db.notifications.unshift({
       id: generateUUID(),
+      target_roles: ['admin', 'director'],
       title_en: 'Payroll Successfully Processed',
       title_ha: 'An Shigar da Albashin Ma’aikata',
       message_en: `Disbursed ₦${totalPayroll.toLocaleString()} in salaries for ${activeVehiclesCount} active tricycles in the cycle.`,
@@ -8206,6 +8265,11 @@ async function sendPushForNotification(n: any) {
     } else if (n.shareholder_id) {
       const sh = db.shareholders.find(s => s.id === n.shareholder_id);
       if (sh && sh.user_id) targetUserIds.push(sh.user_id);
+    } else if (n.target_roles && Array.isArray(n.target_roles)) {
+      const roles = db.roles.filter(r => n.target_roles.includes(r.name));
+      const roleIds = roles.map(r => r.id);
+      const usersWithRole = db.users.filter(u => roleIds.includes(u.role_id));
+      targetUserIds = usersWithRole.map(u => u.id);
     } else if (n.target_role) {
       const roles = db.roles.filter(r => r.name === n.target_role);
       const roleIds = roles.map(r => r.id);
@@ -8248,7 +8312,7 @@ async function sendPushForNotification(n: any) {
           console.log(`PushService: No active web push subscriptions found for user ${uid}. Native push skipped.`);
         }
       }
-    } else if (!n.user_id && !n.driver_id && !n.admin_id && !n.target_role) {
+    } else if (!n.user_id && !n.driver_id && !n.admin_id && !n.target_role && (!n.target_roles || n.target_roles.length === 0)) {
       // Broadcast to all devices only if it's a generic announcement or global system alert
       const results = await PushService.broadcastNotification(payload);
       if (results.sentCount > 0 || results.failedCount > 0) {

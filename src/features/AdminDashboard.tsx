@@ -87,11 +87,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [logs, setLogs] = useState<any[]>([]);
 
   // Admin profile & avatar states
-  const [adminName, setAdminName] = useState(() => localStorage.getItem('ruqayya_admin_name') || 'Operations Admin');
-  const [adminAvatar, setAdminAvatar] = useState(() => localStorage.getItem('ruqayya_admin_avatar') || '');
+  const [adminName, setAdminName] = useState('Operations Admin');
+  const [adminAvatar, setAdminAvatar] = useState('');
+  const [adminId, setAdminId] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [tempAdminName, setTempAdminName] = useState(adminName);
-  const [tempAdminAvatar, setTempAdminAvatar] = useState(adminAvatar);
+  const [tempAdminName, setTempAdminName] = useState('');
+  const [tempAdminAvatar, setTempAdminAvatar] = useState('');
+
+  useEffect(() => {
+    api.getMe().then(payload => {
+      if (payload && payload.user) {
+        setAdminId(payload.user.id);
+        const savedName = localStorage.getItem(`ruqayya_admin_name_${payload.user.id}`);
+        const savedAvatar = localStorage.getItem(`ruqayya_admin_avatar_${payload.user.id}`);
+        
+        const fallbackName = savedName || payload.user.full_name || payload.user.fullName || 'Operations Admin';
+        setAdminName(fallbackName);
+        setTempAdminName(fallbackName);
+        
+        const fallbackAvatar = savedAvatar || localStorage.getItem('ruqayya_admin_avatar') || '';
+        setAdminAvatar(fallbackAvatar);
+        setTempAdminAvatar(fallbackAvatar);
+      }
+    }).catch(() => {
+       setAdminName(localStorage.getItem('ruqayya_admin_name') || 'Operations Admin');
+       setAdminAvatar(localStorage.getItem('ruqayya_admin_avatar') || '');
+       setTempAdminName(localStorage.getItem('ruqayya_admin_name') || 'Operations Admin');
+       setTempAdminAvatar(localStorage.getItem('ruqayya_admin_avatar') || '');
+    });
+  }, []);
 
   // Filter States
   const [driverFilter, setDriverFilter] = useState<'all' | 'pending' | 'approved' | 'correction_requested' | 'rejected'>('all');
@@ -441,7 +465,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-brand-gold via-amber-400 to-blue-500 opacity-75 blur-xs group-hover:opacity-100 animate-spin" style={{ animationDuration: '6s' }} />
                 <div className="relative h-14 w-14 rounded-full bg-slate-900 border-2 border-brand-gold overflow-hidden flex items-center justify-center shadow-lg">
                   {adminAvatar ? (
-                    <img src={adminAvatar} alt={adminName} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={adminAvatar} alt={adminName} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
                     <span className="text-brand-gold font-black text-sm">{adminName.split(' ').map(n => n[0]).join('').substring(0, 2)}</span>
                   )}
@@ -524,7 +548,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                     value={tempAdminAvatar}
                     onChange={(e) => setTempAdminAvatar(e.target.value)}
                     className="flex-1 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-gold"
-                    placeholder="https://images.unsplash.com/... or paste image URL"
+                    placeholder=""
                   />
                   <label className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors">
                     <Camera className="h-4 w-4 text-brand-gold" />
@@ -551,7 +575,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               {tempAdminAvatar && (
                 <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                   <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-brand-gold shrink-0">
-                    <img src={tempAdminAvatar} alt="Preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} src={tempAdminAvatar} alt="Preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-900">Avatar Preview</p>
@@ -568,8 +592,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                     const finalName = tempAdminName.trim() || 'Operations Admin';
                     setAdminName(finalName);
                     setAdminAvatar(tempAdminAvatar);
-                    localStorage.setItem('ruqayya_admin_name', finalName);
-                    localStorage.setItem('ruqayya_admin_avatar', tempAdminAvatar);
+                    if (adminId) {
+                      localStorage.setItem(`ruqayya_admin_name_${adminId}`, finalName);
+                      localStorage.setItem(`ruqayya_admin_avatar_${adminId}`, tempAdminAvatar);
+                    } else {
+                      localStorage.setItem('ruqayya_admin_name', finalName);
+                      localStorage.setItem('ruqayya_admin_avatar', tempAdminAvatar);
+                    }
                     setIsProfileModalOpen(false);
                   }}
                 >
@@ -753,23 +782,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   )}
 
           {/* Module Tab Switchers */}
-          <Tabs
-            activeTab={activeTab}
-            onChange={(id) => { setActiveTab(id as any); setFleetPage(1); }}
-            tabs={[
-              { id: 'dashboard', label: lang === 'en' ? "Overview" : "Bayanai", icon: <Layers className="h-3.5 w-3.5" /> },
-              { id: 'fleet', label: lang === 'en' ? "Tricycle Fleet" : "Rukunin Kekuna", icon: <Truck className="h-3.5 w-3.5" /> },
-              { id: 'drivers', label: `${lang === 'en' ? "Driver Registry" : "Direbobi"} (${drivers.filter(d => d.status === 'pending').length} pending)`, icon: <Users className="h-3.5 w-3.5" /> },
-              { id: 'trips', label: lang === 'en' ? "Daily Remittances" : "Kudaden Remittance", icon: <MapPin className="h-3.5 w-3.5" /> },
-              { id: 'payments', label: lang === 'en' ? "Payment Approvals" : "Tabbatar Biyan Kudi", icon: <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" /> },
-              { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Wallet className="h-3.5 w-3.5" /> },
-              { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
-              { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
-              { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> },
-              { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-3.5 w-3.5" /> },
-              { id: 'settings', label: lang === 'en' ? "System Settings" : "Saitunan Tsarin", icon: <Settings className="h-3.5 w-3.5 text-brand-gold" /> }
-            ]}
-          />
+          <div className="print:hidden">
+            <Tabs
+              activeTab={activeTab}
+              onChange={(id) => { setActiveTab(id as any); setFleetPage(1); }}
+              tabs={[
+                { id: 'dashboard', label: lang === 'en' ? "Overview" : "Bayanai", icon: <Layers className="h-3.5 w-3.5" /> },
+                { id: 'fleet', label: lang === 'en' ? "Tricycle Fleet" : "Rukunin Kekuna", icon: <Truck className="h-3.5 w-3.5" /> },
+                { id: 'drivers', label: `${lang === 'en' ? "Driver Registry" : "Direbobi"} (${drivers.filter(d => d.status === 'pending').length} pending)`, icon: <Users className="h-3.5 w-3.5" /> },
+                { id: 'trips', label: lang === 'en' ? "Daily Remittances" : "Kudaden Remittance", icon: <MapPin className="h-3.5 w-3.5" /> },
+                { id: 'payments', label: lang === 'en' ? "Payment Approvals" : "Tabbatar Biyan Kudi", icon: <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" /> },
+                { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Wallet className="h-3.5 w-3.5" /> },
+                { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
+                { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
+                { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> },
+                { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-3.5 w-3.5" /> },
+                { id: 'settings', label: lang === 'en' ? "System Settings" : "Saitunan Tsarin", icon: <Settings className="h-3.5 w-3.5 text-brand-gold" /> }
+              ]}
+            />
+          </div>
 
           {/* Tab Content Display */}
           <div className="bg-bg-surface border border-border-main rounded-2xl p-4 md:p-6 shadow-xs">
@@ -944,7 +975,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                       ) : (
                         filteredDrivers.map((d, idx) => (
                           <tr key={`${d.id || 'driver'}-${idx}`} className="hover:bg-bg-base/20">
-                            <td className="p-3 font-bold font-mono text-[11px]">{d.company_driver_id || `PEND-${d.id.substring(0, 5).toUpperCase()}`}</td>
+                            <td className="p-3 font-bold font-mono text-[11px]">{d.company_driver_id || `PEND-${(d.id || 'DRV').substring(0, 5).toUpperCase()}`}</td>
                             <td className="p-3 font-extrabold text-text-main">
                               <div className="flex flex-col">
                                 <span>{d.fullName}</span>
@@ -1510,7 +1541,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             <div className="flex items-center gap-4 bg-bg-base/30 p-3 rounded-xl border border-border-main/50">
               <div className="h-14 w-14 rounded-full bg-slate-800 border border-border-main overflow-hidden flex items-center justify-center shrink-0">
                 {selectedReviewDriver.documents?.find(d => d.document_type === 'passport_photo')?.file_url ? (
-                  <img 
+                  <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
                     src={selectedReviewDriver.documents?.find(d => d.document_type === 'passport_photo')?.file_url} 
                     alt="Passport" 
                     className="h-full w-full object-cover"
@@ -1553,7 +1584,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-bg-base/25 p-2 rounded-lg text-text-muted items-center">
                   <div className="md:col-span-3 h-14 w-14 rounded-lg bg-slate-800 border overflow-hidden flex items-center justify-center">
                     {selectedReviewDriver.guarantor.passportPhotoUrl || selectedReviewDriver.guarantor.passport ? (
-                      <img 
+                      <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
                         src={selectedReviewDriver.guarantor.passportPhotoUrl || selectedReviewDriver.guarantor.passport} 
                         alt="Guarantor" 
                         className="h-full w-full object-cover"

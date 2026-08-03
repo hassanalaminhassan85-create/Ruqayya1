@@ -391,6 +391,10 @@ export const api = {
     });
   },
 
+  getShareholderSettings: async () => {
+    return api.request('/api/director/shareholder-settings');
+  },
+
   updateShareholderSettings: async (payload: { distributionPercentage: number }) => {
     return api.request('/api/director/shareholder-settings', {
       method: 'PUT',

@@ -36,6 +36,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
   authToken
 }) => {
   const [shareholder, setShareholder] = useState<Shareholder | null>(null);
+  const [calculations, setCalculations] = useState<any>(null);
   const [financials, setFinancials] = useState<FinancialRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [ledgerLoading, setLedgerLoading] = useState(true);
@@ -80,6 +81,9 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
         equity_percentage: res.calculations?.investmentPercentage ?? res.shareholder.equity_percentage ?? 0
       } : res;
       setShareholder(sh);
+      if (res.calculations) {
+        setCalculations(res.calculations);
+      }
       await fetchLedgerData();
     } catch (err) {
       console.error("Failed to fetch shareholder data:", err);
@@ -173,11 +177,20 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
     // Financial calculations
     const totalInvested = shareholder.investment_amount || (shareholder as any).investmentAmount || 0;
     const equityWeight = shareholder.equity_percentage || 0;
-    // Calculate current dividend pool (simulated or from finance)
-    // In this system, 2% of total revenue is the dividend pool for all shareholders
-    const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((acc, f) => acc + f.amount, 0);
-    const totalPool = totalRevenue * 0.02;
-    const estimatedEarnings = totalPool * (equityWeight / 100);
+    
+    // Use backend calculations if available
+    let estimatedEarnings = calculations?.totalEarnings || 0;
+    
+    // If we want a local fallback estimation (though backend calculations should be preferred):
+    if (!calculations) {
+      const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((acc, f) => acc + f.amount, 0);
+      const totalExpenses = financials.filter(f => f.type === 'expense').reduce((acc, f) => acc + f.amount, 0);
+      const netGenerated = totalRevenue - totalExpenses;
+      const distributionPercentage = 2; // local fallback
+      const totalPool = netGenerated > 0 ? (netGenerated * (distributionPercentage / 100)) : 0;
+      estimatedEarnings = totalPool * (equityWeight / 100);
+    }
+    
     const shTotalWithdrawn = shareholder.total_withdrawn || 0;
     const availableWithdrawable = Math.max(0, estimatedEarnings - shTotalWithdrawn);
     const shTotalReinvested = shareholder.total_reinvested || 0;
@@ -583,7 +596,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
         <form onSubmit={handleWithdraw} className="space-y-4">
           {shActionError && <Alert type="danger">{shActionError}</Alert>}
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-             <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Max Available</span>
+             <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">Available</span>
              <span className="text-xl font-black text-slate-900 font-mono">₦{availableWithdrawable.toLocaleString()}</span>
           </div>
           <div>

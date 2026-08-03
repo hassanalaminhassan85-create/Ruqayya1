@@ -352,11 +352,7 @@ export default function App() {
             const userRole = payload.user.role;
             setAuthToken(token);
             setCurrentRole(userRole);
-            if (userRole === 'driver') {
-              setDriverName(payload.user.fullName);
-            } else {
-              setDriverName('');
-            }
+            setDriverName(payload.user.full_name || payload.user.fullName || '');
           } else {
             console.log('DIAGNOSTIC: api.getMe() returned no user, clearing token.');
             api.clearToken();
@@ -877,7 +873,7 @@ export default function App() {
 
       {/* TOP NAVIGATION HEADER */}
       {currentRole !== 'public' && activeSection !== 'ai-assistant' && (
-        <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-2 sm:px-4 py-3 shadow-xs">
+        <header className="sticky top-0 z-40 bg-bg-surface border-b border-border-main backdrop-blur-md px-2 sm:px-4 py-3 shadow-xs print:hidden">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-4">
             <div className="flex items-center gap-3">
               {currentRole !== 'public' && (
@@ -1274,7 +1270,7 @@ export default function App() {
         onClose={() => setAiCopilotOpen(false)}
         lang={lang}
         currentRole={currentRole}
-        userName={currentRole === 'driver' ? (driverName || 'Authenticated Driver') : currentRole === 'admin' ? (localStorage.getItem('ruqayya_admin_name') || 'Operations Admin') : (localStorage.getItem('ruqayya_director_name') || 'General Director')}
+        userName={driverName || (currentRole === 'driver' ? 'Authenticated Driver' : currentRole === 'admin' ? 'Operations Admin' : currentRole === 'director' ? 'General Director' : 'Shareholder')}
         activeCycleId={activeCycle?.cycleId}
       />
     </div>

@@ -223,7 +223,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
           agreedAmount: parseFloat(drvAgreedAmount),
           remainingVehicleBalance: parseFloat(drvCapitalValue),
           classification: 'Assisted',
-          passportPhoto: drvPassportBase64 || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+          passportPhoto: drvPassportBase64 || '',
           mustChangePassword: drvRequirePassChange
         },
         guarantor: {
@@ -232,7 +232,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
           address: gAddress,
           relationship: gRelationship,
           nin: gNin,
-          passport: gPassportBase64 || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'
+          passport: gPassportBase64 || ''
         },
         vehicle: {
           brand: "Bajaj",
@@ -418,7 +418,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
         address: shAddress,
         investmentAmount: parseFloat(shInvestment),
         investmentDate: shJoinDate,
-        passportPhoto: shPassportBase64 || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150',
+        passportPhoto: shPassportBase64 || '',
         password: shPassword || 'shareholder123',
         mustChangePassword: true
       };
@@ -803,8 +803,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                         </td>
                         <td className="p-4">
                           <div className="flex items-center gap-3">
-                            <img
-                              src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
+                            <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
+                              src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || undefined}
                               alt={d.fullName}
                               className="h-8 w-8 rounded-full border border-border-main/50 object-cover"
                               referrerPolicy="no-referrer"
@@ -1303,8 +1303,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                           </td>
                           <td className="p-4">
                             <div className="flex items-center gap-3">
-                              <img
-                                src={s.passport_photo_url || s.passportPhoto || s.passport_photo || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150'}
+                              <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
+                                src={s.passport_photo_url || s.passportPhoto || s.passport_photo || undefined}
                                 alt={s.full_name}
                                 className="h-8 w-8 rounded-full border border-border-main/50 object-cover"
                                 referrerPolicy="no-referrer"
@@ -1528,8 +1528,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                         <tr key={`${d.id}-${idx}`} className="hover:bg-bg-base/20 transition-all">
                           <td className="p-4">
                             <div className="flex items-center gap-3">
-                              <img
-                                src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
+                              <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
+                                src={d.passport_photo_url || d.passportPhoto || d.passport_photo || d.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || undefined}
                                 alt={d.fullName}
                                 className="h-8 w-8 rounded-full border object-cover"
                                 referrerPolicy="no-referrer"
@@ -2185,8 +2185,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
           <div className="flex flex-col gap-4 p-2 max-w-xl text-text-main max-h-[80vh] overflow-y-auto">
             {/* Header info */}
             <div className="flex items-center gap-3 bg-bg-base/60 p-3 rounded-xl border border-border-main/40">
-              <img
-                src={reviewDriver.passport_photo_url || reviewDriver.passportPhoto || reviewDriver.passport_photo || reviewDriver.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
+              <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
+                src={reviewDriver.passport_photo_url || reviewDriver.passportPhoto || reviewDriver.passport_photo || reviewDriver.documents?.find((doc: any) => doc.document_type === 'passport_photo')?.file_url || undefined}
                 alt={reviewDriver.fullName}
                 className="h-14 w-14 rounded-full border border-border-main/50 object-cover"
                 referrerPolicy="no-referrer"
@@ -2391,8 +2391,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
         <Modal onClose={() => setSelectedDocumentPreview(null)} title={selectedDocumentPreview.title}>
           <div className="flex flex-col gap-4 p-2 max-w-lg items-center text-center text-text-main">
             <div className="w-full bg-slate-900 aspect-video rounded-xl border border-slate-800 flex items-center justify-center p-4 overflow-hidden relative">
-              {selectedDocumentPreview.file_url.startsWith('data:image/') || selectedDocumentPreview.file_url.includes('unsplash.com') ? (
-                <img
+              {selectedDocumentPreview.file_url.startsWith('data:image/') ? (
+                <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
                   src={selectedDocumentPreview.file_url}
                   alt={selectedDocumentPreview.title}
                   className="max-h-full max-w-full rounded object-contain"

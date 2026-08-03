@@ -920,7 +920,7 @@ _Ruqayya Transport Fleet Operations Command_`;
               {/* Driver Profile Header Banner */}
               <div className="p-4 bg-bg-base border border-border-main/60 rounded-xl flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <img
+                  <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
                     src={getDriverPassport(inspectPayment.driverObj)}
                     alt={inspectPayment.driverName}
                     className="h-14 w-14 rounded-2xl object-cover border-2 border-brand-gold shadow-md shrink-0"
@@ -1017,7 +1017,7 @@ _Ruqayya Transport Fleet Operations Command_`;
                     className="relative group rounded-xl overflow-hidden border border-border-main max-h-48 bg-slate-950 flex items-center justify-center cursor-pointer"
                     onClick={() => setLightboxImage(getReceiptProofImage(inspectPayment))}
                   >
-                    <img 
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
                       src={getReceiptProofImage(inspectPayment)} 
                       alt="Bank Teller Slip" 
                       className="w-full h-48 object-contain transition-transform duration-300 group-hover:scale-105"
@@ -1222,7 +1222,7 @@ _Ruqayya Transport Fleet Operations Command_`;
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs relative z-10">
                   
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
-                    <img
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
                       src={getDriverPassport(selectedReceipt.driverObj)}
                       alt={selectedReceipt.driverName}
                       className="h-12 w-12 rounded-xl object-cover border border-slate-300 shadow-xs shrink-0"
@@ -1365,7 +1365,7 @@ _Ruqayya Transport Fleet Operations Command_`;
                 <X className="h-6 w-6" />
               </button>
 
-              <img
+              <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }}
                 src={lightboxImage}
                 alt="Enlarged Payment Proof"
                 className="max-h-[85vh] max-w-full object-contain rounded-xl shadow-2xl border border-slate-700"

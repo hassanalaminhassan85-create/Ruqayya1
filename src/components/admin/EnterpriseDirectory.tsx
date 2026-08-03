@@ -742,7 +742,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                             className={`h-11 w-11 rounded-full flex items-center justify-center font-bold text-xs border ${getAvatarBg(person.fullName || person.full_name || '')}`}
                           >
                             {person.passport_photo_url || person.passportPhoto || person.passport_photo || person.passport ? (
-                              <img 
+                              <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
                                 src={person.passport_photo_url || person.passportPhoto || person.passport_photo || person.passport} 
                                 alt={person.fullName} 
                                 className="h-full w-full rounded-full object-cover"
@@ -868,7 +868,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                   className={`h-16 w-16 rounded-full flex items-center justify-center font-bold text-lg border-2 ${getAvatarBg(selectedPerson.fullName || selectedPerson.full_name || '')}`}
                 >
                   {selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport ? (
-                    <img 
+                    <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
                       src={selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport} 
                       alt={selectedPerson.fullName} 
                       className="h-full w-full rounded-full object-cover"
@@ -903,7 +903,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                   </h3>
                   <div className="relative group overflow-hidden rounded-xl border border-border-main/50 h-32 w-32 bg-bg-surface flex items-center justify-center shadow-md">
                     {selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport ? (
-                      <img 
+                      <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
                         src={selectedPerson.passport_photo_url || selectedPerson.passportPhoto || selectedPerson.passport_photo || selectedPerson.passport} 
                         alt="Official Passport" 
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
@@ -1244,7 +1244,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                   <div className="flex items-center gap-3 p-3 border border-dashed border-border-main rounded-xl bg-bg-base/50">
                     {formData.passportPhoto ? (
                       <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-border-main bg-bg-base flex-shrink-0">
-                        <img 
+                        <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
                           src={formData.passportPhoto} 
                           alt="Passport Preview" 
                           className="w-full h-full object-cover" 
