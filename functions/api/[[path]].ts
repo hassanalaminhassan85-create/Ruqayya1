@@ -26,6 +26,27 @@ interface Env {
   GEMINI_API_KEY?: string;
 }
 
+function base64url(buffer: ArrayBuffer | Uint8Array): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const b64 = btoa(binary);
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeBase64url(str: string): Uint8Array {
+  let sanitized = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (sanitized.length % 4) sanitized += '=';
+  const binary = atob(sanitized);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 // Helper to retrieve or generate VAPID keys
 async function getVapidKeys(env: Env, db: any, dbManager: D1Manager): Promise<{ publicKey: string; privateKey: string } | null> {
   // 1. Try Environment Variables
@@ -1459,27 +1480,6 @@ async function generateVapidHeader(env: Env, endpoint: string, db?: any, dbManag
     throw new Error('VAPID keys not configured.');
   }
 
-  function base64url(buffer: ArrayBuffer | Uint8Array): string {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const b64 = btoa(binary);
-    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-
-  function decodeBase64url(str: string): Uint8Array {
-    let sanitized = str.replace(/-/g, '+').replace(/_/g, '/');
-    while (sanitized.length % 4) sanitized += '=';
-    const binary = atob(sanitized);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-  }
-
   const decodedPublic = decodeBase64url(publicKey);
   const x_b64url = base64url(decodedPublic.slice(1, 33));
   const y_b64url = base64url(decodedPublic.slice(33, 65));
@@ -1552,13 +1552,32 @@ async function sendPushNotification(
     if (subscription.keys && subscription.keys.p256dh && subscription.keys.auth) {
       try {
         const encrypted = await encryptPushPayload(subscription, payload);
-        body = encrypted.body;
+        
+        // RFC 8188 (aes128gcm) Binary Header:
+        // - salt: 16 bytes
+        // - rs (Record Size): 4 bytes (standard is 4096, represented as [0, 0, 16, 0] big-endian)
+        // - idlen: 1 byte (length of sender public key, 65 bytes raw ECDH P-256)
+        // - keyid (ephemeral public key): 65 bytes
+        const saltBytes = decodeBase64url(encrypted.salt);
+        const dhBytes = decodeBase64url(encrypted.dh);
+        
+        const header = new Uint8Array(86);
+        header.set(saltBytes, 0);
+        header.set([0, 0, 16, 0], 16); // rs = 4096
+        header.set([65], 20); // idlen = 65
+        header.set(dhBytes, 21); // ephemeral public key (65 bytes)
+        
+        const bodyWithHeader = new Uint8Array(86 + encrypted.body.byteLength);
+        bodyWithHeader.set(header, 0);
+        bodyWithHeader.set(new Uint8Array(encrypted.body), 86);
+        
+        body = bodyWithHeader;
         headers = {
           ...headers,
           'Content-Encoding': 'aes128gcm',
           'Content-Type': 'application/octet-stream'
         };
-        console.log(`[PUSH] Successfully encrypted payload for endpoint: ${endpoint}`);
+        console.log(`[PUSH] Successfully encrypted payload with RFC 8188 header for endpoint: ${endpoint}`);
       } catch (encryptErr) {
         console.warn(`[PUSH] Encryption failed, falling back to plaintext (unlikely to work in prod):`, encryptErr);
       }
@@ -2472,6 +2491,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     } catch (err: any) {
       return buildResponse({ error: err.message }, 500);
     }
+  }
+
+  // PUBLIC: Get Canonical Cycle Status (Non-authenticated)
+  if (path === '/api/cycles/status' && method === 'GET') {
+    if (!db.cycles) db.cycles = [];
+    const status = getCanonicalCycleStatus(db);
+    return buildResponse({ success: true, ...status });
   }
 
   // ALL OTHER ENDPOINTS REQUIRE AUTHENTICATION
@@ -4482,13 +4508,6 @@ ${JSON.stringify(cleanedContext, null, 2)}
     }
   }
 
-
-  // 17.5. CYCLE STATUS (Missing canonical route)
-  if (path === '/api/cycles/status' && method === 'GET') {
-    if (!db.cycles) db.cycles = [];
-    const status = getCanonicalCycleStatus(db);
-    return buildResponse({ success: true, ...status });
-  }
 
   // 17. RE-ROUTING EXECUTIVE DIRECT CONTROLS
   if (path.startsWith('/api/director/')) {
