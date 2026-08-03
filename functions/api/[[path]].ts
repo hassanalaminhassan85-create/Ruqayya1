@@ -97,6 +97,23 @@ function getCanonicalCycleStatus(db: any): any {
     };
   }
   const now = Date.now();
+
+  // Check if this is a timed pause and if it has ended
+  if (activeCycle.status === 'paused' && activeCycle.pausedAt && (activeCycle.pauseDays || 0) > 0) {
+    const pauseDurationMs = activeCycle.pauseDays * 24 * 3600 * 1000;
+    const pauseEndMs = new Date(activeCycle.pausedAt).getTime() + pauseDurationMs;
+    if (now >= pauseEndMs) {
+      // Auto-resume cycle
+      activeCycle.status = 'active';
+      activeCycle.pausedAt = null;
+      activeCycle.pauseReason = '';
+      activeCycle.pauseDays = 0;
+      if (db.company_operations_state) {
+        db.company_operations_state.status = 'Operational Mode';
+      }
+    }
+  }
+
   const startMs = new Date(activeCycle.startDate).getTime();
   let baseDurationSeconds = 30 * 24 * 3600;
   if (activeCycle.endDate) {
@@ -109,7 +126,11 @@ function getCanonicalCycleStatus(db: any): any {
   let totalPausedSeconds = activeCycle.totalPausedSeconds || 0;
   let currentPauseSeconds = 0;
   if (activeCycle.status === 'paused' && activeCycle.pausedAt) {
-    currentPauseSeconds = Math.floor((now - new Date(activeCycle.pausedAt).getTime()) / 1000);
+    // If it is a timed pause (pauseDays > 0), the timer should CONTINUE counting down!
+    // So we do NOT freeze the timer (currentPauseSeconds = 0)
+    if (!(activeCycle.pauseDays > 0)) {
+      currentPauseSeconds = Math.floor((now - new Date(activeCycle.pausedAt).getTime()) / 1000);
+    }
   }
   const effectivePausedSeconds = totalPausedSeconds + currentPauseSeconds;
   const elapsedSeconds = Math.max(0, Math.floor((now - startMs) / 1000) - effectivePausedSeconds);
@@ -134,7 +155,8 @@ function getCanonicalCycleStatus(db: any): any {
     currentDay: currentDay,
     totalCycleDays: baseDays + (activeCycle.extendedDays || 0),
     pauseReason: activeCycle.pauseReason || '',
-    pausedAt: activeCycle.pausedAt || ''
+    pausedAt: activeCycle.pausedAt || '',
+    pauseDays: activeCycle.pauseDays || 0
   };
 }
 
@@ -4576,20 +4598,31 @@ ${JSON.stringify(cleanedContext, null, 2)}
 
     if (ctrl === 'cycles/pause' && method === 'POST') {
       try {
-        const { reason } = await request.json() as any;
+        const body = await request.json() as any;
+        const { reason, pauseDays, daysPaused, extensionDays } = body;
         if (!reason) {
           return buildResponse({ error: 'Reason for pause is required.' }, 400);
         }
 
-        const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+        const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
         if (!activeCycle) {
           return buildResponse({ error: 'No active operating cycle found to pause.' }, 400);
         }
+
+        const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
+        const newExtendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
 
         activeCycle.status = 'paused';
         activeCycle.pauseReason = reason;
         activeCycle.pausedAt = new Date().toISOString();
         activeCycle.pausedBy = user.fullName;
+        activeCycle.pauseDays = daysToExtend;
+        activeCycle.extendedDays = newExtendedDays;
+
+        const startMs = new Date(activeCycle.startDate).getTime();
+        const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
+        const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
+        activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
 
         if (!activeCycle.pauseHistory) {
           activeCycle.pauseHistory = [];
@@ -4598,7 +4631,9 @@ ${JSON.stringify(cleanedContext, null, 2)}
           id: generateUUID(),
           pausedBy: user.fullName,
           pausedAt: new Date().toISOString(),
-          reason
+          reason,
+          pauseDays: daysToExtend,
+          extendedEndDate: activeCycle.endDate
         });
 
         if (!db.company_operations_state) {
@@ -5197,7 +5232,8 @@ ${JSON.stringify(cleanedContext, null, 2)}
       return buildResponse({ error: 'Access Denied: Only Administrators can pause operations.' }, 403);
     }
     try {
-      const { reason } = await request.json() as any;
+      const body = await request.json() as any;
+      const { reason, pauseDays, daysPaused, extensionDays } = body;
       if (!reason) {
         return buildResponse({ error: 'Reason for suspension is mandatory.' }, 400);
       }
@@ -5231,13 +5267,24 @@ ${JSON.stringify(cleanedContext, null, 2)}
         ...(state.auditLog || [])
       ];
 
+      const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
+
       if (!db.cycles) db.cycles = [];
-      const activeCycle = db.cycles.find((c: any) => c.status === 'active');
+      const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
       if (activeCycle) {
+        const newExtendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
         activeCycle.status = 'paused';
         activeCycle.pauseReason = reason;
         activeCycle.pausedAt = new Date().toISOString();
         activeCycle.pausedBy = user.fullName;
+        activeCycle.pauseDays = daysToExtend;
+        activeCycle.extendedDays = newExtendedDays;
+
+        const startMs = activeCycle.startDate ? new Date(activeCycle.startDate.includes('T') ? activeCycle.startDate : `${activeCycle.startDate}T00:00:00`).getTime() : new Date('2026-07-29T00:00:00').getTime();
+        const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
+        const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
+        activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
+
         if (!activeCycle.pauseHistory) {
           activeCycle.pauseHistory = [];
         }
@@ -5245,7 +5292,9 @@ ${JSON.stringify(cleanedContext, null, 2)}
           id: generateUUID(),
           pausedBy: user.fullName,
           pausedAt: new Date().toISOString(),
-          reason
+          reason,
+          pauseDays: daysToExtend,
+          extendedEndDate: activeCycle.endDate
         });
       }
 

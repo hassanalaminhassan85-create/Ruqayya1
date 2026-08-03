@@ -76,7 +76,8 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
 
   // Local ticker for smooth UI
   useEffect(() => {
-    if (!activeCycle || activeCycle.status !== 'active') return;
+    if (!activeCycle) return;
+    if (activeCycle.status !== 'active' && !(activeCycle.status === 'paused' && activeCycle.pauseDays > 0)) return;
 
     const tick = () => {
       setTimeLeft(prev => {
@@ -276,10 +277,10 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
               <div className="mt-1 border-t border-slate-200/40 pt-1 flex flex-col gap-0.5">
                 <span className="text-[7.5px] sm:text-[8px] text-amber-500 font-black uppercase tracking-wider flex items-center gap-1">
                   <AlertCircle className="h-2.5 w-2.5 shrink-0" />
-                  {lang === 'en' ? "Operating Freeze" : "An Dakatar"}
+                  {lang === 'en' ? "The cycle operation is paused" : "An dakatar da gudanarwar zagayen"}
                 </span>
-                <p className="text-[8px] sm:text-[9px] text-slate-600 bg-amber-50/50 border border-amber-200/20 px-1.5 py-0.5 rounded italic truncate">
-                  "{activeCycle?.pauseReason || "No explanation provided."}"
+                <p className="text-[8px] sm:text-[9px] text-slate-600 bg-amber-50/50 border border-amber-200/20 px-1.5 py-0.5 rounded font-medium">
+                  {lang === 'en' ? `Reason: ${activeCycle?.pauseReason || "No explanation provided."}` : `Dalili: ${activeCycle?.pauseReason || "Babu dalili."}`}
                 </p>
               </div>
             )}

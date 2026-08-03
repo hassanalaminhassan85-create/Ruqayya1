@@ -483,6 +483,29 @@ function getCanonicalCycleStatus(db: any): any {
   }
 
   const now = Date.now();
+
+  // Check if this is a timed pause and if it has ended
+  if (activeCycle.status === 'paused' && activeCycle.pausedAt && (activeCycle.pauseDays || 0) > 0) {
+    const pauseDurationMs = activeCycle.pauseDays * 24 * 3600 * 1000;
+    const pauseEndMs = new Date(activeCycle.pausedAt).getTime() + pauseDurationMs;
+    if (now >= pauseEndMs) {
+      // Auto-resume cycle
+      activeCycle.status = 'active';
+      activeCycle.pausedAt = null;
+      activeCycle.pauseReason = '';
+      activeCycle.pauseDays = 0;
+      if (db.company_operations_state) {
+        db.company_operations_state.status = 'Operational Mode';
+      }
+      try {
+        saveDB(db);
+        syncActiveCycleToFirestore(db);
+      } catch (err) {
+        console.warn('Failed to save auto-resumed cycle status to DB:', err);
+      }
+    }
+  }
+
   const startMs = new Date(activeCycle.startDate).getTime();
   let baseDurationSeconds = 30 * 24 * 3600;
   if (activeCycle.endDate) {
@@ -498,7 +521,11 @@ function getCanonicalCycleStatus(db: any): any {
   // If currently paused, add the time since it was paused to the effective total paused time
   let currentPauseSeconds = 0;
   if (activeCycle.status === 'paused' && activeCycle.pausedAt) {
-    currentPauseSeconds = Math.floor((now - new Date(activeCycle.pausedAt).getTime()) / 1000);
+    // If it is a timed pause (pauseDays > 0), the timer should CONTINUE counting down!
+    // So we do NOT freeze the timer (currentPauseSeconds = 0)
+    if (!(activeCycle.pauseDays > 0)) {
+      currentPauseSeconds = Math.floor((now - new Date(activeCycle.pausedAt).getTime()) / 1000);
+    }
   }
 
   const effectivePausedSeconds = totalPausedSeconds + currentPauseSeconds;
@@ -529,7 +556,8 @@ function getCanonicalCycleStatus(db: any): any {
     currentDay,
     totalCycleDays: baseDays + (activeCycle.extendedDays || 0),
     pauseReason: activeCycle.pauseReason || '',
-    pausedAt: activeCycle.pausedAt || ''
+    pausedAt: activeCycle.pausedAt || '',
+    pauseDays: activeCycle.pauseDays || 0
   };
 }
 
@@ -720,8 +748,15 @@ setInterval(() => {
     const now = new Date();
 
     // 1. CYCLE MANAGEMENT
+    const activeCycleBefore = db.cycles && db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+    const statusBefore = activeCycleBefore ? activeCycleBefore.status : null;
+
     const canonical = getCanonicalCycleStatus(db);
     const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
+    
+    if (activeCycle && statusBefore === 'paused' && activeCycle.status === 'active') {
+      dbChanged = true;
+    }
     
     if (activeCycle && canonical.isActive) {
       const daysElapsed = canonical.currentDay;
@@ -5289,28 +5324,21 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
       return res.status(400).json({ error: 'No active operating cycle found to pause.' });
     }
 
-    const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
+        const daysToExtend = parseInt(pauseDays || daysPaused || extensionDays || 0, 10);
     const newExtendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
 
-    if (daysToExtend > 0) {
-      activeCycle.status = 'active';
-      activeCycle.pausedAt = null;
-      activeCycle.pauseReason = '';
-    } else {
-      activeCycle.status = 'paused';
-      activeCycle.pauseReason = reason;
-      activeCycle.pausedAt = new Date().toISOString();
-      activeCycle.pausedBy = actor.fullName;
-    }
+    activeCycle.status = 'paused';
+    activeCycle.pauseReason = reason;
+    activeCycle.pausedAt = new Date().toISOString();
+    activeCycle.pausedBy = actor.fullName;
+    activeCycle.pauseDays = daysToExtend;
     activeCycle.extendedDays = newExtendedDays;
 
     // Extend end date automatically if extension days were specified
-    if (daysToExtend > 0) {
-      const startMs = new Date(activeCycle.startDate).getTime();
-      const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
-      const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
-      activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
-    }
+    const startMs = new Date(activeCycle.startDate).getTime();
+    const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
+    const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
+    activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
 
     // Add to cycle pause history
     if (!activeCycle.pauseHistory) {
@@ -6121,24 +6149,18 @@ app.post('/api/operations/pause', authenticateSession, async (req, res) => {
     if (!db.cycles) db.cycles = [];
     const activeCycle = db.cycles.find((c: any) => c.status === 'active' || c.status === 'paused');
     if (activeCycle) {
-      const newExtendedDays = (activeCycle.extendedDays || activeCycle.pauseDays || 0) + daysToExtend;
-      activeCycle.pauseDays = newExtendedDays;
+      const newExtendedDays = (activeCycle.extendedDays || 0) + daysToExtend;
+      activeCycle.status = 'paused';
+      activeCycle.pauseReason = reason;
+      activeCycle.pausedAt = new Date().toISOString();
+      activeCycle.pausedBy = actor.fullName;
+      activeCycle.pauseDays = daysToExtend;
       activeCycle.extendedDays = newExtendedDays;
 
-      if (daysToExtend > 0) {
-        activeCycle.status = 'active';
-        activeCycle.pausedAt = null;
-        activeCycle.pauseReason = '';
-        const startMs = activeCycle.startDate ? new Date(activeCycle.startDate.includes('T') ? activeCycle.startDate : `${activeCycle.startDate}T00:00:00`).getTime() : new Date('2026-07-29T00:00:00').getTime();
-        const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
-        const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
-        activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
-      } else {
-        activeCycle.status = 'paused';
-        activeCycle.pauseReason = reason;
-        activeCycle.pausedAt = new Date().toISOString();
-        activeCycle.pausedBy = actor.fullName;
-      }
+      const startMs = activeCycle.startDate ? new Date(activeCycle.startDate.includes('T') ? activeCycle.startDate : `${activeCycle.startDate}T00:00:00`).getTime() : new Date('2026-07-29T00:00:00').getTime();
+      const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
+      const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
+      activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
 
       if (!activeCycle.pauseHistory) {
         activeCycle.pauseHistory = [];
