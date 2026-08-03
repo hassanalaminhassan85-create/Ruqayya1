@@ -507,13 +507,13 @@ function getCanonicalCycleStatus(db: any): any {
   }
 
   const startMs = new Date(activeCycle.startDate).getTime();
-  let baseDurationSeconds = 30 * 24 * 3600;
+  let totalCycleSeconds = 30 * 24 * 3600;
   if (activeCycle.endDate) {
     const endMs = new Date(activeCycle.endDate).getTime();
-    baseDurationSeconds = Math.max(24 * 3600, Math.floor((endMs - startMs) / 1000));
+    totalCycleSeconds = Math.max(24 * 3600, Math.floor((endMs - startMs) / 1000));
+  } else if (activeCycle.extendedDays) {
+    totalCycleSeconds = (30 + activeCycle.extendedDays) * 24 * 3600;
   }
-  const extensionSeconds = (activeCycle.extendedDays || 0) * 24 * 3600;
-  const totalCycleSeconds = baseDurationSeconds + extensionSeconds;
   
   // Total paused seconds accumulated so far
   let totalPausedSeconds = activeCycle.totalPausedSeconds || 0;
@@ -537,16 +537,16 @@ function getCanonicalCycleStatus(db: any): any {
   const minutes = Math.floor((remainingSeconds % 3600) / 60);
   const seconds = remainingSeconds % 60;
   
-  const baseDays = Math.round(baseDurationSeconds / (24 * 3600));
+  const totalCycleDays = Math.round(totalCycleSeconds / (24 * 3600));
   const progressPercent = Math.min(100, (elapsedSeconds / totalCycleSeconds) * 100);
-  const currentDay = Math.min(baseDays + (activeCycle.extendedDays || 0), Math.floor(elapsedSeconds / (24 * 3600)) + 1);
+  const currentDay = Math.min(totalCycleDays, Math.floor(elapsedSeconds / (24 * 3600)) + 1);
 
   return {
     isActive: true,
     status: activeCycle.status,
     cycleId: activeCycle.id,
     startDate: activeCycle.startDate,
-    endDate: activeCycle.endDate || new Date(startMs + baseDurationSeconds * 1000).toISOString(),
+    endDate: activeCycle.endDate || new Date(startMs + totalCycleSeconds * 1000).toISOString(),
     daysRemaining: days,
     hoursRemaining: hours,
     minutesRemaining: minutes,
@@ -554,7 +554,7 @@ function getCanonicalCycleStatus(db: any): any {
     totalSecondsRemaining: remainingSeconds,
     progressPercent,
     currentDay,
-    totalCycleDays: baseDays + (activeCycle.extendedDays || 0),
+    totalCycleDays,
     pauseReason: activeCycle.pauseReason || '',
     pausedAt: activeCycle.pausedAt || '',
     pauseDays: activeCycle.pauseDays || 0
@@ -702,10 +702,10 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
     const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
     const extendedStartDate = new Date(normalStartDate.getTime() + (totalRestDays * 24 * 3600 * 1000) + masterPausedMs);
 
+    const installmentTarget = Math.round(agreedAmount / 6);
     const dueAmount = installmentTarget + carryForward;
-    const paidAmount = payments
-      .filter((p: any) => p.installment_number === k)
-      .reduce((sum: number, p: any) => sum + p.amount, 0);
+    const matchingPayments = payments.filter((p: any) => p.installment_number === k);
+    const paidAmount = matchingPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
     const remaining = dueAmount - paidAmount;
     carryForward = remaining;
@@ -729,7 +729,16 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
       startDate: extendedStartDate.toISOString().split('T')[0],
       endDate: extendedEndDate.toISOString().split('T')[0],
       status,
-      isCurrentRealTime
+      isCurrentRealTime,
+      payments: matchingPayments.map((p: any) => ({
+        id: p.id,
+        amount: p.amount,
+        receiptNumber: p.receipt_number || p.receiptNumber || 'RTL-REC',
+        approvedBy: p.approved_by || p.recorded_by || p.approvedBy || 'Admin',
+        date: p.date || p.created_at || new Date().toISOString(),
+        paymentMethod: p.payment_method || p.paymentMethod || 'Bank Transfer',
+        remarks: p.remarks || p.notes || ''
+      }))
     });
   }
 
@@ -5113,7 +5122,7 @@ app.get('/api/cycles/status', (req, res) => {
   try {
     const db = loadDB();
     const status = getCanonicalCycleStatus(db);
-    res.json({ success: true, ...status });
+    res.json({ success: true, serverTimestamp: Date.now(), ...status });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -5334,10 +5343,9 @@ app.post('/api/director/cycles/pause', authenticateSession, async (req, res) => 
     activeCycle.pauseDays = daysToExtend;
     activeCycle.extendedDays = newExtendedDays;
 
-    // Extend end date automatically if extension days were specified
-    const startMs = new Date(activeCycle.startDate).getTime();
-    const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
-    const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
+    // Extend end date automatically by adding daysToExtend to current end date
+    const currentEndMs = activeCycle.endDate ? new Date(activeCycle.endDate).getTime() : (new Date(activeCycle.startDate).getTime() + 30 * 24 * 3600 * 1000);
+    const extendedEndMs = currentEndMs + daysToExtend * 24 * 3600 * 1000;
     activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
 
     // Add to cycle pause history
@@ -6157,9 +6165,8 @@ app.post('/api/operations/pause', authenticateSession, async (req, res) => {
       activeCycle.pauseDays = daysToExtend;
       activeCycle.extendedDays = newExtendedDays;
 
-      const startMs = activeCycle.startDate ? new Date(activeCycle.startDate.includes('T') ? activeCycle.startDate : `${activeCycle.startDate}T00:00:00`).getTime() : new Date('2026-07-29T00:00:00').getTime();
-      const baseEndMs = startMs + 30 * 24 * 3600 * 1000;
-      const extendedEndMs = baseEndMs + newExtendedDays * 24 * 3600 * 1000;
+      const currentEndMs = activeCycle.endDate ? new Date(activeCycle.endDate).getTime() : (new Date(activeCycle.startDate).getTime() + 30 * 24 * 3600 * 1000);
+      const extendedEndMs = currentEndMs + daysToExtend * 24 * 3600 * 1000;
       activeCycle.endDate = new Date(extendedEndMs).toISOString().split('T')[0];
 
       if (!activeCycle.pauseHistory) {

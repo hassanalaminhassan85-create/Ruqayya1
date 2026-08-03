@@ -291,8 +291,7 @@ export function seedDBIfEmpty() {
   // Check if there is old demo driver/vehicle data that needs to be wiped for a clean slate
   const hasDemoData = db.users.some(u => 
     u.email === 'musa.garba@ruqayyatransport.com' || 
-    u.full_name === 'Alhaji Musa Garba' ||
-    u.full_name?.includes('Ibrahim Bello')
+    u.full_name === 'Alhaji Musa Garba'
   );
 
   if (hasDemoData) {

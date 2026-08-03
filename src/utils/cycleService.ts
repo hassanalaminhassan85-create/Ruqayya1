@@ -21,6 +21,9 @@ export interface ActiveCycleData {
   totalCycleDays: number;
   pauseReason?: string;
   pausedAt?: string;
+  pauseDays?: number;
+  serverTimestamp?: number;
+  fetchTimestamp?: number;
   // Stats
   drivers?: number;
   fleet?: number;
@@ -44,7 +47,8 @@ const DEFAULT_ACTIVE_CYCLE: ActiveCycleData = {
   currentDay: 0,
   totalCycleDays: 30,
   pauseReason: '',
-  pausedAt: ''
+  pausedAt: '',
+  pauseDays: 0
 };
 
 export function subscribeToActiveCycle(onUpdate: (data: ActiveCycleData | null) => void) {
@@ -52,10 +56,14 @@ export function subscribeToActiveCycle(onUpdate: (data: ActiveCycleData | null) 
 
   const fetchStatus = async () => {
     if (!isSubscribed) return;
+    const receiveTime = Date.now();
     try {
       const res = await fetch('/api/cycles/status').then(r => r.json());
       if (res.success) {
-        onUpdate(res);
+        onUpdate({
+          ...res,
+          fetchTimestamp: receiveTime
+        });
       } else {
         onUpdate(DEFAULT_ACTIVE_CYCLE);
       }

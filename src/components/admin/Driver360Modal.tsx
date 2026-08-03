@@ -48,10 +48,12 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     ''
   ) : '';
 
-  const [activeTab, setActiveTab] = useState<'info' | 'payments' | 'history' | 'docs'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'payments' | 'telemetry' | 'docs'>('info');
   const [installments, setInstallments] = useState<any[]>([]);
   const [loadingInstallments, setLoadingInstallments] = useState(false);
   const [selectedMilestone, setSelectedMilestone] = useState<any | null>(null);
+  const [instSortKey, setInstSortKey] = useState<'installmentNumber' | 'amountDue' | 'amountPaid' | 'status'>('installmentNumber');
+  const [instSortOrder, setInstSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const fetchDriverInstallmentsAndData = async () => {
     if (!driver?.id) return;
@@ -363,6 +365,9 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
               <button onClick={() => setActiveTab('payments')} className={`px-4 py-2.5 text-xs font-bold transition-all border-b-2 whitespace-nowrap flex items-center gap-2 ${activeTab === 'payments' ? 'border-brand-gold text-brand-gold bg-brand-gold/5' : 'border-transparent text-text-muted hover:text-text-main cursor-pointer'}`}>
                 <Wallet className="h-4 w-4" /> Installment Ledger
               </button>
+              <button onClick={() => setActiveTab('telemetry')} className={`px-4 py-2.5 text-xs font-bold transition-all border-b-2 whitespace-nowrap flex items-center gap-2 ${activeTab === 'telemetry' ? 'border-brand-gold text-brand-gold bg-brand-gold/5' : 'border-transparent text-text-muted hover:text-text-main cursor-pointer'}`}>
+                <Activity className="h-4 w-4" /> GPS & Telematics
+              </button>
               <button onClick={() => setActiveTab('docs')} className={`px-4 py-2.5 text-xs font-bold transition-all border-b-2 whitespace-nowrap flex items-center gap-2 ${activeTab === 'docs' ? 'border-brand-gold text-brand-gold bg-brand-gold/5' : 'border-transparent text-text-muted hover:text-text-main cursor-pointer'}`}>
                 <FileText className="h-4 w-4" /> Document Hub
               </button>
@@ -589,37 +594,172 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                         </div>
                       )}
                       
-                      <div className="bg-bg-base/30 border border-border-main rounded-xl overflow-hidden mt-4">
-                        <div className="p-4 border-b border-border-main/50 bg-bg-base/50">
-                          <h4 className="font-bold text-sm text-text-main uppercase tracking-wider">Raw Remittance Ledger</h4>
+                      {/* FINANCIAL SUMMARY CARD WITH DETAILED SORTABLE INSTALLMENTS TABLE */}
+                      <div className="financial-summary-card bg-bg-base/30 border border-border-main rounded-xl overflow-hidden mt-2">
+                        <div className="p-4 border-b border-border-main/50 bg-bg-base/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div>
+                            <h4 className="font-bold text-sm text-text-main uppercase tracking-wider flex items-center gap-2">
+                              <Wallet className="h-4 w-4 text-brand-gold" /> Cycle Installment Financial Summary & Approvals Ledger
+                            </h4>
+                            <p className="text-[11px] text-text-muted">Detailed cycle installments, payment statuses, approval timestamps, and approver identity</p>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-text-muted font-bold">Sort By:</span>
+                            <button onClick={() => { setInstSortKey('installmentNumber'); setInstSortOrder(instSortOrder === 'asc' ? 'desc' : 'asc'); }} className={`px-2.5 py-1 rounded border text-[11px] font-mono ${instSortKey === 'installmentNumber' ? 'bg-brand-gold/10 border-brand-gold text-brand-gold' : 'border-border-main text-text-muted'}`}>
+                              Milestone {instSortKey === 'installmentNumber' && (instSortOrder === 'asc' ? '↑' : '↓')}
+                            </button>
+                            <button onClick={() => { setInstSortKey('amountDue'); setInstSortOrder(instSortOrder === 'asc' ? 'desc' : 'asc'); }} className={`px-2.5 py-1 rounded border text-[11px] font-mono ${instSortKey === 'amountDue' ? 'bg-brand-gold/10 border-brand-gold text-brand-gold' : 'border-border-main text-text-muted'}`}>
+                              Amount {instSortKey === 'amountDue' && (instSortOrder === 'asc' ? '↑' : '↓')}
+                            </button>
+                            <button onClick={() => { setInstSortKey('status'); setInstSortOrder(instSortOrder === 'asc' ? 'desc' : 'asc'); }} className={`px-2.5 py-1 rounded border text-[11px] font-mono ${instSortKey === 'status' ? 'bg-brand-gold/10 border-brand-gold text-brand-gold' : 'border-border-main text-text-muted'}`}>
+                              Status {instSortKey === 'status' && (instSortOrder === 'asc' ? '↑' : '↓')}
+                            </button>
+                          </div>
                         </div>
                         <div className="overflow-x-auto">
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
                               <tr className="bg-bg-base border-b border-border-main/50 text-[10px] uppercase font-bold text-text-muted">
-                                <th className="p-3">Receipt Code</th>
-                                <th className="p-3">Milestone</th>
-                                <th className="p-3">Amount Processed</th>
-                                <th className="p-3">Date</th>
-                                <th className="p-3">Status</th>
+                                <th className="p-3 cursor-pointer hover:text-brand-gold" onClick={() => { setInstSortKey('installmentNumber'); setInstSortOrder(instSortOrder === 'asc' ? 'desc' : 'asc'); }}>Milestone #</th>
+                                <th className="p-3">Timeline Window</th>
+                                <th className="p-3 cursor-pointer hover:text-brand-gold" onClick={() => { setInstSortKey('amountDue'); setInstSortOrder(instSortOrder === 'asc' ? 'desc' : 'asc'); }}>Due vs Paid</th>
+                                <th className="p-3 cursor-pointer hover:text-brand-gold" onClick={() => { setInstSortKey('status'); setInstSortOrder(instSortOrder === 'asc' ? 'desc' : 'asc'); }}>Payment Status</th>
+                                <th className="p-3">Approval Timestamp</th>
+                                <th className="p-3">Approved By / Approver</th>
+                                <th className="p-3 text-right">Action</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-border-main/30 text-text-main">
-                              {driverPayments.length === 0 ? (
-                                <tr><td colSpan={5} className="p-6 text-center text-text-muted italic">No installment transactions logged yet.</td></tr>
+                              {installments.length === 0 ? (
+                                <tr><td colSpan={7} className="p-6 text-center text-text-muted italic">No installments available for analysis.</td></tr>
                               ) : (
-                                driverPayments.map((p: any, idx: number) => (
-                                  <tr key={`${p.id}-${idx}`} className="hover:bg-bg-surface transition-colors font-mono text-[11px]">
-                                    <td className="p-3 font-bold text-brand-gold">{p.receipt_number}</td>
-                                    <td className="p-3 font-sans text-text-muted font-bold">#{p.installment_number}</td>
-                                    <td className="p-3 font-black text-emerald-500 text-sm">₦{p.amount.toLocaleString()}</td>
-                                    <td className="p-3 text-text-muted text-[10px]">{p.date}</td>
-                                    <td className="p-3 font-sans"><Badge variant={p.status === 'approved' ? 'success' : 'warning'} className="text-[9px]">{p.status.toUpperCase()}</Badge></td>
-                                  </tr>
-                                ))
+                                [...installments].sort((a, b) => {
+                                  let valA = a[instSortKey];
+                                  let valB = b[instSortKey];
+                                  if (instSortKey === 'installmentNumber') {
+                                    valA = Number(valA);
+                                    valB = Number(valB);
+                                  } else if (instSortKey === 'amountDue') {
+                                    valA = Number(a.amountDue || 0);
+                                    valB = Number(b.amountDue || 0);
+                                  } else {
+                                    valA = String(valA || '');
+                                    valB = String(valB || '');
+                                  }
+                                  if (valA < valB) return instSortOrder === 'asc' ? -1 : 1;
+                                  if (valA > valB) return instSortOrder === 'asc' ? 1 : -1;
+                                  return 0;
+                                }).map((inst: any) => {
+                                  const latestPayment = inst.payments && inst.payments.length > 0 ? inst.payments[0] : null;
+                                  const isCompleted = inst.status === 'Completed';
+                                  const isOverdue = inst.status === 'Overdue';
+                                  const isPartial = inst.status === 'Partially Paid';
+                                  let badgeVariant = 'default';
+                                  if (isCompleted) badgeVariant = 'success';
+                                  if (isOverdue) badgeVariant = 'danger';
+                                  if (isPartial) badgeVariant = 'warning';
+
+                                  return (
+                                    <tr key={inst.installmentNumber} className="hover:bg-bg-surface transition-colors font-mono text-[11px]">
+                                      <td className="p-3 font-bold text-brand-gold">#{inst.installmentNumber}</td>
+                                      <td className="p-3 text-text-muted text-[10px] font-sans">{inst.startDate} → {inst.endDate}</td>
+                                      <td className="p-3 font-sans">
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="font-bold text-text-main">₦{(inst.amountDue || 0).toLocaleString()}</span>
+                                          <span className="text-[10px] text-emerald-500 font-bold">Paid: ₦{(inst.amountPaid || 0).toLocaleString()}</span>
+                                        </div>
+                                      </td>
+                                      <td className="p-3 font-sans">
+                                        <Badge variant={badgeVariant as any} className="text-[9px] uppercase">{inst.status}</Badge>
+                                      </td>
+                                      <td className="p-3 text-text-muted text-[10px]">
+                                        {latestPayment ? new Date(latestPayment.date).toLocaleString() : <span className="italic text-text-muted/60">Pending approval</span>}
+                                      </td>
+                                      <td className="p-3 text-text-main font-bold font-sans">
+                                        {latestPayment ? (
+                                          <div className="flex flex-col">
+                                            <span className="text-xs text-text-main">{latestPayment.approvedBy}</span>
+                                            <span className="text-[9px] text-brand-gold font-mono">{latestPayment.receiptNumber}</span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-text-muted italic text-[10px] font-sans">Awaiting payment</span>
+                                        )}
+                                      </td>
+                                      <td className="p-3 text-right">
+                                        <button onClick={() => setSelectedMilestone(inst)} className="px-2.5 py-1 bg-brand-gold/10 hover:bg-brand-gold text-brand-gold hover:text-slate-950 font-bold rounded text-[10px] transition-all">
+                                          View Ledger
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
                               )}
                             </tbody>
                           </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB: GPS & TELEMATICS */}
+                  {activeTab === 'telemetry' && (
+                    <div className="flex flex-col gap-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-black text-lg text-text-main">Real-Time Fleet Telematics & GPS</h3>
+                          <p className="text-xs text-text-muted">Live sensor feed, route tracking, and rig health diagnostics</p>
+                        </div>
+                        <Badge variant="success" className="text-[10px] animate-pulse">LIVE FEED ACTIVE</Badge>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-bg-base/30 border border-border-main p-4 rounded-xl flex flex-col gap-2">
+                          <span className="text-[10px] font-bold text-text-muted uppercase">Current Location</span>
+                          <span className="text-sm font-black text-text-main font-mono">Abuja Freight Corridor (Km 142)</span>
+                          <span className="text-[11px] text-emerald-500 font-mono">Lat: 9.0765° N, Lng: 7.3986° E</span>
+                        </div>
+                        <div className="bg-bg-base/30 border border-border-main p-4 rounded-xl flex flex-col gap-2">
+                          <span className="text-[10px] font-bold text-text-muted uppercase">Rig Speed & Heading</span>
+                          <span className="text-sm font-black text-text-main font-mono">68 KM/H (Heading North-East)</span>
+                          <span className="text-[11px] text-brand-gold font-mono">Cruise Control Engaged</span>
+                        </div>
+                        <div className="bg-bg-base/30 border border-border-main p-4 rounded-xl flex flex-col gap-2">
+                          <span className="text-[10px] font-bold text-text-muted uppercase">Engine & Fuel Health</span>
+                          <span className="text-sm font-black text-emerald-500 font-mono">88°C (Optimal) • 74% Diesel</span>
+                          <span className="text-[11px] text-text-muted font-mono">Battery: 28.4V (Stable)</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-bg-base/30 border border-border-main rounded-xl p-5 flex flex-col gap-4">
+                        <h4 className="font-bold text-sm text-text-main uppercase tracking-wider">Driver Safety Score & Compliance Card</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 font-black text-lg font-mono">
+                              94
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-text-main">Safety Score</span>
+                              <span className="text-[10px] text-text-muted">Based on speed & braking</span>
+                            </div>
+                          </div>
+                          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 font-black text-lg font-mono">
+                              {driver.accidentHistory?.length || 0}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-text-main">Accidents Logged</span>
+                              <span className="text-[10px] text-text-muted">Incident dossier count</span>
+                            </div>
+                          </div>
+                          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 font-black text-lg font-mono">
+                              {driver.restHistory?.length || 0}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-text-main">Rest Periods</span>
+                              <span className="text-[10px] text-text-muted">Fatigue management logs</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -728,6 +868,71 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                   <Button variant="primary" type="submit">Save Changes</Button>
                 </div>
               </form>
+            </Card>
+          </div>
+        )}
+
+        {/* MODAL: MILESTONE INSTALLMENT DETAILS */}
+        {selectedMilestone && (
+          <div className="fixed inset-0 z-[100] bg-slate-950/90 flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setSelectedMilestone(null)}>
+            <Card className="w-full max-w-xl p-6 flex flex-col gap-5 text-xs bg-bg-surface border border-border-main" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center border-b border-border-main/50 pb-3">
+                <div className="flex items-center gap-2">
+                  <Coins className="h-5 w-5 text-brand-gold" />
+                  <h3 className="text-sm font-black text-text-main uppercase tracking-widest">Milestone #{selectedMilestone.installmentNumber} Remittance Ledger</h3>
+                </div>
+                <button onClick={() => setSelectedMilestone(null)} className="text-text-muted hover:text-rose-500 p-1.5 rounded-lg transition-all"><X className="h-5 w-5" /></button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-bg-base/50 p-3 rounded-lg border border-border-main flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-text-muted uppercase">Due Amount</span>
+                  <span className="text-base font-black text-text-main font-mono">₦{(selectedMilestone.dueAmount || selectedMilestone.amountDue || 0).toLocaleString()}</span>
+                </div>
+                <div className="bg-emerald-500/5 p-3 rounded-lg border border-emerald-500/20 flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-emerald-500 uppercase">Paid Amount</span>
+                  <span className="text-base font-black text-emerald-500 font-mono">₦{(selectedMilestone.paidAmount || selectedMilestone.amountPaid || 0).toLocaleString()}</span>
+                </div>
+                <div className="bg-brand-gold/5 p-3 rounded-lg border border-brand-gold/20 flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-brand-gold uppercase">Balance Due</span>
+                  <span className="text-base font-black text-brand-gold font-mono">₦{(selectedMilestone.remainingAmount || 0).toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="font-bold text-text-muted uppercase text-[10px]">Milestone Window: {selectedMilestone.startDate} to {selectedMilestone.endDate}</span>
+                <span className="font-bold text-text-muted uppercase text-[10px]">Status: <Badge variant={selectedMilestone.status === 'Completed' ? 'success' : 'warning'} className="text-[9px]">{selectedMilestone.status}</Badge></span>
+              </div>
+
+              <div className="flex flex-col gap-2 border-t border-border-main/50 pt-3">
+                <h4 className="font-black text-xs text-text-main uppercase tracking-wider">Approved Installment Remittances ({selectedMilestone.payments?.length || 0})</h4>
+                {(!selectedMilestone.payments || selectedMilestone.payments.length === 0) ? (
+                  <div className="text-center py-6 text-text-muted italic text-xs bg-bg-base/30 rounded-lg">No payments recorded for this milestone yet.</div>
+                ) : (
+                  <div className="flex flex-col gap-2 max-h-60 overflow-y-auto custom-scrollbar">
+                    {selectedMilestone.payments.map((p: any, idx: number) => (
+                      <div key={p.id || idx} className="bg-slate-900/60 border border-slate-800 p-3 rounded-xl flex flex-col gap-1.5 font-mono text-[11px]">
+                        <div className="flex justify-between items-center font-sans">
+                          <span className="font-bold text-brand-gold">Receipt: {p.receiptNumber}</span>
+                          <span className="font-black text-emerald-500 text-sm">₦{(p.amount || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-text-muted">
+                          <span>Approved By: <strong className="text-text-main">{p.approvedBy}</strong></span>
+                          <span>Method: <strong className="text-text-main">{p.paymentMethod}</strong></span>
+                        </div>
+                        <div className="text-[10px] text-text-muted">
+                          <span>Date: {new Date(p.date).toLocaleString()}</span>
+                          {p.remarks && <p className="text-text-main italic mt-1">"{p.remarks}"</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-border-main/50">
+                <Button variant="primary" size="sm" onClick={() => setSelectedMilestone(null)}>Close Ledger</Button>
+              </div>
             </Card>
           </div>
         )}

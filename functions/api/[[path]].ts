@@ -527,10 +527,8 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
     const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
     const extendedStartDate = new Date(normalStartDate.getTime() + totalRestDays * 24 * 3600 * 1000);
 
-    const dueAmount = installmentTarget + carryForward;
-    const paidAmount = payments
-      .filter((p: any) => p.installment_number === k)
-      .reduce((sum: number, p: any) => sum + p.amount, 0);
+    const matchingPayments = payments.filter((p: any) => p.installment_number === k);
+    const paidAmount = matchingPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
     const remaining = dueAmount - paidAmount;
     carryForward = remaining;
@@ -551,7 +549,16 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
       remainingAmount: Math.max(0, remaining),
       startDate: extendedStartDate.toISOString().split('T')[0],
       endDate: extendedEndDate.toISOString().split('T')[0],
-      status
+      status,
+      payments: matchingPayments.map((p: any) => ({
+        id: p.id,
+        amount: p.amount,
+        receiptNumber: p.receipt_number || p.receiptNumber || 'RTL-REC',
+        approvedBy: p.approved_by || p.recorded_by || p.approvedBy || 'Admin',
+        date: p.date || p.created_at || new Date().toISOString(),
+        paymentMethod: p.payment_method || p.paymentMethod || 'Bank Transfer',
+        remarks: p.remarks || p.notes || ''
+      }))
     });
   }
 
@@ -1300,7 +1307,7 @@ class D1Manager {
           email: 'admin@ruqayyatransport.com',
           phone: '+234 803 222 0002',
           password_hash: await hashPassword('admin123'),
-          full_name: 'Operator Ibrahim Bello',
+          full_name: 'Operations Admin ADAM',
           role_id: 'role-admin',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -4381,16 +4388,20 @@ ${JSON.stringify(cleanedContext, null, 2)}
         try {
           const payload = await request.json() as any;
           const uId = generateUUID();
-          
+          const shareholderPassword = payload.password || payload.pass || 'shareholder123';
+          const hashedShareholderPassword = await hashPassword(shareholderPassword);
+
           db.users.push({
             id: uId,
             email: payload.email,
             phone: payload.phone,
-            password_hash: await hashPassword('shareholder123'),
+            password_hash: hashedShareholderPassword,
             full_name: payload.full_name,
             role_id: 'role-shareholder',
             created_at: new Date().toISOString(),
-            status: 'active'
+            updated_at: new Date().toISOString(),
+            status: 'active',
+            must_change_password: payload.mustChangePassword !== undefined ? payload.mustChangePassword : true
           });
 
           const newShareholder = {

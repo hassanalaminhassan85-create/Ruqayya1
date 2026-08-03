@@ -74,47 +74,57 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
     return () => unsubscribe();
   }, []);
 
-  // Local ticker for smooth UI
+  // Local ticker for smooth real-time UI anchored to server offset and totalSecondsRemaining
   useEffect(() => {
-    if (!activeCycle) return;
-    if (activeCycle.status !== 'active' && !(activeCycle.status === 'paused' && activeCycle.pauseDays > 0)) return;
+    if (!activeCycle || !activeCycle.isActive) return;
 
-    const tick = () => {
-      setTimeLeft(prev => {
-        let d = parseInt(prev.days);
-        let h = parseInt(prev.hours);
-        let m = parseInt(prev.minutes);
-        let s = parseInt(prev.seconds);
+    // If paused without a countdown (indefinite pause), freeze timer completely to prevent jitter
+    const isPausedIndefinite = activeCycle.status === 'paused' && !(activeCycle.pauseDays && activeCycle.pauseDays > 0);
+    if (isPausedIndefinite) {
+      const remaining = activeCycle.totalSecondsRemaining || 0;
+      const days = Math.floor(remaining / (24 * 3600));
+      const hours = Math.floor((remaining % (24 * 3600)) / 3600);
+      const minutes = Math.floor((remaining % 3600) / 60);
+      const seconds = remaining % 60;
+      const pad = (num: number) => String(num).padStart(2, '0');
+      setTimeLeft({
+        days: pad(days),
+        hours: pad(hours),
+        minutes: pad(minutes),
+        seconds: pad(seconds)
+      });
+      return;
+    }
 
-        if (d === 0 && h === 0 && m === 0 && s === 0) return prev;
+    const serverOffset = (activeCycle.serverTimestamp && activeCycle.fetchTimestamp) 
+      ? activeCycle.serverTimestamp - activeCycle.fetchTimestamp 
+      : 0;
+    const baseRemaining = activeCycle.totalSecondsRemaining || 0;
+    const fetchRealTime = activeCycle.fetchTimestamp || Date.now();
 
-        s--;
-        if (s < 0) {
-          s = 59;
-          m--;
-          if (m < 0) {
-            m = 59;
-            h--;
-            if (h < 0) {
-              h = 23;
-              d--;
-            }
-          }
-        }
+    const updateTimer = () => {
+      const nowAdjusted = Date.now() + serverOffset;
+      const elapsedSinceFetch = Math.floor((nowAdjusted - fetchRealTime) / 1000);
+      const currentRemaining = Math.max(0, baseRemaining - elapsedSinceFetch);
 
-        const pad = (num: number) => String(num).padStart(2, '0');
-        return {
-          days: pad(d),
-          hours: pad(h),
-          minutes: pad(m),
-          seconds: pad(s)
-        };
+      const days = Math.floor(currentRemaining / (24 * 3600));
+      const hours = Math.floor((currentRemaining % (24 * 3600)) / 3600);
+      const minutes = Math.floor((currentRemaining % 3600) / 60);
+      const seconds = currentRemaining % 60;
+
+      const pad = (num: number) => String(num).padStart(2, '0');
+      setTimeLeft({
+        days: pad(days),
+        hours: pad(hours),
+        minutes: pad(minutes),
+        seconds: pad(seconds)
       });
     };
 
-    const timer = setInterval(tick, 1000);
+    updateTimer();
+    const timer = setInterval(updateTimer, 1000);
     return () => clearInterval(timer);
-  }, [activeCycle]);
+  }, [activeCycle?.cycleId, activeCycle?.status, activeCycle?.totalSecondsRemaining, activeCycle?.fetchTimestamp, activeCycle?.serverTimestamp]);
 
   const formatDateOnly = (dateStr: string | null | undefined) => {
     if (!dateStr) return 'N/A';
