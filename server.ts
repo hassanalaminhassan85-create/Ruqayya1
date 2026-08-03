@@ -484,7 +484,11 @@ function getCanonicalCycleStatus(db: any): any {
 
   const now = Date.now();
   const startMs = new Date(activeCycle.startDate).getTime();
-  const baseDurationSeconds = 30 * 24 * 3600;
+  let baseDurationSeconds = 30 * 24 * 3600;
+  if (activeCycle.endDate) {
+    const endMs = new Date(activeCycle.endDate).getTime();
+    baseDurationSeconds = Math.max(24 * 3600, Math.floor((endMs - startMs) / 1000));
+  }
   const extensionSeconds = (activeCycle.extendedDays || 0) * 24 * 3600;
   const totalCycleSeconds = baseDurationSeconds + extensionSeconds;
   
@@ -506,15 +510,16 @@ function getCanonicalCycleStatus(db: any): any {
   const minutes = Math.floor((remainingSeconds % 3600) / 60);
   const seconds = remainingSeconds % 60;
   
+  const baseDays = Math.round(baseDurationSeconds / (24 * 3600));
   const progressPercent = Math.min(100, (elapsedSeconds / totalCycleSeconds) * 100);
-  const currentDay = Math.min(Math.floor(totalCycleSeconds / (24 * 3600)), Math.floor(elapsedSeconds / (24 * 3600)) + 1);
+  const currentDay = Math.min(baseDays + (activeCycle.extendedDays || 0), Math.floor(elapsedSeconds / (24 * 3600)) + 1);
 
   return {
     isActive: true,
     status: activeCycle.status,
     cycleId: activeCycle.id,
     startDate: activeCycle.startDate,
-    endDate: activeCycle.endDate,
+    endDate: activeCycle.endDate || new Date(startMs + baseDurationSeconds * 1000).toISOString(),
     daysRemaining: days,
     hoursRemaining: hours,
     minutesRemaining: minutes,
@@ -522,7 +527,7 @@ function getCanonicalCycleStatus(db: any): any {
     totalSecondsRemaining: remainingSeconds,
     progressPercent,
     currentDay,
-    totalCycleDays: Math.floor(totalCycleSeconds / (24 * 3600)),
+    totalCycleDays: baseDays + (activeCycle.extendedDays || 0),
     pauseReason: activeCycle.pauseReason || '',
     pausedAt: activeCycle.pausedAt || ''
   };
@@ -6014,10 +6019,13 @@ app.post('/api/operations/start', authenticateSession, async (req, res) => {
         cycleId = generateNextSequentialCycleId(db.cycles);
       }
 
+      const durationDays = parseInt(req.body.durationDays) || 30;
+      const computedEndDate = new Date(Date.now() + durationDays * 24 * 3600 * 1000).toISOString();
+
       db.cycles.unshift({
         id: cycleId,
         startDate: new Date().toISOString(),
-        endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+        endDate: computedEndDate,
         endGoalTons: 200,
         status: 'active',
         created_at: new Date().toISOString(),

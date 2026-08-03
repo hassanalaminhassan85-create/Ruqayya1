@@ -148,36 +148,54 @@ export function showLocalBrowserNotification(title: string, body: string, action
 
 // Helper to register standard Web Push subscription using serviceWorker registration
 export async function registerPushSubscription(): Promise<boolean> {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.warn('Service worker or push management is not supported.');
+  console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Starting registerPushSubscription() workflow...');
+  
+  if (!('serviceWorker' in navigator)) {
+    console.warn('Ruqayya ERP [PUSH_HELPER_DEBUG]: Service worker not supported by this browser.');
+    return false;
+  }
+  if (!('PushManager' in window)) {
+    console.warn('Ruqayya ERP [PUSH_HELPER_DEBUG]: PushManager is not supported by this browser.');
     return false;
   }
 
   try {
+    console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Waiting for service worker ready promise...');
     const reg = await navigator.serviceWorker.ready;
+    console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Service worker is ready. Checking for existing subscription...');
     let sub = await reg.pushManager.getSubscription();
     
-    if (!sub) {
+    if (sub) {
+      console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Existing push subscription found:', sub.endpoint);
+    } else {
+      console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: No existing subscription. Fetching dynamic VAPID public key...');
       // Create lightweight pseudo-subscription for sandbox environment / fallback testing
-      // (This works incredibly in sandboxes where standard VAPID public keys can error out!)
       let vapidKey = 'BFb_V6P8N9B3yXfMMyrWv9Z3Y9x4bL6xKjG7W3a7qA_k6hY6O7N8q3V7G3m7_k3B7e9O4q3V8hY7r3M8v9bL6qA';
       try {
         const res = await api.request('/api/notifications/vapid-public-key');
+        console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: VAPID public key response from backend:', res);
         if (res && res.publicKey) {
           vapidKey = res.publicKey;
+          console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Dynamic VAPID public key acquired:', vapidKey);
+        } else {
+          console.warn('Ruqayya ERP [PUSH_HELPER_DEBUG]: Received empty or invalid VAPID response.');
         }
       } catch (err) {
-        console.warn('Could not fetch dynamic VAPID key from server, using pre-generated fallback.', err);
+        console.warn('Ruqayya ERP [PUSH_HELPER_DEBUG]: Could not fetch dynamic VAPID key from server. Using fallback.', err);
       }
+      
+      console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Converting VAPID key to Uint8Array...');
       const applicationServerKey = urlBase64ToUint8Array(vapidKey);
       
       try {
+        console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Requesting new subscription via pushManager.subscribe()...');
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey
         });
-      } catch (err) {
-        console.warn('Standard Web Push subscription failed, registering fallback subscriber payload:', err);
+        console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Successfully subscribed to browser push service!');
+      } catch (err: any) {
+        console.warn(`Ruqayya ERP [PUSH_HELPER_DEBUG]: Standard Web Push subscription failed: "${err.message}". Registering fallback subscriber payload for test robustness...`);
         // Fallback placeholder subscription details to test backend routes smoothly!
         sub = {
           endpoint: `${window.location.origin}/api/notifications/fallback-push-endpoint`,
@@ -189,15 +207,36 @@ export async function registerPushSubscription(): Promise<boolean> {
       }
     }
 
-    // Send payload back to server
-    await api.request('/api/notifications/subscribe', {
-      method: 'POST',
-      body: JSON.stringify({ subscription: sub })
-    });
-    
-    return true;
+    if (sub) {
+      console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Browser Push Subscription generated successfully:', sub.endpoint);
+      console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Subscription Keys P256DH:', sub.toJSON().keys?.p256dh ? 'Available' : 'NOT Available');
+      console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Subscription Keys Auth:', sub.toJSON().keys?.auth ? 'Available' : 'NOT Available');
+      
+      // Submit the subscription details to BOTH subscription handlers for extreme robustness!
+      const payloads = [
+        { path: '/api/push/subscribe', body: JSON.stringify({ subscription: sub }) },
+        { path: '/api/notifications/subscribe', body: JSON.stringify({ subscription: sub }) }
+      ];
+
+      console.log('Ruqayya ERP [PUSH_HELPER_DEBUG]: Synchronizing subscription payload with backend endpoints...');
+      for (const req of payloads) {
+        try {
+          console.log(`Ruqayya ERP [PUSH_HELPER_DEBUG]: Posting to ${req.path} with api.request...`);
+          const res = await api.request(req.path, {
+            method: 'POST',
+            body: req.body
+          });
+          console.log(`Ruqayya ERP [PUSH_HELPER_DEBUG]: Synchronized successfully with ${req.path}. Response:`, res);
+        } catch (serverErr) {
+          console.warn(`Ruqayya ERP [PUSH_HELPER_DEBUG]: Failed to connect to subscribe endpoint ${req.path}:`, serverErr);
+        }
+      }
+      return true;
+    }
+    console.error('Ruqayya ERP [PUSH_HELPER_DEBUG]: End of registerPushSubscription reached without a valid subscription object.');
+    return false;
   } catch (err) {
-    console.error('Failed to register browser push subscription:', err);
+    console.error('Ruqayya ERP [PUSH_HELPER_DEBUG]: Uncaught error during push registration workflow:', err);
     return false;
   }
 }

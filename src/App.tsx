@@ -134,10 +134,23 @@ export default function App() {
 
   // Global active cycle synchronization service
   useEffect(() => {
+    console.log('Ruqayya ERP [CYCLE_SYNC_DEBUG]: Initializing global active cycle subscription...');
     const unsubscribe = subscribeToActiveCycle((data) => {
+      console.log('Ruqayya ERP [CYCLE_SYNC_DEBUG]: Active cycle data update received from backend:', data);
+      if (data) {
+        console.log(`Ruqayya ERP [CYCLE_SYNC_DEBUG]: Status: "${data.status}", Active: ${data.isActive}, CycleID: "${data.cycleId}", Progress: ${data.progressPercent?.toFixed(1)}%`);
+        console.log(`Ruqayya ERP [CYCLE_SYNC_DEBUG]: Days Remaining: ${data.daysRemaining}, Hours Remaining: ${data.hoursRemaining}, Minutes Remaining: ${data.minutesRemaining}`);
+        console.log(`Ruqayya ERP [CYCLE_SYNC_DEBUG]: Scheduled Start Date: ${data.startDate}, Scheduled End Date: ${data.endDate}`);
+      } else {
+        console.log('Ruqayya ERP [CYCLE_SYNC_DEBUG]: Received null/undefined active cycle data.');
+      }
       setActiveCycle(data);
+      console.log('Ruqayya ERP [CYCLE_SYNC_DEBUG]: State updated and successfully passed down to child components.');
     });
-    return () => unsubscribe();
+    return () => {
+      console.log('Ruqayya ERP [CYCLE_SYNC_DEBUG]: Cleaning up active cycle subscription...');
+      unsubscribe();
+    };
   }, []);
 
   // Ticking WAT clock effect with NTP / API-based time synchronization to prevent system time drift

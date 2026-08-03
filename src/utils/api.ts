@@ -589,7 +589,7 @@ export const api = {
   getOperationsState: async () => {
     return api.request('/api/operations/state');
   },
-  startOperations: async (payload?: { cycleId?: string }) => {
+  startOperations: async (payload?: { cycleId?: string; durationDays?: number }) => {
     return api.request('/api/operations/start', {
       method: 'POST',
       body: payload ? JSON.stringify(payload) : undefined

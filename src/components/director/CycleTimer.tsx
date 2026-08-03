@@ -39,6 +39,14 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
   const [pauseReason, setPauseReason] = useState<string>('');
   const [pauseDays, setPauseDays] = useState<number>(2);
   const [resumeReason, setResumeReason] = useState<string>('');
+
+  const getExtendedEndDate = () => {
+    if (!activeCycle?.endDate) return 'N/A';
+    const baseDate = new Date(activeCycle.endDate);
+    const daysToAdd = parseInt(String(pauseDays), 10) || 0;
+    baseDate.setDate(baseDate.getDate() + daysToAdd);
+    return baseDate.toISOString().split('T')[0];
+  };
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -384,8 +392,8 @@ export const CycleTimer: React.FC<CycleTimerProps> = ({
                   />
                   <p className="text-[10px] text-emerald-600 font-semibold italic">
                     {lang === 'en' 
-                      ? `The scheduled cycle end date will automatically extend by ${pauseDays} day(s).`
-                      : `Ranar gama zagaye zata kara tsawon kwanaki ${pauseDays} da kanta.`}
+                      ? `The scheduled cycle end date will automatically extend to ${getExtendedEndDate()} (+${pauseDays} day(s)).`
+                      : `Ranar gama zagaye zata kasance ${getExtendedEndDate()} (+kwanaki ${pauseDays}).`}
                   </p>
                 </div>
 

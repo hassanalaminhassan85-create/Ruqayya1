@@ -98,7 +98,11 @@ function getCanonicalCycleStatus(db: any): any {
   }
   const now = Date.now();
   const startMs = new Date(activeCycle.startDate).getTime();
-  const baseDurationSeconds = 30 * 24 * 3600;
+  let baseDurationSeconds = 30 * 24 * 3600;
+  if (activeCycle.endDate) {
+    const endMs = new Date(activeCycle.endDate).getTime();
+    baseDurationSeconds = Math.max(24 * 3600, Math.floor((endMs - startMs) / 1000));
+  }
   const extensionSeconds = (activeCycle.extendedDays || 0) * 24 * 3600;
   const totalCycleSeconds = baseDurationSeconds + extensionSeconds;
   
@@ -111,7 +115,8 @@ function getCanonicalCycleStatus(db: any): any {
   const elapsedSeconds = Math.max(0, Math.floor((now - startMs) / 1000) - effectivePausedSeconds);
   const remainingSeconds = Math.max(0, totalCycleSeconds - elapsedSeconds);
   
-  const currentDay = Math.min(30 + (activeCycle.extendedDays || 0), Math.floor(elapsedSeconds / (24 * 3600)) + 1);
+  const baseDays = Math.round(baseDurationSeconds / (24 * 3600));
+  const currentDay = Math.min(baseDays + (activeCycle.extendedDays || 0), Math.floor(elapsedSeconds / (24 * 3600)) + 1);
   const progressPercent = Math.min(100, (elapsedSeconds / totalCycleSeconds) * 100);
   
   return {
@@ -119,7 +124,7 @@ function getCanonicalCycleStatus(db: any): any {
     status: activeCycle.status,
     cycleId: activeCycle.id,
     startDate: activeCycle.startDate,
-    endDate: activeCycle.endDate,
+    endDate: activeCycle.endDate || new Date(startMs + baseDurationSeconds * 1000).toISOString(),
     daysRemaining: Math.floor(remainingSeconds / (24 * 3600)),
     hoursRemaining: Math.floor((remainingSeconds % (24 * 3600)) / 3600),
     minutesRemaining: Math.floor((remainingSeconds % 3600) / 60),
@@ -127,7 +132,7 @@ function getCanonicalCycleStatus(db: any): any {
     totalSecondsRemaining: remainingSeconds,
     progressPercent: progressPercent,
     currentDay: currentDay,
-    totalCycleDays: 30 + (activeCycle.extendedDays || 0),
+    totalCycleDays: baseDays + (activeCycle.extendedDays || 0),
     pauseReason: activeCycle.pauseReason || '',
     pausedAt: activeCycle.pausedAt || ''
   };
@@ -191,6 +196,28 @@ function writeAuditLog(userId: string | null, email: string, userRole: string, a
   };
   if (!db.audit_logs) db.audit_logs = [];
   db.audit_logs.unshift(log);
+
+  // Generate a notification for important system actions
+  const ignoredActions = ['AUTH_', 'READ_', 'LOGOUT', 'SESSION_', 'DEMO_', 'DIRECTOR_MONITORING'];
+  const shouldNotify = !ignoredActions.some(ignored => action.includes(ignored));
+  
+  if (shouldNotify) {
+    if (!db.notifications) db.notifications = [];
+    const notification = {
+      id: generateUUID(),
+      title_en: `System Action: ${action.replace(/_/g, ' ')}`,
+      title_ha: `Wani Abu Ya Faru: ${action.replace(/_/g, ' ')}`,
+      message_en: newVal || `An action was performed by ${email}.`,
+      message_ha: newVal || `Mai amfani ${email} ya yi wani aiki.`,
+      type: 'info',
+      category: 'system',
+      read_status: 0,
+      created_at: new Date().toISOString(),
+      user_id: userId,
+      target_role: userRole // The actor gets it, plus admins/directors get all
+    };
+    db.notifications.unshift(notification);
+  }
 }
 
 // Replaces background Interval/Cron checks in serverless env
@@ -5114,10 +5141,13 @@ ${JSON.stringify(cleanedContext, null, 2)}
           cycleId = `CYC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
         }
 
+        const durationDays = parseInt(body.durationDays) || 30;
+        const computedEndDate = new Date(Date.now() + durationDays * 24 * 3600 * 1000).toISOString();
+
         db.cycles.unshift({
           id: cycleId,
           startDate: new Date().toISOString().split('T')[0],
-          endDate: null,
+          endDate: computedEndDate,
           endGoalTons: 200,
           status: 'active',
           created_at: new Date().toISOString(),

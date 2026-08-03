@@ -82,10 +82,19 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [pauseReason, setPauseReason] = useState('');
   const [pauseDays, setPauseDays] = useState<number | string>(2);
+  const [cycleDays, setCycleDays] = useState<number>(30);
   const [actionError, setActionError] = useState('');
   const [checklist, setChecklist] = useState<any>([]);
   const [generatedCycleId, setGeneratedCycleId] = useState('');
   const [showCycleDebugInspector, setShowCycleDebugInspector] = useState(false);
+
+  const getExtendedEndDate = () => {
+    if (!activeCycle?.endDate) return 'N/A';
+    const baseDate = new Date(activeCycle.endDate);
+    const daysToAdd = parseInt(String(pauseDays), 10) || 0;
+    baseDate.setDate(baseDate.getDate() + daysToAdd);
+    return baseDate.toISOString().split('T')[0];
+  };
 
   // Sync with Firestore activeCycle prop
   useEffect(() => {
@@ -260,7 +269,10 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
   const handleStartCompanyOperations = async () => {
     setActionError('');
     try {
-      const res = await api.startOperations({ cycleId: generatedCycleId });
+      const res = await api.startOperations({ 
+        cycleId: generatedCycleId,
+        durationDays: cycleDays
+      });
       if (res && res.success) {
         setOpsState(res.state);
         setShowChecklistModal(false);
@@ -691,9 +703,26 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                     {lang === 'en' ? 'SCHEDULED END' : 'RANAR KAMMALAWA'}
                   </span>
                   <span className="font-extrabold text-emerald-400 font-mono text-xs mt-1 block">
-                    {new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0]}
+                    {new Date(Date.now() + cycleDays * 24 * 3600 * 1000).toISOString().split('T')[0]}
                   </span>
                 </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                <label className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider block">
+                  {lang === 'en' ? 'CYCLE DURATION (DAYS)' : 'TSAWON ZAGAYE (KWANAKI)'}
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  value={cycleDays}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setCycleDays(isNaN(val) ? 30 : Math.max(1, val));
+                  }}
+                  className="font-extrabold text-amber-400 font-mono text-sm mt-1 bg-transparent border-b border-slate-800 focus:border-amber-400 focus:outline-none w-full"
+                />
               </div>
 
               <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex justify-between items-center">
@@ -716,8 +745,8 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
 
               <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-lg text-[10px] text-slate-400 leading-normal">
                 {lang === 'en' 
-                  ? 'Confirming will activate real-time tracking, open the financial center ledger, and start the high-precision 30-day operating cycle timer instantly.'
-                  : 'Tabbatarwa zai fara kidayar lokaci na kwanaki 30 da lissafin kudaden shiga nan take.'}
+                  ? `Confirming will activate real-time tracking, open the financial center ledger, and start the high-precision ${cycleDays}-day operating cycle timer instantly.`
+                  : `Tabbatarwa zai fara kidayar lokaci na kwanaki ${cycleDays} da lissafin kudaden shiga nan take.`}
               </div>
             </div>
 
@@ -795,8 +824,8 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
                 <div className="bg-slate-950/50 border border-emerald-500/20 rounded-lg p-3 mt-2">
                   <p className="text-xs text-emerald-400 font-semibold italic">
                     {lang === 'en' 
-                      ? `Cycle end date will be extended by ${pauseDays} day(s) automatically.`
-                      : `Ranar karewa zata kara kwanaki ${pauseDays}.`}
+                      ? `Cycle end date will be extended to ${getExtendedEndDate()} (+${pauseDays} day(s)) automatically.`
+                      : `Ranar karewa zata kasance ${getExtendedEndDate()} (+kwanaki ${pauseDays}).`}
                   </p>
                   <p className="text-[10px] text-emerald-600 mt-1">
                     {lang === 'en' 
