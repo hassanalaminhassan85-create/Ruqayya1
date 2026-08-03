@@ -1594,7 +1594,7 @@ app.post('/api/drivers/import', authenticateSession, (req, res) => {
 app.post('/api/auth/register-admin', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
+    if (actor.role !== 'director' && actor.role !== 'admin') {
       return res.status(403).json({ error: 'Access Denied: Directors-only credential endpoint.' });
     }
 
@@ -2344,14 +2344,11 @@ app.get('/api/documents/preview/:filename', (req, res) => {
     const token = req.query.token as string;
     const db = loadDB();
     
-    // Allow previewing if a token is provided OR if there is any active session in the database
+    // Allow previewing if a token is provided and corresponds to an active session
     let authorized = false;
     if (token) {
       const session = db.sessions.find(s => s.token === token && s.status === 'active');
       if (session) authorized = true;
-    } else {
-      const hasActiveSession = db.sessions.some(s => s.status === 'active');
-      if (hasActiveSession) authorized = true;
     }
 
     if (!authorized) {
@@ -6339,7 +6336,7 @@ app.post('/api/operations/config-rules', authenticateSession, (req, res) => {
 app.post('/api/director/admins', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
+    if (actor.role !== 'director' && actor.role !== 'admin') {
       return res.status(403).json({ error: 'Access Denied. Executive Director clearance required.' });
     }
 
@@ -6408,7 +6405,7 @@ app.post('/api/director/admins', authenticateSession, (req, res) => {
 app.put('/api/director/admins/:id', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
+    if (actor.role !== 'director' && actor.role !== 'admin') {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 
@@ -6466,7 +6463,7 @@ app.put('/api/director/admins/:id', authenticateSession, (req, res) => {
 app.delete('/api/director/admins/:id', authenticateSession, (req, res) => {
   try {
     const actor = (req as any).user;
-    if (actor.role !== 'director') {
+    if (actor.role !== 'director' && actor.role !== 'admin') {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 
