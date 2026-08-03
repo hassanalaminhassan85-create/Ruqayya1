@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { SecureSession } from './security';
+
 // Decodes the applicationServerKey VAPID string into a Uint8Array
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -97,7 +99,7 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
       // 1. Fetch the VAPID Public Key from the backend
       let vapidKey = '';
       try {
-        const token = localStorage.getItem('ruqayya_token') || '';
+        const token = SecureSession.getToken() || '';
         console.log(`Ruqayya ERP [PUSH_DEBUG]: Fetching VAPID public key from backend (Auth token length: ${token.length})...`);
         const res = await fetch('/api/notifications/vapid-public-key', {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -163,7 +165,7 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
       console.log('Ruqayya ERP [PUSH_DEBUG]: Subscription Keys P256DH:', sub.toJSON().keys?.p256dh ? 'Available' : 'NOT Available');
       console.log('Ruqayya ERP [PUSH_DEBUG]: Subscription Keys Auth:', sub.toJSON().keys?.auth ? 'Available' : 'NOT Available');
       
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       const headers: any = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
@@ -219,7 +221,7 @@ export async function unsubscribeFromPushNotifications(): Promise<boolean> {
 
     if (sub) {
       const endpoint = sub.endpoint;
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       
       // Notify backend to remove subscription
       try {

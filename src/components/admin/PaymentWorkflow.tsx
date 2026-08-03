@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { Language, Driver, Vehicle } from '../../types';
 import { CircularLogo } from '../CircularLogo';
+import { SecureSession } from '../../utils/security';
 
 interface PaymentWorkflowProps {
   lang: Language;
@@ -138,7 +139,7 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
     if (showLoading) setLoading(true);
     else setIsRefreshing(true);
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       
       const [drvRes, payRes, vehRes, opsRes] = await Promise.all([
         fetch('/api/drivers', { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -186,7 +187,7 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
     }
   };
 
-  const token = localStorage.getItem('ruqayya_token') || '';
+  const token = SecureSession.getToken() || '';
   const getAuthorizedUrl = (urlPath: string) => {
     if (!urlPath) return '';
     if (urlPath.startsWith('/api/documents/preview/') && !urlPath.includes('token=')) {
@@ -218,7 +219,7 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
   const handleUpdateStatus = async (payId: string, newStatus: 'approved' | 'rejected', remarks = '') => {
     setActionLoading(true);
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       const res = await fetch(`/api/payments/${payId}/status`, {
         method: 'PUT',
         headers: {
@@ -255,7 +256,7 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
     let count = 0;
     for (const id of selectedIds) {
       try {
-        const token = localStorage.getItem('ruqayya_token') || '';
+        const token = SecureSession.getToken() || '';
         await fetch(`/api/payments/${id}/status`, {
           method: 'PUT',
           headers: {

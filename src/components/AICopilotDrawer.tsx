@@ -7,6 +7,7 @@ import {
   Printer, Download, Award, Activity, FileImage, ShieldCheck
 } from 'lucide-react';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { SecureSession } from '../utils/security';
 
 interface Message {
   id: string;
@@ -120,7 +121,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     setStreamingContent('');
     
     try {
-      const token = localStorage.getItem('ruqayya_token');
+      const token = SecureSession.getToken();
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -305,7 +306,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     setIsLoading(true);
     setStreamingContent('');
     try {
-      const token = localStorage.getItem('ruqayya_token');
+      const token = SecureSession.getToken();
       const response = await fetch('/api/ai/dashboard', {
         method: 'POST',
         headers: {

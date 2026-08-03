@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { CircularLogo } from './CircularLogo';
+import { SecureSession } from '../utils/security';
 
 interface Message {
   id: string;
@@ -363,7 +364,7 @@ export const AIPortalWorkspace: React.FC<AIPortalWorkspaceProps> = ({
     setSessionTimeLeft(3600);
     
     try {
-      const token = localStorage.getItem('ruqayya_token');
+      const token = SecureSession.getToken();
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {

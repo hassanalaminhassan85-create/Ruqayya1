@@ -19,6 +19,7 @@ import {
   Building
 } from 'lucide-react';
 import { Language, Driver } from '../../types';
+import { SecureSession } from '../../utils/security';
 // Client-side code should not import from server_db.ts directly as it contains Node-only modules like fs, path
 // import { saveR2File } from '../../utils/server_db'; 
 
@@ -119,7 +120,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
   const fetchActiveUserAndEntities = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       
       // Get current logged-in user profile
       const userRes = await fetch('/api/auth/me', {
@@ -223,7 +224,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
     if (!selectedUser || (!chatText && !attachmentBase64)) return;
 
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       let remoteAttachmentUrl = '';
 
       if (attachmentBase64) {
@@ -292,7 +293,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
     }
 
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       let imageUrl = '';
       let attachmentUrl = '';
 
@@ -388,7 +389,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
   };
 
   const handleDownloadAttachment = (url: string, name?: string) => {
-    const token = localStorage.getItem('ruqayya_token') || '';
+    const token = SecureSession.getToken() || '';
     const fullUrl = `${url}?token=${token}`;
     const a = document.createElement('a');
     a.href = fullUrl;
@@ -565,7 +566,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
                         setSelectedUser(u);
                         // Trigger read acknowledgement
                         if (unreadCount > 0) {
-                          const token = localStorage.getItem('ruqayya_token') || '';
+                          const token = SecureSession.getToken() || '';
                           fetch('/api/messages/read', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -698,7 +699,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
                                 {m.attachment_type === 'image' ? (
                                   <div className="relative group shrink-0 w-16 h-12 rounded overflow-hidden border border-border-main">
                                     <img onError={(e) => { e.currentTarget.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23e2e8f0'/><text x='50' y='55' font-family='sans-serif' font-size='40' fill='%2394a3b8' text-anchor='middle' dominant-baseline='middle'>?</text></svg>"; }} 
-                                      src={`${m.attachment_url}?token=${localStorage.getItem('ruqayya_token')}`} 
+                                      src={`${m.attachment_url}?token=${SecureSession.getToken()}`} 
                                       alt="Attachment" 
                                       className="h-full w-full object-cover"
                                       referrerPolicy="no-referrer"
@@ -858,7 +859,7 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
           ) : (
             <div className="flex flex-col gap-4">
               {announcements.map((ann, idx) => {
-                const token = localStorage.getItem('ruqayya_token') || '';
+                const token = SecureSession.getToken() || '';
                 const imageUrl = ann.image_url ? `${ann.image_url}?token=${token}` : '';
                 const attachmentUrl = ann.attachment_url ? `${ann.attachment_url}?token=${token}` : '';
 

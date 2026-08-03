@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge, Alert } from '../ui/SharedComponents';
 import { api } from '../../utils/api';
+import { SecureSession } from '../../utils/security';
 import { Language, Vehicle, Driver } from '../../types';
 import { 
   FileText, 
@@ -93,7 +94,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
   const fetchMetadataAndDocs = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       
       // Fetch metadata for drop-downs
       const vehiclesRes = await fetch('/api/vehicles', {
@@ -169,7 +170,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
 
   const compileDocsFromAPI = async (vList: Vehicle[], dList: Driver[]) => {
     // If SSE isn't ready, let's fallback compile
-    const token = localStorage.getItem('ruqayya_token') || '';
+    const token = SecureSession.getToken() || '';
     try {
       // In our mock database setup, we can fetch all by category via endpoint fallback
       // Since sseState holds them, we look inside sseState first
@@ -206,7 +207,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
     }
 
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       const payload = {
         title: uploadTitle || fileName,
         docType: uploadDocType,
@@ -246,7 +247,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
     if (!replacingDoc || !replaceFileBase64) return;
 
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       const res = await fetch('/api/documents/replace', {
         method: 'POST',
         headers: {
@@ -282,7 +283,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
     if (!window.confirm(msg)) return;
 
     try {
-      const token = localStorage.getItem('ruqayya_token') || '';
+      const token = SecureSession.getToken() || '';
       const res = await fetch(`/api/documents/${doc.category}/${doc.id}`, {
         method: 'DELETE',
         headers: {
@@ -302,7 +303,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
 
   // Helper to trigger secure downloading
   const handleDownload = (fileUrl: string, title?: string) => {
-    const token = localStorage.getItem('ruqayya_token') || '';
+    const token = SecureSession.getToken() || '';
     const fullUrl = `${fileUrl}?token=${token}`;
     
     const a = document.createElement('a');
@@ -449,7 +450,7 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
         /* Document Table Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredDocs.map((doc, idx) => {
-            const token = localStorage.getItem('ruqayya_token') || '';
+            const token = SecureSession.getToken() || '';
             const previewUrl = `${doc.file_url}?token=${token}`;
 
             return (

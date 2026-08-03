@@ -5,21 +5,19 @@
 
 import { Role } from '../types';
 import { offlineSync } from './offlineSync';
-
-const TOKEN_KEY = 'ruqayya_token';
+import { SecureSession } from './security';
 
 export const api = {
   setToken: (token: string) => {
-    localStorage.setItem(TOKEN_KEY, token);
+    SecureSession.setToken(token);
   },
   
   getToken: () => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    return token === 'null' ? null : token;
+    return SecureSession.getToken();
   },
   
   clearToken: () => {
-    localStorage.removeItem(TOKEN_KEY);
+    SecureSession.clearToken();
   },
 
   // Base fetch handler with auth headers and offline sync interception

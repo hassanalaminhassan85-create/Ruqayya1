@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { enDictionary, haDictionary } from './i18n';
 import { Role, Language, Theme } from './types';
 import { dbStore } from './utils/dbStore';
-import { logAuditEvent, seedAuditLogsIfEmpty } from './utils/security';
+import { logAuditEvent, seedAuditLogsIfEmpty, SecureSession } from './utils/security';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { GlobalSearch } from './components/GlobalSearch';
@@ -99,7 +99,7 @@ export default function App() {
   const [lang, setLang] = useState<Language>(DEFAULT_LANG);
   const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
   const [currentRole, setCurrentRole] = useState<Role>(getInitialRole());
-  const [authToken, setAuthToken] = useState<string | null>(typeof window !== 'undefined' ? localStorage.getItem('ruqayya_token') : null);
+  const [authToken, setAuthToken] = useState<string | null>(SecureSession.getToken());
   const [driverName, setDriverName] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -238,6 +238,101 @@ export default function App() {
     return () => window.removeEventListener('navigate-to-section', handleNavigation);
   }, [currentRole]);
 
+  // Robust session and token re-hydration check against backend using secure wrapper
+  const hydrateSession = async () => {
+    setAuthLoading(true);
+    console.log('Ruqayya ERP [SECURE_SESSION]: Starting session re-hydration check...');
+    try {
+      const token = SecureSession.getToken();
+      console.log('Ruqayya ERP [SECURE_SESSION]: Token retrieved via secure wrapper:', token ? 'exists' : 'null');
+      if (!token) {
+        setAuthToken(null);
+        setCurrentRole('public');
+        return;
+      }
+
+      // Bypass backend if it is a local fallback session token for offline/static compatibility
+      if (token.startsWith('tok_fallback_')) {
+        console.log('Ruqayya ERP [SECURE_SESSION]: Using fallback token');
+        const parts = token.split('_');
+        const userKey = parts[2] || '';
+        let fallbackRole: Role = 'driver';
+        let fullName = 'Driver MUSA';
+
+        if (userKey === 'MMR') {
+          fallbackRole = 'director';
+          fullName = 'Executive Director MMR';
+        } else if (userKey === 'ADAM') {
+          fallbackRole = 'admin';
+          fullName = 'Operations Admin ADAM';
+        } else if (userKey === 'ABAKAKA') {
+          fallbackRole = 'admin';
+          fullName = 'Operations Admin ABAKAKA';
+        } else if (userKey === 'KABIR') {
+          fallbackRole = 'shareholder';
+          fullName = 'Shareholder KABIR';
+        } else if (userKey === 'AMINA') {
+          fallbackRole = 'shareholder';
+          fullName = 'Shareholder AMINA';
+        } else {
+          fallbackRole = 'driver';
+          fullName = 'Driver MUSA';
+        }
+
+        setAuthToken(token);
+        setCurrentRole(fallbackRole);
+        if (fallbackRole === 'driver') {
+          setDriverName(fullName);
+        } else {
+          setDriverName('');
+        }
+        return;
+      }
+
+      try {
+        console.log('Ruqayya ERP [SECURE_SESSION]: Calling api.getMe() for role verification...');
+        const payload = await api.getMe();
+        console.log('Ruqayya ERP [SECURE_SESSION]: api.getMe() payload:', payload);
+        if (payload && payload.user) {
+          const userRole = payload.user.role;
+          setAuthToken(token);
+          setCurrentRole(userRole);
+          setDriverName(payload.user.full_name || payload.user.fullName || '');
+        } else {
+          console.log('Ruqayya ERP [SECURE_SESSION]: api.getMe() returned no user, clearing token via secure wrapper.');
+          SecureSession.clearToken();
+          setAuthToken(null);
+          setCurrentRole('public');
+        }
+      } catch (e) {
+        console.error('Ruqayya ERP [SECURE_SESSION]: api.getMe() error during re-hydration:', e);
+        SecureSession.clearToken();
+        setAuthToken(null);
+        setCurrentRole('public');
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Trigger re-hydration check every time the tab gains focus or visibility state changes
+  useEffect(() => {
+    const handleFocusRehydration = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Ruqayya ERP [SECURE_SESSION]: Tab gained focus or visibility detected. Re-hydrating session...');
+        hydrateSession();
+      }
+    };
+
+    window.addEventListener('focus', handleFocusRehydration);
+    document.addEventListener('visibilitychange', handleFocusRehydration);
+
+    return () => {
+      window.removeEventListener('focus', handleFocusRehydration);
+      document.removeEventListener('visibilitychange', handleFocusRehydration);
+    };
+  }, []);
+
   // Load state from localStorage & Hydrate full-stack session on init
   useEffect(() => {
     seedAuditLogsIfEmpty();
@@ -307,81 +402,6 @@ export default function App() {
     window.addEventListener('pwa-action-queued', updateSyncCount);
     window.addEventListener('pwa-sync-completed', updateSyncCount);
 
-    const hydrateSession = async () => {
-      setAuthLoading(true);
-      console.log('DIAGNOSTIC: Starting hydrateSession...');
-      try {
-        const token = api.getToken();
-        console.log('DIAGNOSTIC: Token retrieved:', token ? 'exists' : 'null');
-        if (!token) {
-          setAuthToken(null);
-          setCurrentRole('public');
-          return;
-        }
-
-        // Bypass backend if it is a local fallback session token for offline/static compatibility
-        if (token.startsWith('tok_fallback_')) {
-          console.log('DIAGNOSTIC: Using fallback token');
-          const parts = token.split('_');
-          const userKey = parts[2] || '';
-          let fallbackRole: Role = 'driver';
-          let fullName = 'Driver MUSA';
-
-          if (userKey === 'MMR') {
-            fallbackRole = 'director';
-            fullName = 'Executive Director MMR';
-          } else if (userKey === 'ADAM') {
-            fallbackRole = 'admin';
-            fullName = 'Operations Admin ADAM';
-          } else if (userKey === 'ABAKAKA') {
-            fallbackRole = 'admin';
-            fullName = 'Operations Admin ABAKAKA';
-          } else if (userKey === 'KABIR') {
-            fallbackRole = 'shareholder';
-            fullName = 'Shareholder KABIR';
-          } else if (userKey === 'AMINA') {
-            fallbackRole = 'shareholder';
-            fullName = 'Shareholder AMINA';
-          } else {
-            fallbackRole = 'driver';
-            fullName = 'Driver MUSA';
-          }
-
-          setAuthToken(token);
-          setCurrentRole(fallbackRole);
-          if (fallbackRole === 'driver') {
-            setDriverName(fullName);
-          } else {
-            setDriverName('');
-          }
-          return;
-        }
-
-        try {
-          console.log('DIAGNOSTIC: Calling api.getMe()...');
-          const payload = await api.getMe();
-          console.log('DIAGNOSTIC: api.getMe() payload:', payload);
-          if (payload && payload.user) {
-            const userRole = payload.user.role;
-            setAuthToken(token);
-            setCurrentRole(userRole);
-            setDriverName(payload.user.full_name || payload.user.fullName || '');
-          } else {
-            console.log('DIAGNOSTIC: api.getMe() returned no user, clearing token.');
-            api.clearToken();
-            setAuthToken(null);
-            setCurrentRole('public');
-          }
-        } catch (e) {
-          console.error('DIAGNOSTIC: api.getMe() error:', e);
-          api.clearToken();
-          setAuthToken(null);
-          setCurrentRole('public');
-        }
-      } finally {
-        setAuthLoading(false);
-      }
-    };
     hydrateSession();
 
     const handleSessionExpired = (e: any) => {
@@ -389,7 +409,7 @@ export default function App() {
       setAuthToken(null);
       setCurrentRole('public');
       setDriverName('');
-      api.clearToken();
+      SecureSession.clearToken();
       setSessionExpiredMessage(msg);
       
       const cleanPath = normalizePath(window.location.pathname);

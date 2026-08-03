@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/C
 import { Button } from '../components/ui/Button';
 import { Badge, Alert, Tabs, Modal, ProgressBar } from '../components/ui/SharedComponents';
 import { api } from '../utils/api';
+import { SecureSession } from '../utils/security';
 import { Vehicle, Driver, DailyRemittance, Dictionary, Language, FinancialRecord, Shareholder } from '../types';
 import { 
   Truck, 
@@ -265,7 +266,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     syncAllData();
     
     // Establish real-time SSE stream sync
-    const token = localStorage.getItem('ruqayya_token') || '';
+    const token = SecureSession.getToken() || '';
     let eventSource: EventSource | null = null;
     try {
       eventSource = new EventSource(`/api/sse?token=${encodeURIComponent(token)}`);

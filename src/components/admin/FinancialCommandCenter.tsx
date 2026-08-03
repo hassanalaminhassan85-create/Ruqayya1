@@ -62,6 +62,7 @@ import {
 } from 'recharts';
 import { Driver, Vehicle, FinancialRecord, Shareholder } from '../../types';
 import { api } from '../../utils/api';
+import { SecureSession } from '../../utils/security';
 import { subscribeToActiveCycle } from '../../utils/cycleService';
 import { ReportCenter } from './ReportCenter';
 
@@ -362,7 +363,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
 
   // Auto-fetch additional records
   const fetchAuxRecords = async () => {
-    const token = localStorage.getItem('ruqayya_token') || localStorage.getItem('token');
+    const token = SecureSession.getToken() || localStorage.getItem('token');
     if (!token) return;
     
     setIsFetching(true);
