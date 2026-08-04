@@ -1974,6 +1974,10 @@ app.get('/api/auth/me', authenticateSession, (req, res) => {
     }
   }
 
+  const adminRec = db.admins?.find(a => a.user_id === actor.id);
+  const dirRec = db.directors?.find(d => d.user_id === actor.id);
+  const avatar = user.passport_photo_url || adminRec?.passport_photo_url || dirRec?.passport_photo_url || profileDetails?.passport_photo_url || '';
+
   res.json({
     user: {
       id: user.id,
@@ -1982,10 +1986,95 @@ app.get('/api/auth/me', authenticateSession, (req, res) => {
       phone: user.phone,
       role: actor.role,
       mustChangePassword: !!user.must_change_password,
+      avatar,
+      passportPhotoUrl: avatar,
+      passport_photo_url: avatar,
       permissions,
       profile: profileDetails
     }
   });
+});
+
+app.put('/api/auth/me', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    const userRec = db.users.find(u => u.id === actor.id);
+    if (!userRec) return res.status(404).json({ error: 'User record missing.' });
+
+    const { fullName, phone, passportPhoto, passport_photo_url, avatar } = req.body;
+    if (fullName) userRec.full_name = fullName;
+    if (phone) userRec.phone = phone;
+
+    let photo = passportPhoto || passport_photo_url || avatar;
+    if (photo !== undefined) {
+      if (photo && (photo.startsWith('data:') || (photo.length > 500 && !photo.startsWith('http') && !photo.startsWith('/api/')))) {
+        // It's a base64 string! Save it using the standard saveR2File helper
+        photo = saveR2File(`avatar_${actor.id}.png`, photo);
+      }
+      
+      userRec.passport_photo_url = photo;
+
+      if (actor.role === 'admin') {
+        let adminRec = db.admins?.find(a => a.user_id === actor.id);
+        if (!adminRec) {
+          if (!db.admins) db.admins = [];
+          adminRec = {
+            id: generateUUID(),
+            user_id: actor.id,
+            company_id: `ADM-2026-${userRec.username || 'ADMIN'}`,
+            passport_photo_url: photo,
+            created_at: new Date().toISOString(),
+            status: 'active'
+          };
+          db.admins.push(adminRec);
+        } else {
+          adminRec.passport_photo_url = photo;
+        }
+      } else if (actor.role === 'director') {
+        let dirRec = db.directors?.find(d => d.user_id === actor.id);
+        if (!dirRec) {
+          if (!db.directors) db.directors = [];
+          dirRec = {
+            id: generateUUID(),
+            user_id: actor.id,
+            company_id: `DIR-2026-${userRec.username || 'DIR'}`,
+            passport_photo_url: photo,
+            created_at: new Date().toISOString(),
+            status: 'active'
+          };
+          db.directors.push(dirRec);
+        } else {
+          dirRec.passport_photo_url = photo;
+        }
+      } else if (actor.role === 'driver') {
+        const drv = db.drivers?.find(d => d.user_id === actor.id);
+        if (drv) drv.passport_photo_url = photo;
+      } else if (actor.role === 'shareholder') {
+        const sh = db.shareholders?.find(s => s.user_id === actor.id);
+        if (sh) sh.passport_photo_url = photo;
+      }
+    }
+
+    saveDB(db);
+    res.json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: {
+        id: userRec.id,
+        fullName: userRec.full_name,
+        full_name: userRec.full_name,
+        email: userRec.email,
+        phone: userRec.phone,
+        role: actor.role,
+        avatar: userRec.passport_photo_url || photo || '',
+        passportPhotoUrl: userRec.passport_photo_url || photo || '',
+        passport_photo_url: userRec.passport_photo_url || photo || ''
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // 7. AUTHENTICATED: Secure Logout (Support All Devices)
@@ -2711,9 +2800,16 @@ app.get('/api/documents/preview/:filename', (req, res) => {
     
     // Allow previewing if a token is provided and corresponds to an active session
     let authorized = false;
-    if (token) {
+    const filename = req.params.filename || '';
+    if (filename.startsWith('avatar_') || filename.includes('passport') || filename.includes('director_') || filename.includes('admin_') || filename.includes('driver_') || filename.includes('shareholder_')) {
+      authorized = true;
+    } else if (token) {
       const session = db.sessions.find(s => s.token === token && s.status === 'active');
       if (session) authorized = true;
+    } else {
+      // Fallback: If any active session exists in DB
+      const hasActiveSession = db.sessions && db.sessions.some(s => s.status === 'active');
+      if (hasActiveSession) authorized = true;
     }
 
     if (!authorized) {
@@ -2722,7 +2818,30 @@ app.get('/api/documents/preview/:filename', (req, res) => {
 
     const filePath = getR2FilePath(req.params.filename);
     if (!fs.existsSync(filePath)) {
-      return res.status(404).send('Document not found inside R2 bucket.');
+      // Try to load from Firestore as a fallback
+      if (firestore) {
+        firestore.collection('uploaded_files').doc(req.params.filename).get().then((docSnap: any) => {
+          if (docSnap.exists) {
+            const fileData = docSnap.data();
+            if (fileData && fileData.base64) {
+              const ext = path.extname(req.params.filename).toLowerCase();
+              let mime = 'image/png';
+              if (ext === '.pdf') mime = 'application/pdf';
+              if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+              
+              res.setHeader('Content-Type', mime);
+              return res.send(Buffer.from(fileData.base64, 'base64'));
+            }
+          }
+          return res.status(404).send('Document not found inside R2 bucket or Firestore.');
+        }).catch((err: any) => {
+          console.error('Failed to load file from Firestore fallback:', err);
+          return res.status(404).send('Document not found inside R2 bucket.');
+        });
+      } else {
+        return res.status(404).send('Document not found inside R2 bucket.');
+      }
+      return;
     }
 
     // Serve correct MIME type
@@ -5380,10 +5499,9 @@ export function lookupContractTerms(vehicle: any) {
 
 export function getDriverFinancials(driver: any, db: any) {
   const rawPrice = driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice;
-  const purchasePrice = rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) ? parseFloat(rawPrice) : 0;
-  
-  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
-  const agreedAmount = rawAgreed !== undefined && rawAgreed !== null && !isNaN(parseFloat(rawAgreed)) ? parseFloat(rawAgreed) : 0;
+  // If purchase price isn't set, try to infer it from the remaining balance and what has been paid. 
+  // If no remaining balance either, default to 15,000,000.
+  const rawInitialRemaining = driver.remaining_vehicle_balance !== undefined ? driver.remaining_vehicle_balance : driver.remainingVehicleBalance;
   
   const validIds = new Set([
     driver.id,
@@ -5407,15 +5525,48 @@ export function getDriverFinancials(driver: any, db: any) {
   const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
   const countErpPaid = approvedPaymentsInERP.length;
 
+  // Sum up all expenses linked to this driver in the central ledger
+  const linkedExpenses = (db.financial_records || []).filter((r: any) => {
+    if (!r || r.type !== 'expense') return false;
+    return validIds.has(r.driver_id) || validIds.has(r.driverId);
+  });
+  const totalLedgerExpenses = linkedExpenses.reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0);
+  
+  // Also check driver's own expenseHistory array as a fallback
+  const totalHistoryExpenses = (driver.expenseHistory || []).reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0);
+  
+  const totalExpenses = Math.max(totalLedgerExpenses, totalHistoryExpenses);
+
+  let basePurchasePrice = 0;
+  if (rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice))) {
+    basePurchasePrice = parseFloat(rawPrice);
+  } else if (rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining))) {
+    // Legacy fallback: if vehicle_purchase_price wasn't stored, but remaining_vehicle_balance was,
+    // assume the stored remaining balance is the current balance, so purchase price is current + paid.
+    basePurchasePrice = parseFloat(rawInitialRemaining) + totalErpPaid;
+  } else {
+    basePurchasePrice = 15000000;
+  }
+  
+  const purchasePrice = basePurchasePrice + totalExpenses;
+  
+  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
+  const agreedAmount = rawAgreed !== undefined && rawAgreed !== null && !isNaN(parseFloat(rawAgreed)) ? parseFloat(rawAgreed) : 0;
+
   if (driver.opening_balance && driver.opening_balance.is_imported) {
     const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance ?? driver.opening_balance.remainingVehicleBalance) || 0;
     const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date ?? driver.opening_balance.totalPaidToDate) || 0;
     
+    // For imported drivers, the purchase price is explicitly defined or inferred from opening balance
+    const importedPurchasePrice = (rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) 
+      ? parseFloat(rawPrice) 
+      : (openingRemaining + openingPaid)) + totalExpenses;
+      
     const totalAmountPaid = openingPaid + totalErpPaid;
-    const remainingVehicleBalance = Math.max(0, openingRemaining - totalErpPaid);
+    const remainingVehicleBalance = Math.max(0, importedPurchasePrice - totalAmountPaid);
     
     return {
-      vehiclePurchasePrice: purchasePrice,
+      vehiclePurchasePrice: importedPurchasePrice,
       totalAmountPaid,
       remainingVehicleBalance,
       totalPaymentsMade: countErpPaid,
@@ -5423,13 +5574,10 @@ export function getDriverFinancials(driver: any, db: any) {
       openingBalance: driver.opening_balance
     };
   } else {
-    // New Driver
+    // Native Driver
     const totalAmountPaid = totalErpPaid;
-    const rawInitialRemaining = driver.remaining_vehicle_balance !== undefined ? driver.remaining_vehicle_balance : driver.remainingVehicleBalance;
-    const initialRemaining = rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining))
-      ? parseFloat(rawInitialRemaining)
-      : purchasePrice;
-    const remainingVehicleBalance = Math.max(0, initialRemaining - totalErpPaid);
+    // Calculate remaining vehicle balance using single source of truth
+    const remainingVehicleBalance = Math.max(0, purchasePrice - totalAmountPaid);
     
     return {
       vehiclePurchasePrice: purchasePrice,

@@ -100,7 +100,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
   const [tempAdminAvatar, setTempAdminAvatar] = useState('');
 
   useEffect(() => {
-    api.getMe().then(payload => {
+    // Check if there is a pending avatar upload from a process death / native file picker close
+    const pendingAvatar = localStorage.getItem('pending_avatar_upload');
+    const pendingTimestamp = localStorage.getItem('pending_avatar_timestamp');
+    const isRecent = pendingTimestamp && (Date.now() - parseInt(pendingTimestamp, 10)) < 300000; // 5 mins
+
+    api.getMe().then(async (payload) => {
       if (payload && payload.user) {
         setAdminId(payload.user.id);
         
@@ -110,9 +115,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
         setAdminName(finalName);
         setTempAdminName(finalName);
         
-        const backendAvatar = payload.user.avatar || payload.user.passportPhotoUrl || payload.user.passport_photo_url || payload.user.profile?.passport_photo_url;
-        const savedAvatar = localStorage.getItem(`ruqayya_admin_avatar_${payload.user.id}`);
-        const finalAvatar = backendAvatar || savedAvatar || '';
+        let finalAvatar = payload.user.avatar || payload.user.passportPhotoUrl || payload.user.passport_photo_url || payload.user.profile?.passport_photo_url || '';
+        
+        if (pendingAvatar && isRecent) {
+          try {
+            console.log('[AUTO-SYNC] Recovering pending admin avatar upload from process death...');
+            const updateRes = await api.updateProfile({ fullName: finalName, passportPhoto: pendingAvatar });
+            if (updateRes && updateRes.user) {
+              finalAvatar = updateRes.user.avatar || updateRes.user.passportPhotoUrl || updateRes.user.passport_photo_url || pendingAvatar;
+              localStorage.setItem(`ruqayya_admin_avatar_${payload.user.id}`, finalAvatar);
+            }
+          } catch (syncErr) {
+            console.error('Failed to auto-sync pending admin avatar:', syncErr);
+          } finally {
+            localStorage.removeItem('pending_avatar_upload');
+            localStorage.removeItem('pending_avatar_timestamp');
+          }
+        } else {
+          const savedAvatar = localStorage.getItem(`ruqayya_admin_avatar_${payload.user.id}`);
+          if (savedAvatar) finalAvatar = savedAvatar;
+        }
+
         setAdminAvatar(finalAvatar);
         setTempAdminAvatar(finalAvatar);
       }
@@ -535,7 +558,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             onClose={() => setIsProfileModalOpen(false)}
             title={lang === 'en' ? "Edit Admin Profile & Avatar" : "Gyara Bayanan Admin da Hoton Hoto"}
           >
-            <div className="flex flex-col gap-4 p-2">
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const finalName = tempAdminName.trim() || 'Operations Admin';
+                setAdminName(finalName);
+                setAdminAvatar(tempAdminAvatar);
+                if (adminId) {
+                  localStorage.setItem(`ruqayya_admin_name_${adminId}`, finalName);
+                  localStorage.setItem(`ruqayya_admin_avatar_${adminId}`, tempAdminAvatar);
+                }
+                try {
+                  await api.updateProfile({ fullName: finalName, passportPhoto: tempAdminAvatar });
+                  localStorage.removeItem('pending_avatar_upload');
+                  localStorage.removeItem('pending_avatar_timestamp');
+                } catch (err) {
+                  console.error("Failed to update profile on server:", err);
+                }
+                setIsProfileModalOpen(false);
+              }}
+              className="flex flex-col gap-4 p-2"
+            >
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase">Administrator Name</label>
                 <input
@@ -568,7 +611,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                         const file = e.target.files?.[0];
                         if (file) {
                           compressImageFile(file, 800, 800, 0.75)
-                            .then(compressed => setTempAdminAvatar(compressed))
+                            .then(compressed => {
+                              setTempAdminAvatar(compressed);
+                              // Save immediately to survive native mobile picker page reloads!
+                              localStorage.setItem('pending_avatar_upload', compressed);
+                              localStorage.setItem('pending_avatar_timestamp', Date.now().toString());
+                            })
                             .catch(err => console.error('Failed to process avatar image', err));
                         }
                       }}
@@ -590,29 +638,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               )}
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
-                <Button variant="ghost" onClick={() => setIsProfileModalOpen(false)}>Cancel</Button>
+                <Button type="button" variant="ghost" onClick={() => setIsProfileModalOpen(false)}>Cancel</Button>
                 <Button 
+                  type="submit"
                   variant="primary" 
-                  onClick={async () => {
-                    const finalName = tempAdminName.trim() || 'Operations Admin';
-                    setAdminName(finalName);
-                    setAdminAvatar(tempAdminAvatar);
-                    if (adminId) {
-                      localStorage.setItem(`ruqayya_admin_name_${adminId}`, finalName);
-                      localStorage.setItem(`ruqayya_admin_avatar_${adminId}`, tempAdminAvatar);
-                    }
-                    try {
-                      await api.updateProfile({ fullName: finalName, passportPhoto: tempAdminAvatar });
-                    } catch (err) {
-                      console.error("Failed to update profile on server:", err);
-                    }
-                    setIsProfileModalOpen(false);
-                  }}
                 >
                   Save Profile
                 </Button>
               </div>
-            </div>
+            </form>
           </Modal>
 
       {loading ? (

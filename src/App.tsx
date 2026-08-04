@@ -715,9 +715,10 @@ export default function App() {
       else if (activeSection === 'finance') adminTabValue = 'finance';
       else if (activeSection === 'directory') adminTabValue = 'directory';
       else if (activeSection === 'people') adminTabValue = 'people';
+      else if (activeSection === 'accounts') adminTabValue = 'accounts';
       else if (activeSection === 'settings') adminTabValue = 'settings';
       
-      const allowedAdminSections = ["dashboard", "fleet", "drivers", "payments", "finance", "trips", "communications", "documents", "directory", "people", "settings"];
+      const allowedAdminSections = ["dashboard", "fleet", "drivers", "payments", "finance", "trips", "communications", "documents", "directory", "people", "accounts", "settings"];
       if (!allowedAdminSections.includes(activeSection)) {
         return (
           <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
@@ -749,6 +750,7 @@ export default function App() {
             else if (tab === 'finance') setActiveSection('finance');
             else if (tab === 'directory') setActiveSection('directory');
             else if (tab === 'people') setActiveSection('people');
+            else if (tab === 'accounts') setActiveSection('accounts');
             else if (tab === 'settings') setActiveSection('settings');
           }}
         />

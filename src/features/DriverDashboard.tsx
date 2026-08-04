@@ -121,7 +121,30 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   };
 
   useEffect(() => {
-    fetchData();
+    const handlePendingPassportSync = async () => {
+      const pendingPassport = localStorage.getItem('pending_passport_upload');
+      const pendingTimestamp = localStorage.getItem('pending_passport_timestamp');
+      const isRecent = pendingTimestamp && (Date.now() - parseInt(pendingTimestamp, 10)) < 300000; // 5 mins
+
+      if (pendingPassport && isRecent) {
+        try {
+          console.log('[AUTO-SYNC] Recovering pending driver passport upload from process death...');
+          await api.request('/api/drivers/self', {
+            method: 'PUT',
+            body: JSON.stringify({ passportPhoto: pendingPassport })
+          });
+        } catch (syncErr) {
+          console.error('Failed to auto-sync pending driver passport:', syncErr);
+        } finally {
+          localStorage.removeItem('pending_passport_upload');
+          localStorage.removeItem('pending_passport_timestamp');
+        }
+      }
+      
+      await fetchData();
+    };
+
+    handlePendingPassportSync();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -401,12 +424,18 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     if (!file) return;
     try {
       const base64 = await compressImageFile(file, 800, 800, 0.75);
+      // Save immediately to survive native mobile picker page reloads!
+      localStorage.setItem('pending_passport_upload', base64);
+      localStorage.setItem('pending_passport_timestamp', Date.now().toString());
+
       const res = await api.request('/api/drivers/self', {
         method: 'PUT',
         body: JSON.stringify({ passportPhoto: base64 })
       });
       if (res && res.success) {
         alert(lang === 'en' ? "Passport photo updated successfully!" : "An sabunta hoton fasfo cikin nasara!");
+        localStorage.removeItem('pending_passport_upload');
+        localStorage.removeItem('pending_passport_timestamp');
         await fetchData();
       } else {
         alert(res.error || "Failed to update passport photo.");

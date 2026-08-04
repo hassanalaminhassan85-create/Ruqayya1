@@ -344,10 +344,7 @@ function syncCyclesOnRequest(db: any): boolean {
 // Financial calculations matching server.ts
 function getDriverFinancials(driver: any, db: any) {
   const rawPrice = driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice;
-  const purchasePrice = rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) ? parseFloat(rawPrice) : 0;
-  
-  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
-  const agreedAmount = rawAgreed !== undefined && rawAgreed !== null && !isNaN(parseFloat(rawAgreed)) ? parseFloat(rawAgreed) : 0;
+  const rawInitialRemaining = driver.remaining_vehicle_balance !== undefined ? driver.remaining_vehicle_balance : driver.remainingVehicleBalance;
   
   const validIds = new Set([
     driver.id,
@@ -371,14 +368,46 @@ function getDriverFinancials(driver: any, db: any) {
   const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
   const countErpPaid = approvedPaymentsInERP.length;
 
+  // Sum up all expenses linked to this driver in the central ledger
+  const linkedExpenses = (db.financial_records || []).filter((r: any) => {
+    if (!r || r.type !== 'expense') return false;
+    return validIds.has(r.driver_id) || validIds.has(r.driverId);
+  });
+  const totalLedgerExpenses = linkedExpenses.reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0);
+  
+  // Also check driver's own expenseHistory array as a fallback
+  const totalHistoryExpenses = (driver.expenseHistory || []).reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0);
+  
+  const totalExpenses = Math.max(totalLedgerExpenses, totalHistoryExpenses);
+
+  let basePurchasePrice = 0;
+  if (rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice))) {
+    basePurchasePrice = parseFloat(rawPrice);
+  } else if (rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining))) {
+    basePurchasePrice = parseFloat(rawInitialRemaining) + totalErpPaid;
+  } else {
+    basePurchasePrice = 15000000;
+  }
+  
+  const purchasePrice = basePurchasePrice + totalExpenses;
+  
+  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
+  const agreedAmount = rawAgreed !== undefined && rawAgreed !== null && !isNaN(parseFloat(rawAgreed)) ? parseFloat(rawAgreed) : 0;
+
   if (driver.opening_balance && driver.opening_balance.is_imported) {
-    const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance) || 0;
-    const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date) || 0;
+    const openingRemaining = parseFloat(driver.opening_balance.remaining_vehicle_balance ?? driver.opening_balance.remainingVehicleBalance) || 0;
+    const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date ?? driver.opening_balance.totalPaidToDate) || 0;
+    
+    // For imported drivers, the purchase price is explicitly defined or inferred from opening balance
+    const importedPurchasePrice = (rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) 
+      ? parseFloat(rawPrice) 
+      : (openingRemaining + openingPaid)) + totalExpenses;
+      
     const totalAmountPaid = openingPaid + totalErpPaid;
-    const remainingVehicleBalance = Math.max(0, openingRemaining - totalErpPaid);
+    const remainingVehicleBalance = Math.max(0, importedPurchasePrice - totalAmountPaid);
 
     return {
-      vehiclePurchasePrice: purchasePrice,
+      vehiclePurchasePrice: importedPurchasePrice,
       totalAmountPaid,
       remainingVehicleBalance,
       totalPaymentsMade: countErpPaid,
@@ -387,9 +416,7 @@ function getDriverFinancials(driver: any, db: any) {
     };
   } else {
     const totalAmountPaid = totalErpPaid;
-    const remainingVehicleBalance = (driver.remaining_vehicle_balance !== undefined && driver.remaining_vehicle_balance !== null)
-      ? parseFloat(driver.remaining_vehicle_balance)
-      : Math.max(0, purchasePrice - totalErpPaid);
+    const remainingVehicleBalance = Math.max(0, purchasePrice - totalAmountPaid);
 
     return {
       vehiclePurchasePrice: purchasePrice,
@@ -1106,7 +1133,7 @@ function plainToFirestore(obj: any): any {
 
 async function fetchFromFirestore(): Promise<any> {
   try {
-    const url = getFirestoreDocUrl();
+    const url = getFirestoreDocUrl() + `&t=${Date.now()}`;
     console.log(`[FIRESTORE REST] Fetching from ${url}`);
     const res = await fetch(url);
     if (!res.ok) {
@@ -1125,6 +1152,61 @@ async function fetchFromFirestore(): Promise<any> {
     return null;
   } catch (err: any) {
     console.error("[FIRESTORE REST ERROR] Failed to load database state from Firestore:", err.message);
+    return null;
+  }
+}
+
+const getFirestoreFileUrl = (filename: string) => {
+  const { projectId, firestoreDatabaseId, apiKey } = FIREBASE_CONFIG;
+  return `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${firestoreDatabaseId}/documents/uploaded_files/${encodeURIComponent(filename)}?key=${apiKey}`;
+};
+
+async function saveFileToFirestore(filename: string, base64Content: string): Promise<void> {
+  try {
+    const url = getFirestoreFileUrl(filename);
+    console.log(`[FIRESTORE FILE REST] Saving file to ${url}`);
+    const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
+    const converted = plainToFirestore({ base64: cleanBase64, timestamp: new Date().toISOString() });
+    const fields = converted && converted.mapValue ? converted.mapValue.fields : {};
+    const body = { fields };
+    
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`HTTP error! status: ${res.status}, response: ${errText}`);
+    }
+    console.log(`[FIRESTORE FILE REST] Successfully saved file ${filename} to Firestore.`);
+  } catch (err: any) {
+    console.error(`[FIRESTORE FILE REST ERROR] Failed to save file ${filename} to Firestore:`, err.message);
+  }
+}
+
+async function fetchFileFromFirestore(filename: string): Promise<string | null> {
+  try {
+    const url = getFirestoreFileUrl(filename) + `&t=${Date.now()}`;
+    console.log(`[FIRESTORE FILE REST] Fetching file from ${url}`);
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (res.status === 404) {
+        console.log(`[FIRESTORE FILE REST] File ${filename} not found in Firestore.`);
+        return null;
+      }
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    const doc = await res.json() as any;
+    if (doc && doc.fields) {
+      const plain = firestoreToPlain(doc.fields);
+      return plain.base64 || null;
+    }
+    return null;
+  } catch (err: any) {
+    console.error(`[FIRESTORE FILE REST ERROR] Failed to load file ${filename} from Firestore:`, err.message);
     return null;
   }
 }
@@ -2307,6 +2389,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             console.error(`[R2 ERROR] Failed to upload director photo:`, r2Err);
           }
         }
+        
+        await saveFileToFirestore(filename, passportPhoto);
       }
 
       const userId = generateUUID();
@@ -2374,22 +2458,26 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
       if (personal.passportPhoto) {
         const fileId = `${Date.now()}-${generateUUID().substring(0, 8)}`;
-        driverPassportUrl = `/api/documents/preview/${fileId}.png`;
+        const filename = `${fileId}.png`;
+        driverPassportUrl = `/api/documents/preview/${filename}`;
         if (env.R2_BUCKET) {
           const cleanBase64 = personal.passportPhoto.replace(/^data:.*?;base64,/, '');
           const binaryString = atob(cleanBase64); const buffer = new Uint8Array(binaryString.length); for (let i = 0; i < binaryString.length; i++) buffer[i] = binaryString.charCodeAt(i);
-          await env.R2_BUCKET.put(`${fileId}.png`, buffer, { httpMetadata: { contentType: 'image/png' } });
+          await env.R2_BUCKET.put(filename, buffer, { httpMetadata: { contentType: 'image/png' } });
         }
+        await saveFileToFirestore(filename, personal.passportPhoto);
       }
 
       if (guarantor.passport) {
         const fileId = `${Date.now()}-${generateUUID().substring(0, 8)}`;
-        guarantorPassportUrl = `/api/documents/preview/${fileId}.png`;
+        const filename = `${fileId}.png`;
+        guarantorPassportUrl = `/api/documents/preview/${filename}`;
         if (env.R2_BUCKET) {
           const cleanBase64 = guarantor.passport.replace(/^data:.*?;base64,/, '');
           const binaryString = atob(cleanBase64); const buffer = new Uint8Array(binaryString.length); for (let i = 0; i < binaryString.length; i++) buffer[i] = binaryString.charCodeAt(i);
-          await env.R2_BUCKET.put(`${fileId}.png`, buffer, { httpMetadata: { contentType: 'image/png' } });
+          await env.R2_BUCKET.put(filename, buffer, { httpMetadata: { contentType: 'image/png' } });
         }
+        await saveFileToFirestore(filename, guarantor.passport);
       }
 
       const userId = generateUUID();
@@ -2870,8 +2958,31 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       if (payload.fullName) userRec.full_name = payload.fullName;
       if (payload.phone) userRec.phone = payload.phone;
 
-      const photo = payload.passportPhoto || payload.passport_photo_url || payload.avatar;
-      if (photo !== undefined) {
+      let photo = payload.passportPhoto || payload.passport_photo_url || payload.avatar;
+      if (photo !== undefined && photo) {
+        if (photo.startsWith('data:') || (photo.length > 500 && !photo.startsWith('http') && !photo.startsWith('/api/'))) {
+          // It's a base64 string! Save it as a separate file
+          const fileId = `${Date.now()}-${generateUUID().substring(0, 8)}`;
+          const filename = `avatar_${user.id}_${fileId}.png`;
+          
+          if (env.R2_BUCKET) {
+            try {
+              const cleanBase64 = photo.replace(/^data:.*?;base64,/, '');
+              const binaryString = atob(cleanBase64);
+              const buffer = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                buffer[i] = binaryString.charCodeAt(i);
+              }
+              await env.R2_BUCKET.put(filename, buffer, { httpMetadata: { contentType: 'image/png' } });
+            } catch (r2Err) {
+              console.error(`[R2 ERROR] Failed to upload updated avatar to bucket:`, r2Err);
+            }
+          }
+          
+          await saveFileToFirestore(filename, photo);
+          photo = `/api/documents/preview/${filename}`;
+        }
+        
         userRec.passport_photo_url = photo;
 
         if (user.role === 'admin') {
@@ -3725,6 +3836,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
       }
 
+      await saveFileToFirestore(filename, fileBase64);
+
       const docObj = {
         id: generateUUID(),
         title,
@@ -3764,7 +3877,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const authSession = db.sessions.find((s: any) => s.token === tokenParam && s.status === 'active');
     
     let authorized = false;
-    if (tokenParam) {
+    if (filename.startsWith('avatar_') || filename.includes('passport') || filename.includes('director_') || filename.includes('admin_') || filename.includes('driver_') || filename.includes('shareholder_')) {
+      authorized = true;
+    } else if (tokenParam) {
       if (authSession) authorized = true;
     } else {
       const hasActiveSession = db.sessions && db.sessions.some((s: any) => s.status === 'active');
@@ -3785,6 +3900,35 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         headers.set('etag', object.httpEtag);
         return new Response(object.body, { headers });
       }
+    }
+    
+    // Fallback: Check Firestore uploaded_files collection
+    try {
+      const base64Content = await fetchFileFromFirestore(filename);
+      if (base64Content) {
+        const ext = filename.split('.').pop()?.toLowerCase();
+        let contentType = 'image/png';
+        if (ext === 'pdf') contentType = 'application/pdf';
+        else if (ext === 'jpg' || ext === 'jpeg') contentType = 'image/jpeg';
+        
+        // Convert base64 to binary response
+        const binaryString = atob(base64Content);
+        const buffer = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          buffer[i] = binaryString.charCodeAt(i);
+        }
+        
+        return new Response(buffer, {
+          headers: {
+            'Content-Type': contentType,
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': '*',
+            'Access-Control-Allow-Methods': '*'
+          }
+        });
+      }
+    } catch (fsErr: any) {
+      console.error(`[PREVIEW FIRESTORE FALLBACK ERROR] Failed to fetch ${filename} from Firestore:`, fsErr);
     }
     
     return new Response('File not found in storage.', { status: 404 });
@@ -6421,6 +6565,8 @@ ${JSON.stringify(cleanedContext, null, 2)}
             console.error(`[R2 ERROR] Failed to upload admin photo:`, r2Err);
           }
         }
+        
+        await saveFileToFirestore(filename, passportPhoto);
       }
 
       const userId = generateUUID();
@@ -6610,6 +6756,8 @@ ${JSON.stringify(cleanedContext, null, 2)}
           console.error(`[R2 ERROR] Failed to replace doc file:`, r2Err);
         }
       }
+
+      await saveFileToFirestore(filename, fileBase64);
 
       doc.file_url = newFileUrl;
       doc.created_at = new Date().toISOString();

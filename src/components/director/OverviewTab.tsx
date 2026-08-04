@@ -136,7 +136,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const [tempDirectorAvatar, setTempDirectorAvatar] = useState('');
 
   useEffect(() => {
-    api.getMe().then(payload => {
+    // Check if there is a pending avatar upload from a process death / native file picker close
+    const pendingAvatar = localStorage.getItem('pending_avatar_upload');
+    const pendingTimestamp = localStorage.getItem('pending_avatar_timestamp');
+    const isRecent = pendingTimestamp && (Date.now() - parseInt(pendingTimestamp, 10)) < 300000; // 5 mins
+
+    api.getMe().then(async (payload) => {
       if (payload && payload.user) {
         setDirectorId(payload.user.id);
         const backendName = payload.user.full_name || payload.user.fullName;
@@ -145,9 +150,27 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         setDirectorName(finalName);
         setTempDirectorName(finalName);
 
-        const backendAvatar = payload.user.avatar || payload.user.passportPhotoUrl || payload.user.passport_photo_url;
-        const savedAvatar = localStorage.getItem(`ruqayya_director_avatar_${payload.user.id}`);
-        const finalAvatar = backendAvatar || savedAvatar || '';
+        let finalAvatar = payload.user.avatar || payload.user.passportPhotoUrl || payload.user.passport_photo_url || '';
+
+        if (pendingAvatar && isRecent) {
+          try {
+            console.log('[AUTO-SYNC] Recovering pending director avatar upload from process death...');
+            const updateRes = await api.updateProfile({ fullName: finalName, passportPhoto: pendingAvatar });
+            if (updateRes && updateRes.user) {
+              finalAvatar = updateRes.user.avatar || updateRes.user.passportPhotoUrl || updateRes.user.passport_photo_url || pendingAvatar;
+              localStorage.setItem(`ruqayya_director_avatar_${payload.user.id}`, finalAvatar);
+            }
+          } catch (syncErr) {
+            console.error('Failed to auto-sync pending director avatar:', syncErr);
+          } finally {
+            localStorage.removeItem('pending_avatar_upload');
+            localStorage.removeItem('pending_avatar_timestamp');
+          }
+        } else {
+          const savedAvatar = localStorage.getItem(`ruqayya_director_avatar_${payload.user.id}`);
+          if (savedAvatar) finalAvatar = savedAvatar;
+        }
+
         setDirectorAvatar(finalAvatar);
         setTempDirectorAvatar(finalAvatar);
       }
@@ -332,10 +355,30 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
         {/* Profile Edit Modal for Director */}
         {isProfileModalOpen && (
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 text-white shadow-2xl flex flex-col gap-4">
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const finalName = tempDirectorName.trim() || 'General Director';
+                setDirectorName(finalName);
+                setDirectorAvatar(tempDirectorAvatar);
+                if (directorId) {
+                  localStorage.setItem(`ruqayya_director_name_${directorId}`, finalName);
+                  localStorage.setItem(`ruqayya_director_avatar_${directorId}`, tempDirectorAvatar);
+                }
+                try {
+                  await api.updateProfile({ fullName: finalName, passportPhoto: tempDirectorAvatar });
+                  localStorage.removeItem('pending_avatar_upload');
+                  localStorage.removeItem('pending_avatar_timestamp');
+                } catch (err) {
+                  console.error("Failed to update director profile on server:", err);
+                }
+                setIsProfileModalOpen(false);
+              }}
+              className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 text-white shadow-2xl flex flex-col gap-4"
+            >
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-sm font-black uppercase text-brand-gold">Edit Director Profile & Avatar</h3>
-                <button onClick={() => setIsProfileModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <button type="button" onClick={() => setIsProfileModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
                   <span className="text-lg">&times;</span>
                 </button>
               </div>
@@ -372,7 +415,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                         const file = e.target.files?.[0];
                         if (file) {
                           compressImageFile(file, 800, 800, 0.75)
-                            .then(compressed => setTempDirectorAvatar(compressed))
+                            .then(compressed => {
+                              setTempDirectorAvatar(compressed);
+                              // Save immediately to survive native mobile picker page reloads!
+                              localStorage.setItem('pending_avatar_upload', compressed);
+                              localStorage.setItem('pending_avatar_timestamp', Date.now().toString());
+                            })
                             .catch(err => console.error('Failed to process director avatar image', err));
                         }
                       }}
@@ -395,33 +443,20 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
                 <button 
+                  type="button"
                   onClick={() => setIsProfileModalOpen(false)}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
-                  onClick={async () => {
-                    const finalName = tempDirectorName.trim() || 'General Director';
-                    setDirectorName(finalName);
-                    setDirectorAvatar(tempDirectorAvatar);
-                    if (directorId) {
-                      localStorage.setItem(`ruqayya_director_name_${directorId}`, finalName);
-                      localStorage.setItem(`ruqayya_director_avatar_${directorId}`, tempDirectorAvatar);
-                    }
-                    try {
-                      await api.updateProfile({ fullName: finalName, passportPhoto: tempDirectorAvatar });
-                    } catch (err) {
-                      console.error("Failed to update director profile on server:", err);
-                    }
-                    setIsProfileModalOpen(false);
-                  }}
+                  type="submit"
                   className="px-4 py-2 bg-brand-gold hover:bg-yellow-500 text-slate-950 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"
                 >
                   Save Profile
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         )}
 

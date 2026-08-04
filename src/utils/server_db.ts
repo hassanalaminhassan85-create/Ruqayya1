@@ -477,6 +477,18 @@ export function saveR2File(fileName: string, base64Content: string): string {
     const cleanBase64 = base64Content.replace(/^data:.*?;base64,/, '');
     fs.writeFileSync(filePath, Buffer.from(cleanBase64, 'base64'));
     
+    // Sync to Firestore if available (fire-and-forget, non-blocking)
+    if (firestore) {
+      firestore.collection('uploaded_files').doc(savedName).set({
+        base64: cleanBase64,
+        timestamp: new Date().toISOString()
+      }).then(() => {
+        console.log(`[FIRESTORE ADMIN] Successfully synced uploaded file ${savedName} to Firestore.`);
+      }).catch((err: any) => {
+        console.warn(`[FIRESTORE ADMIN ERROR] Failed to sync file ${savedName} to Firestore:`, err.message);
+      });
+    }
+    
     // Return relative preview path
     return `/api/documents/preview/${savedName}`;
   } catch (err) {
