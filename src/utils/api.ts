@@ -468,7 +468,7 @@ export const api = {
     return api.request(`/api/payments${query}`);
   },
 
-  addPayment: async (payload: { driverId: string; amount: number; installmentNumber: number; outstandingAmount: number; date: string; receiptNumber: string; remarks?: string }) => {
+  addPayment: async (payload: { driverId: string; amount: number; installmentNumber: number; outstandingAmount: number; date: string; receiptNumber: string; remarks?: string; cycleId?: string }) => {
     return api.request('/api/payments', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -636,5 +636,31 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ confirmationText })
     });
+  },
+
+  // Telematics & Duty Tracking
+  startDriverDuty: async (payload: { startingMileage?: number; startingLocation?: string; latitude?: number; longitude?: number; placeName?: string }) => {
+    return api.request('/api/driver/duty/start', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  finishDriverDuty: async (payload?: { endingMileage?: number; notes?: string }) => {
+    return api.request('/api/driver/duty/finish', {
+      method: 'POST',
+      body: JSON.stringify(payload || {})
+    });
+  },
+
+  sendDriverLocation: async (payload: { latitude: number; longitude: number; accuracy?: number; speed?: number; heading?: number; altitude?: number; placeName?: string; activity?: string; driverId?: string }) => {
+    return api.request('/api/driver/location', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  getDriverTelematics: async (driverId: string) => {
+    return api.request(`/api/driver/${driverId}/telematics`);
   }
 };

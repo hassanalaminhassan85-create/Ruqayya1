@@ -120,6 +120,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 
   // Driver payments state (fetched dynamically if needed)
   const [livePayments, setLivePayments] = useState<any[]>(payments);
+  const [telematicsData, setTelematicsData] = useState<any | null>(null);
 
   const fetchDriverInstallmentsAndData = async () => {
     if (!activeDriver?.id) return;
@@ -146,6 +147,12 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
       const payRes = await api.getPayments(activeDriver.id).catch(() => []);
       if (Array.isArray(payRes) && payRes.length > 0) {
         setLivePayments(payRes);
+      }
+
+      // Telematics & Shift Dwell Data
+      const teleRes = await api.getDriverTelematics(activeDriver.id).catch(() => null);
+      if (teleRes && teleRes.success) {
+        setTelematicsData(teleRes);
       }
     } catch (err) {
       console.error("Failed to fetch telemetry details:", err);
@@ -272,6 +279,10 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const rawPrice = (activeDriver as any).vehicle_purchase_price ?? (activeDriver as any).vehiclePurchasePrice ?? (activeDriver as any).financials?.vehiclePurchasePrice;
   const vehiclePurchasePrice = rawPrice !== undefined && rawPrice !== null ? parseFloat(rawPrice) || 0 : 0;
   const remainingVehicleBalance = (activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? (activeDriver as any).financials?.remainingVehicleBalance ?? Math.max(0, vehiclePurchasePrice - totalPaid);
+
+  const safePaidRemittance = agreedTotal > 0 ? (totalPaid % agreedTotal) : totalPaid;
+  const safeRemittancePercent = agreedTotal > 0 ? Math.min(100, Math.round((safePaidRemittance / agreedTotal) * 100)) : (totalPaid > 0 ? 100 : 0);
+  const safeOwnershipPercent = vehiclePurchasePrice > 0 ? Math.min(100, Math.max(0, Math.round(((vehiclePurchasePrice - remainingVehicleBalance) / vehiclePurchasePrice) * 100))) : (totalPaid > 0 ? 100 : 0);
 
   // Non-null asset identification fallback for Chassis and Engine numbers
   const chassisNum = vehicleAssigned?.chassisNumber || vehicleAssigned?.chassis_number || `CHAS-2026-${(activeDriver.company_driver_id || activeDriver.id).substring(0, 6).toUpperCase()}`;
@@ -599,12 +610,12 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
           </div>
           <div className="flex justify-between items-center font-mono">
             <span className="text-slate-400 text-[11px]">Milestone Remittance:</span>
-            <span className="text-white font-bold text-xs">₦{(totalPaid % agreedTotal).toLocaleString()} paid</span>
+            <span className="text-white font-bold text-xs">₦{safePaidRemittance.toLocaleString()} paid</span>
           </div>
           <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
             <div 
               className="bg-emerald-500 h-full transition-all duration-500" 
-              style={{ width: `${Math.min(100, Math.round(((totalPaid % agreedTotal) / agreedTotal) * 100))}%` }}
+              style={{ width: `${safeRemittancePercent}%` }}
             ></div>
           </div>
         </div>
@@ -613,7 +624,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         <div className="flex flex-col justify-center bg-slate-950/60 border border-slate-800 p-2.5 px-3.5 rounded-xl text-xs gap-1">
           <div className="flex justify-between items-center text-slate-400 text-[10px] font-bold uppercase">
             <span>Vehicle Asset Ownership</span>
-            <span className="text-brand-gold font-mono font-bold">{Math.round(((vehiclePurchasePrice - remainingVehicleBalance) / vehiclePurchasePrice) * 100)}% Paid</span>
+            <span className="text-brand-gold font-mono font-bold">{safeOwnershipPercent}% Paid</span>
           </div>
           <div className="flex justify-between items-center font-mono">
             <span className="text-slate-400 text-[11px]">Outstanding Rig Balance:</span>
@@ -622,7 +633,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
           <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
             <div 
               className="bg-brand-gold h-full transition-all duration-500" 
-              style={{ width: `${Math.min(100, Math.round(((vehiclePurchasePrice - remainingVehicleBalance) / vehiclePurchasePrice) * 100))}%` }}
+              style={{ width: `${safeOwnershipPercent}%` }}
             ></div>
           </div>
         </div>
@@ -677,15 +688,20 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                       <Radio className="h-6 w-6 animate-pulse" />
                     </div>
                     <div>
-                      <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                      <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2 flex-wrap">
                         Global Fleet Telematics & GPS Command
+                        {telematicsData?.activeDuty ? (
+                          <Badge variant="success" className="text-[10px]">ON DUTY</Badge>
+                        ) : (
+                          <Badge variant="warning" className="text-[10px]">OFF DUTY</Badge>
+                        )}
                         {isImmobilized ? (
                           <Badge variant="danger" className="text-[10px]">ENGINE IMMOBILIZED</Badge>
                         ) : (
                           <Badge variant="success" className="text-[10px]">GPS ACTIVE</Badge>
                         )}
                       </h3>
-                      <p className="text-xs text-slate-400">High-precision sensor telemetry stream, 3-channel dashcam feed, and remote rig control</p>
+                      <p className="text-xs text-slate-400">High-precision sensor telemetry stream, live location tracking, and remote rig control</p>
                     </div>
                   </div>
 
@@ -875,11 +891,11 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                   <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col gap-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Rig Speed</span>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-black text-white font-mono">{vehicleSpeed}</span>
+                      <span className="text-2xl font-black text-white font-mono">{telematicsData?.currentLocation?.speed ? Math.round(telematicsData.currentLocation.speed) : vehicleSpeed}</span>
                       <span className="text-xs text-brand-gold font-bold">KM/H</span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                      <div className={`h-full transition-all duration-300 ${vehicleSpeed > 80 ? 'bg-rose-500' : 'bg-brand-gold'}`} style={{ width: `${(vehicleSpeed / 120) * 100}%` }}></div>
+                      <div className={`h-full transition-all duration-300 ${(telematicsData?.currentLocation?.speed || vehicleSpeed) > 80 ? 'bg-rose-500' : 'bg-brand-gold'}`} style={{ width: `${((telematicsData?.currentLocation?.speed || vehicleSpeed) / 120) * 100}%` }}></div>
                     </div>
                   </div>
 

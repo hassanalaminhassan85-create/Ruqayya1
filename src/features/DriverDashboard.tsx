@@ -70,6 +70,27 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   const [paymentSuccessReceipt, setPaymentSuccessReceipt] = useState<any | null>(null);
   const [isLoadingInstallments, setIsLoadingInstallments] = useState<boolean>(false);
 
+  // Telematics & Shift States
+  const [telematicsData, setTelematicsData] = useState<any | null>(null);
+  const [isShiftActive, setIsShiftActive] = useState<boolean>(false);
+  const [isUpdatingShift, setIsUpdatingShift] = useState<boolean>(false);
+  const [startingMileage, setStartingMileage] = useState<string>('');
+  const [endingMileage, setEndingMileage] = useState<string>('');
+  const [shiftLocation, setShiftLocation] = useState<string>('');
+  const [shiftNotes, setShiftNotes] = useState<string>('');
+  
+  const fetchTelematics = async (driverId: string) => {
+    try {
+      const res = await api.getDriverTelematics(driverId);
+      if (res && res.success) {
+        setTelematicsData(res);
+        setIsShiftActive(!!res.activeDuty);
+      }
+    } catch (err) {
+      console.error("Failed to fetch telematics data:", err);
+    }
+  };
+
   const fetchData = async () => {
     try {
       const me = await api.getMe();
@@ -88,6 +109,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           setPayments(p || []);
           const t = await api.getTrips().then(list => list.filter((item: any) => item.driverId === d.id || item.driver_id === d.id || item.driverId === me.id));
           setTrips(t || []);
+          
+          await fetchTelematics(d.id);
         }
       }
     } catch (err) {
@@ -102,6 +125,100 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Periodic Telematics Location Reporting
+  useEffect(() => {
+    if (!isShiftActive || !driverData) return;
+    
+    const reportLocation = () => {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              await api.sendDriverLocation({
+                driverId: driverData.id,
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+                speed: pos.coords.speed || 0,
+                heading: pos.coords.heading || 0,
+                altitude: pos.coords.altitude || 0,
+                placeName: 'Active Tracking Location',
+              });
+              fetchTelematics(driverData.id);
+            } catch (err) {
+              console.error("Failed to send location update", err);
+            }
+          },
+          (err) => console.error("Geolocation error:", err),
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      }
+    };
+    
+    // Initial report, then every 2 minutes while active
+    reportLocation();
+    const locInterval = setInterval(reportLocation, 120000);
+    return () => clearInterval(locInterval);
+  }, [isShiftActive, driverData]);
+
+  const handleStartShift = async () => {
+    if (!driverData) return;
+    setIsUpdatingShift(true);
+    try {
+      let lat = 9.0765;
+      let lng = 7.3986;
+      if ('geolocation' in navigator) {
+        await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              lat = pos.coords.latitude;
+              lng = pos.coords.longitude;
+              resolve(true);
+            },
+            () => resolve(false),
+            { enableHighAccuracy: true, timeout: 5000 }
+          );
+        });
+      }
+      const res = await api.startDriverDuty({
+        startingMileage: parseFloat(startingMileage) || 0,
+        startingLocation: shiftLocation || 'Terminal',
+        latitude: lat,
+        longitude: lng,
+        placeName: shiftLocation || 'Terminal'
+      });
+      if (res.success) {
+        await fetchTelematics(driverData.id);
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to start shift");
+    } finally {
+      setIsUpdatingShift(false);
+      setStartingMileage('');
+      setShiftLocation('');
+    }
+  };
+
+  const handleEndShift = async () => {
+    if (!driverData) return;
+    setIsUpdatingShift(true);
+    try {
+      const res = await api.finishDriverDuty({
+        endingMileage: parseFloat(endingMileage) || 0,
+        notes: shiftNotes
+      });
+      if (res.success) {
+        await fetchTelematics(driverData.id);
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to end shift");
+    } finally {
+      setIsUpdatingShift(false);
+      setEndingMileage('');
+      setShiftNotes('');
+    }
+  };
 
   // Trigger Pay Now modal whenever activeTab is set to 'pay-now'
   useEffect(() => {
@@ -799,6 +916,152 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     );
   };
 
+  const renderTelematicsTab = () => (
+    <div className="space-y-6">
+      <Card className="bg-bg-surface p-6">
+        <CardHeader className="p-0 pb-4 mb-4 border-b border-border-main flex flex-row items-center justify-between">
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <Activity className="h-5 w-5 text-brand-gold" />
+            {lang === 'en' ? "Live Telematics & Duty Shift" : "Bibiyar Aiki Tsaye"}
+          </CardTitle>
+          <Badge variant={isShiftActive ? 'success' : 'warning'}>
+            {isShiftActive ? 'ON DUTY' : 'OFF DUTY'}
+          </Badge>
+        </CardHeader>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Duty Controls */}
+          <div className="bg-bg-base border border-border-main p-5 rounded-2xl space-y-4">
+            <h3 className="text-sm font-bold text-text-main">
+              {isShiftActive ? 'Active Shift Controls' : 'Start New Shift'}
+            </h3>
+            
+            {isShiftActive ? (
+              <div className="space-y-4">
+                <p className="text-xs text-text-muted">You are currently on duty. Your live location is being transmitted periodically to the central fleet management.</p>
+                <div>
+                  <label className="text-[10px] font-bold text-text-muted uppercase mb-1 block">Ending Mileage</label>
+                  <input
+                    type="number"
+                    value={endingMileage}
+                    onChange={(e) => setEndingMileage(e.target.value)}
+                    className="w-full bg-bg-surface border border-border-main p-2 rounded-lg text-sm"
+                    placeholder="e.g. 15400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-text-muted uppercase mb-1 block">Shift Notes / Issues</label>
+                  <input
+                    type="text"
+                    value={shiftNotes}
+                    onChange={(e) => setShiftNotes(e.target.value)}
+                    className="w-full bg-bg-surface border border-border-main p-2 rounded-lg text-sm"
+                    placeholder="Any incidents?"
+                  />
+                </div>
+                <Button 
+                  onClick={handleEndShift}
+                  disabled={isUpdatingShift}
+                  className="w-full bg-red-600 hover:bg-red-500 text-white font-bold cursor-pointer"
+                >
+                  {isUpdatingShift ? 'Ending...' : 'End Duty Shift 🛑'}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-text-muted">Start your shift to begin live GPS tracking and register your operational duty session.</p>
+                <div>
+                  <label className="text-[10px] font-bold text-text-muted uppercase mb-1 block">Starting Mileage</label>
+                  <input
+                    type="number"
+                    value={startingMileage}
+                    onChange={(e) => setStartingMileage(e.target.value)}
+                    className="w-full bg-bg-surface border border-border-main p-2 rounded-lg text-sm"
+                    placeholder="e.g. 15200"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-text-muted uppercase mb-1 block">Starting Location</label>
+                  <input
+                    type="text"
+                    value={shiftLocation}
+                    onChange={(e) => setShiftLocation(e.target.value)}
+                    className="w-full bg-bg-surface border border-border-main p-2 rounded-lg text-sm"
+                    placeholder="e.g. Central Depot"
+                  />
+                </div>
+                <Button 
+                  onClick={handleStartShift}
+                  disabled={isUpdatingShift}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer"
+                >
+                  {isUpdatingShift ? 'Starting...' : 'Start Duty Shift 🚀'}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Telematics Readout */}
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col gap-4 text-white">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <Activity className="h-4 w-4 text-brand-gold" />
+              Live Telemetry Feed
+            </h3>
+            
+            {telematicsData?.currentLocation ? (
+              <div className="grid grid-cols-2 gap-4 font-mono text-xs">
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase block mb-1">Speed</span>
+                  <span className="text-brand-gold font-bold text-lg">{Math.round(telematicsData.currentLocation.speed || 0)} <span className="text-sm">km/h</span></span>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase block mb-1">Status</span>
+                  <span className="text-emerald-400 font-bold">{telematicsData.currentLocation.activity || 'Active'}</span>
+                </div>
+                <div className="col-span-2 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase block mb-1">Last Known Location</span>
+                  <span className="text-white">
+                    {telematicsData.currentLocation.place_name || 
+                     `${telematicsData.currentLocation.latitude?.toFixed(4)}, ${telematicsData.currentLocation.longitude?.toFixed(4)}`}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-slate-500 text-xs italic">
+                No active telemetry data streaming. Start your shift to activate.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Places Visited Today */}
+        {telematicsData?.placesVisitedToday && telematicsData.placesVisitedToday.length > 0 && (
+          <div className="mt-6 border-t border-border-main pt-4">
+            <h3 className="text-sm font-bold text-text-main mb-4">Places Visited Today</h3>
+            <div className="space-y-3">
+              {telematicsData.placesVisitedToday.map((place: any, i: number) => (
+                <div key={i} className="flex items-center justify-between p-3 bg-bg-base rounded-xl border border-border-main/50 text-xs">
+                  <div>
+                    <p className="font-bold text-text-main">{place.place_name}</p>
+                    <p className="text-[10px] text-text-muted font-mono mt-1">
+                      Arrived: {new Date(place.arrived_at).toLocaleTimeString()} 
+                      {place.departed_at ? ` | Departed: ${new Date(place.departed_at).toLocaleTimeString()}` : ' | Currently Here'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant={place.status === 'completed' ? 'secondary' : 'warning'}>
+                      {place.dwell_duration_minutes} min dwell
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto p-4 md:p-6 bg-bg-base min-h-screen">
       {/* Welcome Header with Animated Motion Passport Avatar */}
@@ -845,6 +1108,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       <div className="flex items-center gap-2 border-b border-border-main overflow-x-auto pb-1">
         {[
           { id: 'overview', label: lang === 'en' ? "Overview" : "Bayanai", icon: <LayersIcon className="h-4 w-4" /> },
+          { id: 'telematics', label: lang === 'en' ? "Telematics" : "Bibiya", icon: <Activity className="h-4 w-4 text-emerald-500" /> },
           { id: 'pay-now', label: lang === 'en' ? "Pay Now 💳" : "Biyan Yanzu 💳", icon: <CreditCard className="h-4 w-4 text-emerald-500" /> },
           { id: 'vehicle', label: lang === 'en' ? "My Vehicle" : "Motata", icon: <Truck className="h-4 w-4" /> },
           { id: 'payments', label: lang === 'en' ? "Payments" : "Biyan Kudi", icon: <Wallet className="h-4 w-4" /> },
@@ -876,6 +1140,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       {/* Active Tab View */}
       <div className="mt-2">
         {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'telematics' && renderTelematicsTab()}
         {activeTab === 'pay-now' && renderPayNowTab()}
         {activeTab === 'vehicle' && renderVehicleTab()}
         {activeTab === 'payments' && renderPaymentsTab()}

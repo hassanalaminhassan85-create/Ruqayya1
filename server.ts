@@ -2293,6 +2293,296 @@ app.put('/api/drivers/:id/status', authenticateSession, (req, res) => {
   }
 });
 
+// 11.5. LIVE REAL-TIME TELEMATICS & DUTY SHIFT TRACKING
+app.post('/api/driver/duty/start', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.user_id === actor.id || d.id === actor.id);
+    if (!drv) {
+      return res.status(404).json({ error: 'Driver profile not linked.' });
+    }
+
+    const { startingMileage, startingLocation, latitude, longitude, placeName } = req.body;
+    if (!db.driver_duty_sessions) db.driver_duty_sessions = [];
+
+    const nowIso = new Date().toISOString();
+    db.driver_duty_sessions.forEach(s => {
+      if (s.driver_id === drv.id && s.status === 'active') {
+        s.status = 'completed';
+        s.finish_time = nowIso;
+      }
+    });
+
+    const newDutySession = {
+      id: `DUTY-${Date.now()}-${generateUUID().substring(0, 6).toUpperCase()}`,
+      driver_id: drv.id,
+      driver_name: actor.fullName || drv.full_name || 'Driver',
+      company_driver_id: drv.company_driver_id || 'DRV-UNKNOWN',
+      start_time: nowIso,
+      finish_time: null,
+      status: 'active',
+      starting_mileage: parseFloat(startingMileage) || 0,
+      starting_location: startingLocation || placeName || 'Ruqayya Central Terminal',
+      latitude: latitude || 9.0765,
+      longitude: longitude || 7.3986,
+      places_visited: []
+    };
+
+    db.driver_duty_sessions.unshift(newDutySession);
+
+    const initPlace = placeName || startingLocation || 'Ruqayya Central Depot';
+    const initPlaceRecord = {
+      id: `PLC-${Date.now()}-${generateUUID().substring(0, 4)}`,
+      place_name: initPlace,
+      arrived_at: nowIso,
+      departed_at: null,
+      dwell_duration_minutes: 0,
+      status: 'active_dwell',
+      activity: 'Shift Commencement & Pre-trip Check',
+      latitude: latitude || 9.0765,
+      longitude: longitude || 7.3986
+    };
+    newDutySession.places_visited.push(initPlaceRecord);
+
+    drv.status = 'available';
+    drv.updated_at = nowIso;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_SHIFT_START',
+      'OFF_DUTY',
+      `Driver ${drv.full_name || actor.fullName} started work shift at ${initPlace}`,
+      req
+    );
+
+    res.json({
+      success: true,
+      message: 'Work shift started successfully. GPS telematics active.',
+      dutySession: newDutySession
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/driver/duty/finish', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.user_id === actor.id || d.id === actor.id);
+    if (!drv) {
+      return res.status(404).json({ error: 'Driver profile not linked.' });
+    }
+
+    const { endingMileage, notes } = req.body;
+    if (!db.driver_duty_sessions) db.driver_duty_sessions = [];
+
+    const activeSession = db.driver_duty_sessions.find(s => s.driver_id === drv.id && s.status === 'active');
+    const nowIso = new Date().toISOString();
+
+    if (activeSession) {
+      activeSession.status = 'completed';
+      activeSession.finish_time = nowIso;
+      activeSession.ending_mileage = parseFloat(endingMileage) || activeSession.starting_mileage;
+      activeSession.notes = notes || '';
+
+      const startTime = new Date(activeSession.start_time).getTime();
+      const endTime = new Date(nowIso).getTime();
+      const totalMinutes = Math.round((endTime - startTime) / (1000 * 60));
+      activeSession.total_duty_hours = (totalMinutes / 60).toFixed(2);
+
+      if (activeSession.places_visited && activeSession.places_visited.length > 0) {
+        const lastPlace = activeSession.places_visited[activeSession.places_visited.length - 1];
+        if (!lastPlace.departed_at) {
+          lastPlace.departed_at = nowIso;
+          const arrTime = new Date(lastPlace.arrived_at).getTime();
+          lastPlace.dwell_duration_minutes = Math.round((endTime - arrTime) / (1000 * 60));
+          lastPlace.status = 'completed';
+        }
+      }
+    }
+
+    drv.status = 'off-duty';
+    drv.updated_at = nowIso;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_SHIFT_FINISH',
+      'ON_DUTY',
+      `Driver ${drv.full_name || actor.fullName} finished work shift.`,
+      req
+    );
+
+    res.json({
+      success: true,
+      message: 'Work shift ended successfully. Off duty status recorded.',
+      dutySession: activeSession || null
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/driver/location', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    const db = loadDB();
+    let drv = db.drivers.find(d => d.user_id === actor.id || d.id === actor.id);
+    if (!drv && req.body.driverId) {
+      drv = db.drivers.find(d => d.id === req.body.driverId);
+    }
+    
+    if (!drv) {
+      return res.status(404).json({ error: 'Driver profile not found.' });
+    }
+
+    const { latitude, longitude, accuracy, speed, heading, altitude, placeName, activity } = req.body;
+    const nowIso = new Date().toISOString();
+
+    if (!db.driver_locations) db.driver_locations = [];
+
+    let loc = db.driver_locations.find(l => l.driver_id === drv.id);
+    if (!loc) {
+      loc = {
+        id: `LOC-${drv.id}`,
+        driver_id: drv.id,
+        driver_name: drv.full_name || actor.fullName,
+        company_driver_id: drv.company_driver_id || 'DRV-UNKNOWN',
+        latitude: parseFloat(latitude) || 9.0765,
+        longitude: parseFloat(longitude) || 7.3986,
+        accuracy: parseFloat(accuracy) || 10,
+        speed: parseFloat(speed) || 0,
+        heading: parseFloat(heading) || 0,
+        altitude: parseFloat(altitude) || 0,
+        place_name: placeName || 'Abuja Fleet Corridor',
+        activity: activity || (speed > 5 ? 'In Transit' : 'Stationary Work'),
+        updated_at: nowIso,
+        history: []
+      };
+      db.driver_locations.push(loc);
+    } else {
+      loc.latitude = parseFloat(latitude) || loc.latitude;
+      loc.longitude = parseFloat(longitude) || loc.longitude;
+      loc.accuracy = parseFloat(accuracy) || loc.accuracy;
+      loc.speed = parseFloat(speed) >= 0 ? parseFloat(speed) : loc.speed;
+      loc.heading = parseFloat(heading) || loc.heading;
+      loc.place_name = placeName || loc.place_name;
+      loc.activity = activity || (loc.speed > 5 ? 'In Transit' : 'Stationary Work');
+      loc.updated_at = nowIso;
+      
+      if (!loc.history) loc.history = [];
+      loc.history.unshift({
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        speed: loc.speed,
+        heading: loc.heading,
+        place_name: loc.place_name,
+        timestamp: nowIso
+      });
+      if (loc.history.length > 50) loc.history = loc.history.slice(0, 50);
+    }
+
+    if (!db.driver_duty_sessions) db.driver_duty_sessions = [];
+    const activeSession = db.driver_duty_sessions.find(s => s.driver_id === drv.id && s.status === 'active');
+
+    if (activeSession) {
+      if (!activeSession.places_visited) activeSession.places_visited = [];
+      const currentPlaceName = placeName || loc.place_name || 'Stationary Location';
+      const lastPlace = activeSession.places_visited[activeSession.places_visited.length - 1];
+
+      if (!lastPlace) {
+        activeSession.places_visited.push({
+          id: `PLC-${Date.now()}-${generateUUID().substring(0, 4)}`,
+          place_name: currentPlaceName,
+          arrived_at: nowIso,
+          departed_at: null,
+          dwell_duration_minutes: 0,
+          status: 'active_dwell',
+          activity: activity || 'Workstation Check',
+          latitude: loc.latitude,
+          longitude: loc.longitude
+        });
+      } else if (lastPlace.place_name === currentPlaceName) {
+        const arrTime = new Date(lastPlace.arrived_at).getTime();
+        const currTime = new Date(nowIso).getTime();
+        lastPlace.dwell_duration_minutes = Math.round((currTime - arrTime) / (1000 * 60));
+        lastPlace.status = 'active_dwell';
+      } else if (currentPlaceName && lastPlace.place_name !== currentPlaceName) {
+        const arrTime = new Date(lastPlace.arrived_at).getTime();
+        const currTime = new Date(nowIso).getTime();
+        lastPlace.departed_at = nowIso;
+        lastPlace.dwell_duration_minutes = Math.round((currTime - arrTime) / (1000 * 60));
+        lastPlace.status = 'completed';
+
+        activeSession.places_visited.push({
+          id: `PLC-${Date.now()}-${generateUUID().substring(0, 4)}`,
+          place_name: currentPlaceName,
+          arrived_at: nowIso,
+          departed_at: null,
+          dwell_duration_minutes: 0,
+          status: 'active_dwell',
+          activity: activity || 'Workstation Check',
+          latitude: loc.latitude,
+          longitude: loc.longitude
+        });
+      }
+    }
+
+    saveDB(db);
+
+    res.json({
+      success: true,
+      location: loc,
+      activeDuty: activeSession || null
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/driver/:id/telematics', authenticateSession, (req, res) => {
+  try {
+    const db = loadDB();
+    let targetDriverId = req.params.id;
+    const actor = (req as any).user;
+
+    if (actor.role === 'driver') {
+      const selfDrv = db.drivers.find(d => d.user_id === actor.id || d.id === actor.id);
+      if (selfDrv) targetDriverId = selfDrv.id;
+    }
+
+    const drv = db.drivers.find(d => d.id === targetDriverId || d.user_id === targetDriverId);
+    if (!drv) {
+      return res.status(404).json({ error: 'Driver telematics profile not found.' });
+    }
+
+    const dutySessions = (db.driver_duty_sessions || []).filter(s => s.driver_id === drv.id);
+    const activeDuty = dutySessions.find(s => s.status === 'active') || null;
+    const currentLocation = (db.driver_locations || []).find(l => l.driver_id === drv.id) || null;
+
+    res.json({
+      success: true,
+      driverId: drv.id,
+      companyDriverId: drv.company_driver_id || 'DRV-UNKNOWN',
+      activeDuty,
+      dutyHistory: dutySessions.slice(0, 20),
+      currentLocation,
+      placesVisitedToday: activeDuty ? activeDuty.places_visited || [] : (dutySessions[0]?.places_visited || [])
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 12. AUTHENTICATED: Admin Driver Classification (Smart vs Assisted)
 app.put('/api/drivers/:id/classify', authenticateSession, (req, res) => {
   try {

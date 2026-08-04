@@ -91,6 +91,9 @@ export interface DBState {
   trip_manifests: any[];
   cycles: any[];
   driver_payments: any[];
+  driver_duty_sessions?: any[];
+  driver_locations?: any[];
+  driver_places?: any[];
   messages?: any[];
   announcements?: any[];
   push_subscriptions?: any[];
@@ -202,6 +205,9 @@ export function loadDB(): DBState {
       if (!parsed.notifications) { parsed.notifications = []; changed = true; }
       if (!parsed.financial_records) { parsed.financial_records = []; changed = true; }
       if (!parsed.driver_payments) { parsed.driver_payments = []; changed = true; }
+      if (!parsed.driver_duty_sessions) { parsed.driver_duty_sessions = []; changed = true; }
+      if (!parsed.driver_locations) { parsed.driver_locations = []; changed = true; }
+      if (!parsed.driver_places) { parsed.driver_places = []; changed = true; }
       if (!parsed.messages) { parsed.messages = []; changed = true; }
       if (!parsed.announcements) { parsed.announcements = []; changed = true; }
       if (!parsed.vehicle_documents) { parsed.vehicle_documents = []; changed = true; }
