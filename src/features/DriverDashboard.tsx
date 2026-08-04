@@ -1,3 +1,4 @@
+import { compressImageFile } from '../utils/imageCompressor';
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -281,25 +282,21 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (uploadEvent) => {
-      const base64 = uploadEvent.target?.result as string;
-      try {
-        const res = await api.request('/api/drivers/self', {
-          method: 'PUT',
-          body: JSON.stringify({ passportPhoto: base64 })
-        });
-        if (res && res.success) {
-          alert(lang === 'en' ? "Passport photo updated successfully!" : "An sabunta hoton fasfo cikin nasara!");
-          await fetchData();
-        } else {
-          alert(res.error || "Failed to update passport photo.");
-        }
-      } catch (err: any) {
-        alert(err.message || "Failed to update passport photo.");
+    try {
+      const base64 = await compressImageFile(file, 800, 800, 0.75);
+      const res = await api.request('/api/drivers/self', {
+        method: 'PUT',
+        body: JSON.stringify({ passportPhoto: base64 })
+      });
+      if (res && res.success) {
+        alert(lang === 'en' ? "Passport photo updated successfully!" : "An sabunta hoton fasfo cikin nasara!");
+        await fetchData();
+      } else {
+        alert(res.error || "Failed to update passport photo.");
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      alert(err.message || "Failed to update passport photo.");
+    }
   };
 
   // Render Animated Passport Avatar

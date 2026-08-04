@@ -683,10 +683,27 @@ export const RecordPaymentModal: React.FC<{
   lang: 'en' | 'ha';
 }> = ({ isOpen, onClose, lang }) => {
   const [driverId, setDriverId] = useState('');
-  const [amount, setAmount] = useState('15000');
+  const [cycleId, setCycleId] = useState('1');
+  const [installmentNumber, setInstallmentNumber] = useState('1');
+  const [amount, setAmount] = useState('30000');
   const [remarks, setRemarks] = useState('');
+  const [driversList, setDriversList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      api.getDrivers().then(res => {
+        if (Array.isArray(res)) setDriversList(res);
+        else if (res && Array.isArray(res.drivers)) setDriversList(res.drivers);
+      }).catch(() => {
+        const lastState = (window as any).lastSSEState || {};
+        if (lastState.drivers && Array.isArray(lastState.drivers)) {
+          setDriversList(lastState.drivers);
+        }
+      });
+    }
+  }, [isOpen]);
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -698,16 +715,17 @@ export const RecordPaymentModal: React.FC<{
       const payload = {
         driverId,
         amount: Number(amount),
-        installmentNumber: 1,
+        installmentNumber: parseInt(installmentNumber) || 1,
+        cycleId: cycleId || '1',
         outstandingAmount: 0,
         date: new Date().toISOString().split('T')[0],
         receiptNumber: receiptNo,
         referenceNumber: receiptNo,
         paymentMethod: 'bank_transfer',
-        remarks: remarks || `Daily tricycle collection remittance`
+        remarks: remarks || `Daily tricycle collection remittance for Cycle #${cycleId}, Inst. #${installmentNumber}`
       };
 
-      const res = await api.recordPayment(payload);
+      const res = await api.addPayment(payload);
 
       if (res && (res.success || res.payment)) {
         const lastState = (window as any).lastSSEState || {};
@@ -767,10 +785,40 @@ export const RecordPaymentModal: React.FC<{
                 className="w-full px-3 py-2 bg-bg-base border border-border-main rounded-xl focus:outline-none text-xs text-text-main"
               >
                 <option value="">{lang === 'en' ? '-- Select Certified Driver --' : '-- Zabi Direba --'}</option>
-                <option value="drv-1">Ibrahim Ahmad (RTL-DRV-102)</option>
-                <option value="drv-2">Aminu Yusuf (RTL-DRV-103)</option>
-                <option value="drv-3">Garba Abdullahi (RTL-DRV-104)</option>
+                {driversList.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.fullName || d.full_name || 'Driver'} ({d.company_driver_id || d.id.substring(0,6)}) {d.vehicle?.plateNumber ? `- ${d.vehicle.plateNumber}` : ''}
+                  </option>
+                ))}
               </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="font-bold text-text-main">Cycle</label>
+                <select
+                  value={cycleId}
+                  onChange={(e) => setCycleId(e.target.value)}
+                  className="w-full px-3 py-2 bg-bg-base border border-border-main rounded-xl focus:outline-none text-xs text-text-main font-bold"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(c => (
+                    <option key={c} value={c}>Cycle #{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="font-bold text-text-main">Installment #</label>
+                <select
+                  value={installmentNumber}
+                  onChange={(e) => setInstallmentNumber(e.target.value)}
+                  className="w-full px-3 py-2 bg-bg-base border border-border-main rounded-xl focus:outline-none text-xs text-text-main font-bold"
+                >
+                  {[1, 2, 3, 4, 5, 6].map(i => (
+                    <option key={i} value={i}>Installment #{i}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -791,7 +839,7 @@ export const RecordPaymentModal: React.FC<{
               <label className="font-bold text-text-main">Audit Remarks</label>
               <input
                 type="text"
-                placeholder="e.g. Completed week 3, installment 4"
+                placeholder="e.g. Cycle #1, installment #4 remittance"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 className="w-full px-3 py-2 bg-bg-base border border-border-main rounded-xl focus:outline-none text-xs"

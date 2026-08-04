@@ -66,7 +66,8 @@ import {
   Coins,
   Sparkles,
   ArrowLeft,
-  Clock
+  Clock,
+  KeyRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -563,6 +564,7 @@ export default function App() {
       { id: 'documents', label: lang === 'en' ? "Documents" : "Taskar Takardu", icon: <FileText className="h-4 w-4 shrink-0" />, active: activeSection === 'documents' },
       { id: 'notifications', label: lang === 'en' ? "Notifications" : "Sanarwa", icon: <Bell className="h-4 w-4 shrink-0" />, active: activeSection === 'notifications' },
       { id: 'pwa', label: lang === 'en' ? "PWA Hub" : "Kula da PWA", icon: <Zap className="h-4 w-4 shrink-0" />, active: activeSection === 'pwa' },
+      { id: 'accounts', label: lang === 'en' ? "Account Controller" : "Ikon Akantoci", icon: <KeyRound className="h-4 w-4 shrink-0 text-amber-500" />, active: activeSection === 'accounts' },
       { id: 'settings', label: lang === 'en' ? "Settings" : "Kula da Akun", icon: <Settings className="h-4 w-4 shrink-0" />, active: activeSection === 'settings' },
       { id: 'help', label: lang === 'en' ? "Help & Support" : "Taimako da Support", icon: <HelpCircle className="h-4 w-4 shrink-0" />, active: activeSection === 'help' },
     ];
@@ -573,7 +575,7 @@ export default function App() {
       );
     }
     if (currentRole === 'admin') {
-      return items.filter(item => ["dashboard", "fleet", "drivers", "trips", "payments", "finance", "people", "communications", "documents", "directory", "ai-assistant", "notifications", "settings", "help"].includes(item.id));
+      return items.filter(item => ["dashboard", "fleet", "drivers", "trips", "payments", "finance", "people", "communications", "documents", "directory", "accounts", "ai-assistant", "notifications", "settings", "help"].includes(item.id));
     }
     if (currentRole === 'shareholder') {
       return items.filter(item => 
@@ -593,7 +595,7 @@ export default function App() {
     // Explicitly synchronize role-specific dashboard tabs when sidebar items are clicked
     // This ensures that when we switch back to 'dashboard' section, we land on the correct tab
     if (currentRole === 'admin') {
-      const adminTabs: any[] = ['dashboard', 'fleet', 'drivers', 'payments', 'finance', 'trips', 'documents', 'communications', 'directory', 'people', 'settings'];
+      const adminTabs: any[] = ['dashboard', 'fleet', 'drivers', 'payments', 'finance', 'trips', 'documents', 'communications', 'directory', 'people', 'accounts', 'settings'];
       if (adminTabs.includes(id)) {
         setAdminTab(id);
       }

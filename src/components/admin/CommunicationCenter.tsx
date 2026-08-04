@@ -1,3 +1,4 @@
+import { compressImageFile } from '../../utils/imageCompressor';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -202,20 +203,17 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
     setUsersList(list);
   };
 
-  const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("File size limit is 5MB");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAttachmentBase64(reader.result as string);
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        setAttachmentBase64(compressed);
         setAttachmentName(file.name);
         setAttachmentType(file.type.includes('pdf') ? 'pdf' : 'image');
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Failed to process image attachment', err);
+      }
     }
   };
 

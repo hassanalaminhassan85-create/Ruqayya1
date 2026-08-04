@@ -1,3 +1,4 @@
+import { compressImageFile } from '../../utils/imageCompressor';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -369,11 +370,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setTempDirectorAvatar(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
+                          compressImageFile(file, 800, 800, 0.75)
+                            .then(compressed => setTempDirectorAvatar(compressed))
+                            .catch(err => console.error('Failed to process director avatar image', err));
                         }
                       }}
                     />

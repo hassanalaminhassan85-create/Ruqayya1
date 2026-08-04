@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { compressImageFile } from '../../utils/imageCompressor';
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -130,8 +132,8 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const [payrollSubView, setPayrollSubView] = useState<'analytics' | 'history'>('analytics');
   const [driverView, setDriverView] = useState<'remit' | 'history' | 'compliance'>('remit');
   const [dbCycles, setDbCycles] = useState<any[]>([]);
-  const [selectedCycle, setSelectedCycle] = useState<string | null>(null); // Initialize as null
-  const [selectedInstallment, setSelectedInstallment] = useState<string | null>(null);
+  const [selectedCycle, setSelectedCycle] = useState<string | null>('1');
+  const [selectedInstallment, setSelectedInstallment] = useState<string | null>('1');
   const [isCyclePopupOpen, setIsCyclePopupOpen] = useState(false);
   const [isInstallmentPopupOpen, setIsInstallmentPopupOpen] = useState(false);
   const [isUnpaidDriversPopupOpen, setIsUnpaidDriversPopupOpen] = useState(false);
@@ -194,14 +196,15 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     setIsAddEditShareholderOpen(true);
   };
 
-  const handleShFormFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleShFormFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setShFormPassportPhoto(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        setShFormPassportPhoto(compressed);
+      } catch (err) {
+        console.error('Failed to process image file', err);
+      }
     }
   };
 
@@ -350,15 +353,37 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     }
   }, [formattedCycles, userHasSelectedCycle]);
 
-  // Identify drivers missing payments for selected period
+  useEffect(() => {
+    if (drivers.length > 0 && !selectedDriverId) {
+      setSelectedDriverId(drivers[0].id);
+    }
+  }, [drivers, selectedDriverId]);
+
+  // Identify drivers missing payments for selected cycle & installment
   const pendingDrivers = drivers.filter(d => {
-    const hasPayment = localAuditLogs.some(log => 
-      log.userId === d.id && 
+    const targetInstallment = selectedInstallment || '1';
+    const targetCycle = selectedCycle || '1';
+
+    const driverAgreed = (d as any).agreed_amount || (d as any).agreedAmount || ((d as any).vehicle ? (d as any).vehicle.agreed_amount : 0) || 180000;
+    const driverInstDue = driverAgreed / 6;
+
+    const paidForInstallment = (localPayments || [])
+      .filter(p => 
+        (p.driver_id === d.id || p.driverId === d.id) && 
+        p.status === 'approved' && 
+        String(p.installment_number || p.installmentNumber) === String(targetInstallment)
+      )
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const hasAuditLog = (localAuditLogs || []).some(log => 
+      (log.userId === d.id || log.driverId === d.id) && 
       log.action === 'DRIVER_REMITTANCE' && 
-      (log.description?.includes(`Cycle #${selectedCycle}`) || log.description?.includes(`Cycle ${selectedCycle}`)) &&
-      (log.description?.includes(`Inst. #${selectedInstallment}`) || log.description?.includes(`Installment #${selectedInstallment}`))
+      (log.description?.includes(`Cycle #${targetCycle}`) || log.description?.includes(`Cycle ${targetCycle}`)) &&
+      (log.description?.includes(`Inst. #${targetInstallment}`) || log.description?.includes(`Installment #${targetInstallment}`))
     );
-    return !hasPayment;
+
+    const isFullyPaid = paidForInstallment >= driverInstDue || hasAuditLog;
+    return !isFullyPaid;
   });
 
   // Auto-fetch additional records
@@ -728,25 +753,47 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   // DRIVER PAYMENT SPECIFIC MATHS & LOGIC
   const matchedDriver = drivers.find(d => d.id === selectedDriverId);
 
-  // Calculate agreement
-  const agreedAmount = matchedDriver?.agreed_amount || 180000;
+  // Selected or active installment number
+  const currentInstallmentNumber = selectedInstallment ? parseInt(selectedInstallment) : 1;
+
+  // Calculate agreement based on real driver data
+  const agreedAmount = matchedDriver 
+    ? ((matchedDriver as any).agreed_amount || (matchedDriver as any).agreedAmount || (matchedDriver.vehicle ? (matchedDriver.vehicle as any).agreed_amount : 0) || 180000) 
+    : 180000;
   const installmentDue = agreedAmount / 6;
 
-  // Payments already registered for this installment
-  const currentInstallmentNumber = matchedDriver 
-    ? Math.min(6, Math.floor((localPayments.filter(p => p.driver_id === matchedDriver.id && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0)) / installmentDue) + 1)
-    : 1;
-
+  // Payments already registered for this specific driver and selected installment
   const totalInstallmentPaymentsPaid = matchedDriver
     ? localPayments
-        .filter(p => p.driver_id === matchedDriver.id && p.status === 'approved' && p.installment_number === currentInstallmentNumber)
+        .filter(p => 
+          (p.driver_id === matchedDriver.id || p.driverId === matchedDriver.id) && 
+          p.status === 'approved' && 
+          String(p.installment_number || p.installmentNumber) === String(currentInstallmentNumber)
+        )
         .reduce((sum, p) => sum + p.amount, 0)
     : 0;
 
   const remainingInstallmentBalance = Math.max(0, installmentDue - totalInstallmentPaymentsPaid);
-  const driverWalletBalance = matchedDriver ? (matchedDriver as any).wallet_balance || 0 : 0;
-  const outstandingVehicleBalance = matchedDriver?.remaining_vehicle_balance || 14250000;
-  const driverOutstandingDebt = matchedDriver ? Math.max(0, (currentInstallmentNumber - 1) * installmentDue - (localPayments.filter(p => p.driver_id === matchedDriver.id && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0) - totalInstallmentPaymentsPaid)) : 0;
+  const driverWalletBalance = matchedDriver ? ((matchedDriver as any).wallet_balance || (matchedDriver as any).walletBalance || 0) : 0;
+  
+  // Real-time outstanding vehicle balance from driver record (No hardcoded 14,250,000)
+  const outstandingVehicleBalance = matchedDriver 
+    ? ((matchedDriver as any).remaining_vehicle_balance !== undefined 
+        ? (matchedDriver as any).remaining_vehicle_balance 
+        : ((matchedDriver as any).remainingVehicleBalance !== undefined 
+            ? (matchedDriver as any).remainingVehicleBalance 
+            : 0)) 
+    : 0;
+
+  const totalPaidAllTime = matchedDriver
+    ? localPayments
+        .filter(p => (p.driver_id === matchedDriver.id || p.driverId === matchedDriver.id) && p.status === 'approved')
+        .reduce((sum, p) => sum + p.amount, 0)
+    : 0;
+
+  const driverOutstandingDebt = matchedDriver 
+    ? Math.max(0, (currentInstallmentNumber - 1) * installmentDue - (totalPaidAllTime - totalInstallmentPaymentsPaid)) 
+    : 0;
 
   // Real-time engine calculators (as the admin types)
   const incomingCash = parseFloat(payAmountInput) || 0;
@@ -773,11 +820,12 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
       await api.addPayment({
         driverId: selectedDriverId,
         amount: parseFloat(payAmountInput),
-        installmentNumber: parseInt(selectedInstallment),
+        installmentNumber: currentInstallmentNumber,
+        cycleId: selectedCycle || '1',
         outstandingAmount: remainingInstallmentAfterPay,
         date: new Date().toISOString().split('T')[0],
         receiptNumber: payReceiptInput,
-        remarks: payRemarksInput || `Remittance for ${formattedCycles.find(c => c.seqId === selectedCycle)?.label || 'Unknown Cycle'}, Inst. #${selectedInstallment || '?'}`
+        remarks: payRemarksInput || `Remittance for ${formattedCycles.find(c => c.seqId === selectedCycle)?.label || `Cycle #${selectedCycle}`}, Inst. #${currentInstallmentNumber}`
       });
 
       // Reset
@@ -1433,7 +1481,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                   <div className="flex flex-col items-end gap-1 shrink-0 font-mono text-[10px]">
                     <span className="text-text-muted font-bold uppercase">Assigned Tricycle</span>
                     <Badge variant="outline" className="border-slate-300 font-bold bg-white text-slate-900">
-                      {matchedDriver.assignedVehicleId || 'V-7789 Kano'}
+                      {matchedDriver.vehicle?.plateNumber || (matchedDriver as any).plate_number || matchedDriver.assignedVehicleId || 'Unassigned'}
                     </Badge>
                   </div>
                 </div>
@@ -1450,7 +1498,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Current Installment due</span>
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-md font-bold text-slate-900 font-mono">₦{installmentDue.toLocaleString()}</p>
-                      <Badge variant="primary" className="font-mono text-[9px]">Cycle #{currentInstallmentNumber}</Badge>
+                      <Badge variant="primary" className="font-mono text-[9px]">Cycle #{selectedCycle || '1'} • Inst #{currentInstallmentNumber}</Badge>
                     </div>
                     <span className="text-[9px] text-text-muted block mt-1">Due every 5 operational days</span>
                   </div>

@@ -1713,27 +1713,15 @@ app.post('/api/auth/login', (req, res) => {
     let authType = '';
 
     if (username) {
-      const trimmedUsername = username.trim().toUpperCase();
+      const cleanUsername = username.trim();
+      const upperUsername = cleanUsername.toUpperCase();
 
-      // Route-specific username enforcement
-      if (portal) {
-        if (portal.startsWith('/director') && trimmedUsername !== 'MMR') {
-          return res.status(401).json({ error: 'Access Denied: Only authorized Director credentials can access this secure node.' });
-        }
-        if (portal.startsWith('/admin') && trimmedUsername !== 'ADAM' && trimmedUsername !== 'ABAKAKA') {
-          return res.status(401).json({ error: 'Access Denied: Only authorized Admin credentials can access this secure node.' });
-        }
-      } else {
-        // General portal switcher validation
-        if (trimmedUsername !== 'MMR' && trimmedUsername !== 'ADAM' && trimmedUsername !== 'ABAKAKA') {
-          return res.status(401).json({ error: 'Access Denied: Unregistered enterprise username.' });
-        }
-      }
+      // Dynamically lookup user case-insensitively by username
+      user = db.users.find(u => u.username && u.username.trim().toLowerCase() === cleanUsername.toLowerCase());
 
-      // Dynamically retrieve or seed standard users with their associated usernames
-      user = db.users.find(u => u.username === trimmedUsername);
       if (!user) {
-        if (trimmedUsername === 'MMR') {
+        // Fallback seed for default administrative handles if not yet present in DB
+        if (upperUsername === 'MMR') {
           user = db.users.find(u => u.role_id === 'role-director');
           if (user) {
             user.username = 'MMR';
@@ -1762,12 +1750,12 @@ app.post('/api/auth/login', (req, res) => {
               status: 'active'
             });
           }
-        } else if (trimmedUsername === 'ADAM' || trimmedUsername === 'ABAKAKA') {
+        } else if (upperUsername === 'ADAM' || upperUsername === 'ABAKAKA') {
           const adamUser = db.users.find(u => u.username === 'ADAM');
           const abakakaUser = db.users.find(u => u.username === 'ABAKAKA');
           const existingAdmins = db.users.filter(u => u.role_id === 'role-admin');
 
-          if (trimmedUsername === 'ADAM') {
+          if (upperUsername === 'ADAM') {
             user = adamUser || existingAdmins.find(u => u.username === 'ADAM') || existingAdmins[0];
             if (user) {
               user.username = 'ADAM';
@@ -1775,7 +1763,7 @@ app.post('/api/auth/login', (req, res) => {
                 user.full_name = 'Operations Admin ADAM';
               }
             }
-          } else if (trimmedUsername === 'ABAKAKA') {
+          } else if (upperUsername === 'ABAKAKA') {
             user = abakakaUser || existingAdmins.find(u => u.username === 'ABAKAKA') || existingAdmins[1];
             if (user) {
               user.username = 'ABAKAKA';
@@ -1789,11 +1777,11 @@ app.post('/api/auth/login', (req, res) => {
             const adminId = generateUUID();
             user = {
               id: adminId,
-              username: trimmedUsername,
-              email: `${trimmedUsername.toLowerCase()}@ruqayyatransport.com`,
+              username: upperUsername,
+              email: `${upperUsername.toLowerCase()}@ruqayyatransport.com`,
               phone: '+234 803 222 0002',
               password_hash: hashPassword('admin123'),
-              full_name: trimmedUsername === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
+              full_name: upperUsername === 'ADAM' ? 'Operations Admin ADAM' : 'Operations Admin ABAKAKA',
               role_id: 'role-admin',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -1803,7 +1791,7 @@ app.post('/api/auth/login', (req, res) => {
             db.admins.push({
               id: generateUUID(),
               user_id: adminId,
-              company_id: `ADM-2026-${trimmedUsername}`,
+              company_id: `ADM-2026-${upperUsername}`,
               passport_photo_url: '',
               created_at: new Date().toISOString(),
               status: 'active'
@@ -1815,6 +1803,27 @@ app.post('/api/auth/login', (req, res) => {
       if (!user) {
         return res.status(401).json({ error: 'Access Denied: Unregistered enterprise username.' });
       }
+
+      // Check password if provided
+      if (password && password.trim().length > 0) {
+        if (!verifyPassword(password, user.password_hash)) {
+          return res.status(401).json({ error: 'Access Denied: Invalid password for this username.' });
+        }
+      }
+
+      // Route-specific role enforcement
+      if (portal) {
+        if (portal.startsWith('/director')) {
+          if (user.role_id !== 'role-director' && user.role !== 'director' && user.role_id !== 'role-admin' && user.role !== 'admin') {
+            return res.status(401).json({ error: 'Access Denied: Only authorized Director credentials can access this secure node.' });
+          }
+        } else if (portal.startsWith('/admin')) {
+          if (user.role_id !== 'role-admin' && user.role !== 'admin' && user.role_id !== 'role-director' && user.role !== 'director') {
+            return res.status(401).json({ error: 'Access Denied: Only authorized Admin credentials can access this secure node.' });
+          }
+        }
+      }
+
       authType = 'username-only';
     } else {
       // Standard email & password login for public users (drivers, shareholders)
@@ -1823,7 +1832,10 @@ app.post('/api/auth/login', (req, res) => {
       }
 
       const cleanEmail = email.trim().toLowerCase();
-      user = db.users.find(u => u.email && u.email.trim().toLowerCase() === cleanEmail);
+      user = db.users.find(u => 
+        (u.email && u.email.trim().toLowerCase() === cleanEmail) || 
+        (u.username && u.username.trim().toLowerCase() === cleanEmail)
+      );
       if (!user) {
         writeServerAuditLog(null, email, 'public', 'AUTH_FAILURE', `Attempt with unregistered email`, null, req);
         return res.status(401).json({ error: 'Access Denied: Unregistered email or invalid passwords.' });
@@ -8200,6 +8212,159 @@ app.get('/api/admin/audit-logs', authenticateSession, (req, res) => {
     res.json(db.audit_logs || []);
   } catch (err: any) {
     res.status(500).json({ error: `Failed to fetch audit logs: ${err.message}` });
+  }
+});
+
+// Admin Account Controller: Fetch all user credentials and account statuses
+app.get('/api/admin/accounts', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Administrative permissions required.' });
+    }
+
+    const db = loadDB();
+    const accounts = (db.users || []).map((u: any) => {
+      let role = u.role || 'driver';
+      if (u.role_id === 'role-admin') role = 'admin';
+      else if (u.role_id === 'role-director') role = 'director';
+      else if (u.role_id === 'role-shareholder') role = 'shareholder';
+      else if (u.role_id === 'role-driver') role = 'driver';
+
+      // Attach linked profile info
+      let profileInfo: any = {};
+      if (role === 'driver') {
+        const d = (db.drivers || []).find((driver: any) => driver.user_id === u.id || driver.id === u.driver_id);
+        if (d) {
+          profileInfo = {
+            tricycle_number: d.tricycle_number || d.keke_number,
+            driver_code: d.driver_code,
+            nin: d.nin,
+            address: d.address
+          };
+        }
+      } else if (role === 'shareholder') {
+        const s = (db.shareholders || []).find((sh: any) => sh.user_id === u.id || sh.id === u.shareholder_id);
+        if (s) {
+          profileInfo = {
+            shareholder_code: s.shareholder_code,
+            units: s.units
+          };
+        }
+      }
+
+      return {
+        id: u.id,
+        full_name: u.full_name || u.name || 'Enterprise User',
+        username: u.username || u.email || 'N/A',
+        email: u.email || '',
+        phone: u.phone || '',
+        role: role,
+        status: u.status || 'active',
+        created_at: u.created_at || new Date().toISOString(),
+        updated_at: u.updated_at || new Date().toISOString(),
+        profile: profileInfo
+      };
+    });
+
+    res.json(accounts);
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to fetch accounts: ${err.message}` });
+  }
+});
+
+// Admin Account Controller: Update user credentials and invalidate active sessions
+app.put('/api/admin/users/:id/credentials', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Administrative permissions required.' });
+    }
+
+    const { id } = req.params;
+    const { username, password, status, email, phone, full_name } = req.body;
+
+    const db = loadDB();
+    const userIndex = (db.users || []).findIndex((u: any) => u.id === id);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Target user account not found in system directory.' });
+    }
+
+    const user = db.users[userIndex];
+
+    // Check username uniqueness if changing
+    if (username && username.trim()) {
+      const cleanUsername = username.trim();
+      const existing = (db.users || []).find((u: any) => u.id !== id && u.username && u.username.trim().toLowerCase() === cleanUsername.toLowerCase());
+      if (existing) {
+        return res.status(400).json({ error: `Username "${cleanUsername}" is already assigned to another account.` });
+      }
+      user.username = cleanUsername;
+    }
+
+    if (password && password.trim()) {
+      user.password_hash = hashPassword(password.trim());
+    }
+
+    if (status) {
+      user.status = status;
+    }
+
+    if (email !== undefined) {
+      user.email = email.trim();
+    }
+
+    if (phone !== undefined) {
+      user.phone = phone.trim();
+    }
+
+    if (full_name !== undefined) {
+      user.full_name = full_name.trim();
+    }
+
+    user.updated_at = new Date().toISOString();
+
+    // Force re-authentication on next login by clearing active user sessions
+    if (db.sessions && Array.isArray(db.sessions)) {
+      db.sessions = db.sessions.filter((s: any) => s.userId !== id && s.user_id !== id);
+    }
+
+    // Also update associated role tables if applicable
+    if (user.role_id === 'role-driver' || user.role === 'driver') {
+      const driver = (db.drivers || []).find((d: any) => d.user_id === user.id || d.id === user.driver_id);
+      if (driver) {
+        if (full_name) driver.full_name = full_name;
+        if (email) driver.email = email;
+        if (phone) driver.phone = phone;
+        if (status) driver.status = status;
+      }
+    } else if (user.role_id === 'role-shareholder' || user.role === 'shareholder') {
+      const shareholder = (db.shareholders || []).find((s: any) => s.user_id === user.id || s.id === user.shareholder_id);
+      if (shareholder) {
+        if (full_name) shareholder.full_name = full_name;
+        if (email) shareholder.email = email;
+        if (phone) shareholder.phone = phone;
+        if (status) shareholder.status = status;
+      }
+    }
+
+    saveDB(db);
+
+    writeServerAuditLog(actor.id, user.username || user.email, 'admin', 'CREDENTIAL_UPDATE', `Updated credentials/status for user ID: ${id} (${user.username})`, null, req);
+
+    res.json({
+      success: true,
+      message: `Credentials updated successfully for ${user.username || user.full_name}. Active sessions invalidated.`,
+      user: {
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+        email: user.email,
+        status: user.status
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: `Failed to update credentials: ${err.message}` });
   }
 });
 

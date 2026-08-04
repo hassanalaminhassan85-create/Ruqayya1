@@ -1,3 +1,4 @@
+import { compressImageFile } from '../../utils/imageCompressor';
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -181,18 +182,15 @@ export const DocumentHub: React.FC<DocumentHubProps> = ({ lang }) => {
     }
   };
 
-  const handleFileRead = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string, name: string) => void) => {
+  const handleFileRead = async (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string, name: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert(lang === 'en' ? "File limit is 10MB." : "Iyakar girman fayil shine 10MB.");
-        return;
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        callback(compressed, file.name);
+      } catch (err) {
+        console.error('Failed to process image file', err);
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        callback(reader.result as string, file.name);
-      };
-      reader.readAsDataURL(file);
     }
   };
 

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { compressImageFile } from '../../utils/imageCompressor';
+
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
@@ -191,14 +193,15 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
     setWizardError('');
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setter(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        setter(compressed);
+      } catch (err) {
+        console.error('Failed to process image file', err);
+      }
     }
   };
 

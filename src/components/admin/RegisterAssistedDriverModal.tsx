@@ -1,3 +1,4 @@
+import { compressImageFile } from '../../utils/imageCompressor';
 import React, { useState } from 'react';
 import { 
   User, 
@@ -81,18 +82,15 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
   const [importVehicleEngine, setImportVehicleEngine] = useState('');
   const [importVehicleCapacity, setImportVehicleCapacity] = useState('30 Tons');
 
-  const handleFileRead = (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
+  const handleFileRead = async (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert(lang === 'en' ? "File limit is 10MB." : "Iyakar girman fayil shine 10MB.");
-        return;
+      try {
+        const compressed = await compressImageFile(file, 800, 800, 0.75);
+        callback(compressed);
+      } catch (err) {
+        console.error('Failed to process image file', err);
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        callback(reader.result as string);
-      };
-      reader.readAsDataURL(file);
     }
   };
 

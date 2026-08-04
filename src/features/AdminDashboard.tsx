@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { compressImageFile } from '../utils/imageCompressor';
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import EnterpriseDirectory from '../components/admin/EnterpriseDirectory';
@@ -40,7 +42,8 @@ import {
   Settings,
   Camera,
   Edit3,
-  Sparkles
+  Sparkles,
+  KeyRound
 } from 'lucide-react';
 
 import { AdminKPIs } from '../components/admin/AdminKPIs';
@@ -55,6 +58,7 @@ import { CompanyWalletCard } from '../components/admin/CompanyWalletCard';
 import { SystemStatusCard } from '../components/admin/SystemStatusCard';
 import { CycleStatusSummary } from '../components/admin/CycleStatusSummary';
 import { PeopleManagement } from '../components/admin/PeopleManagement';
+import { AccountController } from '../components/admin/AccountController';
 import { CycleTimer } from '../components/director/CycleTimer';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { ActivityFeed } from '../components/admin/ActivityFeed';
@@ -63,14 +67,14 @@ import { subscribeToActiveCycle } from '../utils/cycleService';
 interface AdminDashboardProps {
   lang: Language;
   dictionary: Dictionary;
-  activeTab?: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings';
-  setActiveTab?: (tab: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings') => void;
+  activeTab?: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings';
+  setActiveTab?: (tab: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings') => void;
   activeCycle?: any;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab, activeCycle: propActiveCycle }) => {
   // Tabs & Views
-  const [localActiveTab, setLocalActiveTab] = useState<'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'settings'>('dashboard');
+  const [localActiveTab, setLocalActiveTab] = useState<'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings'>('dashboard');
   const activeTab = propActiveTab || localActiveTab;
   const setActiveTab = propSetActiveTab || setLocalActiveTab;
   
@@ -563,11 +567,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setTempAdminAvatar(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
+                          compressImageFile(file, 800, 800, 0.75)
+                            .then(compressed => setTempAdminAvatar(compressed))
+                            .catch(err => console.error('Failed to process avatar image', err));
                         }
                       }}
                     />
@@ -802,6 +804,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
                 { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> },
                 { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-3.5 w-3.5" /> },
+                { id: 'accounts', label: lang === 'en' ? "Account Controller" : "Ikon Akantoci", icon: <KeyRound className="h-3.5 w-3.5 text-amber-500" /> },
                 { id: 'settings', label: lang === 'en' ? "System Settings" : "Saitunan Tsarin", icon: <Settings className="h-3.5 w-3.5 text-brand-gold" /> }
               ]}
             />
@@ -1182,6 +1185,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             {/* TAB 9: ENTERPRISE DIRECTORY */}
             {activeTab === 'directory' && (
               <EnterpriseDirectory lang={lang} dictionary={dictionary} />
+            )}
+
+            {/* TAB 10: ACCOUNT CONTROLLER */}
+            {activeTab === 'accounts' && (
+              <AccountController lang={lang} />
             )}
 
             {/* TAB 10: SYSTEM SETTINGS & PRODUCTION RESET UTILITIES */}

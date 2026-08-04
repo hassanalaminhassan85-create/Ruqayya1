@@ -1,3 +1,4 @@
+import { compressImageFile } from '../../utils/imageCompressor';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -304,12 +305,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   }, [activeDriver, driverPayments]);
 
   const convertFileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    return compressImageFile(file, 800, 800, 0.75);
   };
 
   const handleFilesUpload = async (files: FileList) => {
