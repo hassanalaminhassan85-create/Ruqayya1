@@ -117,7 +117,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           title: `Active Operating Cycle ${data.cycleId}`,
           status: data.status,
           startDate: data.startDate,
-          agreedAmount: 300000,
+          agreedAmount: driverData?.agreed_amount ?? driverData?.agreedAmount ?? 0,
           daysRemaining: data.daysRemaining,
           currentDay: data.currentDay
         });
@@ -160,7 +160,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
         const instRes = await api.request(`/api/drivers/${currentDriver.id}/installments${cycleToUse ? `?cycleId=${cycleToUse.id}` : ''}`).catch(() => ({ installments: [] }));
         let list = instRes.installments || [];
         if (list.length === 0) {
-          const agreed = currentDriver.agreed_amount || currentDriver.agreedAmount || 300000;
+          const agreed = currentDriver.agreed_amount ?? currentDriver.agreedAmount ?? 0;
           const perInst = Math.round(agreed / 6);
           list = [1, 2, 3, 4, 5, 6].map(k => ({
             installmentNumber: k,
@@ -179,7 +179,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                                list.find((i: any) => i.status !== 'Completed') || 
                                list[0];
           setSelectedInstallment(realTimeInst);
-          setPaymentAmount(realTimeInst.remainingAmount || Math.round((currentDriver.agreed_amount || 300000) / 6));
+          const currentAgreed = currentDriver.agreed_amount ?? currentDriver.agreedAmount ?? 0;
+          setPaymentAmount(realTimeInst.remainingAmount || (currentAgreed > 0 ? Math.round(currentAgreed / 6) : 0));
         }
       }
     } catch (err) {
@@ -191,7 +192,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
 
   const handleSelectInstallment = (inst: any) => {
     setSelectedInstallment(inst);
-    setPaymentAmount(inst.remainingAmount || 50000);
+    setPaymentAmount(inst.remainingAmount || 0);
     setPayNowStep(3); // Proceed to live calculation & payment
   };
 
@@ -206,7 +207,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     setIsSubmittingPayment(true);
 
     try {
-      const vehiclePrice = driverData?.vehiclePurchasePrice || driverData?.vehicle_purchase_price || 15000000;
+      const rawVehPrice = driverData?.vehiclePurchasePrice ?? driverData?.vehicle_purchase_price ?? driverData?.financials?.vehiclePurchasePrice;
+      const vehiclePrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
       const totalPaid = driverData?.total_amount_paid || driverData?.totalAmountPaid || payments.reduce((sum, p) => sum + (p.amount || 0), 0);
       const currentBalance = driverData?.remaining_vehicle_balance || driverData?.remainingVehicleBalance || Math.max(0, vehiclePrice - totalPaid);
       const newBalance = Math.max(0, currentBalance - paymentAmount);
@@ -358,7 +360,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     );
   };
 
-  const vehiclePurchasePrice = driverData?.vehiclePurchasePrice || driverData?.vehicle_purchase_price || driverData?.financials?.vehiclePurchasePrice || 15000000;
+  const rawVehPrice = driverData?.vehiclePurchasePrice ?? driverData?.vehicle_purchase_price ?? driverData?.financials?.vehiclePurchasePrice;
+  const vehiclePurchasePrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
   const totalPaid = driverData?.financials?.totalAmountPaid ?? driverData?.total_amount_paid ?? driverData?.totalAmountPaid ?? payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const currentBalance = driverData?.financials?.remainingVehicleBalance ?? driverData?.remaining_vehicle_balance ?? driverData?.remainingVehicleBalance ?? Math.max(0, vehiclePurchasePrice - totalPaid);
 
@@ -366,8 +369,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   const livePaymentVal = paymentAmount || 0;
   const liveProjectedBalance = Math.max(0, currentBalance - livePaymentVal);
   const liveProjectedTotalPaid = totalPaid + livePaymentVal;
-  const liveCurrentPercent = ((totalPaid / vehiclePurchasePrice) * 100).toFixed(2);
-  const liveProjectedPercent = ((liveProjectedTotalPaid / vehiclePurchasePrice) * 100).toFixed(2);
+  const liveCurrentPercent = vehiclePurchasePrice > 0 ? ((totalPaid / vehiclePurchasePrice) * 100).toFixed(2) : '0.00';
+  const liveProjectedPercent = vehiclePurchasePrice > 0 ? ((liveProjectedTotalPaid / vehiclePurchasePrice) * 100).toFixed(2) : '0.00';
 
   const renderOverview = () => (
     <div className="space-y-6">
@@ -435,7 +438,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                   {lang === 'en' ? "30-Day Rent Rate" : "Kudin Aiki Na Kwana 30"}
                 </p>
                 <h3 className="text-xl font-black mt-1 text-purple-600 font-mono">
-                  ₦{(driverData?.agreed_amount || driverData?.agreedAmount || 300000).toLocaleString()}
+                  ₦{(driverData?.agreed_amount ?? driverData?.agreedAmount ?? driverData?.financials?.agreedAmount ?? 0).toLocaleString()}
                 </h3>
               </div>
               <div className="p-3 bg-purple-500/10 rounded-xl text-purple-500">
@@ -1021,11 +1024,11 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                       <div className="grid grid-cols-2 gap-2 pt-2 text-xs font-mono border-t border-slate-800">
                         <div>
                           <span className="block text-slate-500 text-[10px]">30-Day Target Remittance:</span>
-                          <span className="text-brand-gold font-bold">₦{(selectedCycle?.agreedAmount || driverData?.agreed_amount || 300000).toLocaleString()}</span>
+                          <span className="text-brand-gold font-bold">₦{(selectedCycle?.agreedAmount ?? driverData?.agreed_amount ?? driverData?.agreedAmount ?? 0).toLocaleString()}</span>
                         </div>
                         <div>
                           <span className="block text-slate-500 text-[10px]">Per-Installment Target (5 Days):</span>
-                          <span className="text-emerald-400 font-bold">₦{((selectedCycle?.agreedAmount || 300000) / 6).toLocaleString()}</span>
+                          <span className="text-emerald-400 font-bold">₦{(((selectedCycle?.agreedAmount ?? driverData?.agreed_amount ?? driverData?.agreedAmount ?? 0)) / 6).toLocaleString()}</span>
                         </div>
                       </div>
                     </div>

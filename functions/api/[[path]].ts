@@ -343,8 +343,11 @@ function syncCyclesOnRequest(db: any): boolean {
 
 // Financial calculations matching server.ts
 function getDriverFinancials(driver: any, db: any) {
-  const purchasePrice = parseFloat(driver.vehicle_purchase_price) || parseFloat(driver.vehiclePurchasePrice) || 15000000;
-  const agreedAmount = parseFloat(driver.agreed_amount) || parseFloat(driver.agreedAmount) || 300000;
+  const rawPrice = driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice;
+  const purchasePrice = rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) ? parseFloat(rawPrice) : 0;
+  
+  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
+  const agreedAmount = rawAgreed !== undefined && rawAgreed !== null && !isNaN(parseFloat(rawAgreed)) ? parseFloat(rawAgreed) : 0;
   
   const validIds = new Set([
     driver.id,
@@ -470,7 +473,7 @@ function lookupContractTerms(vehicle: any) {
 }
 
 function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
-  const agreedAmount = driver.agreed_amount || 180000;
+  const agreedAmount = parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 0;
   const installmentTarget = Math.round(agreedAmount / 6);
   
   let startDate = new Date();
@@ -695,6 +698,79 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       return { id: s.id, full_name: s.full_name, status: s.status };
     });
 
+// Helper to detect operational cycle notifications
+function isOperationalCycleNotification(n: any): boolean {
+  if (!n) return false;
+  const category = (n.category || n.type || '').toLowerCase();
+  if (category === 'cycle' || category === 'operations' || category === 'operational') return true;
+
+  const text = `${n.title_en || n.titleEn || n.title || ''} ${n.message_en || n.messageEn || n.message || ''} ${n.title_ha || n.titleHa || ''} ${n.message_ha || n.messageHa || ''}`.toLowerCase();
+
+  return (
+    text.includes('cycle') ||
+    text.includes('zagaye') ||
+    text.includes('operating') ||
+    text.includes('remittance') ||
+    text.includes('installment') ||
+    text.includes('operational') ||
+    text.includes('paused') ||
+    text.includes('resumed') ||
+    text.includes('scheduled') ||
+    text.includes('started') ||
+    text.includes('ended') ||
+    text.includes('vouchers') ||
+    text.includes('payroll') ||
+    text.includes('fleet')
+  );
+}
+
+// Helper to determine if a notification is relevant for a given user or role
+function isNotificationForUser(n: any, user: { id?: string; role: string }, db: any): boolean {
+  if (!n || !user) return false;
+
+  // Direct user targeting
+  if (user.id && n.user_id && n.user_id === user.id) return true;
+
+  if (user.role === 'driver') {
+    const drv = user.id ? db.drivers?.find((d: any) => d.user_id === user.id || d.id === user.id) : null;
+    if (drv && n.driver_id && n.driver_id === drv.id) return true;
+
+    // Driver specific role target
+    if (n.target_role === 'driver') return true;
+
+    // Untargeted notifications: ONLY show operational cycle notifications for drivers
+    if (!n.user_id && !n.target_role) {
+      return isOperationalCycleNotification(n);
+    }
+
+    return false;
+  }
+
+  if (user.role === 'shareholder') {
+    const sh = user.id ? db.shareholders?.find((s: any) => s.user_id === user.id || s.id === user.id) : null;
+    if (sh && n.shareholder_id && n.shareholder_id === sh.id) return true;
+
+    // Shareholder specific role target
+    if (n.target_role === 'shareholder') return true;
+
+    // Untargeted notifications: ONLY show operational cycle & shareholder financial notifications
+    if (!n.user_id && !n.target_role) {
+      if (isOperationalCycleNotification(n)) return true;
+      const text = `${n.title_en || n.titleEn || n.title || ''} ${n.message_en || n.messageEn || n.message || ''}`.toLowerCase();
+      if (text.includes('dividend') || text.includes('capital') || text.includes('investment') || text.includes('financial')) return true;
+    }
+
+    return false;
+  }
+
+  // Directors and admins see all or role-matched notifications
+  if (user.role === 'director' || user.role === 'admin') {
+    if (!n.user_id || (user.id && n.user_id === user.id) || !n.target_role || n.target_role === user.role || n.target_role === 'all') return true;
+  }
+
+  return false;
+}
+
     return {
       ...common,
       shareholders: cleanShareholders,
@@ -702,14 +778,14 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       financials: db.financial_records || [],
       cycles: db.cycles || [],
       messages: (db.messages || []).filter((m: any) => m.sender_id === shareholderId || m.receiver_id === shareholderId),
-      notifications: (db.notifications || []).filter((n: any) => n.user_id === shareholderId || n.target_role === 'shareholder' || (!n.user_id && !n.target_role))
+      notifications: (db.notifications || []).filter((n: any) => isNotificationForUser(n, { id: shareholderId, role: 'shareholder' }, db))
     };
   } else if (role === 'driver') {
     const activeDriver = mappedDrivers.find((d: any) => d.id === driverProfileId) || {};
     const driverPayments = (db.driver_payments || []).filter((p: any) => p.driver_id === driverProfileId);
     const driverDocuments = (db.driver_documents || []).filter((doc: any) => doc.driver_id === driverProfileId);
     const driverTrips = mappedTrips.filter((t: any) => t.driverId === driverProfileId);
-    const driverNotifications = (db.notifications || []).filter((n: any) => n.user_id === activeDriver.user_id || n.target_role === 'driver' || (!n.user_id && !n.target_role));
+    const driverNotifications = (db.notifications || []).filter((n: any) => isNotificationForUser(n, { id: activeDriver.user_id || driverProfileId, role: 'driver' }, db));
     const driverMessages = (db.messages || []).filter((m: any) => m.sender_id === activeDriver.user_id || m.receiver_id === activeDriver.user_id);
 
     return {
@@ -847,7 +923,9 @@ async function sendPushForNotification(env: Env, db: any, n: any) {
     }
 
     if (isBroadcast) {
-      await sendPushNotificationToUserOrRole(env, { all: true }, { title: enriched.titleEn, message: enriched.messageEn, type: n.type }, db);
+      const isCycleNotif = isOperationalCycleNotification(n);
+      const allowedRoles = isCycleNotif ? ['director', 'admin', 'driver', 'shareholder'] : ['director', 'admin'];
+      await sendPushNotificationToUserOrRole(env, { roles: allowedRoles }, { title: enriched.titleEn, message: enriched.messageEn, type: n.type }, db);
     } else {
       for (const uid of targetUserIds) {
         const prefs = db.user_preferences?.find((p: any) => p.user_id === uid);
@@ -1297,6 +1375,7 @@ class D1Manager {
     if (!parsed.users || parsed.users.length === 0) {
       const directorId = generateUUID();
       const adminId = generateUUID();
+      const abakakaAdminUserId = generateUUID();
       const driverUserId = generateUUID();
       const shareholderId1 = generateUUID();
       const shareholderId2 = generateUUID();
@@ -1327,7 +1406,7 @@ class D1Manager {
           status: 'active'
         },
         {
-          id: generateUUID(),
+          id: abakakaAdminUserId,
           username: 'ABAKAKA',
           email: 'abakaka@ruqayyatransport.com',
           phone: '+234 803 222 0003',
@@ -1381,7 +1460,8 @@ class D1Manager {
       ];
 
       parsed.admins = [
-        { id: generateUUID(), user_id: adminId, company_id: 'ADM-2026-001', created_at: new Date().toISOString(), status: 'active' }
+        { id: generateUUID(), user_id: adminId, company_id: 'ADM-2026-001', passport_photo_url: '', created_at: new Date().toISOString(), status: 'active' },
+        { id: generateUUID(), user_id: abakakaAdminUserId, company_id: 'ADM-2026-002', passport_photo_url: '', created_at: new Date().toISOString(), status: 'active' }
       ];
 
       const driverId = generateUUID();
@@ -1551,6 +1631,16 @@ const buildResponse = (data: any, status = 200, headers = {}) => {
   });
 };
 
+async function safeJson(request: Request): Promise<any> {
+  try {
+    const text = await request.clone().text();
+    if (!text || !text.trim()) return {};
+    return JSON.parse(text);
+  } catch (err) {
+    return {};
+  }
+}
+
 // Helper to sign and generate standard ES256 VAPID JWT header for Web Push using Web Crypto
 async function generateVapidHeader(env: Env, endpoint: string, db?: any, dbManager?: D1Manager): Promise<string> {
   const keys = await getVapidKeys(env, db, dbManager);
@@ -1697,11 +1787,19 @@ async function sendPushNotification(
 // Helper to broadcast push notifications to users or roles based on subscriptions in KV and/or D1
 async function sendPushNotificationToUserOrRole(
   env: Env,
-  target: { userId?: string; role?: string; all?: boolean },
+  target: { userId?: string; role?: string; roles?: string[]; all?: boolean },
   notification: { title: string; message: string; type?: string },
   db?: any
 ) {
   const subscriptionsToNotify: { userId: string; subscription: any; keyName?: string }[] = [];
+
+  const getUserRole = (subUserId: string) => {
+    if (!db || !subUserId) return '';
+    const user = db.users?.find((u: any) => u.id === subUserId);
+    if (!user) return '';
+    const roleObj = db.roles?.find((r: any) => r.id === user.role_id);
+    return (roleObj ? roleObj.name : user.role || '').toLowerCase();
+  };
 
   // 1. Gather subscriptions from KV Store if available
   if (env.PUSH_SUBSCRIPTIONS) {
@@ -1719,6 +1817,16 @@ async function sendPushNotificationToUserOrRole(
           shouldSend = true;
         } else if (target.userId && subUserId === target.userId) {
           shouldSend = true;
+        } else if (target.roles && target.roles.length > 0) {
+          const userRole = getUserRole(subUserId);
+          if (userRole && target.roles.map(r => r.toLowerCase()).includes(userRole)) {
+            shouldSend = true;
+          }
+        } else if (target.role) {
+          const userRole = getUserRole(subUserId);
+          if (userRole && userRole === target.role.toLowerCase()) {
+            shouldSend = true;
+          }
         }
 
         if (shouldSend) {
@@ -1749,6 +1857,16 @@ async function sendPushNotificationToUserOrRole(
             shouldSend = true;
           } else if (target.userId && entry.userId === target.userId) {
             shouldSend = true;
+          } else if (target.roles && target.roles.length > 0) {
+            const userRole = getUserRole(entry.userId);
+            if (userRole && target.roles.map(r => r.toLowerCase()).includes(userRole)) {
+              shouldSend = true;
+            }
+          } else if (target.role) {
+            const userRole = getUserRole(entry.userId);
+            if (userRole && userRole === target.role.toLowerCase()) {
+              shouldSend = true;
+            }
           }
 
           if (shouldSend) {
@@ -1807,9 +1925,10 @@ async function sendPushNotificationToUserOrRole(
 
 // Main Request Handler
 export const onRequest: PagesFunction<Env> = async (context) => {
-  const { request, env } = context;
-  const url = new URL(request.url);
-  const method = request.method;
+  try {
+    const { request, env } = context;
+    const url = new URL(request.url);
+    const method = request.method;
   
   // Handle preflight requests
   if (method === 'OPTIONS') {
@@ -2288,6 +2407,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
       const driverId = generateUUID();
       const vehicleId = generateUUID();
+      const agreedAmt = personal.agreedAmount !== undefined && personal.agreedAmount !== null && !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 0;
+      const vehPrice = personal.vehiclePurchasePrice !== undefined && personal.vehiclePurchasePrice !== null && !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 0;
+      const remBal = personal.remainingVehicleBalance !== undefined && personal.remainingVehicleBalance !== null && !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : vehPrice;
+
       const newDriver = {
         id: driverId,
         user_id: userId,
@@ -2306,10 +2429,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         licenseExpiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         vehicle_id: vehicleId,
         vehicleId: vehicleId,
+        assignedVehicleId: vehicleId,
         passport_photo_url: driverPassportUrl,
         passportPhotoUrl: driverPassportUrl,
         classification: 'Assisted',
         rating: 5.0,
+        agreed_amount: agreedAmt,
+        agreedAmount: agreedAmt,
+        vehicle_purchase_price: vehPrice,
+        vehiclePurchasePrice: vehPrice,
+        remaining_vehicle_balance: remBal,
+        remainingVehicleBalance: remBal,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         status: 'active'
@@ -2648,7 +2778,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           file_url: doc.file_url ? (doc.file_url.includes('token=') ? doc.file_url : `${doc.file_url}?token=${encodeURIComponent(token)}`) : ''
         }));
         const passportDoc = documents.find((doc: any) => doc.document_type === 'passport_photo');
-        const passport_photo_url = passportDoc ? passportDoc.file_url : '';
+        const passport_photo_url = userRec.passport_photo_url || (passportDoc ? passportDoc.file_url : '');
 
         profileDetails = {
           ...dr,
@@ -2699,21 +2829,111 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     } else if (user.role === 'shareholder') {
       const sh = db.shareholders.find((s: any) => s.user_id === user.id);
       if (sh) profileDetails = sh;
+    } else if (user.role === 'admin') {
+      const adm = db.admins?.find((a: any) => a.user_id === user.id);
+      if (adm) profileDetails = adm;
+    } else if (user.role === 'director') {
+      const dir = db.directors?.find((d: any) => d.user_id === user.id);
+      if (dir) profileDetails = dir;
     }
+
+    const adminRec = db.admins?.find((a: any) => a.user_id === user.id);
+    const dirRec = db.directors?.find((d: any) => d.user_id === user.id);
+    const avatar = userRec.passport_photo_url || adminRec?.passport_photo_url || dirRec?.passport_photo_url || profileDetails?.passport_photo_url || '';
 
     return buildResponse({
       success: true,
       user: {
         id: user.id,
         email: user.email,
-        fullName: user.fullName,
+        fullName: userRec.full_name || user.fullName,
+        full_name: userRec.full_name || user.fullName,
         phone: userRec.phone,
         role: user.role,
+        avatar,
+        passportPhotoUrl: avatar,
+        passport_photo_url: avatar,
         permissions,
         profile: profileDetails,
         profileDetails: profileDetails
       }
     });
+  }
+
+  // UPDATE ACTIVE PROFILE
+  if (path === '/api/auth/me' && method === 'PUT') {
+    try {
+      const payload = await request.json() as any;
+      const userRec = db.users.find((u: any) => u.id === user.id);
+      if (!userRec) return buildResponse({ error: 'User record missing.' }, 404);
+
+      if (payload.fullName) userRec.full_name = payload.fullName;
+      if (payload.phone) userRec.phone = payload.phone;
+
+      const photo = payload.passportPhoto || payload.passport_photo_url || payload.avatar;
+      if (photo !== undefined) {
+        userRec.passport_photo_url = photo;
+
+        if (user.role === 'admin') {
+          let adminRec = db.admins?.find((a: any) => a.user_id === user.id);
+          if (!adminRec) {
+            if (!db.admins) db.admins = [];
+            adminRec = {
+              id: generateUUID(),
+              user_id: user.id,
+              company_id: `ADM-2026-${userRec.username || 'ADMIN'}`,
+              passport_photo_url: photo,
+              created_at: new Date().toISOString(),
+              status: 'active'
+            };
+            db.admins.push(adminRec);
+          } else {
+            adminRec.passport_photo_url = photo;
+          }
+        } else if (user.role === 'director') {
+          let dirRec = db.directors?.find((d: any) => d.user_id === user.id);
+          if (!dirRec) {
+            if (!db.directors) db.directors = [];
+            dirRec = {
+              id: generateUUID(),
+              user_id: user.id,
+              company_id: `DIR-2026-${userRec.username || 'DIR'}`,
+              passport_photo_url: photo,
+              created_at: new Date().toISOString(),
+              status: 'active'
+            };
+            db.directors.push(dirRec);
+          } else {
+            dirRec.passport_photo_url = photo;
+          }
+        } else if (user.role === 'driver') {
+          const drv = db.drivers?.find((d: any) => d.user_id === user.id);
+          if (drv) drv.passport_photo_url = photo;
+        } else if (user.role === 'shareholder') {
+          const sh = db.shareholders?.find((s: any) => s.user_id === user.id);
+          if (sh) sh.passport_photo_url = photo;
+        }
+      }
+
+      await dbManager.saveDB(db);
+      return buildResponse({
+        success: true,
+        message: 'Profile updated successfully.',
+        user: {
+          id: userRec.id,
+          fullName: userRec.full_name,
+          full_name: userRec.full_name,
+          email: userRec.email,
+          phone: userRec.phone,
+          role: user.role,
+          avatar: userRec.passport_photo_url || photo || '',
+          passportPhotoUrl: userRec.passport_photo_url || photo || '',
+          passport_photo_url: userRec.passport_photo_url || photo || ''
+        }
+      });
+    } catch (err: any) {
+      return buildResponse({ error: err.message }, 500);
+    }
   }
 
   // 6. LOGOUT
@@ -2855,12 +3075,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           rating: 5.0,
           created_at: new Date().toISOString(),
           status: 'approved',
-          agreed_amount: personal.agreedAmount || 180000,
-          vehicle_purchase_price: personal.vehiclePurchasePrice || 15000000,
+          agreed_amount: !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 0,
+          agreedAmount: !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 0,
+          vehicle_purchase_price: !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 0,
+          vehiclePurchasePrice: !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 0,
+          remaining_vehicle_balance: !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : 0,
+          remainingVehicleBalance: !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : 0,
           opening_balance: {
             is_imported: true,
-            total_paid_to_date: personal.totalPaidToDate || 0,
-            remaining_vehicle_balance: personal.remainingVehicleBalance || 15000000
+            total_paid_to_date: !isNaN(parseFloat(personal.totalPaidToDate)) ? parseFloat(personal.totalPaidToDate) : 0,
+            remaining_vehicle_balance: !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : 0
           },
           restHistory: []
         };
@@ -3572,14 +3796,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (path === '/api/notifications' && method === 'GET') {
     let list = db.notifications || [];
     
-    // Filter base list based on user role/id
-    if (user.role === 'driver') {
-      list = list.filter((n: any) => n.user_id === user.id || n.target_role === 'driver' || (!n.user_id && !n.target_role));
-    } else if (user.role === 'shareholder') {
-      list = list.filter((n: any) => n.user_id === user.id || n.target_role === 'shareholder' || (!n.user_id && !n.target_role));
-    } else if (user.role === 'admin') {
-      list = list.filter((n: any) => n.user_id === user.id || n.target_role === 'admin' || (!n.user_id && !n.target_role));
-    }
+    // Filter base list based on user role/id using strict isolation helper
+    list = list.filter((n: any) => isNotificationForUser(n, user, db));
 
     // Enrich notifications
     let enriched = list.map(enrichNotification);
@@ -6563,4 +6781,8 @@ ${JSON.stringify(cleanedContext, null, 2)}
 
   // Fallback 404 for unmatched endpoints
   return buildResponse({ error: `The requested corporate endpoint ${path} is non-existent.` }, 404);
+  } catch (err: any) {
+    console.error("[CLOUDFLARE HANDLER FATAL ERROR]", err);
+    return buildResponse({ error: err.message || 'Internal server error' }, 500);
+  }
 };

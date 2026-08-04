@@ -187,6 +187,13 @@ export const api = {
     return api.request('/api/auth/me');
   },
 
+  updateProfile: async (payload: { fullName?: string; passportPhoto?: string; phone?: string; avatar?: string }) => {
+    return api.request('/api/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
   changePasswordFirstLogin: async (newPassword: string) => {
     return api.request('/api/auth/change-password-first-login', {
       method: 'POST',

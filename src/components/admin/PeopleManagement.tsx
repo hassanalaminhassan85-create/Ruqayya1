@@ -2251,11 +2251,11 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
               <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                 <div>
                   <span className="block font-bold text-text-muted text-[10px]">30-Day Rent Rate:</span>
-                  <span className="text-[#D4AF37] font-black">₦{(reviewDriver.agreedAmount || reviewDriver.agreed_amount || lookupTerms?.agreedAmount || 300000).toLocaleString()}</span>
+                  <span className="text-[#D4AF37] font-black">₦{(reviewDriver.agreedAmount ?? reviewDriver.agreed_amount ?? lookupTerms?.agreedAmount ?? 0).toLocaleString()}</span>
                 </div>
                 <div>
                   <span className="block font-bold text-text-muted text-[10px]">Vehicle Price:</span>
-                  <span className="text-[#D4AF37] font-black">₦{(reviewDriver.vehiclePurchasePrice || reviewDriver.vehicle_purchase_price || lookupTerms?.purchasePrice || 15000000).toLocaleString()}</span>
+                  <span className="text-[#D4AF37] font-black">₦{(reviewDriver.vehiclePurchasePrice ?? reviewDriver.vehicle_purchase_price ?? lookupTerms?.purchasePrice ?? 0).toLocaleString()}</span>
                 </div>
               </div>
             </div>

@@ -216,8 +216,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [editNin, setEditNin] = useState(activeDriver.nin || '');
   const [editLicense, setEditLicense] = useState(activeDriver.licenseNumber);
   const [editExpiry, setEditExpiry] = useState(activeDriver.licenseExpiry);
-  const [editAgreedAmount, setEditAgreedAmount] = useState((activeDriver as any).agreed_amount?.toString() || '300000');
-  const [editRemainingBalance, setEditRemainingBalance] = useState((activeDriver as any).remaining_vehicle_balance?.toString() || '15000000');
+  const [editAgreedAmount, setEditAgreedAmount] = useState(((activeDriver as any).agreed_amount ?? (activeDriver as any).agreedAmount ?? '').toString());
+  const [editRemainingBalance, setEditRemainingBalance] = useState(((activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? '').toString());
   const [editStatus, setEditStatus] = useState(activeDriver.status);
   const [editError, setEditError] = useState('');
 
@@ -237,8 +237,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     setEditNin(activeDriver.nin || '');
     setEditLicense(activeDriver.licenseNumber);
     setEditExpiry(activeDriver.licenseExpiry);
-    setEditAgreedAmount((activeDriver as any).agreed_amount?.toString() || (activeDriver as any).agreedAmount?.toString() || '300000');
-    setEditRemainingBalance((activeDriver as any).remaining_vehicle_balance?.toString() || (activeDriver as any).remainingVehicleBalance?.toString() || '15000000');
+    setEditAgreedAmount(((activeDriver as any).agreed_amount ?? (activeDriver as any).agreedAmount ?? '').toString());
+    setEditRemainingBalance(((activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? '').toString());
     setEditStatus(activeDriver.status);
   }, [activeDriver]);
 
@@ -263,11 +263,13 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     })
     .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
-  const agreedTotal = (activeDriver as any).agreed_amount || (activeDriver as any).agreedAmount || (activeDriver as any).financials?.agreedAmount || 300000;
+  const rawAgreed = (activeDriver as any).agreed_amount ?? (activeDriver as any).agreedAmount ?? (activeDriver as any).financials?.agreedAmount;
+  const agreedTotal = rawAgreed !== undefined && rawAgreed !== null ? parseFloat(rawAgreed) || 0 : 0;
   const outstandingInstallment = Math.max(0, agreedTotal - totalPaid);
   const vehicleAssigned = vehicles.find(v => v.id === activeDriver.assignedVehicleId || v.id === activeDriver.vehicle_id || v.driver_id === activeDriver.id) || (activeDriver as any).vehicle;
   
-  const vehiclePurchasePrice = (activeDriver as any).vehicle_purchase_price || (activeDriver as any).vehiclePurchasePrice || (activeDriver as any).financials?.vehiclePurchasePrice || 15000000;
+  const rawPrice = (activeDriver as any).vehicle_purchase_price ?? (activeDriver as any).vehiclePurchasePrice ?? (activeDriver as any).financials?.vehiclePurchasePrice;
+  const vehiclePurchasePrice = rawPrice !== undefined && rawPrice !== null ? parseFloat(rawPrice) || 0 : 0;
   const remainingVehicleBalance = (activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? (activeDriver as any).financials?.remainingVehicleBalance ?? Math.max(0, vehiclePurchasePrice - totalPaid);
 
   // Non-null asset identification fallback for Chassis and Engine numbers

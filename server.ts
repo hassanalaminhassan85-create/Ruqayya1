@@ -636,7 +636,7 @@ function computeActiveDuration(cycle: any): number {
 
 // Helper: Calculate installments for a driver
 export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
-  const agreedAmount = driver.agreed_amount || 300000;
+  const agreedAmount = parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 0;
   const installmentTarget = Math.round(agreedAmount / 6);
   
   // Find all approved payments for this driver during the active cycle
@@ -1207,9 +1207,9 @@ app.post('/api/auth/register-driver', (req, res) => {
     // B. Create Driver Profile
     const driverId = generateUUID();
     const vehicleId = generateUUID();
-    const agreedAmt = parseFloat(personal.agreedAmount) !== undefined && !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 300000;
-    const vehPrice = parseFloat(personal.vehiclePurchasePrice) !== undefined && !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 15000000;
-    const remBal = parseFloat(personal.remainingVehicleBalance) !== undefined && !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : vehPrice;
+    const agreedAmt = personal.agreedAmount !== undefined && personal.agreedAmount !== null && !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 0;
+    const vehPrice = personal.vehiclePurchasePrice !== undefined && personal.vehiclePurchasePrice !== null && !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 0;
+    const remBal = personal.remainingVehicleBalance !== undefined && personal.remainingVehicleBalance !== null && !isNaN(parseFloat(personal.remainingVehicleBalance)) ? parseFloat(personal.remainingVehicleBalance) : vehPrice;
     const compDrvId = personal.companyDriverId || `RTL-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const newDriver = {
@@ -1540,8 +1540,8 @@ app.post('/api/drivers/import', authenticateSession, (req, res) => {
       license_expiry: personal.licenseExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       classification: personal.classification || 'Assisted',
       rating: 5.0,
-      agreed_amount: parseFloat(personal.agreedAmount) || 300000,
-      vehicle_purchase_price: parseFloat(personal.vehiclePurchasePrice) || 15000000,
+      agreed_amount: !isNaN(parseFloat(personal.agreedAmount)) ? parseFloat(personal.agreedAmount) : 0,
+      vehicle_purchase_price: !isNaN(parseFloat(personal.vehiclePurchasePrice)) ? parseFloat(personal.vehiclePurchasePrice) : 0,
       remaining_vehicle_balance: parseFloat(personal.remainingVehicleBalance),
       status: 'approved',
       opening_balance: {
@@ -3537,7 +3537,7 @@ function executeRecordPayment(args: any, actor: any, req: express.Request) {
   if (drv.remaining_vehicle_balance !== undefined) {
     drv.remaining_vehicle_balance = Math.max(0, parseFloat(drv.remaining_vehicle_balance) - newPayment.amount);
   } else {
-    const purchasePrice = parseFloat(drv.vehicle_purchase_price) || 15000000;
+    const purchasePrice = parseFloat(drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice) || 0;
     drv.remaining_vehicle_balance = Math.max(0, purchasePrice - newPayment.amount);
   }
 
@@ -5077,8 +5077,11 @@ export function lookupContractTerms(vehicle: any) {
 }
 
 export function getDriverFinancials(driver: any, db: any) {
-  const purchasePrice = parseFloat(driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice) || 15000000;
-  const agreedAmount = parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 300000;
+  const rawPrice = driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice;
+  const purchasePrice = rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) ? parseFloat(rawPrice) : 0;
+  
+  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
+  const agreedAmount = rawAgreed !== undefined && rawAgreed !== null && !isNaN(parseFloat(rawAgreed)) ? parseFloat(rawAgreed) : 0;
   
   const validIds = new Set([
     driver.id,
@@ -5679,12 +5682,12 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
         driverId: d.id,
         fullName: user ? user.full_name : d.fullName || 'Unknown Driver',
         companyDriverId: d.company_driver_id || 'PENDING',
-        agreedAmount: d.agreed_amount || 300000,
+        agreedAmount: d.agreed_amount ?? d.agreedAmount ?? 0,
         paymentsDuringCycle: collected,
         expensesApplied,
         openingVehicleBalance,
         closingVehicleBalance,
-        outstandingBalance: Math.max(0, (d.agreed_amount || 300000) - collected),
+        outstandingBalance: Math.max(0, (d.agreed_amount ?? d.agreedAmount ?? 0) - collected),
         installmentsCompleted: completedInstallments,
         payments: paymentsForDriver.map((p: any) => ({
           id: p.id,
@@ -5713,7 +5716,7 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
         plateNumber: v.plate_number,
         model: v.model,
         driverName: assignedDriverUser ? assignedDriverUser.full_name : 'No Driver Assigned',
-        remainingVehicleBalance: assignedDriver ? (assignedDriver.remaining_vehicle_balance || 15000000) : 15000000
+        remainingVehicleBalance: assignedDriver ? (assignedDriver.remaining_vehicle_balance ?? assignedDriver.remainingVehicleBalance ?? 0) : 0
       };
     });
 

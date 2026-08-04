@@ -126,11 +126,31 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   // Director profile & avatar states
-  const [directorName, setDirectorName] = useState(() => localStorage.getItem('ruqayya_director_name') || 'General Director');
-  const [directorAvatar, setDirectorAvatar] = useState(() => localStorage.getItem('ruqayya_director_avatar') || '');
+  const [directorId, setDirectorId] = useState('');
+  const [directorName, setDirectorName] = useState('General Director');
+  const [directorAvatar, setDirectorAvatar] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [tempDirectorName, setTempDirectorName] = useState(directorName);
-  const [tempDirectorAvatar, setTempDirectorAvatar] = useState(directorAvatar);
+  const [tempDirectorName, setTempDirectorName] = useState('General Director');
+  const [tempDirectorAvatar, setTempDirectorAvatar] = useState('');
+
+  useEffect(() => {
+    api.getMe().then(payload => {
+      if (payload && payload.user) {
+        setDirectorId(payload.user.id);
+        const backendName = payload.user.full_name || payload.user.fullName;
+        const savedName = localStorage.getItem(`ruqayya_director_name_${payload.user.id}`);
+        const finalName = backendName || savedName || 'General Director';
+        setDirectorName(finalName);
+        setTempDirectorName(finalName);
+
+        const backendAvatar = payload.user.avatar || payload.user.passportPhotoUrl || payload.user.passport_photo_url;
+        const savedAvatar = localStorage.getItem(`ruqayya_director_avatar_${payload.user.id}`);
+        const finalAvatar = backendAvatar || savedAvatar || '';
+        setDirectorAvatar(finalAvatar);
+        setTempDirectorAvatar(finalAvatar);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Statistics calculations
   const totalDrivers = drivers.length;
@@ -381,12 +401,19 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   Cancel
                 </button>
                 <button 
-                  onClick={() => {
+                  onClick={async () => {
                     const finalName = tempDirectorName.trim() || 'General Director';
                     setDirectorName(finalName);
                     setDirectorAvatar(tempDirectorAvatar);
-                    localStorage.setItem('ruqayya_director_name', finalName);
-                    localStorage.setItem('ruqayya_director_avatar', tempDirectorAvatar);
+                    if (directorId) {
+                      localStorage.setItem(`ruqayya_director_name_${directorId}`, finalName);
+                      localStorage.setItem(`ruqayya_director_avatar_${directorId}`, tempDirectorAvatar);
+                    }
+                    try {
+                      await api.updateProfile({ fullName: finalName, passportPhoto: tempDirectorAvatar });
+                    } catch (err) {
+                      console.error("Failed to update director profile on server:", err);
+                    }
                     setIsProfileModalOpen(false);
                   }}
                   className="px-4 py-2 bg-brand-gold hover:bg-yellow-500 text-slate-950 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"

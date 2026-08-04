@@ -100,26 +100,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       if (payload && payload.user) {
         setAdminId(payload.user.id);
         
-        // Priority 1: Backend server user data (The Source of Truth)
-        // Priority 2: Stored preference for custom name override
-        // Priority 3: Hardcoded fallback
         const backendName = payload.user.full_name || payload.user.fullName;
         const savedName = localStorage.getItem(`ruqayya_admin_name_${payload.user.id}`);
-        
         const finalName = backendName || savedName || 'Operations Admin';
         setAdminName(finalName);
         setTempAdminName(finalName);
         
+        const backendAvatar = payload.user.avatar || payload.user.passportPhotoUrl || payload.user.passport_photo_url || payload.user.profile?.passport_photo_url;
         const savedAvatar = localStorage.getItem(`ruqayya_admin_avatar_${payload.user.id}`);
-        const fallbackAvatar = savedAvatar || localStorage.getItem('ruqayya_admin_avatar') || '';
-        setAdminAvatar(fallbackAvatar);
-        setTempAdminAvatar(fallbackAvatar);
+        const finalAvatar = backendAvatar || savedAvatar || '';
+        setAdminAvatar(finalAvatar);
+        setTempAdminAvatar(finalAvatar);
       }
     }).catch(() => {
-       setAdminName(localStorage.getItem('ruqayya_admin_name') || 'Operations Admin');
-       setAdminAvatar(localStorage.getItem('ruqayya_admin_avatar') || '');
-       setTempAdminName(localStorage.getItem('ruqayya_admin_name') || 'Operations Admin');
-       setTempAdminAvatar(localStorage.getItem('ruqayya_admin_avatar') || '');
+       setAdminName('Operations Admin');
+       setAdminAvatar('');
+       setTempAdminName('Operations Admin');
+       setTempAdminAvatar('');
     });
   }, []);
 
@@ -594,16 +591,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                 <Button variant="ghost" onClick={() => setIsProfileModalOpen(false)}>Cancel</Button>
                 <Button 
                   variant="primary" 
-                  onClick={() => {
+                  onClick={async () => {
                     const finalName = tempAdminName.trim() || 'Operations Admin';
                     setAdminName(finalName);
                     setAdminAvatar(tempAdminAvatar);
                     if (adminId) {
                       localStorage.setItem(`ruqayya_admin_name_${adminId}`, finalName);
                       localStorage.setItem(`ruqayya_admin_avatar_${adminId}`, tempAdminAvatar);
-                    } else {
-                      localStorage.setItem('ruqayya_admin_name', finalName);
-                      localStorage.setItem('ruqayya_admin_avatar', tempAdminAvatar);
+                    }
+                    try {
+                      await api.updateProfile({ fullName: finalName, passportPhoto: tempAdminAvatar });
+                    } catch (err) {
+                      console.error("Failed to update profile on server:", err);
                     }
                     setIsProfileModalOpen(false);
                   }}
