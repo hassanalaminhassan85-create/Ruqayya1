@@ -852,36 +852,103 @@ export default function App() {
   };
 
   if (authLoading) {
+    const splashText = "RUQAYYA TRANSPORT LIMITED";
+    const words = splashText.split(" ");
+
     return (
-      <div className="min-h-screen w-full bg-slate-950 text-white flex flex-col items-center justify-center font-sans p-6 relative overflow-hidden">
-        {/* Subtle ambient animated backdrop */}
-        <div className="absolute inset-0 bg-radial-gradient from-brand-gold/10 via-transparent to-transparent opacity-50 animate-pulse pointer-events-none" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand-gold/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="min-h-screen w-full bg-slate-950 text-white flex flex-col items-center justify-center font-sans p-6 relative overflow-hidden select-none">
+        {/* Subtle high-motion ambient animated backdrops */}
+        <div className="absolute inset-0 bg-radial-gradient from-brand-gold/15 via-transparent to-transparent opacity-60 animate-pulse pointer-events-none" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-gold/5 blur-[130px] rounded-full pointer-events-none animate-float-1" />
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-blue-500/5 blur-[150px] rounded-full pointer-events-none animate-float-2" />
         
-        <div className="flex flex-col items-center gap-6 max-w-sm text-center relative z-10">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-full border-4 border-brand-gold/20 animate-ping opacity-30" />
-            <div className="absolute inset-0 rounded-full border-2 border-t-brand-gold border-r-transparent border-b-transparent border-l-transparent animate-spin duration-1000" />
-            <div className="p-5 bg-slate-900 rounded-full border border-slate-800 shadow-2xl relative">
-              <Truck className="h-10 w-10 text-brand-gold animate-pulse" />
-            </div>
+        {/* Floating tech background particles */}
+        <div className="absolute inset-0 opacity-[0.04] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+
+        <div className="flex flex-col items-center gap-9 max-w-md text-center relative z-10">
+          {/* Animated concentric decorative rings surrounding the logo */}
+          <div className="relative p-2.5">
+            <motion.div 
+              className="absolute inset-0 rounded-full border border-dashed border-brand-gold/25"
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 15, ease: "linear" }}
+            />
+            <motion.div 
+              className="absolute inset-1 rounded-full border border-brand-gold/10"
+              animate={{ rotate: -360 }}
+              transition={{ repeat: Infinity, duration: 25, ease: "linear" }}
+            />
+            <motion.div 
+              className="absolute inset-[-15px] rounded-full border-[1.5px] border-brand-gold/15"
+              animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0.8, 0.4] }}
+              transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+            />
+            
+            {/* Core Circular Motion Logo */}
+            <CircularLogo size="2xl" animateContinuous={true} />
           </div>
           
-          <div className="space-y-2">
-            <h2 className="text-xl font-black uppercase tracking-widest text-brand-gold">
-              RUQAYYA ERP
-            </h2>
-            <div className="h-1 w-12 bg-gradient-to-r from-transparent via-brand-gold to-transparent mx-auto rounded-full" />
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider animate-pulse">
-              {lang === 'en' ? "Validating Enterprise Session..." : "Tabbatar da Zama na Kamfani..."}
-            </p>
+          {/* Company Title - Close to the middle animated logo with High Motion fonts */}
+          <div className="space-y-4">
+            <motion.h2 
+              className="text-lg sm:text-xl md:text-2xl font-black uppercase tracking-[0.2em] text-white flex flex-wrap justify-center gap-x-3 gap-y-1 select-none font-mono"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                visible: { transition: { staggerChildren: 0.04, delayChildren: 0.2 } }
+              }}
+            >
+              {words.map((word, wordIdx) => (
+                <span key={wordIdx} className="inline-block whitespace-nowrap">
+                  {word.split("").map((letter, letterIdx) => (
+                    <motion.span
+                      key={letterIdx}
+                      className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-[#D4AF37] via-amber-400 to-white"
+                      variants={{
+                        hidden: { opacity: 0, y: 18, scale: 0.7, filter: "blur(4px)" },
+                        visible: { 
+                          opacity: 1, 
+                          y: 0, 
+                          scale: 1, 
+                          filter: "blur(0px)",
+                          transition: { type: "spring", stiffness: 120, damping: 9 } 
+                        }
+                      }}
+                    >
+                      {letter}
+                    </motion.span>
+                  ))}
+                </span>
+              ))}
+            </motion.h2>
+
+            <motion.div 
+              className="h-[1.5px] w-20 bg-gradient-to-r from-transparent via-brand-gold/60 to-transparent mx-auto rounded-full"
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 80, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 1 }}
+            />
+
+            <motion.p 
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 1.1 }}
+              className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-[0.15em] animate-pulse"
+            >
+              {lang === 'en' ? "SECURE ENTERPRISE GATEWAY..." : "AMINTACCEN SHIGA TA MA'AIKATA..."}
+            </motion.p>
           </div>
 
-          <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 1.3 }}
+            className="text-[10px] text-slate-500 leading-relaxed font-semibold max-w-xs uppercase tracking-wide"
+          >
             {lang === 'en' 
               ? "Connecting securely to West African operations servers. Please hold."
               : "Haɗawa cikin aminci zuwa sabar ayyukan Afirka ta Yamma. Da fatan za a jira."}
-          </p>
+          </motion.p>
         </div>
       </div>
     );

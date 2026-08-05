@@ -852,42 +852,46 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
-                className="w-full max-w-xl bg-[#0b1736]/55 backdrop-blur-xl border border-white/10 rounded-3xl shadow-[0_25px_60px_-15px_rgba(2,6,23,0.8)] overflow-hidden p-5 sm:p-8 hover:border-white/15 transition-all duration-300"
+                className="w-full max-w-xl bg-[#0b1736]/55 backdrop-blur-xl border border-white/10 rounded-3xl shadow-[0_25px_60px_-15px_rgba(2,6,23,0.8)] overflow-hidden p-4 xs:p-5 sm:p-8 hover:border-white/15 transition-all duration-300"
               >
                 
                 {/* Public Tab Selection Controls */}
-                <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-950/50 rounded-2xl border border-white/5 mb-6">
-                  <button
+                <div className="grid grid-cols-2 gap-1.5 sm:gap-2 p-1.5 bg-slate-950/50 rounded-2xl border border-white/5 mb-6">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => {
                       setPublicTab('driver');
                       setLoginError('');
                       setRegError('');
                     }}
-                    className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-1 sm:px-4 rounded-xl text-[10px] xs:text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap overflow-hidden select-none ${
                       publicTab === 'driver'
                         ? 'bg-gradient-to-r from-[#D4AF37] to-amber-500 text-slate-950 font-black shadow-md'
                         : 'text-slate-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <Truck className="h-4 w-4" />
-                    <span>{lang === 'en' ? 'Drivers' : 'Direbobi'}</span>
-                  </button>
+                    <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                    <span className="truncate">{lang === 'en' ? 'Drivers' : 'Direbobi'}</span>
+                  </motion.button>
 
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => {
                       setPublicTab('shareholder');
                       setLoginError('');
                       setRegError('');
                     }}
-                    className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-1 sm:px-4 rounded-xl text-[10px] xs:text-xs font-extrabold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap overflow-hidden select-none ${
                       publicTab === 'shareholder'
                         ? 'bg-gradient-to-r from-[#D4AF37] to-amber-500 text-slate-950 font-black shadow-md'
                         : 'text-slate-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <Users className="h-4 w-4" />
-                    <span>{lang === 'en' ? 'Shareholders' : 'Masu Hannun Jari'}</span>
-                  </button>
+                    <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                    <span className="truncate">{lang === 'en' ? 'Shareholders' : 'Masu Hannun Jari'}</span>
+                  </motion.button>
                 </div>
 
                 {/* Subheading notice based on selection */}

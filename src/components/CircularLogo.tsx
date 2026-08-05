@@ -29,17 +29,42 @@ export const CircularLogo: React.FC<CircularLogoProps> = ({
   // Particle or ring animations to add "super high motion" feel
   return (
     <div className={`relative flex items-center justify-center ${sizeClasses} ${className}`}>
-      {/* Dynamic spinning glow background ring */}
+      {/* 1. Outermost ambient glowing expanding pulse ring (breathing ripple) */}
       <motion.div
-        className="absolute inset-0 rounded-full bg-gradient-to-tr from-brand-gold via-transparent to-brand-navy dark:to-blue-500 opacity-60 blur-[3px]"
+        className="absolute inset-[-12%] rounded-full bg-brand-gold/15 dark:bg-brand-gold/20 blur-[6px] pointer-events-none"
         animate={{
-          rotate: 360,
-          scale: [0.95, 1.05, 0.95],
+          scale: [0.9, 1.25, 0.9],
+          opacity: [0.3, 0.7, 0.3],
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 4,
+          ease: "easeInOut"
+        }}
+      />
+
+      {/* 2. Dotted gold technical orbit ring spinning clockwise */}
+      <motion.div
+        className="absolute inset-[-6%] rounded-full border-2 border-dashed border-brand-gold/40 dark:border-brand-gold/60 pointer-events-none"
+        animate={{ rotate: 360 }}
+        transition={{
+          repeat: Infinity,
+          duration: 12,
+          ease: "linear"
+        }}
+      />
+
+      {/* 3. Outer gradient glowing ring spinning counter-clockwise */}
+      <motion.div
+        className="absolute inset-[-2%] rounded-full bg-gradient-to-tr from-brand-gold via-transparent to-brand-navy dark:to-blue-500 opacity-65 blur-[2px]"
+        animate={{
+          rotate: -360,
+          scale: [0.97, 1.03, 0.97],
         }}
         transition={{
           rotate: {
             repeat: Infinity,
-            duration: 3,
+            duration: 4,
             ease: "linear"
           },
           scale: {
@@ -50,40 +75,39 @@ export const CircularLogo: React.FC<CircularLogoProps> = ({
         }}
       />
 
-      {/* Floating and interactive logo container */}
+      {/* 4. Interactive and high-motion core logo container */}
       <motion.div
-        className="relative h-full w-full rounded-full overflow-hidden border-2 border-brand-gold/80 dark:border-brand-gold shadow-lg cursor-pointer bg-white"
+        className="relative h-full w-full rounded-full overflow-hidden border-[2.5px] border-brand-gold/90 dark:border-brand-gold shadow-xl cursor-pointer bg-white"
         whileHover={{
-          scale: 1.18,
+          scale: 1.15,
           rotate: 360,
-          boxShadow: "0 0 20px rgba(212, 163, 89, 0.8)",
+          boxShadow: "0 0 25px rgba(212, 163, 89, 0.95)",
         }}
         whileTap={{ scale: 0.92, rotate: -45 }}
         animate={animateContinuous ? {
-          y: [0, -5, 0],
-          filter: ["drop-shadow(0px 2px 4px rgba(0,0,0,0.1))", "drop-shadow(0px 10px 15px rgba(212,163,89,0.3))", "drop-shadow(0px 2px 4px rgba(0,0,0,0.1))"]
+          y: [0, -6, 0],
+          filter: ["drop-shadow(0px 2px 4px rgba(0,0,0,0.15))", "drop-shadow(0px 12px 20px rgba(212,163,89,0.45))", "drop-shadow(0px 2px 4px rgba(0,0,0,0.15))"]
         } : {}}
         transition={{
           y: {
             repeat: Infinity,
-            duration: 3,
+            duration: 2.8,
             ease: "easeInOut"
           },
           filter: {
             repeat: Infinity,
-            duration: 3,
+            duration: 2.8,
             ease: "easeInOut"
           },
-          // Spring physics for hover rotation
           rotate: {
             type: "spring",
-            stiffness: 120,
-            damping: 12
+            stiffness: 140,
+            damping: 10
           },
           scale: {
             type: "spring",
-            stiffness: 300,
-            damping: 15
+            stiffness: 350,
+            damping: 14
           }
         }}
       >
@@ -95,15 +119,15 @@ export const CircularLogo: React.FC<CircularLogoProps> = ({
         />
       </motion.div>
 
-      {/* Pulsing orbiting decorative indicator */}
+      {/* 5. Pulsing orbiting decorative status indicator */}
       <motion.div
-        className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-500 border border-white dark:border-slate-950 shadow-xs"
+        className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 border border-white dark:border-slate-950 shadow-md z-10"
         animate={{
-          scale: [1, 1.4, 1],
+          scale: [1, 1.45, 1],
         }}
         transition={{
           repeat: Infinity,
-          duration: 1.5,
+          duration: 1.2,
           ease: "easeInOut"
         }}
       />
