@@ -1,6 +1,7 @@
 import { compressImageFile } from '../../utils/imageCompressor';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { calculateDistance, ingestDriverTelemetry, MAIDUGURI_HUB } from '../../utils/geofencingService';
 import { 
   ArrowLeft, Navigation, Compass, ShieldCheck, AlertTriangle, Moon, 
   Edit, UploadCloud, Plus, X, Download, Eye, RefreshCw, Truck, 
@@ -227,6 +228,16 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 
     return { placesVisited, currentLoc };
   }, [activeDriver]);
+
+  const liveCoordinates = useMemo(() => {
+    const lat = telematicsData?.currentLocation?.latitude || maiduguriSim.currentLoc?.latitude || 11.8311;
+    const lng = telematicsData?.currentLocation?.longitude || maiduguriSim.currentLoc?.longitude || 13.1509;
+    return { latitude: lat, longitude: lng };
+  }, [telematicsData, maiduguriSim]);
+
+  const geofenceTelemetry = useMemo(() => {
+    return ingestDriverTelemetry(liveCoordinates);
+  }, [liveCoordinates]);
 
   const fetchDriverInstallmentsAndData = async () => {
     if (!activeDriver?.id) return;
@@ -996,13 +1007,21 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                           {telematicsData?.currentLocation?.place_name || maiduguriSim.currentLoc?.place_name || 'Maiduguri Central Depot'}
                         </span>
                         <span>
-                          Coordinates: {(telematicsData?.currentLocation?.latitude || maiduguriSim.currentLoc?.latitude || 11.8311).toFixed(4)}° N, {(telematicsData?.currentLocation?.longitude || maiduguriSim.currentLoc?.longitude || 13.1509).toFixed(4)}° E
+                          Coordinates: {liveCoordinates.latitude.toFixed(4)}° N, {liveCoordinates.longitude.toFixed(4)}° E
                         </span>
                         <span className="text-emerald-400">Heading: North-East (45°) • Borno State</span>
+                        <span className="text-brand-gold font-semibold">
+                          Hub Dist: {geofenceTelemetry.distanceFromHubKm.toFixed(1)} km
+                        </span>
                       </div>
 
                       <div className="absolute top-3 right-3 bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl font-mono text-[11px] text-right text-slate-300 flex flex-col gap-0.5 backdrop-blur-md">
-                        <span className="font-bold text-white">Geofence Status: OK</span>
+                        <span className={`font-bold ${geofenceTelemetry.isCompliant ? 'text-emerald-400' : 'text-rose-400 animate-pulse'}`}>
+                          Geofence: {geofenceTelemetry.geofenceStatus}
+                        </span>
+                        <span className="text-slate-400 text-[10px] truncate max-w-[150px]">
+                          {geofenceTelemetry.closestZone}
+                        </span>
                         <span className="text-slate-400">Speed Limit: 80 KM/H</span>
                         <span className={(telematicsData?.currentLocation?.speed || vehicleSpeed) > 80 ? 'text-rose-400 font-bold animate-pulse' : 'text-emerald-400'}>
                           {(telematicsData?.currentLocation?.speed || vehicleSpeed) > 80 ? '⚠️ OVERSPEED ALERT' : 'Speed Compliance: 100%'}
