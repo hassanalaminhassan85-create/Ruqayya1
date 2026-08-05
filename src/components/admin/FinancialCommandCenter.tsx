@@ -3027,6 +3027,22 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
             />
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <label className="font-bold text-slate-700">Associated Driver (Optional - Debit/Add to Driver Balance)</label>
+            <select
+              value={expDriverId}
+              onChange={(e) => setExpDriverId(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs focus:outline-none font-medium text-slate-900"
+            >
+              <option value="">-- No Driver Association --</option>
+              {drivers.map((d, idx) => (
+                <option key={`modal-${d.id}-${idx}`} value={d.id}>
+                  {d.fullName} ({d.vehicle?.plateNumber || 'No Plate'}) - Balance: ₦{(d.remaining_vehicle_balance || d.agreed_amount || 180000).toLocaleString()}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {expError && <Alert variant="danger">{expError}</Alert>}
           {expSuccess && <Alert variant="success">{expSuccess}</Alert>}
 

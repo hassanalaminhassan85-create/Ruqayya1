@@ -524,7 +524,7 @@ export const api = {
   },
 
   // Profile management & direct operations
-  updateDriverProfileComplete: async (id: string, payload: { fullName?: string; phone?: string; address?: string; nin?: string; licenseNumber?: string; licenseExpiry?: string; agreedAmount?: number; remainingVehicleBalance?: number; status?: string }) => {
+  updateDriverProfileComplete: async (id: string, payload: any) => {
     return api.request(`/api/drivers/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload)

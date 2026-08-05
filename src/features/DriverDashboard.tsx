@@ -1,5 +1,5 @@
 import { compressImageFile } from '../utils/imageCompressor';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge, Modal, ProgressBar } from '../components/ui/SharedComponents';
@@ -107,8 +107,21 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           }
           const p = await api.getPayments(d.id);
           setPayments(p || []);
-          const t = await api.getTrips().then(list => list.filter((item: any) => item.driverId === d.id || item.driver_id === d.id || item.driverId === me.id));
-          setTrips(t || []);
+          
+          const allTrips = await api.getTrips();
+          const driverIdSet = new Set([
+            d.id,
+            d.user_id,
+            d.company_driver_id,
+            d.companyDriverId,
+            me.id,
+            me.user_id
+          ].filter(Boolean));
+
+          const matchedTrips = (allTrips || []).filter((item: any) =>
+            driverIdSet.has(item.driverId) || driverIdSet.has(item.driver_id)
+          );
+          setTrips(matchedTrips || []);
           
           await fetchTelematics(d.id);
         }
@@ -119,6 +132,54 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       setLoading(false);
     }
   };
+
+  const recentActivities = useMemo(() => {
+    const list: any[] = [];
+
+    // Add Trips
+    (trips || []).forEach((trip: any) => {
+      list.push({
+        id: `trip-${trip.id}`,
+        type: 'trip',
+        title: trip.destination ? `Trip to ${trip.destination}` : (trip.origin ? `Trip from ${trip.origin}` : 'Operational Route'),
+        subtitle: `Manifest: ${trip.manifestNumber || trip.manifest_number || trip.trip_number || trip.tripNumber || 'TRP-RECORD'}`,
+        date: trip.startDate || trip.start_date || trip.departureTime || trip.departure_time || trip.created_at || new Date().toISOString(),
+        status: trip.status || 'completed',
+        amount: trip.freightCharges || trip.freight_charges
+      });
+    });
+
+    // Add Payments
+    (payments || []).forEach((pay: any) => {
+      list.push({
+        id: `pay-${pay.id}`,
+        type: 'payment',
+        title: `Remittance Payment ₦${(pay.amount || 0).toLocaleString()}`,
+        subtitle: `Ref: ${pay.receipt_number || pay.reference_number || 'SLIP-REF'}${pay.installment_number || pay.installmentNumber ? ` • Installment #${pay.installment_number || pay.installmentNumber}` : ''}`,
+        date: pay.date || pay.created_at || new Date().toISOString(),
+        status: pay.status || 'submitted',
+        amount: pay.amount
+      });
+    });
+
+    // Add Telematics / Duty Shifts
+    if (telematicsData?.dutyLogs) {
+      telematicsData.dutyLogs.forEach((duty: any) => {
+        list.push({
+          id: `duty-${duty.id}`,
+          type: 'shift',
+          title: duty.status === 'active' ? 'Duty Shift Started' : 'Duty Shift Completed',
+          subtitle: `Location: ${duty.starting_location || duty.startingLocation || duty.ending_location || duty.endingLocation || 'Terminal'}`,
+          date: duty.start_time || duty.startTime || duty.created_at || new Date().toISOString(),
+          status: duty.status === 'active' ? 'in_transit' : 'completed'
+        });
+      });
+    }
+
+    // Sort descending by date
+    list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return list;
+  }, [trips, payments, telematicsData]);
 
   useEffect(() => {
     const handlePendingPassportSync = async () => {
@@ -253,21 +314,22 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   useEffect(() => {
     const unsubscribe = subscribeToActiveCycle((data) => {
       if (data) {
-        setSelectedCycle({
+        setSelectedCycle((prev: any) => ({
+          ...prev,
           id: data.cycleId,
           title: `Active Operating Cycle ${data.cycleId}`,
           status: data.status,
           startDate: data.startDate,
-          agreedAmount: driverData?.agreed_amount ?? driverData?.agreedAmount ?? 0,
+          agreedAmount: driverData?.agreed_amount ?? driverData?.agreedAmount ?? prev?.agreedAmount ?? 0,
           daysRemaining: data.daysRemaining,
           currentDay: data.currentDay
-        });
+        }));
       } else {
         setSelectedCycle(null);
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [driverData]);
 
   const openPayNowModal = async () => {
     setIsPayNowModalOpen(true);
@@ -699,7 +761,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
         </Card>
       </div>
 
-      {/* Recent Trips */}
+      {/* Recent Activity */}
       <Card className="bg-bg-surface">
         <CardHeader>
           <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -708,28 +770,37 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {trips.slice(0, 5).map((trip, idx) => (
+          <div className="space-y-3">
+            {recentActivities.slice(0, 6).map((act, idx) => (
               <div key={idx} className="flex items-center justify-between p-3 bg-bg-base/40 rounded-xl border border-border-main/40">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-bg-surface rounded-lg border border-border-main">
-                    <TrendingUp className="h-4 w-4 text-text-muted" />
+                  <div className={`p-2 rounded-lg border ${
+                    act.type === 'payment' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
+                    act.type === 'shift' ? 'bg-blue-500/10 border-blue-500/20 text-blue-500' :
+                    'bg-amber-500/10 border-amber-500/20 text-amber-500'
+                  }`}>
+                    {act.type === 'payment' ? <Wallet className="h-4 w-4" /> :
+                     act.type === 'shift' ? <Activity className="h-4 w-4" /> :
+                     <TrendingUp className="h-4 w-4" />}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-text-main">{trip.destination}</p>
+                    <p className="text-sm font-bold text-text-main">{act.title}</p>
                     <p className="text-[10px] text-text-muted font-mono">
-                      {trip.startDate ? new Date(trip.startDate).toLocaleDateString() : '---'}
+                      {act.subtitle} • {act.date ? new Date(act.date).toLocaleDateString() : 'Recent'}
                     </p>
                   </div>
                 </div>
-                <Badge variant={trip.status === 'completed' ? 'success' : 'warning'}>
-                  {trip.status}
+                <Badge variant={
+                  act.status === 'completed' || act.status === 'approved' || act.status === 'success' ? 'success' :
+                  act.status === 'pending' || act.status === 'in_transit' || act.status === 'submitted' ? 'warning' : 'secondary'
+                }>
+                  {(act.status || 'Active').toUpperCase()}
                 </Badge>
               </div>
             ))}
-            {trips.length === 0 && (
+            {recentActivities.length === 0 && (
               <p className="text-center py-6 text-sm text-text-muted italic">
-                {lang === 'en' ? "No recent trips recorded." : "Ba a sami tafiye-tafiye ba."}
+                {lang === 'en' ? "No recent activity recorded." : "Ba a sami ayyuka ba."}
               </p>
             )}
           </div>
@@ -1407,8 +1478,19 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                                     </span>
                                   )}
                                 </span>
-                                <Badge variant={inst.status === 'Completed' ? 'success' : inst.status === 'Overdue' ? 'danger' : 'warning'}>
-                                  {inst.status}
+                                <Badge variant={
+                                  inst.status === 'Completed' || inst.status === 'Paid Completely' ? 'success' :
+                                  inst.status === 'Overpayment' ? 'info' :
+                                  inst.status === 'Partially Paid' || inst.status === 'Partial' ? 'warning' :
+                                  inst.status === 'Overdue' ? 'danger' : 'warning'
+                                }>
+                                  {inst.remainingAmount === 0 && inst.paidAmount >= inst.dueAmount && inst.paidAmount > inst.dueAmount
+                                    ? 'Overpayment'
+                                    : inst.remainingAmount === 0 && inst.paidAmount > 0
+                                    ? 'Paid Completely'
+                                    : inst.paidAmount > 0
+                                    ? 'Partial'
+                                    : inst.status}
                                 </Badge>
                               </div>
 

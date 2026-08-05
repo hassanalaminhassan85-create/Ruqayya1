@@ -146,11 +146,13 @@ export const AccountController: React.FC<AccountControllerProps> = ({ lang }) =>
         email: modalEmail.trim(),
         phone: modalPhone.trim(),
         fullName: modalFullName.trim(),
+        full_name: modalFullName.trim(),
         status: modalStatus
       };
 
       if (modalNewPassword.trim().length > 0) {
         payload.newPassword = modalNewPassword.trim();
+        payload.password = modalNewPassword.trim();
       }
 
       const res = await api.request(`/api/admin/users/${editingUser.id}/credentials`, {

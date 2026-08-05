@@ -361,7 +361,7 @@ function getDriverFinancials(driver: any, db: any) {
     const matchesDriver = validIds.has(p.driver_id) || validIds.has(p.driverId) || validIds.has(p.driver_name) || validIds.has(p.driverName);
     if (!matchesDriver) return false;
     const st = (p.status || '').toLowerCase();
-    return st === 'approved' || st === 'completed' || st === 'active' || st === 'paid' || st === 'pending';
+    return st === 'approved' || st === 'completed' || st === 'paid';
   };
 
   const approvedPaymentsInERP = (db.driver_payments || []).filter(isApprovedPayment);
@@ -3375,6 +3375,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
           if (payload.passportPhoto) {
             drv.passport_photo_url = payload.passportPhoto;
+            drv.passportPhoto = payload.passportPhoto;
             if (!db.driver_documents) db.driver_documents = [];
             const existingDoc = db.driver_documents.find((d: any) => d.driver_id === drv.id && d.document_type === 'passport_photo');
             if (existingDoc) {
@@ -3394,27 +3395,96 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             }
           }
 
-          if (payload.fullName && u) u.full_name = payload.fullName;
-          if (payload.phone && u) u.phone = payload.phone;
+          if (payload.fullName) {
+            if (u) u.full_name = payload.fullName;
+            drv.full_name = payload.fullName;
+            drv.fullName = payload.fullName;
+          }
+          if (payload.email && u) u.email = payload.email;
+          if (payload.phone) {
+            if (u) u.phone = payload.phone;
+            drv.phone = payload.phone;
+          }
           if (payload.address !== undefined) drv.address = payload.address;
           if (payload.nin !== undefined) drv.nin = payload.nin;
-          if (payload.licenseNumber !== undefined) drv.license_number = payload.licenseNumber;
-          if (payload.licenseExpiry !== undefined) drv.license_expiry = payload.licenseExpiry;
-          if (payload.agreedAmount !== undefined) drv.agreed_amount = parseFloat(payload.agreedAmount);
-          if (payload.remainingVehicleBalance !== undefined) {
-            const approvedPaymentsInERP = (db.driver_payments || [])
-              .filter((p: any) => p.driver_id === drv.id && p.status === 'approved');
-            const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
-            drv.vehicle_purchase_price = parseFloat(payload.remainingVehicleBalance) + totalErpPaid;
+          if (payload.licenseNumber !== undefined) {
+            drv.license_number = payload.licenseNumber;
+            drv.licenseNumber = payload.licenseNumber;
+          }
+          if (payload.licenseExpiry !== undefined) {
+            drv.license_expiry = payload.licenseExpiry;
+            drv.licenseExpiry = payload.licenseExpiry;
+          }
+          if (payload.companyDriverId !== undefined) {
+            drv.company_driver_id = payload.companyDriverId;
+            drv.companyDriverId = payload.companyDriverId;
+          }
+          if (payload.agreedAmount !== undefined && payload.agreedAmount !== '' && !isNaN(parseFloat(payload.agreedAmount))) {
+            drv.agreed_amount = parseFloat(payload.agreedAmount);
+            drv.agreedAmount = parseFloat(payload.agreedAmount);
+          }
+          if (payload.vehiclePurchasePrice !== undefined && payload.vehiclePurchasePrice !== '' && !isNaN(parseFloat(payload.vehiclePurchasePrice))) {
+            drv.vehicle_purchase_price = parseFloat(payload.vehiclePurchasePrice);
+            drv.vehiclePurchasePrice = parseFloat(payload.vehiclePurchasePrice);
+          }
+          if (payload.remainingVehicleBalance !== undefined && payload.remainingVehicleBalance !== '' && !isNaN(parseFloat(payload.remainingVehicleBalance))) {
             drv.remaining_vehicle_balance = parseFloat(payload.remainingVehicleBalance);
+            drv.remainingVehicleBalance = parseFloat(payload.remainingVehicleBalance);
             if (drv.opening_balance) {
               drv.opening_balance.remaining_vehicle_balance = parseFloat(payload.remainingVehicleBalance);
             }
           }
+          if (payload.classification !== undefined) {
+            drv.classification = payload.classification;
+          }
           if (payload.status) {
             drv.status = payload.status;
             if (u) {
-              u.status = payload.status === 'approved' || payload.status === 'available' ? 'active' : payload.status;
+              u.status = (payload.status === 'approved' || payload.status === 'available' || payload.status === 'on-trip') ? 'active' : payload.status;
+            }
+          }
+
+          if (payload.guarantor) {
+            if (!drv.guarantor) drv.guarantor = {};
+            if (payload.guarantor.fullName !== undefined) drv.guarantor.fullName = payload.guarantor.fullName;
+            if (payload.guarantor.phone !== undefined) drv.guarantor.phone = payload.guarantor.phone;
+            if (payload.guarantor.address !== undefined) drv.guarantor.address = payload.guarantor.address;
+            if (payload.guarantor.relationship !== undefined) drv.guarantor.relationship = payload.guarantor.relationship;
+            if (payload.guarantor.nin !== undefined) drv.guarantor.nin = payload.guarantor.nin;
+            if (payload.guarantor.passportPhoto !== undefined) {
+              drv.guarantor.passportPhoto = payload.guarantor.passportPhoto;
+              drv.guarantor.passport_photo_url = payload.guarantor.passportPhoto;
+            }
+          }
+
+          if (payload.vehicle) {
+            let vehicle = (db.vehicles || []).find((v: any) => v.driver_id === drv.id || v.driverId === drv.id || v.id === drv.vehicle_id || v.id === drv.vehicleId);
+            if (vehicle) {
+              if (payload.vehicle.brand !== undefined) vehicle.brand = payload.vehicle.brand;
+              if (payload.vehicle.model !== undefined) vehicle.model = payload.vehicle.model;
+              if (payload.vehicle.year !== undefined && payload.vehicle.year !== '' && !isNaN(parseInt(payload.vehicle.year))) vehicle.year = parseInt(payload.vehicle.year);
+              if (payload.vehicle.color !== undefined || payload.vehicle.colour !== undefined) {
+                const c = payload.vehicle.color || payload.vehicle.colour;
+                vehicle.colour = c;
+                vehicle.color = c;
+              }
+              if (payload.vehicle.plateNumber !== undefined) {
+                vehicle.plate_number = payload.vehicle.plateNumber;
+                vehicle.plateNumber = payload.vehicle.plateNumber;
+              }
+              if (payload.vehicle.registrationNumber !== undefined) {
+                vehicle.registration_number = payload.vehicle.registrationNumber;
+                vehicle.registrationNumber = payload.vehicle.registrationNumber;
+              }
+              if (payload.vehicle.chassisNumber !== undefined) {
+                vehicle.chassis_number = payload.vehicle.chassisNumber;
+                vehicle.chassisNumber = payload.vehicle.chassisNumber;
+              }
+              if (payload.vehicle.engineNumber !== undefined) {
+                vehicle.engine_number = payload.vehicle.engineNumber;
+                vehicle.engineNumber = payload.vehicle.engineNumber;
+              }
+              if (payload.vehicle.capacity !== undefined) vehicle.capacity = payload.vehicle.capacity;
             }
           }
 
@@ -3655,7 +3725,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         db.driver_payments.push(newPayment);
 
         const targetDrv = db.drivers.find((d: any) => d.id === payload.driverId || d.user_id === payload.driverId || d.company_driver_id === payload.driverId);
-        if (targetDrv && payload.outstandingAmount !== undefined) {
+        if (targetDrv && initialStatus === 'approved' && payload.outstandingAmount !== undefined) {
           targetDrv.remaining_vehicle_balance = parseFloat(payload.outstandingAmount);
         }
 
@@ -3724,6 +3794,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             date: pay.date,
             description: `Driver ${pay.driver_id} payment for Installment ${pay.installment_number} (Receipt: ${pay.receipt_number})`
           });
+
+          // Update driver remaining vehicle balance upon admin approval
+          const drv = db.drivers.find((d: any) => d.id === pay.driver_id || d.user_id === pay.driver_id);
+          if (drv) {
+            if (drv.remaining_vehicle_balance === undefined || drv.remaining_vehicle_balance === null) {
+              drv.remaining_vehicle_balance = 15000000;
+            }
+            drv.remaining_vehicle_balance = Math.max(0, drv.remaining_vehicle_balance - pay.amount);
+          }
         }
 
         // Send notify
@@ -3778,19 +3857,39 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (method === 'POST') {
       if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
       try {
-        const { type, category, amount, date, description } = await request.json() as any;
+        const { type, category, amount, date, description, driverId, recipient } = await request.json() as any;
+        const parsedAmount = parseFloat(amount) || 0;
         const record = {
           id: generateUUID(),
           type,
           category,
-          amount: parseFloat(amount),
+          amount: parsedAmount,
           date,
-          description,
+          description: `${description} ${driverId ? `(Linked Driver ID: ${driverId})` : ''}`,
+          recipient: recipient || '',
+          driver_id: driverId || null,
           created_at: new Date().toISOString()
         };
 
         db.financial_records.push(record);
-        writeAuditLog(user.id, user.email, user.role, 'FINANCE_RECORD_POSTED', null, `Recorded ${type}: ₦${amount}`, db);
+
+        if (type === 'expense' && driverId) {
+          const drv = db.drivers.find((d: any) => d.id === driverId);
+          if (drv) {
+            if (!drv.expenseHistory) drv.expenseHistory = [];
+            drv.expenseHistory.unshift({
+              id: record.id,
+              amount: parsedAmount,
+              category,
+              description,
+              date
+            });
+            const currentRemBalance = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : (drv.agreed_amount || 180000);
+            drv.remaining_vehicle_balance = currentRemBalance + parsedAmount;
+          }
+        }
+
+        writeAuditLog(user.id, user.email, user.role, 'FINANCE_RECORD_POSTED', null, `Recorded ${type}: ₦${parsedAmount}`, db);
         await dbManager.saveDB(db);
 
         return buildResponse(record);
@@ -3804,19 +3903,40 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
     try {
       const { amount, category, description, date, driverId, receiptUrl } = await request.json() as any;
+      const parsedAmount = parseFloat(amount) || 0;
       const record = {
         id: generateUUID(),
         type: 'expense',
         category,
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         date,
-        description: `${description} ${driverId ? `(Driver: ${driverId})` : ''}`,
-        receiptUrl,
+        description: `${description} ${driverId ? `(Linked Driver ID: ${driverId})` : ''}`,
+        receiptUrl: receiptUrl || '',
+        driver_id: driverId || null,
         created_at: new Date().toISOString()
       };
 
       db.financial_records.push(record);
-      writeAuditLog(user.id, user.email, user.role, 'FINANCE_EXPENSE_POSTED', null, `Recorded expense: ₦${amount}`, db);
+
+      // If driver linked, update their expense history and update remaining balance
+      if (driverId) {
+        const drv = db.drivers.find((d: any) => d.id === driverId);
+        if (drv) {
+          if (!drv.expenseHistory) drv.expenseHistory = [];
+          drv.expenseHistory.unshift({
+            id: record.id,
+            amount: parsedAmount,
+            category,
+            description,
+            date,
+            receipt_url: receiptUrl || ''
+          });
+          const currentRemBalance = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : (drv.agreed_amount || 180000);
+          drv.remaining_vehicle_balance = currentRemBalance + parsedAmount;
+        }
+      }
+
+      writeAuditLog(user.id, user.email, user.role, 'FINANCE_EXPENSE_POSTED', null, `Recorded expense: ₦${parsedAmount}`, db);
       await dbManager.saveDB(db);
 
       return buildResponse(record);
@@ -5096,7 +5216,31 @@ ${JSON.stringify(cleanedContext, null, 2)}
 
     if (parts.length === 0) {
       if (method === 'GET') {
-        return buildResponse(db.trip_manifests || []);
+        const list = (db.trip_manifests || []).map((t: any) => ({
+          ...t,
+          id: t.id,
+          manifestNumber: t.manifest_number || t.manifestNumber || t.trip_number || t.tripNumber || 'N/A',
+          manifest_number: t.manifest_number || t.manifestNumber || t.trip_number || t.tripNumber || 'N/A',
+          vehicleId: t.vehicle_id || t.vehicleId,
+          vehicle_id: t.vehicle_id || t.vehicleId,
+          driverId: t.driver_id || t.driverId,
+          driver_id: t.driver_id || t.driverId,
+          origin: t.origin || 'Depot',
+          destination: t.destination || (t.origin ? `Trip from ${t.origin}` : 'Operational Route'),
+          departureTime: t.departure_time || t.departureTime || t.start_date || t.created_at,
+          departure_time: t.departure_time || t.departureTime || t.start_date || t.created_at,
+          expectedArrivalTime: t.expected_arrival_time || t.expectedArrivalTime,
+          expected_arrival_time: t.expected_arrival_time || t.expectedArrivalTime,
+          startDate: t.start_date || t.startDate || t.created_at,
+          start_date: t.start_date || t.startDate || t.created_at,
+          status: t.status || 'completed',
+          cargoType: t.cargo_type || t.cargoType,
+          cargo_type: t.cargo_type || t.cargoType,
+          weight: t.weight,
+          freightCharges: t.freight_charges || t.freightCharges,
+          freight_charges: t.freight_charges || t.freightCharges
+        }));
+        return buildResponse(list);
       }
       if (method === 'POST') {
         if (user.role !== 'admin' && user.role !== 'director') return buildResponse({ error: 'Access Denied.' }, 403);
@@ -6820,6 +6964,153 @@ ${JSON.stringify(cleanedContext, null, 2)}
       return buildResponse({ success: true, message: 'Document permanently deleted from corporate archive.' });
     } catch (err: any) {
       return buildResponse({ error: err.message }, 500);
+    }
+  }
+
+  if (path === '/api/admin/accounts' && method === 'GET') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Administrative permissions required.' }, 403);
+    }
+    try {
+      const accounts = (db.users || []).map((u: any) => {
+        let role = u.role || 'driver';
+        if (u.role_id === 'role-admin') role = 'admin';
+        else if (u.role_id === 'role-director') role = 'director';
+        else if (u.role_id === 'role-shareholder') role = 'shareholder';
+        else if (u.role_id === 'role-driver') role = 'driver';
+
+        let profileInfo: any = {};
+        if (role === 'driver') {
+          const d = (db.drivers || []).find((driver: any) => driver.user_id === u.id || driver.id === u.driver_id);
+          if (d) {
+            profileInfo = {
+              tricycle_number: d.tricycle_number || d.keke_number,
+              driver_code: d.driver_code,
+              nin: d.nin,
+              address: d.address
+            };
+          }
+        } else if (role === 'shareholder') {
+          const s = (db.shareholders || []).find((sh: any) => sh.user_id === u.id || sh.id === u.shareholder_id);
+          if (s) {
+            profileInfo = {
+              shareholder_code: s.shareholder_code,
+              units: s.units
+            };
+          }
+        }
+
+        return {
+          id: u.id,
+          full_name: u.full_name || u.name || 'Enterprise User',
+          username: u.username || u.email || 'N/A',
+          email: u.email || '',
+          phone: u.phone || '',
+          role: role,
+          status: u.status || 'active',
+          created_at: u.created_at || new Date().toISOString(),
+          updated_at: u.updated_at || new Date().toISOString(),
+          profile: profileInfo
+        };
+      });
+
+      return buildResponse(accounts);
+    } catch (err: any) {
+      return buildResponse({ error: `Failed to fetch accounts: ${err.message}` }, 500);
+    }
+  }
+
+  if (path.startsWith('/api/admin/users/') && path.endsWith('/credentials') && method === 'PUT') {
+    if (user.role !== 'admin' && user.role !== 'director') {
+      return buildResponse({ error: 'Access Denied: Administrative permissions required.' }, 403);
+    }
+    try {
+      const userId = path.replace('/api/admin/users/', '').replace('/credentials', '');
+      const body = await request.json() as any;
+      const { username, password, newPassword, status, email, phone, full_name, fullName } = body || {};
+
+      const userIndex = (db.users || []).findIndex((u: any) => u.id === userId);
+      if (userIndex === -1) {
+        return buildResponse({ error: 'Target user account not found in system directory.' }, 404);
+      }
+
+      const targetUser = db.users[userIndex];
+
+      // Check username uniqueness if changing
+      if (username && username.trim()) {
+        const cleanUsername = username.trim();
+        const existing = (db.users || []).find((u: any) => u.id !== userId && u.username && u.username.trim().toLowerCase() === cleanUsername.toLowerCase());
+        if (existing) {
+          return buildResponse({ error: `Username "${cleanUsername}" is already assigned to another account.` }, 400);
+        }
+        targetUser.username = cleanUsername;
+      }
+
+      const passToSet = (newPassword || password || '').trim();
+      if (passToSet) {
+        targetUser.password_hash = await hashPassword(passToSet);
+      }
+
+      if (status) {
+        targetUser.status = status;
+      }
+
+      if (email !== undefined) {
+        targetUser.email = email.trim();
+      }
+
+      if (phone !== undefined) {
+        targetUser.phone = phone.trim();
+      }
+
+      const nameToSet = (fullName !== undefined ? fullName : full_name);
+      if (nameToSet !== undefined) {
+        targetUser.full_name = nameToSet.trim();
+      }
+
+      targetUser.updated_at = new Date().toISOString();
+
+      // Force re-authentication on next login by clearing active user sessions
+      if (db.sessions && Array.isArray(db.sessions)) {
+        db.sessions = db.sessions.filter((s: any) => s.userId !== userId && s.user_id !== userId);
+      }
+
+      // Also update associated role tables if applicable
+      if (targetUser.role_id === 'role-driver' || targetUser.role === 'driver') {
+        const driver = (db.drivers || []).find((d: any) => d.user_id === targetUser.id || d.id === targetUser.driver_id);
+        if (driver) {
+          if (nameToSet !== undefined) driver.full_name = nameToSet.trim();
+          if (email !== undefined) driver.email = email.trim();
+          if (phone !== undefined) driver.phone = phone.trim();
+          if (status) driver.status = status;
+        }
+      } else if (targetUser.role_id === 'role-shareholder' || targetUser.role === 'shareholder') {
+        const shareholder = (db.shareholders || []).find((s: any) => s.user_id === targetUser.id || s.id === targetUser.shareholder_id);
+        if (shareholder) {
+          if (nameToSet !== undefined) shareholder.full_name = nameToSet.trim();
+          if (email !== undefined) shareholder.email = email.trim();
+          if (phone !== undefined) shareholder.phone = phone.trim();
+          if (status) shareholder.status = status;
+        }
+      }
+
+      await dbManager.saveDB(db);
+
+      writeAuditLog(user.id, user.email, user.role, 'CREDENTIAL_UPDATE', userId, `Updated credentials/status for user ID: ${userId} (${targetUser.username})`, db);
+
+      return buildResponse({
+        success: true,
+        message: `Credentials updated successfully for ${targetUser.username || targetUser.full_name}. Active sessions invalidated.`,
+        user: {
+          id: targetUser.id,
+          username: targetUser.username,
+          full_name: targetUser.full_name,
+          email: targetUser.email,
+          status: targetUser.status
+        }
+      });
+    } catch (err: any) {
+      return buildResponse({ error: `Failed to update credentials: ${err.message}` }, 500);
     }
   }
 

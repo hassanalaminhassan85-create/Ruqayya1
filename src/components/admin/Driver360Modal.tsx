@@ -105,7 +105,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   ) : '';
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'telematics' | 'dossier' | 'payments' | 'docs' | 'trips'>('telematics');
+  const [activeTab, setActiveTab] = useState<'telematics' | 'dossier' | 'edit-profile' | 'payments' | 'docs' | 'trips'>('telematics');
   
   // Installments state
   const [installments, setInstallments] = useState<any[]>([]);
@@ -218,15 +218,44 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [restError, setRestError] = useState('');
 
   // Form states: Edit Profile Details
-  const [editName, setEditName] = useState(activeDriver.fullName);
-  const [editPhone, setEditPhone] = useState(activeDriver.phone);
+  const [editName, setEditName] = useState(activeDriver.fullName || (activeDriver as any).full_name || '');
+  const [editEmail, setEditEmail] = useState((activeDriver as any).email || (activeDriver as any).user?.email || '');
+  const [editPhone, setEditPhone] = useState(activeDriver.phone || '');
   const [editAddress, setEditAddress] = useState(activeDriver.address || '');
   const [editNin, setEditNin] = useState(activeDriver.nin || '');
-  const [editLicense, setEditLicense] = useState(activeDriver.licenseNumber);
-  const [editExpiry, setEditExpiry] = useState(activeDriver.licenseExpiry);
+  const [editCompanyDriverId, setEditCompanyDriverId] = useState(activeDriver.company_driver_id || activeDriver.companyDriverId || '');
+  const [editLicense, setEditLicense] = useState(activeDriver.licenseNumber || activeDriver.license_number || '');
+  const [editExpiry, setEditExpiry] = useState(activeDriver.licenseExpiry || activeDriver.license_expiry || '');
   const [editAgreedAmount, setEditAgreedAmount] = useState(((activeDriver as any).agreed_amount ?? (activeDriver as any).agreedAmount ?? '').toString());
+  const [editVehiclePurchasePrice, setEditVehiclePurchasePrice] = useState(((activeDriver as any).vehicle_purchase_price ?? (activeDriver as any).vehiclePurchasePrice ?? '').toString());
   const [editRemainingBalance, setEditRemainingBalance] = useState(((activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? '').toString());
-  const [editStatus, setEditStatus] = useState(activeDriver.status);
+  const [editStatus, setEditStatus] = useState(activeDriver.status || 'approved');
+  const [editClassification, setEditClassification] = useState<'Smart' | 'Assisted'>(activeDriver.classification || 'Assisted');
+  const [editPassportPhoto, setEditPassportPhoto] = useState((activeDriver as any).passport_photo_url || (activeDriver as any).passportPhoto || '');
+
+  // Guarantor Edit States
+  const [editGuarantorName, setEditGuarantorName] = useState(activeDriver.guarantor?.fullName || (activeDriver.guarantor as any)?.full_name || '');
+  const [editGuarantorPhone, setEditGuarantorPhone] = useState(activeDriver.guarantor?.phone || '');
+  const [editGuarantorAddress, setEditGuarantorAddress] = useState(activeDriver.guarantor?.address || '');
+  const [editGuarantorRelationship, setEditGuarantorRelationship] = useState(activeDriver.guarantor?.relationship || '');
+  const [editGuarantorNin, setEditGuarantorNin] = useState(activeDriver.guarantor?.nin || '');
+  const [editGuarantorPassport, setEditGuarantorPassport] = useState(activeDriver.guarantor?.passportPhoto || (activeDriver.guarantor as any)?.passport_photo_url || '');
+
+  // Vehicle Edit States
+  const [editVehicleBrand, setEditVehicleBrand] = useState('');
+  const [editVehicleModel, setEditVehicleModel] = useState('');
+  const [editVehicleYear, setEditVehicleYear] = useState('');
+  const [editVehicleColor, setEditVehicleColor] = useState('');
+  const [editVehiclePlate, setEditVehiclePlate] = useState('');
+  const [editVehicleRegNumber, setEditVehicleRegNumber] = useState('');
+  const [editVehicleChassis, setEditVehicleChassis] = useState('');
+  const [editVehicleEngine, setEditVehicleEngine] = useState('');
+  const [editVehicleCapacity, setEditVehicleCapacity] = useState('');
+
+  // Submit Status
+  const [isSavingDriverProfile, setIsSavingDriverProfile] = useState(false);
+  const [saveProfileSuccess, setSaveProfileSuccess] = useState('');
+  const [saveProfileError, setSaveProfileError] = useState('');
   const [editError, setEditError] = useState('');
 
   // Form states: Record Remittance
@@ -237,18 +266,44 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [remitError, setRemitError] = useState('');
   const [remitSubmitting, setRemitSubmitting] = useState(false);
 
-  // Sync state whenever activeDriver changes
+  const vehicleAssigned = vehicles.find(v => v.id === activeDriver.assignedVehicleId || v.id === activeDriver.vehicle_id || v.driver_id === activeDriver.id) || (activeDriver as any).vehicle;
+
+  // Sync state whenever activeDriver or vehicleAssigned changes
   useEffect(() => {
-    setEditName(activeDriver.fullName);
-    setEditPhone(activeDriver.phone);
+    setEditName(activeDriver.fullName || (activeDriver as any).full_name || '');
+    setEditEmail((activeDriver as any).email || (activeDriver as any).user?.email || '');
+    setEditPhone(activeDriver.phone || '');
     setEditAddress(activeDriver.address || '');
     setEditNin(activeDriver.nin || '');
-    setEditLicense(activeDriver.licenseNumber);
-    setEditExpiry(activeDriver.licenseExpiry);
+    setEditCompanyDriverId(activeDriver.company_driver_id || activeDriver.companyDriverId || '');
+    setEditLicense(activeDriver.licenseNumber || activeDriver.license_number || '');
+    setEditExpiry(activeDriver.licenseExpiry || activeDriver.license_expiry || '');
     setEditAgreedAmount(((activeDriver as any).agreed_amount ?? (activeDriver as any).agreedAmount ?? '').toString());
+    setEditVehiclePurchasePrice(((activeDriver as any).vehicle_purchase_price ?? (activeDriver as any).vehiclePurchasePrice ?? '').toString());
     setEditRemainingBalance(((activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? '').toString());
-    setEditStatus(activeDriver.status);
-  }, [activeDriver]);
+    setEditStatus(activeDriver.status || 'approved');
+    setEditClassification(activeDriver.classification || 'Assisted');
+    setEditPassportPhoto((activeDriver as any).passport_photo_url || (activeDriver as any).passportPhoto || '');
+
+    const g = activeDriver.guarantor || {};
+    setEditGuarantorName(g.fullName || (g as any).full_name || '');
+    setEditGuarantorPhone(g.phone || '');
+    setEditGuarantorAddress(g.address || '');
+    setEditGuarantorRelationship(g.relationship || '');
+    setEditGuarantorNin(g.nin || '');
+    setEditGuarantorPassport(g.passportPhoto || (g as any).passport_photo_url || '');
+
+    const v = vehicleAssigned || {};
+    setEditVehicleBrand(v.brand || '');
+    setEditVehicleModel(v.model || '');
+    setEditVehicleYear(v.year ? v.year.toString() : '');
+    setEditVehicleColor(v.color || v.colour || '');
+    setEditVehiclePlate(v.plateNumber || v.plate_number || '');
+    setEditVehicleRegNumber(v.registrationNumber || v.registration_number || '');
+    setEditVehicleChassis(v.chassisNumber || v.chassis_number || '');
+    setEditVehicleEngine(v.engineNumber || v.engine_number || '');
+    setEditVehicleCapacity(v.capacity ? v.capacity.toString() : '');
+  }, [activeDriver, vehicleAssigned]);
 
   // Payment Calculations
   const driverPayments = useMemo(() => {
@@ -274,7 +329,6 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const rawAgreed = (activeDriver as any).agreed_amount ?? (activeDriver as any).agreedAmount ?? (activeDriver as any).financials?.agreedAmount;
   const agreedTotal = rawAgreed !== undefined && rawAgreed !== null ? parseFloat(rawAgreed) || 0 : 0;
   const outstandingInstallment = Math.max(0, agreedTotal - totalPaid);
-  const vehicleAssigned = vehicles.find(v => v.id === activeDriver.assignedVehicleId || v.id === activeDriver.vehicle_id || v.driver_id === activeDriver.id) || (activeDriver as any).vehicle;
   
   const rawPrice = (activeDriver as any).vehicle_purchase_price ?? (activeDriver as any).vehiclePurchasePrice ?? (activeDriver as any).financials?.vehiclePurchasePrice;
   const vehiclePurchasePrice = rawPrice !== undefined && rawPrice !== null ? parseFloat(rawPrice) || 0 : 0;
@@ -414,22 +468,67 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     }
   };
 
-  const handleEditProfileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setEditError('');
+  const handleSaveDriverProfileComplete = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSaveProfileError('');
+    setSaveProfileSuccess('');
+    setIsSavingDriverProfile(true);
+
     try {
-      await api.updateDriverProfileComplete(activeDriver.id, {
-        fullName: editName, phone: editPhone, address: editAddress, nin: editNin,
-        licenseNumber: editLicense, licenseExpiry: editExpiry, agreedAmount: parseFloat(editAgreedAmount),
-        remainingVehicleBalance: parseFloat(editRemainingBalance), status: editStatus
-      });
-      setIsEditProfileOpen(false);
+      const payload: any = {
+        fullName: editName,
+        email: editEmail,
+        phone: editPhone,
+        address: editAddress,
+        nin: editNin,
+        companyDriverId: editCompanyDriverId,
+        licenseNumber: editLicense,
+        licenseExpiry: editExpiry,
+        agreedAmount: editAgreedAmount !== '' ? parseFloat(editAgreedAmount) : undefined,
+        vehiclePurchasePrice: editVehiclePurchasePrice !== '' ? parseFloat(editVehiclePurchasePrice) : undefined,
+        remainingVehicleBalance: editRemainingBalance !== '' ? parseFloat(editRemainingBalance) : undefined,
+        status: editStatus,
+        classification: editClassification,
+        passportPhoto: editPassportPhoto,
+        guarantor: {
+          fullName: editGuarantorName,
+          phone: editGuarantorPhone,
+          address: editGuarantorAddress,
+          relationship: editGuarantorRelationship,
+          nin: editGuarantorNin,
+          passportPhoto: editGuarantorPassport
+        },
+        vehicle: {
+          brand: editVehicleBrand,
+          model: editVehicleModel,
+          year: editVehicleYear !== '' ? parseInt(editVehicleYear) : undefined,
+          color: editVehicleColor,
+          colour: editVehicleColor,
+          plateNumber: editVehiclePlate,
+          registrationNumber: editVehicleRegNumber,
+          chassisNumber: editVehicleChassis,
+          engineNumber: editVehicleEngine,
+          capacity: editVehicleCapacity
+        }
+      };
+
+      await api.updateDriverProfileComplete(activeDriver.id, payload);
+
+      setSaveProfileSuccess(lang === 'en' ? "Driver details updated successfully across the system!" : "An sabunta bayanan direba cikin nasara!");
       window.dispatchEvent(new CustomEvent('db-change'));
-      fetchDriverFullData(activeDriver.id);
+      await fetchDriverFullData(activeDriver.id);
       if (onSync) onSync();
     } catch (err: any) {
-      setEditError(err.message || "Dossier update failed.");
+      setSaveProfileError(err.message || "Failed to update driver details.");
+    } finally {
+      setIsSavingDriverProfile(false);
     }
+  };
+
+  const handleEditProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleSaveDriverProfileComplete();
+    setIsEditProfileOpen(false);
   };
 
   const handleRecordRemittanceSubmit = async (e: React.FormEvent) => {
@@ -553,11 +652,11 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
             </button>
 
             <button 
-              onClick={() => setIsEditProfileOpen(true)}
+              onClick={() => setActiveTab('edit-profile')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-gold text-slate-950 hover:bg-brand-gold/90 transition-all text-xs font-black shadow-lg cursor-pointer"
             >
               <Edit className="h-3.5 w-3.5" />
-              <span>Edit Dossier</span>
+              <span>Edit Details</span>
             </button>
           </div>
         </div>
@@ -646,6 +745,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         {[
           { id: 'telematics', label: 'Live Tracking & Telematics', icon: Radio },
           { id: 'dossier', label: '360° Profile & Guarantor', icon: User },
+          { id: 'edit-profile', label: 'Edit Driver Details', icon: Edit },
           { id: 'payments', label: 'Installments & Remittances', icon: Wallet },
           { id: 'docs', label: 'Digital Document Vault', icon: FileText },
           { id: 'trips', label: 'Trip Logbook & Safety', icon: Activity },
@@ -1127,6 +1227,506 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
               </div>
             )}
 
+            {/* DEDICATED TAB: EDIT DRIVER DETAILS */}
+            {activeTab === 'edit-profile' && (
+              <div className="flex flex-col gap-6 max-w-5xl mx-auto pb-12 w-full">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl">
+                  <div>
+                    <h3 className="text-lg font-black text-white uppercase tracking-wider flex items-center gap-2">
+                      <Edit className="h-5 w-5 text-brand-gold" /> Dedicated 360° Driver Profile Editor
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Modify driver personal details, license information, financial contract terms, guarantor profile, and assigned vehicle assets. Changes persist directly to the database and reflect globally across all views.
+                    </p>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    type="button"
+                    onClick={handleSaveDriverProfileComplete}
+                    disabled={isSavingDriverProfile}
+                    className="flex items-center gap-2 px-5 py-2.5 shadow-xl shrink-0 cursor-pointer"
+                  >
+                    <Check className="h-4 w-4" />
+                    <span>{isSavingDriverProfile ? 'Saving Changes...' : 'Save All Changes'}</span>
+                  </Button>
+                </div>
+
+                {saveProfileSuccess && (
+                  <Alert type="success" className="text-xs font-bold border-emerald-500/50 bg-emerald-500/10 text-emerald-400">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 inline mr-2" />
+                    {saveProfileSuccess}
+                  </Alert>
+                )}
+
+                {saveProfileError && (
+                  <Alert type="danger" className="text-xs font-bold border-rose-500/50 bg-rose-500/10 text-rose-400">
+                    <AlertCircle className="h-4 w-4 text-rose-400 inline mr-2" />
+                    {saveProfileError}
+                  </Alert>
+                )}
+
+                <form onSubmit={handleSaveDriverProfileComplete} className="flex flex-col gap-6">
+                  {/* 1. PERSONAL & ACCOUNT INFORMATION */}
+                  <Card className="p-6 bg-slate-900 border-slate-800 text-xs flex flex-col gap-5">
+                    <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                      <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <User className="h-4 w-4 text-brand-gold" /> 1. Personal & Roster Account Details
+                      </h4>
+                      <Badge variant="warning" className="text-[10px] uppercase font-mono">
+                        Roster ID: {editCompanyDriverId || 'UNASSIGNED'}
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row gap-6 items-start">
+                      {/* Driver Passport Photo Picker */}
+                      <div className="flex flex-col items-center gap-2 shrink-0">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Driver Passport Photo</label>
+                        <div className="h-28 w-28 rounded-2xl border-2 border-slate-700 bg-slate-950 overflow-hidden relative group shadow-md flex items-center justify-center">
+                          {editPassportPhoto ? (
+                            <img src={getAuthorizedUrl(editPassportPhoto)} alt="Driver Passport" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="h-10 w-10 text-slate-500" />
+                          )}
+                          <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer text-white text-[10px] font-bold gap-1">
+                            <Camera className="h-5 w-5 text-brand-gold" />
+                            <span>Change Photo</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const files = e.target.files;
+                                if (files && files[0]) {
+                                  const b64 = await convertFileToBase64(files[0]);
+                                  setEditPassportPhoto(b64);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {editPassportPhoto && (
+                          <button
+                            type="button"
+                            onClick={() => setEditPassportPhoto('')}
+                            className="text-[10px] text-rose-400 hover:underline cursor-pointer"
+                          >
+                            Remove Photo
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 w-full">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Full Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-bold text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="e.g. Ibrahim Musa"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Email Address</label>
+                          <input
+                            type="email"
+                            value={editEmail}
+                            onChange={(e) => setEditEmail(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="driver@ruqayyatransport.com"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Phone Number *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editPhone}
+                            onChange={(e) => setEditPhone(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="+234 803 123 4567"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Company Driver / Roster ID</label>
+                          <input
+                            type="text"
+                            value={editCompanyDriverId}
+                            onChange={(e) => setEditCompanyDriverId(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-brand-gold font-mono font-bold text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="DRV-2026-101"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">National Identification Number (NIN)</label>
+                          <input
+                            type="text"
+                            value={editNin}
+                            onChange={(e) => setEditNin(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="12345678901"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Roster / Operational Status</label>
+                          <select
+                            value={editStatus}
+                            onChange={(e) => setEditStatus(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-bold text-xs focus:border-brand-gold focus:outline-none cursor-pointer"
+                          >
+                            <option value="approved">Approved / Active Roster</option>
+                            <option value="available">Available for Assignment</option>
+                            <option value="on-trip">On Active Freight Duty</option>
+                            <option value="off-duty">Off Duty / Rest Window</option>
+                            <option value="suspended">Suspended / Under Audit</option>
+                            <option value="correction_requested">Correction Requested</option>
+                            <option value="pending_approval">Pending Approval</option>
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Classification Node</label>
+                          <select
+                            value={editClassification}
+                            onChange={(e) => setEditClassification(e.target.value as 'Smart' | 'Assisted')}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-brand-gold font-bold text-xs focus:border-brand-gold focus:outline-none cursor-pointer"
+                          >
+                            <option value="Assisted">Assisted Driver (Standard Operations)</option>
+                            <option value="Smart">Smart Driver (Autonomous / Telematics Certified)</option>
+                          </select>
+                        </div>
+
+                        <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Residential Address</label>
+                          <textarea
+                            value={editAddress}
+                            onChange={(e) => setEditAddress(e.target.value)}
+                            rows={2}
+                            className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="Residential street, district, and state address..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* 2. DRIVER LICENSE & QUALIFICATIONS */}
+                  <Card className="p-6 bg-slate-900 border-slate-800 text-xs flex flex-col gap-5">
+                    <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                      <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <Award className="h-4 w-4 text-brand-gold" /> 2. Commercial License & Credentials
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Driver License Number</label>
+                        <input
+                          type="text"
+                          value={editLicense}
+                          onChange={(e) => setEditLicense(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="FRSC-DL-12345678"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">License Expiry Date</label>
+                        <input
+                          type="date"
+                          value={editExpiry}
+                          onChange={(e) => setEditExpiry(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* 3. CONTRACT & VEHICLE PURCHASE FINANCIALS */}
+                  <Card className="p-6 bg-slate-900 border border-brand-gold/30 bg-brand-gold/5 text-xs flex flex-col gap-5">
+                    <div className="flex justify-between items-center border-b border-brand-gold/20 pb-3">
+                      <h4 className="text-sm font-black text-brand-gold uppercase tracking-wider flex items-center gap-2">
+                        <Wallet className="h-4 w-4 text-brand-gold" /> 3. Financial Contract Terms & Asset Purchase Balance
+                      </h4>
+                      <span className="text-[10px] text-slate-400 font-mono">Overrides reflect instantly in revenue reporting</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-brand-gold/80 uppercase text-[10px]">Agreed 30-Day Rate (₦)</label>
+                        <input
+                          type="number"
+                          value={editAgreedAmount}
+                          onChange={(e) => setEditAgreedAmount(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl font-mono text-brand-gold font-bold text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="e.g. 50000"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-brand-gold/80 uppercase text-[10px]">Total Vehicle Purchase Price (₦)</label>
+                        <input
+                          type="number"
+                          value={editVehiclePurchasePrice}
+                          onChange={(e) => setEditVehiclePurchasePrice(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl font-mono text-white font-bold text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="e.g. 12000000"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-brand-gold/80 uppercase text-[10px]">Remaining Rig Balance (₦)</label>
+                        <input
+                          type="number"
+                          value={editRemainingBalance}
+                          onChange={(e) => setEditRemainingBalance(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl font-mono text-emerald-400 font-bold text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="e.g. 9500000"
+                        />
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* 4. GUARANTOR / SURETY DOSSIER */}
+                  <Card className="p-6 bg-slate-900 border-slate-800 text-xs flex flex-col gap-5">
+                    <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                      <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-emerald-400" /> 4. Guarantor / Surety Profile
+                      </h4>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row gap-6 items-start">
+                      {/* Guarantor Passport Photo Picker */}
+                      <div className="flex flex-col items-center gap-2 shrink-0">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Guarantor Photo</label>
+                        <div className="h-28 w-28 rounded-2xl border-2 border-slate-700 bg-slate-950 overflow-hidden relative group shadow-md flex items-center justify-center">
+                          {editGuarantorPassport ? (
+                            <img src={getAuthorizedUrl(editGuarantorPassport)} alt="Guarantor Passport" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <User className="h-10 w-10 text-slate-500" />
+                          )}
+                          <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer text-white text-[10px] font-bold gap-1">
+                            <Camera className="h-5 w-5 text-emerald-400" />
+                            <span>Upload Photo</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const files = e.target.files;
+                                if (files && files[0]) {
+                                  const b64 = await convertFileToBase64(files[0]);
+                                  setEditGuarantorPassport(b64);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {editGuarantorPassport && (
+                          <button
+                            type="button"
+                            onClick={() => setEditGuarantorPassport('')}
+                            className="text-[10px] text-rose-400 hover:underline cursor-pointer"
+                          >
+                            Remove Photo
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 w-full">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Guarantor Full Name</label>
+                          <input
+                            type="text"
+                            value={editGuarantorName}
+                            onChange={(e) => setEditGuarantorName(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-bold text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="Alhaji Usman Garba"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Guarantor Phone Number</label>
+                          <input
+                            type="text"
+                            value={editGuarantorPhone}
+                            onChange={(e) => setEditGuarantorPhone(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="+234 802 987 6543"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Relationship to Driver</label>
+                          <input
+                            type="text"
+                            value={editGuarantorRelationship}
+                            onChange={(e) => setEditGuarantorRelationship(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-brand-gold text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="Uncle / Community Leader"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Guarantor NIN</label>
+                          <input
+                            type="text"
+                            value={editGuarantorNin}
+                            onChange={(e) => setEditGuarantorNin(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="98765432109"
+                          />
+                        </div>
+
+                        <div className="col-span-1 sm:col-span-2 flex flex-col gap-1.5">
+                          <label className="font-bold text-slate-400 uppercase text-[10px]">Guarantor Address</label>
+                          <input
+                            type="text"
+                            value={editGuarantorAddress}
+                            onChange={(e) => setEditGuarantorAddress(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white text-xs focus:border-brand-gold focus:outline-none"
+                            placeholder="Guarantor residential or business address..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* 5. ASSIGNED VEHICLE ASSET SPECIFICATIONS */}
+                  <Card className="p-6 bg-slate-900 border-slate-800 text-xs flex flex-col gap-5">
+                    <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                      <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <Truck className="h-4 w-4 text-brand-gold" /> 5. Assigned Vehicle Asset Specifications
+                      </h4>
+                      <Badge variant={vehicleAssigned ? 'success' : 'warning'} className="text-[9px]">
+                        {vehicleAssigned ? (vehicleAssigned.plateNumber || vehicleAssigned.plate_number) : 'NO VEHICLE LINKED'}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Vehicle Brand / Manufacturer</label>
+                        <input
+                          type="text"
+                          value={editVehicleBrand}
+                          onChange={(e) => setEditVehicleBrand(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-bold text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="e.g. SinoTruck / FAW / Mercedes"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Model & Variant</label>
+                        <input
+                          type="text"
+                          value={editVehicleModel}
+                          onChange={(e) => setEditVehicleModel(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="e.g. HOWO 371 HP Heavy Rig"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Year of Manufacture</label>
+                        <input
+                          type="number"
+                          value={editVehicleYear}
+                          onChange={(e) => setEditVehicleYear(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="2022"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Vehicle Color</label>
+                        <input
+                          type="text"
+                          value={editVehicleColor}
+                          onChange={(e) => setEditVehicleColor(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="e.g. Royal Blue / Metallic Gold"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">License Plate Number</label>
+                        <input
+                          type="text"
+                          value={editVehiclePlate}
+                          onChange={(e) => setEditVehiclePlate(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-brand-gold font-mono font-bold text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="e.g. ABJ-890-XX"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Registration / Permit Number</label>
+                        <input
+                          type="text"
+                          value={editVehicleRegNumber}
+                          onChange={(e) => setEditVehicleRegNumber(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="REG-2026-99"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Chassis Number</label>
+                        <input
+                          type="text"
+                          value={editVehicleChassis}
+                          onChange={(e) => setEditVehicleChassis(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="CHAS-887654321"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Engine Number</label>
+                        <input
+                          type="text"
+                          value={editVehicleEngine}
+                          onChange={(e) => setEditVehicleEngine(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white font-mono text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="ENG-11223344"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="font-bold text-slate-400 uppercase text-[10px]">Cargo Capacity / Tonner</label>
+                        <input
+                          type="text"
+                          value={editVehicleCapacity}
+                          onChange={(e) => setEditVehicleCapacity(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white text-xs focus:border-brand-gold focus:outline-none"
+                          placeholder="15 Tons / 30 Tons"
+                        />
+                      </div>
+                    </div>
+                  </Card>
+
+                  <div className="flex justify-end items-center gap-4 pt-4 border-t border-slate-800">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={isSavingDriverProfile}
+                      className="flex items-center gap-2 px-8 py-3 text-sm font-black shadow-xl cursor-pointer"
+                    >
+                      <Check className="h-5 w-5" />
+                      <span>{isSavingDriverProfile ? 'Committing Changes...' : 'Save & Publish Driver Profile'}</span>
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {/* TAB 3: INSTALLMENTS & REMITTANCES */}
             {activeTab === 'payments' && (
               <div className="flex flex-col gap-6">
@@ -1428,78 +2028,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         </div>
       )}
 
-      {/* MODAL: EDIT DOSSIER */}
-      {isEditProfileOpen && (
-        <div className="fixed inset-0 bg-slate-950/90 z-50 flex items-center justify-center p-4 backdrop-blur-md">
-          <Card className="w-full max-w-2xl p-6 flex flex-col gap-5 text-xs bg-slate-900 border border-slate-800 max-h-[90vh] overflow-y-auto text-slate-100">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <span className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-                <Edit className="h-4 w-4 text-brand-gold" /> Edit Driver Profile Dossier
-              </span>
-              <button onClick={() => setIsEditProfileOpen(false)} className="text-slate-400 hover:text-rose-500 cursor-pointer"><X className="h-5 w-5" /></button>
-            </div>
-            <form onSubmit={handleEditProfileSubmit} className="flex flex-col gap-4">
-              {editError && <Alert type="danger">{editError}</Alert>}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-400 uppercase text-[10px]">Full Name</label>
-                  <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-400 uppercase text-[10px]">Phone Number</label>
-                  <input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg font-mono text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-400 uppercase text-[10px]">National ID (NIN)</label>
-                  <input type="text" value={editNin} onChange={(e) => setEditNin(e.target.value)} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg font-mono text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-400 uppercase text-[10px]">Roster Status</label>
-                  <select value={editStatus} onChange={(e: any) => setEditStatus(e.target.value)} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg text-white">
-                    <option value="approved">Approved / Active</option>
-                    <option value="on-trip">Currently On Trip</option>
-                    <option value="off-duty">Off Duty / Leave</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-400 uppercase text-[10px]">License Number</label>
-                  <input type="text" value={editLicense} onChange={(e) => setEditLicense(e.target.value)} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg font-mono text-white" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-400 uppercase text-[10px]">License Expiry</label>
-                  <input type="date" value={editExpiry} onChange={(e) => setEditExpiry(e.target.value)} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg font-mono text-white" />
-                </div>
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-400 uppercase text-[10px]">Residential Address</label>
-                  <textarea value={editAddress} onChange={(e) => setEditAddress(e.target.value)} rows={2} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg text-white" />
-                </div>
-              </div>
 
-              <div className="p-4 border border-brand-gold/30 bg-brand-gold/5 rounded-xl flex flex-col gap-3 mt-2">
-                <span className="font-black text-brand-gold uppercase text-[11px] flex items-center gap-2">
-                  <Wallet className="h-4 w-4" /> Financial Contract Rate Overrides
-                </span>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-brand-gold/80 uppercase text-[10px]">30-Day Rate (₦)</label>
-                    <input type="number" value={editAgreedAmount} onChange={(e) => setEditAgreedAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg font-mono text-brand-gold" />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-brand-gold/80 uppercase text-[10px]">Remaining Rig Balance (₦)</label>
-                    <input type="number" value={editRemainingBalance} onChange={(e) => setEditRemainingBalance(e.target.value)} className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-lg font-mono text-brand-gold" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                <Button variant="outline" type="button" onClick={() => setIsEditProfileOpen(false)}>Cancel</Button>
-                <Button variant="primary" type="submit">Save Changes</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
 
       {/* MODAL: RECORD REMITTANCE */}
       {isRecordRemittanceOpen && (

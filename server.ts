@@ -2279,6 +2279,157 @@ app.get('/api/drivers/:id/contract-lookup', authenticateSession, (req, res) => {
   }
 });
 
+// 10.8 AUTHENTICATED (Admins and Directors): Complete Driver Profile Update
+app.put('/api/drivers/:id', authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== 'admin' && actor.role !== 'director') {
+      return res.status(403).json({ error: 'Access Denied: Administrative authorization required.' });
+    }
+
+    const db = loadDB();
+    const drv = db.drivers.find(d => d.id === req.params.id);
+    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
+
+    const payload = req.body || {};
+    const u = db.users.find((usr: any) => usr.id === drv.user_id);
+
+    if (payload.passportPhoto) {
+      drv.passport_photo_url = payload.passportPhoto;
+      drv.passportPhoto = payload.passportPhoto;
+      if (!db.driver_documents) db.driver_documents = [];
+      const existingDoc = db.driver_documents.find((d: any) => d.driver_id === drv.id && d.document_type === 'passport_photo');
+      if (existingDoc) {
+        existingDoc.file_url = payload.passportPhoto;
+        existingDoc.created_at = new Date().toISOString();
+        existingDoc.created_by = actor.fullName;
+      } else {
+        db.driver_documents.push({
+          id: generateUUID(),
+          driver_id: drv.id,
+          document_type: 'passport_photo',
+          file_url: payload.passportPhoto,
+          created_at: new Date().toISOString(),
+          created_by: actor.fullName,
+          status: 'active'
+        });
+      }
+    }
+
+    if (payload.fullName) {
+      if (u) u.full_name = payload.fullName;
+      drv.full_name = payload.fullName;
+      drv.fullName = payload.fullName;
+    }
+    if (payload.email && u) u.email = payload.email;
+    if (payload.phone) {
+      if (u) u.phone = payload.phone;
+      drv.phone = payload.phone;
+    }
+    if (payload.address !== undefined) drv.address = payload.address;
+    if (payload.nin !== undefined) drv.nin = payload.nin;
+    if (payload.licenseNumber !== undefined) {
+      drv.license_number = payload.licenseNumber;
+      drv.licenseNumber = payload.licenseNumber;
+    }
+    if (payload.licenseExpiry !== undefined) {
+      drv.license_expiry = payload.licenseExpiry;
+      drv.licenseExpiry = payload.licenseExpiry;
+    }
+    if (payload.companyDriverId !== undefined) {
+      drv.company_driver_id = payload.companyDriverId;
+      drv.companyDriverId = payload.companyDriverId;
+    }
+    if (payload.agreedAmount !== undefined && payload.agreedAmount !== '' && !isNaN(parseFloat(payload.agreedAmount))) {
+      drv.agreed_amount = parseFloat(payload.agreedAmount);
+      drv.agreedAmount = parseFloat(payload.agreedAmount);
+    }
+    if (payload.vehiclePurchasePrice !== undefined && payload.vehiclePurchasePrice !== '' && !isNaN(parseFloat(payload.vehiclePurchasePrice))) {
+      drv.vehicle_purchase_price = parseFloat(payload.vehiclePurchasePrice);
+      drv.vehiclePurchasePrice = parseFloat(payload.vehiclePurchasePrice);
+    }
+    if (payload.remainingVehicleBalance !== undefined && payload.remainingVehicleBalance !== '' && !isNaN(parseFloat(payload.remainingVehicleBalance))) {
+      drv.remaining_vehicle_balance = parseFloat(payload.remainingVehicleBalance);
+      drv.remainingVehicleBalance = parseFloat(payload.remainingVehicleBalance);
+      if (drv.opening_balance) {
+        drv.opening_balance.remaining_vehicle_balance = parseFloat(payload.remainingVehicleBalance);
+      }
+    }
+    if (payload.classification !== undefined) {
+      drv.classification = payload.classification;
+    }
+    if (payload.status) {
+      drv.status = payload.status;
+      if (u) {
+        u.status = (payload.status === 'approved' || payload.status === 'available' || payload.status === 'on-trip') ? 'active' : payload.status;
+      }
+    }
+
+    if (payload.guarantor) {
+      if (!drv.guarantor) drv.guarantor = {};
+      if (payload.guarantor.fullName !== undefined) drv.guarantor.fullName = payload.guarantor.fullName;
+      if (payload.guarantor.phone !== undefined) drv.guarantor.phone = payload.guarantor.phone;
+      if (payload.guarantor.address !== undefined) drv.guarantor.address = payload.guarantor.address;
+      if (payload.guarantor.relationship !== undefined) drv.guarantor.relationship = payload.guarantor.relationship;
+      if (payload.guarantor.nin !== undefined) drv.guarantor.nin = payload.guarantor.nin;
+      if (payload.guarantor.passportPhoto !== undefined) {
+        drv.guarantor.passportPhoto = payload.guarantor.passportPhoto;
+        drv.guarantor.passport_photo_url = payload.guarantor.passportPhoto;
+      }
+    }
+
+    if (payload.vehicle) {
+      let vehicle = (db.vehicles || []).find((v: any) => v.driver_id === drv.id || v.driverId === drv.id || v.id === drv.vehicle_id || v.id === drv.vehicleId);
+      if (vehicle) {
+        if (payload.vehicle.brand !== undefined) vehicle.brand = payload.vehicle.brand;
+        if (payload.vehicle.model !== undefined) vehicle.model = payload.vehicle.model;
+        if (payload.vehicle.year !== undefined && payload.vehicle.year !== '' && !isNaN(parseInt(payload.vehicle.year))) vehicle.year = parseInt(payload.vehicle.year);
+        if (payload.vehicle.color !== undefined || payload.vehicle.colour !== undefined) {
+          const c = payload.vehicle.color || payload.vehicle.colour;
+          vehicle.colour = c;
+          vehicle.color = c;
+        }
+        if (payload.vehicle.plateNumber !== undefined) {
+          vehicle.plate_number = payload.vehicle.plateNumber;
+          vehicle.plateNumber = payload.vehicle.plateNumber;
+        }
+        if (payload.vehicle.registrationNumber !== undefined) {
+          vehicle.registration_number = payload.vehicle.registrationNumber;
+          vehicle.registrationNumber = payload.vehicle.registrationNumber;
+        }
+        if (payload.vehicle.chassisNumber !== undefined) {
+          vehicle.chassis_number = payload.vehicle.chassisNumber;
+          vehicle.chassisNumber = payload.vehicle.chassisNumber;
+        }
+        if (payload.vehicle.engineNumber !== undefined) {
+          vehicle.engine_number = payload.vehicle.engineNumber;
+          vehicle.engineNumber = payload.vehicle.engineNumber;
+        }
+        if (payload.vehicle.capacity !== undefined) vehicle.capacity = payload.vehicle.capacity;
+      }
+    }
+
+    drv.updated_at = new Date().toISOString();
+    drv.updated_by = actor.fullName;
+
+    saveDB(db);
+
+    writeServerAuditLog(
+      actor.id,
+      actor.email,
+      actor.role,
+      'DRIVER_ADMIN_FORCE_EDIT',
+      null,
+      `Admin updated complete profile of driver ${drv.company_driver_id || drv.id}`,
+      req
+    );
+
+    res.json({ success: true, message: 'Driver details updated successfully.', driver: drv });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 11. AUTHENTICATED (Admins and Directors): Approve / Reject Driver Roster Status
 app.put('/api/drivers/:id/status', authenticateSession, (req, res) => {
   try {
@@ -5096,24 +5247,44 @@ app.post('/api/finance', authenticateSession, (req, res) => {
       return res.status(403).json({ error: 'Access Denied.' });
     }
 
-    const { type, category, amount, date, description } = req.body;
+    const { type, category, amount, date, description, driverId, recipient } = req.body;
     if (!type || !category || !amount || !date || !description) {
       return res.status(400).json({ error: 'Missing parameters.' });
     }
 
     const db = loadDB();
+    const parsedAmount = parseFloat(amount) || 0;
     const newRecord = {
       id: generateUUID(),
       type,
       category,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       date,
-      description,
+      description: `${description} ${driverId ? `(Linked Driver ID: ${driverId})` : ''}`,
+      recipient: recipient || '',
+      driver_id: driverId || null,
       approvedBy: actor.fullName,
       created_at: new Date().toISOString()
     };
 
     db.financial_records.unshift(newRecord);
+
+    if (type === 'expense' && driverId) {
+      const drv = db.drivers.find(d => d.id === driverId);
+      if (drv) {
+        if (!drv.expenseHistory) drv.expenseHistory = [];
+        drv.expenseHistory.unshift({
+          id: newRecord.id,
+          amount: parsedAmount,
+          category,
+          description,
+          date
+        });
+        const currentRemBalance = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : (drv.agreed_amount || 180000);
+        drv.remaining_vehicle_balance = currentRemBalance + parsedAmount;
+      }
+    }
+
     saveDB(db);
 
     writeServerAuditLog(
@@ -5122,7 +5293,7 @@ app.post('/api/finance', authenticateSession, (req, res) => {
       actor.role,
       'LEDGER_POST',
       null,
-      `Posted ₦${parseFloat(amount).toLocaleString()} (${type} -> ${category})`,
+      `Posted ₦${parsedAmount.toLocaleString()} (${type} -> ${category})`,
       req
     );
 
@@ -5518,7 +5689,7 @@ export function getDriverFinancials(driver: any, db: any) {
     const matchesDriver = validIds.has(p.driver_id) || validIds.has(p.driverId) || validIds.has(p.driver_name) || validIds.has(p.driverName);
     if (!matchesDriver) return false;
     const st = (p.status || '').toLowerCase();
-    return st === 'approved' || st === 'completed' || st === 'active' || st === 'paid' || st === 'pending';
+    return st === 'approved' || st === 'completed' || st === 'paid';
   };
 
   const approvedPaymentsInERP = (db.driver_payments || []).filter(isApprovedPayment);
@@ -8720,7 +8891,7 @@ app.put('/api/admin/users/:id/credentials', authenticateSession, (req, res) => {
     }
 
     const { id } = req.params;
-    const { username, password, status, email, phone, full_name } = req.body;
+    const { username, password, newPassword, status, email, phone, full_name, fullName } = req.body;
 
     const db = loadDB();
     const userIndex = (db.users || []).findIndex((u: any) => u.id === id);
@@ -8740,8 +8911,9 @@ app.put('/api/admin/users/:id/credentials', authenticateSession, (req, res) => {
       user.username = cleanUsername;
     }
 
-    if (password && password.trim()) {
-      user.password_hash = hashPassword(password.trim());
+    const passToSet = (newPassword || password || '').trim();
+    if (passToSet) {
+      user.password_hash = hashPassword(passToSet);
     }
 
     if (status) {
@@ -8756,8 +8928,9 @@ app.put('/api/admin/users/:id/credentials', authenticateSession, (req, res) => {
       user.phone = phone.trim();
     }
 
-    if (full_name !== undefined) {
-      user.full_name = full_name.trim();
+    const nameToSet = (fullName !== undefined ? fullName : full_name);
+    if (nameToSet !== undefined) {
+      user.full_name = nameToSet.trim();
     }
 
     user.updated_at = new Date().toISOString();
@@ -8771,17 +8944,17 @@ app.put('/api/admin/users/:id/credentials', authenticateSession, (req, res) => {
     if (user.role_id === 'role-driver' || user.role === 'driver') {
       const driver = (db.drivers || []).find((d: any) => d.user_id === user.id || d.id === user.driver_id);
       if (driver) {
-        if (full_name) driver.full_name = full_name;
-        if (email) driver.email = email;
-        if (phone) driver.phone = phone;
+        if (nameToSet !== undefined) driver.full_name = nameToSet.trim();
+        if (email !== undefined) driver.email = email.trim();
+        if (phone !== undefined) driver.phone = phone.trim();
         if (status) driver.status = status;
       }
     } else if (user.role_id === 'role-shareholder' || user.role === 'shareholder') {
       const shareholder = (db.shareholders || []).find((s: any) => s.user_id === user.id || s.id === user.shareholder_id);
       if (shareholder) {
-        if (full_name) shareholder.full_name = full_name;
-        if (email) shareholder.email = email;
-        if (phone) shareholder.phone = phone;
+        if (nameToSet !== undefined) shareholder.full_name = nameToSet.trim();
+        if (email !== undefined) shareholder.email = email.trim();
+        if (phone !== undefined) shareholder.phone = phone.trim();
         if (status) shareholder.status = status;
       }
     }
