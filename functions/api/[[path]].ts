@@ -505,32 +505,34 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
   const agreedAmount = parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 0;
   const installmentTarget = Math.round(agreedAmount / 6);
   
-  let startDate = new Date();
-  if (activeCycle) {
-    const rawStart = activeCycle.created_at || activeCycle.startDate;
-    let startMs = NaN;
-    if (rawStart) {
-      if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart)) {
-        startMs = new Date(`${rawStart}T00:00:00Z`).getTime();
-      } else {
-        startMs = new Date(rawStart).getTime();
-      }
-    }
-    if (!isNaN(startMs)) {
-      startDate = new Date(startMs);
-    } else {
-      startDate = new Date(activeCycle.startDate);
-    }
-  } else {
-    startDate = new Date(Date.now() - 30 * 24 * 3600 * 1000);
-  }
-  let endDate = activeCycle && activeCycle.endDate ? new Date(activeCycle.endDate) : new Date();
+  // Find all approved payments for this driver during the active cycle using safe YYYY-MM-DD string comparisons
+  const cycleStartRaw = activeCycle ? (activeCycle.startDate || activeCycle.start_time || activeCycle.created_at) : null;
+  const startStr = cycleStartRaw
+    ? (typeof cycleStartRaw === 'string' ? cycleStartRaw.split('T')[0] : new Date(cycleStartRaw).toISOString().split('T')[0])
+    : new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().split('T')[0];
+
+  const cycleEndRaw = activeCycle ? (activeCycle.endDate || activeCycle.end_time) : null;
+  const endStr = cycleEndRaw
+    ? (typeof cycleEndRaw === 'string' ? cycleEndRaw.split('T')[0] : new Date(cycleEndRaw).toISOString().split('T')[0])
+    : new Date().toISOString().split('T')[0];
   
   const payments = (db.driver_payments || []).filter((p: any) => {
-    return p.driver_id === driver.id && p.status === 'approved' &&
-      new Date(p.date) >= startDate &&
-      (activeCycle && activeCycle.endDate ? new Date(p.date) <= endDate : true);
+    const isMatchingDriver = (
+      p.driver_id === driver.id || 
+      p.driver_id === driver.user_id || 
+      p.driver_id === driver.company_driver_id ||
+      p.driverId === driver.id || 
+      p.driverId === driver.user_id || 
+      p.driverId === driver.company_driver_id
+    );
+    if (!isMatchingDriver || p.status !== 'approved') return false;
+    const pDateStr = typeof p.date === 'string' ? p.date.split('T')[0] : new Date(p.date).toISOString().split('T')[0];
+    const afterStart = pDateStr >= startStr;
+    const beforeEnd = activeCycle && activeCycle.endDate ? pDateStr <= endStr : true;
+    return afterStart && beforeEnd;
   });
+
+  const totalApprovedAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
   let totalRestDays = 0;
   const restHistory = driver.restHistory || [];
@@ -538,7 +540,8 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
     restHistory.forEach((rest: any) => {
       const restStart = new Date(rest.startDate);
       const restEnd = new Date(rest.endDate);
-      const cycleStart = new Date(activeCycle.startDate);
+      const rawCycleStart = activeCycle.startDate || activeCycle.start_time || activeCycle.created_at;
+      const cycleStart = rawCycleStart ? new Date(rawCycleStart) : new Date();
       
       if (restEnd >= cycleStart) {
         const overlapStart = restStart < cycleStart ? cycleStart : restStart;
@@ -559,13 +562,16 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
     return today >= start && today <= end;
   });
 
+  const rawCycleStart = activeCycle ? (activeCycle.startDate || activeCycle.start_time || activeCycle.created_at) : null;
+  let startDate = rawCycleStart ? new Date(rawCycleStart) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
+
   const nowMs = Date.now();
   const cycleStartMs = startDate.getTime();
   const elapsedDays = Math.max(1, Math.floor((nowMs - cycleStartMs) / (1000 * 60 * 60 * 24)) + 1);
   const currentRealTimeInstallment = Math.min(6, Math.max(1, Math.ceil(elapsedDays / 5)));
 
   const installments = [];
-  let carryForward = 0;
+  let remainingPaidPool = totalApprovedAmount;
 
   // Calculate total paused time from the master cycle to shift installment deadlines
   let masterPausedMs = (activeCycle?.totalPausedSeconds || 0) * 1000;
@@ -584,13 +590,11 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
     const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
     const extendedStartDate = new Date(normalStartDate.getTime() + (totalRestDays * 24 * 3600 * 1000) + masterPausedMs);
 
-    const installmentTarget = Math.round(agreedAmount / 6);
-    const dueAmount = installmentTarget + carryForward;
-    const matchingPayments = payments.filter((p: any) => p.installment_number === k);
-    const paidAmount = matchingPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+    const dueAmount = installmentTarget;
+    const paidAmount = Math.min(dueAmount, remainingPaidPool);
+    remainingPaidPool = Math.max(0, remainingPaidPool - paidAmount);
 
     const remaining = dueAmount - paidAmount;
-    carryForward = remaining;
 
     let status = 'Pending';
     if (remaining <= 0) {
@@ -603,11 +607,14 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
 
     const isCurrentRealTime = (k === currentRealTimeInstallment);
 
+    // Let's attach payments to this milestone
+    const matchingPayments = payments.filter((p: any) => p.installment_number === k || p.installmentNumber === k);
+
     installments.push({
       installmentNumber: k,
       dueAmount,
       paidAmount,
-      remainingAmount: Math.max(0, remaining),
+      remainingAmount: remaining,
       startDate: extendedStartDate.toISOString().split('T')[0],
       endDate: extendedEndDate.toISOString().split('T')[0],
       status,
@@ -1355,6 +1362,16 @@ class D1Manager {
   }
 
   async saveDB(state: any): Promise<void> {
+    if (state) {
+      if (!state.company_settings) state.company_settings = {};
+      if (state.company_settings.wallet_initial_amount === undefined) {
+        state.company_settings.wallet_initial_amount = state.company_settings.wallet_balance !== undefined ? state.company_settings.wallet_balance : 0;
+      }
+      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+      state.company_settings.wallet_balance = (state.company_settings.wallet_initial_amount || 0) + totalRev - totalExp;
+    }
+
     this.dbCache = state;
 
     // Detect and dispatch new push notifications (non-blocking)
@@ -3782,11 +3799,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const pay = db.driver_payments.find((p: any) => p.id === parts[0]);
         if (!pay) return buildResponse({ error: 'Payment not found.' }, 404);
 
+        const oldStatus = pay.status;
         pay.status = status;
         pay.approved_by = user.fullName;
         pay.updated_at = new Date().toISOString();
 
-        if (status === 'approved') {
+        if (status === 'approved' && oldStatus !== 'approved') {
           // Add payment as corporate revenue ledger
           db.financial_records.push({
             id: generateUUID(),
@@ -3805,6 +3823,23 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             }
             drv.remaining_vehicle_balance = Math.max(0, drv.remaining_vehicle_balance - pay.amount);
           }
+
+          // Update company wallet balance
+          db.company_settings = db.company_settings || {};
+          db.company_settings.wallet_balance = (db.company_settings.wallet_balance || 0) + pay.amount;
+        } else if (status !== 'approved' && oldStatus === 'approved') {
+          // Revert remaining balance
+          const drv = db.drivers.find((d: any) => d.id === pay.driver_id || d.user_id === pay.driver_id);
+          if (drv && drv.remaining_vehicle_balance !== undefined) {
+            drv.remaining_vehicle_balance = drv.remaining_vehicle_balance + pay.amount;
+          }
+
+          // Revert company wallet balance
+          db.company_settings = db.company_settings || {};
+          db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - pay.amount);
+
+          // Remove the corresponding ledger record
+          db.financial_records = (db.financial_records || []).filter((f: any) => !f.description.includes(pay.receipt_number));
         }
 
         // Send notify
@@ -3875,6 +3910,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
         db.financial_records.push(record);
 
+        // Update company wallet balance
+        db.company_settings = db.company_settings || {};
+        if (type === 'revenue' || type === 'deposit') {
+          db.company_settings.wallet_balance = (db.company_settings.wallet_balance || 0) + parsedAmount;
+        } else if (type === 'expense' || type === 'withdrawal') {
+          db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - parsedAmount);
+        }
+
         if (type === 'expense' && driverId) {
           const drv = db.drivers.find((d: any) => d.id === driverId);
           if (drv) {
@@ -3919,6 +3962,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       };
 
       db.financial_records.push(record);
+
+      // Update company wallet balance
+      db.company_settings = db.company_settings || {};
+      db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - parsedAmount);
 
       // If driver linked, update their expense history and update remaining balance
       if (driverId) {
@@ -5927,7 +5974,13 @@ ${JSON.stringify(cleanedContext, null, 2)}
 
       const totalDrivers = (db.drivers || []).length;
       const totalTricycles = (db.vehicles || []).length;
-      const companyWalletBalance = db.company_settings?.wallet_balance || 0;
+      let companyWalletBalance = db.company_settings?.wallet_balance;
+      if (companyWalletBalance === undefined || companyWalletBalance === null) {
+        const initial = db.company_settings?.wallet_initial_amount || 0;
+        const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
+        const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+        companyWalletBalance = initial + totalRev - totalExp;
+      }
       const systemHealth = 'Healthy';
 
       return buildResponse({
@@ -6370,6 +6423,10 @@ ${JSON.stringify(cleanedContext, null, 2)}
         approvedBy: user.fullName,
         created_at: new Date().toISOString()
       });
+
+      // Update company wallet balance
+      db.company_settings = db.company_settings || {};
+      db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - withdrawAmt);
 
       if (!db.notifications) db.notifications = [];
       db.notifications.unshift({

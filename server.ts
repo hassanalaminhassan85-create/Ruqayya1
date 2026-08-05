@@ -639,15 +639,34 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
   const agreedAmount = parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 0;
   const installmentTarget = Math.round(agreedAmount / 6);
   
-  // Find all approved payments for this driver during the active cycle
-  let startDate = activeCycle ? new Date(activeCycle.startDate) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
-  let endDate = activeCycle && activeCycle.endDate ? new Date(activeCycle.endDate) : new Date();
+  // Find all approved payments for this driver during the active cycle using safe YYYY-MM-DD string comparisons
+  const cycleStartRaw = activeCycle ? (activeCycle.startDate || activeCycle.start_time || activeCycle.created_at) : null;
+  const startStr = cycleStartRaw
+    ? (typeof cycleStartRaw === 'string' ? cycleStartRaw.split('T')[0] : new Date(cycleStartRaw).toISOString().split('T')[0])
+    : new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().split('T')[0];
+
+  const cycleEndRaw = activeCycle ? (activeCycle.endDate || activeCycle.end_time) : null;
+  const endStr = cycleEndRaw
+    ? (typeof cycleEndRaw === 'string' ? cycleEndRaw.split('T')[0] : new Date(cycleEndRaw).toISOString().split('T')[0])
+    : new Date().toISOString().split('T')[0];
   
   const payments = (db.driver_payments || []).filter((p: any) => {
-    return p.driver_id === driver.id && p.status === 'approved' &&
-      new Date(p.date) >= startDate &&
-      (activeCycle && activeCycle.endDate ? new Date(p.date) <= endDate : true);
+    const isMatchingDriver = (
+      p.driver_id === driver.id || 
+      p.driver_id === driver.user_id || 
+      p.driver_id === driver.company_driver_id ||
+      p.driverId === driver.id || 
+      p.driverId === driver.user_id || 
+      p.driverId === driver.company_driver_id
+    );
+    if (!isMatchingDriver || p.status !== 'approved') return false;
+    const pDateStr = typeof p.date === 'string' ? p.date.split('T')[0] : new Date(p.date).toISOString().split('T')[0];
+    const afterStart = pDateStr >= startStr;
+    const beforeEnd = activeCycle && activeCycle.endDate ? pDateStr <= endStr : true;
+    return afterStart && beforeEnd;
   });
+
+  const totalApprovedAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
   // Calculate total rest days during this active cycle to extend installments
   let totalRestDays = 0;
@@ -656,7 +675,8 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
     restHistory.forEach((rest: any) => {
       const restStart = new Date(rest.startDate);
       const restEnd = new Date(rest.endDate);
-      const cycleStart = new Date(activeCycle.startDate);
+      const rawCycleStart = activeCycle.startDate || activeCycle.start_time || activeCycle.created_at;
+      const cycleStart = rawCycleStart ? new Date(rawCycleStart) : new Date();
       
       if (restEnd >= cycleStart) {
         const overlapStart = restStart < cycleStart ? cycleStart : restStart;
@@ -677,13 +697,16 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
     return today >= start && today <= end;
   });
 
+  const rawCycleStart = activeCycle ? (activeCycle.startDate || activeCycle.start_time || activeCycle.created_at) : null;
+  let startDate = rawCycleStart ? new Date(rawCycleStart) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
+
   const nowMs = Date.now();
   const cycleStartMs = startDate.getTime();
   const elapsedDays = Math.max(1, Math.floor((nowMs - cycleStartMs) / (1000 * 60 * 60 * 24)) + 1);
   const currentRealTimeInstallment = Math.min(6, Math.max(1, Math.ceil(elapsedDays / 5)));
 
   const installments = [];
-  let carryForward = 0;
+  let remainingPaidPool = totalApprovedAmount;
 
   // Calculate total paused time from the master cycle to shift installment deadlines
   let masterPausedMs = (activeCycle?.totalPausedSeconds || 0) * 1000;
@@ -702,13 +725,11 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
     const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
     const extendedStartDate = new Date(normalStartDate.getTime() + (totalRestDays * 24 * 3600 * 1000) + masterPausedMs);
 
-    const installmentTarget = Math.round(agreedAmount / 6);
-    const dueAmount = installmentTarget + carryForward;
-    const matchingPayments = payments.filter((p: any) => p.installment_number === k);
-    const paidAmount = matchingPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+    const dueAmount = installmentTarget;
+    const paidAmount = Math.min(dueAmount, remainingPaidPool);
+    remainingPaidPool = Math.max(0, remainingPaidPool - paidAmount);
 
     const remaining = dueAmount - paidAmount;
-    carryForward = remaining;
 
     let status = 'Pending';
     if (remaining <= 0) {
@@ -721,11 +742,14 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
 
     const isCurrentRealTime = (k === currentRealTimeInstallment);
 
+    // Let's attach payments to this milestone
+    const matchingPayments = payments.filter((p: any) => p.installment_number === k || p.installmentNumber === k);
+
     installments.push({
       installmentNumber: k,
       dueAmount,
       paidAmount,
-      remainingAmount: Math.max(0, remaining),
+      remainingAmount: remaining,
       startDate: extendedStartDate.toISOString().split('T')[0],
       endDate: extendedEndDate.toISOString().split('T')[0],
       status,
@@ -5269,6 +5293,14 @@ app.post('/api/finance', authenticateSession, (req, res) => {
 
     db.financial_records.unshift(newRecord);
 
+    // Update company wallet balance
+    db.company_settings = db.company_settings || {};
+    if (type === 'revenue' || type === 'deposit') {
+      db.company_settings.wallet_balance = (db.company_settings.wallet_balance || 0) + parsedAmount;
+    } else if (type === 'expense' || type === 'withdrawal') {
+      db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - parsedAmount);
+    }
+
     if (type === 'expense' && driverId) {
       const drv = db.drivers.find(d => d.id === driverId);
       if (drv) {
@@ -7700,6 +7732,7 @@ app.put('/api/payments/:id/status', authenticateSession, (req, res) => {
       return res.status(400).json({ error: 'Payment has already been reviewed.' });
     }
 
+    const oldStatus = payment.status;
     payment.status = status;
     payment.remarks = remarks || payment.remarks;
     payment.approved_by = actor.fullName;
@@ -7707,7 +7740,7 @@ app.put('/api/payments/:id/status', authenticateSession, (req, res) => {
 
     const drv = db.drivers.find(d => d.id === payment.driver_id);
 
-    if (status === 'approved') {
+    if (status === 'approved' && oldStatus !== 'approved') {
       // Automatically post to financial ledger as corporate revenue
       db.financial_records.unshift({
         id: generateUUID(),
@@ -7728,6 +7761,22 @@ app.put('/api/payments/:id/status', authenticateSession, (req, res) => {
         }
         drv.remaining_vehicle_balance = Math.max(0, drv.remaining_vehicle_balance - payment.amount);
       }
+
+      // Update company wallet balance
+      db.company_settings = db.company_settings || {};
+      db.company_settings.wallet_balance = (db.company_settings.wallet_balance || 0) + payment.amount;
+    } else if (status !== 'approved' && oldStatus === 'approved') {
+      // Revert remaining balance if applicable
+      if (drv && drv.remaining_vehicle_balance !== undefined) {
+        drv.remaining_vehicle_balance = drv.remaining_vehicle_balance + payment.amount;
+      }
+
+      // Revert company wallet balance
+      db.company_settings = db.company_settings || {};
+      db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - payment.amount);
+
+      // Remove the corresponding ledger record
+      db.financial_records = (db.financial_records || []).filter((f: any) => !f.description.includes(payment.receipt_number));
     }
 
     // Notify Driver
@@ -7820,92 +7869,7 @@ app.put('/api/payments/:id', authenticateSession, (req, res) => {
   }
 });
 
-// Edit Driver Profile Complete (Admin/Director can edit complete driver profile details)
-app.put('/api/drivers/:id', authenticateSession, (req, res) => {
-  try {
-    const actor = (req as any).user;
-    if (actor.role !== 'admin' && actor.role !== 'director') {
-      return res.status(403).json({ error: 'Access Denied.' });
-    }
 
-    const db = loadDB();
-    const drv = db.drivers.find(d => d.id === req.params.id);
-    if (!drv) return res.status(404).json({ error: 'Driver profile not found.' });
-
-    const { fullName, phone, address, nin, licenseNumber, licenseExpiry, agreedAmount, remainingVehicleBalance, status, passportPhoto } = req.body;
-    
-    const user = db.users.find(u => u.id === drv.user_id);
-    const prevDrvVal = JSON.stringify(drv);
-
-    if (passportPhoto) {
-      const fileUrl = saveR2File(`driver_${drv.id}_passport`, passportPhoto);
-      (drv as any).passport_photo_url = fileUrl;
-      
-      // Update or insert in driver_documents
-      if (!db.driver_documents) db.driver_documents = [];
-      const existingDoc = db.driver_documents.find(d => d.driver_id === drv.id && d.document_type === 'passport_photo');
-      if (existingDoc) {
-        existingDoc.file_url = fileUrl;
-        existingDoc.created_at = new Date().toISOString();
-        existingDoc.created_by = actor.fullName;
-      } else {
-        db.driver_documents.push({
-          id: generateUUID(),
-          driver_id: drv.id,
-          document_type: 'passport_photo',
-          file_url: fileUrl,
-          created_at: new Date().toISOString(),
-          created_by: actor.fullName,
-          status: 'active'
-        });
-      }
-    }
-
-    if (user) {
-      if (fullName) user.full_name = fullName;
-      if (phone) user.phone = phone;
-    }
-    if (address !== undefined) drv.address = address;
-    if (nin !== undefined) drv.nin = nin;
-    if (licenseNumber !== undefined) drv.license_number = licenseNumber;
-    if (licenseExpiry !== undefined) drv.license_expiry = licenseExpiry;
-    if (agreedAmount !== undefined) drv.agreed_amount = parseFloat(agreedAmount);
-    
-    if (remainingVehicleBalance !== undefined) {
-      const approvedPaymentsInERP = (db.driver_payments || [])
-        .filter((p: any) => p.driver_id === drv.id && p.status === 'approved');
-      const totalErpPaid = approvedPaymentsInERP.reduce((sum: number, p: any) => sum + p.amount, 0);
-      drv.vehicle_purchase_price = parseFloat(remainingVehicleBalance) + totalErpPaid;
-      drv.remaining_vehicle_balance = parseFloat(remainingVehicleBalance);
-    }
-    
-    if (status) {
-      drv.status = status;
-      if (user) {
-        user.status = status === 'approved' || status === 'available' ? 'active' : status;
-      }
-    }
-
-    drv.updated_at = new Date().toISOString();
-    drv.updated_by = actor.fullName;
-
-    saveDB(db);
-
-    writeServerAuditLog(
-      actor.id,
-      actor.email,
-      actor.role,
-      'DRIVER_PROFILE_EDIT',
-      prevDrvVal,
-      JSON.stringify(drv),
-      req
-    );
-
-    res.json({ success: true, driver: drv });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 app.put('/api/drivers/:id/archive', authenticateSession, (req, res) => {
   try {
@@ -8298,6 +8262,10 @@ app.post('/api/expenses', authenticateSession, (req, res) => {
 
     db.financial_records.unshift(expenseRecord);
 
+    // Update company wallet balance
+    db.company_settings = db.company_settings || {};
+    db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - parseFloat(amount));
+
     // If driver linked, update their expense history and automatically add to their remaining balance
     if (driverId) {
       const drv = db.drivers.find(d => d.id === driverId);
@@ -8457,6 +8425,10 @@ app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
       approvedBy: actor.fullName || actor.email || 'Shareholder',
       created_at: new Date().toISOString()
     });
+
+    // Update company wallet balance
+    db.company_settings = db.company_settings || {};
+    db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - withdrawAmt);
 
     db.notifications.unshift({
       id: generateUUID(),

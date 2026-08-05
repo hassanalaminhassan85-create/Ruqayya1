@@ -1502,13 +1502,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                                   inst.status === 'Partially Paid' || inst.status === 'Partial' ? 'warning' :
                                   inst.status === 'Overdue' ? 'danger' : 'warning'
                                 }>
-                                  {inst.remainingAmount === 0 && inst.paidAmount >= inst.dueAmount && inst.paidAmount > inst.dueAmount
-                                    ? 'Overpayment'
-                                    : inst.remainingAmount === 0 && inst.paidAmount > 0
-                                    ? 'Paid Completely'
-                                    : inst.paidAmount > 0
-                                    ? 'Partial'
-                                    : inst.status}
+                                  {inst.status === 'Completed' ? 'Paid Completely' : inst.status}
                                 </Badge>
                               </div>
 

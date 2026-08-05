@@ -153,6 +153,8 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
             systemHealth: 'Healthy'
           });
         }
+      } else {
+        fetchOperationsState();
       }
     };
     

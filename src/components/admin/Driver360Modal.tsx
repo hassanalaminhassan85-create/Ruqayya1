@@ -145,7 +145,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 
       // Payments
       const payRes = await api.getPayments(activeDriver.id).catch(() => []);
-      if (Array.isArray(payRes) && payRes.length > 0) {
+      if (Array.isArray(payRes)) {
         setLivePayments(payRes);
       }
 
@@ -165,6 +165,9 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   useEffect(() => {
     fetchDriverInstallmentsAndData();
     const handleDBChange = () => {
+      if (activeDriver?.id) {
+        fetchDriverFullData(activeDriver.id);
+      }
       fetchDriverInstallmentsAndData();
       if (onSync) onSync();
     };
@@ -266,6 +269,16 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [remitError, setRemitError] = useState('');
   const [remitSubmitting, setRemitSubmitting] = useState(false);
 
+  // Initialize and reset remittance states when active driver changes
+  useEffect(() => {
+    setRemitAmount('50000');
+    setRemitInstallmentNumber('1');
+    setRemitReceipt(`RCP-${Math.floor(100000 + Math.random() * 900000)}`);
+    setRemitRemarks('30-Day Cycle Installment Remittance');
+    setRemitError('');
+    setRemitSubmitting(false);
+  }, [activeDriver?.id]);
+
   const vehicleAssigned = vehicles.find(v => v.id === activeDriver.assignedVehicleId || v.id === activeDriver.vehicle_id || v.driver_id === activeDriver.id) || (activeDriver as any).vehicle;
 
   // Sync state whenever activeDriver or vehicleAssigned changes
@@ -303,7 +316,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     setEditVehicleChassis(v.chassisNumber || v.chassis_number || '');
     setEditVehicleEngine(v.engineNumber || v.engine_number || '');
     setEditVehicleCapacity(v.capacity ? v.capacity.toString() : '');
-  }, [activeDriver, vehicleAssigned]);
+  }, [activeDriver]);
 
   // Payment Calculations
   const driverPayments = useMemo(() => {

@@ -111,6 +111,11 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
   const [adminRemarksInput, setAdminRemarksInput] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Reset administrator remarks when looking at a different payment
+  useEffect(() => {
+    setAdminRemarksInput('');
+  }, [inspectPayment?.id]);
+
   // Official Certified Receipt Modal State
   const [selectedReceipt, setSelectedReceipt] = useState<PaymentRecord | null>(null);
 

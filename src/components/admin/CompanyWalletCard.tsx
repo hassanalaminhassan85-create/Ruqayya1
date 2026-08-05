@@ -89,6 +89,8 @@ export const CompanyWalletCard: React.FC<CompanyWalletCardProps> = ({
       const detail = (e as CustomEvent).detail;
       if (detail && detail.company_settings) {
         setBalance(detail.company_settings.wallet_balance || 0);
+      } else {
+        fetchWalletBalance();
       }
     };
     
