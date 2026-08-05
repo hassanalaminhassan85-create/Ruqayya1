@@ -5709,12 +5709,8 @@ export function getDriverFinancials(driver: any, db: any) {
   const totalExpenses = Math.max(totalLedgerExpenses, totalHistoryExpenses);
 
   let basePurchasePrice = 0;
-  if (rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice))) {
+  if (rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) && parseFloat(rawPrice) > 0) {
     basePurchasePrice = parseFloat(rawPrice);
-  } else if (rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining))) {
-    // Legacy fallback: if vehicle_purchase_price wasn't stored, but remaining_vehicle_balance was,
-    // assume the stored remaining balance is the current balance, so purchase price is current + paid.
-    basePurchasePrice = parseFloat(rawInitialRemaining) + totalErpPaid;
   } else {
     basePurchasePrice = 15000000;
   }
@@ -5729,12 +5725,14 @@ export function getDriverFinancials(driver: any, db: any) {
     const openingPaid = parseFloat(driver.opening_balance.total_paid_to_date ?? driver.opening_balance.totalPaidToDate) || 0;
     
     // For imported drivers, the purchase price is explicitly defined or inferred from opening balance
-    const importedPurchasePrice = (rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) 
+    const importedPurchasePrice = (rawPrice !== undefined && rawPrice !== null && !isNaN(parseFloat(rawPrice)) && parseFloat(rawPrice) > 0
       ? parseFloat(rawPrice) 
-      : (openingRemaining + openingPaid)) + totalExpenses;
+      : Math.max(15000000, openingRemaining + openingPaid)) + totalExpenses;
       
     const totalAmountPaid = openingPaid + totalErpPaid;
-    const remainingVehicleBalance = Math.max(0, importedPurchasePrice - totalAmountPaid);
+    const remainingVehicleBalance = rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining))
+      ? Math.max(0, parseFloat(rawInitialRemaining) - totalErpPaid)
+      : Math.max(0, importedPurchasePrice - totalAmountPaid);
     
     return {
       vehiclePurchasePrice: importedPurchasePrice,
@@ -5748,7 +5746,9 @@ export function getDriverFinancials(driver: any, db: any) {
     // Native Driver
     const totalAmountPaid = totalErpPaid;
     // Calculate remaining vehicle balance using single source of truth
-    const remainingVehicleBalance = Math.max(0, purchasePrice - totalAmountPaid);
+    const remainingVehicleBalance = rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining))
+      ? Math.max(0, parseFloat(rawInitialRemaining) - totalErpPaid)
+      : Math.max(0, purchasePrice - totalAmountPaid);
     
     return {
       vehiclePurchasePrice: purchasePrice,

@@ -594,7 +594,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   const renderOverview = () => (
     <div className="space-y-6">
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="border-l-4 border-l-brand-gold bg-bg-surface shadow-sm">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -608,6 +608,24 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
               </div>
               <div className="p-3 bg-brand-gold/10 rounded-xl text-brand-gold">
                 <Truck className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-amber-500 bg-bg-surface shadow-sm">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                  {lang === 'en' ? "Vehicle Purchase Price" : "Farashin Sayen Mota"}
+                </p>
+                <h3 className="text-xl font-black mt-1 text-amber-600 font-mono">
+                  ₦{vehiclePurchasePrice.toLocaleString()}
+                </h3>
+              </div>
+              <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500">
+                <DollarSign className="h-6 w-6" />
               </div>
             </div>
           </CardContent>
