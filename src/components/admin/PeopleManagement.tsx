@@ -194,6 +194,8 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
     const file = e.target.files?.[0];
     if (file) {
       try {

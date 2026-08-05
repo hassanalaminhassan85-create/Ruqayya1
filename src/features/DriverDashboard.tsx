@@ -420,28 +420,42 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   })();
 
   const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const base64 = await compressImageFile(file, 800, 800, 0.75);
-      // Save immediately to survive native mobile picker page reloads!
+      // Save immediately to survive native mobile picker process restarts
       localStorage.setItem('pending_passport_upload', base64);
       localStorage.setItem('pending_passport_timestamp', Date.now().toString());
+
+      // Optimistically update UI state with the new image URL / base64 without page reload
+      setDriverData((prev: any) => prev ? {
+        ...prev,
+        passport_photo_url: base64,
+        passportPhoto: base64,
+        passportPhotoUrl: base64,
+        passport: base64,
+        avatar: base64
+      } : prev);
 
       const res = await api.request('/api/drivers/self', {
         method: 'PUT',
         body: JSON.stringify({ passportPhoto: base64 })
       });
+
       if (res && res.success) {
-        alert(lang === 'en' ? "Passport photo updated successfully!" : "An sabunta hoton fasfo cikin nasara!");
         localStorage.removeItem('pending_passport_upload');
         localStorage.removeItem('pending_passport_timestamp');
-        await fetchData();
+        if (res.driver) {
+          setDriverData((prev: any) => prev ? { ...prev, ...res.driver } : res.driver);
+        }
       } else {
-        alert(res.error || "Failed to update passport photo.");
+        console.error("Failed to update passport photo on server:", res?.error);
       }
     } catch (err: any) {
-      alert(err.message || "Failed to update passport photo.");
+      console.error("Error uploading passport photo:", err?.message || err);
     }
   };
 
@@ -907,8 +921,13 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                     onChange={handlePassportUpload} 
                   />
                   <Button 
+                    type="button"
                     size="sm" 
-                    onClick={() => document.getElementById('driver-passport-upload-input')?.click()}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      document.getElementById('driver-passport-upload-input')?.click();
+                    }}
                     className="bg-brand-gold hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer"
                   >
                     {lang === 'en' ? "Upload / Change Passport 📷" : "Canza Hoton Fasfo 📷"}

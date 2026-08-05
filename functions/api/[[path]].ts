@@ -557,19 +557,33 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
     return today >= start && today <= end;
   });
 
+  const nowMs = Date.now();
+  const cycleStartMs = startDate.getTime();
+  const elapsedDays = Math.max(1, Math.floor((nowMs - cycleStartMs) / (1000 * 60 * 60 * 24)) + 1);
+  const currentRealTimeInstallment = Math.min(6, Math.max(1, Math.ceil(elapsedDays / 5)));
+
   const installments = [];
   let carryForward = 0;
+
+  // Calculate total paused time from the master cycle to shift installment deadlines
+  let masterPausedMs = (activeCycle?.totalPausedSeconds || 0) * 1000;
+  if (activeCycle?.status === 'paused' && activeCycle?.pausedAt) {
+    masterPausedMs += Date.now() - new Date(activeCycle.pausedAt).getTime();
+  }
 
   for (let k = 1; k <= 6; k++) {
     const startDay = (k - 1) * 5 + 1;
     const endDay = k * 5;
 
+    // Shift the schedule by both driver-specific rest days AND company-wide paused time
     const normalEndDate = new Date(startDate.getTime() + (endDay - 1) * 24 * 3600 * 1000);
-    const extendedEndDate = new Date(normalEndDate.getTime() + totalRestDays * 24 * 3600 * 1000);
+    const extendedEndDate = new Date(normalEndDate.getTime() + (totalRestDays * 24 * 3600 * 1000) + masterPausedMs);
     
     const normalStartDate = new Date(startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000);
-    const extendedStartDate = new Date(normalStartDate.getTime() + totalRestDays * 24 * 3600 * 1000);
+    const extendedStartDate = new Date(normalStartDate.getTime() + (totalRestDays * 24 * 3600 * 1000) + masterPausedMs);
 
+    const installmentTarget = Math.round(agreedAmount / 6);
+    const dueAmount = installmentTarget + carryForward;
     const matchingPayments = payments.filter((p: any) => p.installment_number === k);
     const paidAmount = matchingPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
@@ -585,6 +599,8 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
       status = 'Overdue';
     }
 
+    const isCurrentRealTime = (k === currentRealTimeInstallment);
+
     installments.push({
       installmentNumber: k,
       dueAmount,
@@ -593,6 +609,7 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
       startDate: extendedStartDate.toISOString().split('T')[0],
       endDate: extendedEndDate.toISOString().split('T')[0],
       status,
+      isCurrentRealTime,
       payments: matchingPayments.map((p: any) => ({
         id: p.id,
         amount: p.amount,
@@ -606,6 +623,79 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
   }
 
   return installments;
+}
+
+// Helper to detect operational cycle notifications
+function isOperationalCycleNotification(n: any): boolean {
+  if (!n) return false;
+  const category = (n.category || n.type || '').toLowerCase();
+  if (category === 'cycle' || category === 'operations' || category === 'operational') return true;
+
+  const text = `${n.title_en || n.titleEn || n.title || ''} ${n.message_en || n.messageEn || n.message || ''} ${n.title_ha || n.titleHa || ''} ${n.message_ha || n.messageHa || ''}`.toLowerCase();
+
+  return (
+    text.includes('cycle') ||
+    text.includes('zagaye') ||
+    text.includes('operating') ||
+    text.includes('remittance') ||
+    text.includes('installment') ||
+    text.includes('operational') ||
+    text.includes('paused') ||
+    text.includes('resumed') ||
+    text.includes('scheduled') ||
+    text.includes('started') ||
+    text.includes('ended') ||
+    text.includes('vouchers') ||
+    text.includes('payroll') ||
+    text.includes('fleet')
+  );
+}
+
+// Helper to determine if a notification is relevant for a given user or role
+function isNotificationForUser(n: any, user: { id?: string; role: string }, db: any): boolean {
+  if (!n || !user) return false;
+
+  // Direct user targeting
+  if (user.id && n.user_id && n.user_id === user.id) return true;
+
+  if (user.role === 'driver') {
+    const drv = user.id ? db.drivers?.find((d: any) => d.user_id === user.id || d.id === user.id) : null;
+    if (drv && n.driver_id && n.driver_id === drv.id) return true;
+
+    // Driver specific role target
+    if (n.target_role === 'driver') return true;
+
+    // Untargeted notifications: ONLY show operational cycle notifications for drivers
+    if (!n.user_id && !n.target_role) {
+      return isOperationalCycleNotification(n);
+    }
+
+    return false;
+  }
+
+  if (user.role === 'shareholder') {
+    const sh = user.id ? db.shareholders?.find((s: any) => s.user_id === user.id || s.id === user.id) : null;
+    if (sh && n.shareholder_id && n.shareholder_id === sh.id) return true;
+
+    // Shareholder specific role target
+    if (n.target_role === 'shareholder') return true;
+
+    // Untargeted notifications: ONLY show operational cycle & shareholder financial notifications
+    if (!n.user_id && !n.target_role) {
+      if (isOperationalCycleNotification(n)) return true;
+      const text = `${n.title_en || n.titleEn || n.title || ''} ${n.message_en || n.messageEn || n.message || ''}`.toLowerCase();
+      if (text.includes('dividend') || text.includes('capital') || text.includes('investment') || text.includes('financial')) return true;
+    }
+
+    return false;
+  }
+
+  // Directors and admins see all or role-matched notifications
+  if (user.role === 'director' || user.role === 'admin') {
+    if (!n.user_id || (user.id && n.user_id === user.id) || !n.target_role || n.target_role === user.role || n.target_role === 'all') return true;
+  }
+
+  return false;
 }
 
 // Helper to filter and optimize database snapshots based on security roles
@@ -724,79 +814,6 @@ function generateFilteredPayload(role: string, driverProfileId: string | null, s
       }
       return { id: s.id, full_name: s.full_name, status: s.status };
     });
-
-// Helper to detect operational cycle notifications
-function isOperationalCycleNotification(n: any): boolean {
-  if (!n) return false;
-  const category = (n.category || n.type || '').toLowerCase();
-  if (category === 'cycle' || category === 'operations' || category === 'operational') return true;
-
-  const text = `${n.title_en || n.titleEn || n.title || ''} ${n.message_en || n.messageEn || n.message || ''} ${n.title_ha || n.titleHa || ''} ${n.message_ha || n.messageHa || ''}`.toLowerCase();
-
-  return (
-    text.includes('cycle') ||
-    text.includes('zagaye') ||
-    text.includes('operating') ||
-    text.includes('remittance') ||
-    text.includes('installment') ||
-    text.includes('operational') ||
-    text.includes('paused') ||
-    text.includes('resumed') ||
-    text.includes('scheduled') ||
-    text.includes('started') ||
-    text.includes('ended') ||
-    text.includes('vouchers') ||
-    text.includes('payroll') ||
-    text.includes('fleet')
-  );
-}
-
-// Helper to determine if a notification is relevant for a given user or role
-function isNotificationForUser(n: any, user: { id?: string; role: string }, db: any): boolean {
-  if (!n || !user) return false;
-
-  // Direct user targeting
-  if (user.id && n.user_id && n.user_id === user.id) return true;
-
-  if (user.role === 'driver') {
-    const drv = user.id ? db.drivers?.find((d: any) => d.user_id === user.id || d.id === user.id) : null;
-    if (drv && n.driver_id && n.driver_id === drv.id) return true;
-
-    // Driver specific role target
-    if (n.target_role === 'driver') return true;
-
-    // Untargeted notifications: ONLY show operational cycle notifications for drivers
-    if (!n.user_id && !n.target_role) {
-      return isOperationalCycleNotification(n);
-    }
-
-    return false;
-  }
-
-  if (user.role === 'shareholder') {
-    const sh = user.id ? db.shareholders?.find((s: any) => s.user_id === user.id || s.id === user.id) : null;
-    if (sh && n.shareholder_id && n.shareholder_id === sh.id) return true;
-
-    // Shareholder specific role target
-    if (n.target_role === 'shareholder') return true;
-
-    // Untargeted notifications: ONLY show operational cycle & shareholder financial notifications
-    if (!n.user_id && !n.target_role) {
-      if (isOperationalCycleNotification(n)) return true;
-      const text = `${n.title_en || n.titleEn || n.title || ''} ${n.message_en || n.messageEn || n.message || ''}`.toLowerCase();
-      if (text.includes('dividend') || text.includes('capital') || text.includes('investment') || text.includes('financial')) return true;
-    }
-
-    return false;
-  }
-
-  // Directors and admins see all or role-matched notifications
-  if (user.role === 'director' || user.role === 'admin') {
-    if (!n.user_id || (user.id && n.user_id === user.id) || !n.target_role || n.target_role === user.role || n.target_role === 'all') return true;
-  }
-
-  return false;
-}
 
     return {
       ...common,

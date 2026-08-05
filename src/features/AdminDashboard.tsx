@@ -608,6 +608,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                       accept="image/*" 
                       className="hidden" 
                       onChange={(e) => {
+                        e.preventDefault?.();
+                        e.stopPropagation?.();
                         const file = e.target.files?.[0];
                         if (file) {
                           compressImageFile(file, 800, 800, 0.75)

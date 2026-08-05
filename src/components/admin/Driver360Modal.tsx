@@ -345,6 +345,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   };
 
   const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
     const files = e.target.files;
     if (files) {
       await handleFilesUpload(files);

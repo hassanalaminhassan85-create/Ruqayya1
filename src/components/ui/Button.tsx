@@ -42,6 +42,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <motion.button
+      type={props.type || 'button'}
       whileTap={disabled || isLoading ? {} : { scale: 0.98 }}
       className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={disabled || isLoading}

@@ -83,6 +83,8 @@ export const RegisterAssistedDriverModal: React.FC<RegisterAssistedDriverModalPr
   const [importVehicleCapacity, setImportVehicleCapacity] = useState('30 Tons');
 
   const handleFileRead = async (e: React.ChangeEvent<HTMLInputElement>, callback: (base64: string) => void) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
     const file = e.target.files?.[0];
     if (file) {
       try {

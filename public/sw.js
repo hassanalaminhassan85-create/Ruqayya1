@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const CACHE_NAME = 'ruqayya-transport-erp-v1';
+const CACHE_NAME = 'ruqayya-transport-erp-v2';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/logo.png'
 ];
 
-// Install Event: cache core assets
+// Install Event: cache static core assets (excluding index.html to avoid stale HTML)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -27,6 +25,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
+            console.log('RUQAYYA ERP SW: Clearing legacy cache:', cache);
             return caches.delete(cache);
           }
         })
@@ -47,10 +46,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Navigation requests (HTML pages / index.html): ALWAYS fetch fresh from network
+  if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-cache' })
+        .catch(() => caches.match('/index.html') || caches.match(event.request))
+    );
+    return;
+  }
+
+  // Static assets (CSS/JS/images)
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cache new successful requests
         if (response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -60,7 +68,6 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Fallback to cache if offline
         return caches.match(event.request);
       })
   );

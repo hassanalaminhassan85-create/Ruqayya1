@@ -36,6 +36,7 @@ import { Dictionary, Language, Theme } from '../types';
 import { Button } from '../components/ui/Button';
 import { api } from '../utils/api';
 import { CircularLogo } from '../components/CircularLogo';
+import { compressImageFile } from '../utils/imageCompressor';
 
 // Helper to normalize paths
 const normalizePath = (path: string): string => {
@@ -1160,17 +1161,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                               onDragOver={(e) => {
                                 e.preventDefault();
                               }}
-                              onDrop={(e) => {
+                              onDrop={async (e) => {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 const file = e.dataTransfer.files?.[0];
                                 if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    if (typeof reader.result === 'string') {
-                                      setRegPassportPhoto(reader.result);
-                                    }
-                                  };
-                                  reader.readAsDataURL(file);
+                                  try {
+                                    const compressed = await compressImageFile(file, 800, 800, 0.75);
+                                    setRegPassportPhoto(compressed);
+                                  } catch (err) {
+                                    console.error('Failed to compress passport image:', err);
+                                  }
                                 }
                               }}
                             >
@@ -1179,16 +1180,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                 id="driver-passport-upload" 
                                 accept="image/*" 
                                 className="hidden" 
-                                onChange={(e) => {
+                                onChange={async (e) => {
+                                  e.preventDefault?.();
+                                  e.stopPropagation?.();
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => {
-                                      if (typeof reader.result === 'string') {
-                                        setRegPassportPhoto(reader.result);
-                                      }
-                                    };
-                                    reader.readAsDataURL(file);
+                                    try {
+                                      const compressed = await compressImageFile(file, 800, 800, 0.75);
+                                      setRegPassportPhoto(compressed);
+                                    } catch (err) {
+                                      console.error('Failed to compress passport image:', err);
+                                    }
                                   }
                                 }}
                               />
@@ -1633,17 +1635,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                               onDragOver={(e) => {
                                 e.preventDefault();
                               }}
-                              onDrop={(e) => {
+                              onDrop={async (e) => {
                                 e.preventDefault();
+                                e.stopPropagation();
                                 const file = e.dataTransfer.files?.[0];
                                 if (file) {
-                                  const reader = new FileReader();
-                                  reader.onloadend = () => {
-                                    if (typeof reader.result === 'string') {
-                                      setRegGuarantorPassport(reader.result);
-                                    }
-                                  };
-                                  reader.readAsDataURL(file);
+                                  try {
+                                    const compressed = await compressImageFile(file, 800, 800, 0.75);
+                                    setRegGuarantorPassport(compressed);
+                                  } catch (err) {
+                                    console.error('Failed to compress guarantor passport image:', err);
+                                  }
                                 }
                               }}
                             >
@@ -1652,16 +1654,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                                 id="guarantor-passport-upload" 
                                 accept="image/*" 
                                 className="hidden" 
-                                onChange={(e) => {
+                                onChange={async (e) => {
+                                  e.preventDefault?.();
+                                  e.stopPropagation?.();
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => {
-                                      if (typeof reader.result === 'string') {
-                                        setRegGuarantorPassport(reader.result);
-                                      }
-                                    };
-                                    reader.readAsDataURL(file);
+                                    try {
+                                      const compressed = await compressImageFile(file, 800, 800, 0.75);
+                                      setRegGuarantorPassport(compressed);
+                                    } catch (err) {
+                                      console.error('Failed to compress guarantor passport image:', err);
+                                    }
                                   }
                                 }}
                               />

@@ -204,6 +204,8 @@ export const CommunicationCenter: React.FC<CommunicationCenterProps> = ({ lang }
   };
 
   const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
     const file = e.target.files?.[0];
     if (file) {
       try {

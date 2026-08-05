@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge, Tabs, Modal, Alert } from '../components/ui/SharedComponents';
 import { api } from '../utils/api';
+import { compressImageFile } from '../utils/imageCompressor';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   TrendingUp, 
@@ -93,28 +94,37 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
   };
 
   const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (uploadEvent) => {
-      const base64 = uploadEvent.target?.result as string;
-      try {
-        const res = await api.request('/api/shareholders/self', {
-          method: 'PUT',
-          body: JSON.stringify({ passportPhoto: base64 })
-        });
-        if (res && res.success) {
-          alert(lang === 'en' ? "Passport photo updated successfully!" : "An sabunta hoton fasfo cikin nasara!");
-          await fetchData();
-          window.dispatchEvent(new CustomEvent('db-change'));
-        } else {
-          alert(res.error || "Failed to update passport photo.");
+    try {
+      const base64 = await compressImageFile(file, 800, 800, 0.75);
+      // Optimistically update UI state immediately with new image URL
+      setShareholder((prev: any) => prev ? {
+        ...prev,
+        passportPhoto: base64,
+        passport_photo_url: base64,
+        passportPhotoUrl: base64,
+        avatar: base64
+      } : prev);
+
+      const res = await api.request('/api/shareholders/self', {
+        method: 'PUT',
+        body: JSON.stringify({ passportPhoto: base64 })
+      });
+
+      if (res && res.success) {
+        if (res.shareholder) {
+          setShareholder((prev: any) => prev ? { ...prev, ...res.shareholder } : res.shareholder);
         }
-      } catch (err: any) {
-        alert(err.message || "Failed to update passport photo.");
+        window.dispatchEvent(new CustomEvent('db-change'));
+      } else {
+        console.error("Failed to update passport photo on server:", res?.error);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.error("Error uploading passport photo:", err?.message || err);
+    }
   };
 
   // Dedicated effect to fetch fresh data when authToken changes
@@ -275,8 +285,13 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
                     onChange={handlePassportUpload} 
                   />
                   <Button 
+                    type="button"
                     size="sm" 
-                    onClick={() => document.getElementById('shareholder-passport-upload-input')?.click()}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      document.getElementById('shareholder-passport-upload-input')?.click();
+                    }}
                     className="bg-brand-gold hover:bg-amber-400 text-slate-950 font-bold text-[10px] py-1 px-2 h-7 cursor-pointer"
                   >
                     {lang === 'en' ? "Upload 📷" : "Sanya 📷"}

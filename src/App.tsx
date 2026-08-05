@@ -240,8 +240,10 @@ export default function App() {
   }, [currentRole]);
 
   // Robust session and token re-hydration check against backend using secure wrapper
-  const hydrateSession = async () => {
-    setAuthLoading(true);
+  const hydrateSession = async (isInitial = false) => {
+    if (isInitial) {
+      setAuthLoading(true);
+    }
     console.log('Ruqayya ERP [SECURE_SESSION]: Starting session re-hydration check...');
     try {
       const token = SecureSession.getToken();
@@ -299,20 +301,24 @@ export default function App() {
           setAuthToken(token);
           setCurrentRole(userRole);
           setDriverName(payload.user.full_name || payload.user.fullName || '');
-        } else {
+        } else if (isInitial) {
           console.log('Ruqayya ERP [SECURE_SESSION]: api.getMe() returned no user, clearing token via secure wrapper.');
           SecureSession.clearToken();
           setAuthToken(null);
           setCurrentRole('public');
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Ruqayya ERP [SECURE_SESSION]: api.getMe() error during re-hydration:', e);
-        SecureSession.clearToken();
-        setAuthToken(null);
-        setCurrentRole('public');
+        if (isInitial || e?.status === 401 || e?.status === 403) {
+          SecureSession.clearToken();
+          setAuthToken(null);
+          setCurrentRole('public');
+        }
       }
     } finally {
-      setAuthLoading(false);
+      if (isInitial) {
+        setAuthLoading(false);
+      }
     }
   };
 
@@ -320,8 +326,8 @@ export default function App() {
   useEffect(() => {
     const handleFocusRehydration = () => {
       if (document.visibilityState === 'visible') {
-        console.log('Ruqayya ERP [SECURE_SESSION]: Tab gained focus or visibility detected. Re-hydrating session...');
-        hydrateSession();
+        console.log('Ruqayya ERP [SECURE_SESSION]: Tab gained focus or visibility detected. Re-hydrating session silently...');
+        hydrateSession(false);
       }
     };
 
@@ -403,7 +409,7 @@ export default function App() {
     window.addEventListener('pwa-action-queued', updateSyncCount);
     window.addEventListener('pwa-sync-completed', updateSyncCount);
 
-    hydrateSession();
+    hydrateSession(true);
 
     const handleSessionExpired = (e: any) => {
       const msg = e.detail?.message || "Session expired. Please enter your username again.";
