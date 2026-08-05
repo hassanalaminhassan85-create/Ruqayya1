@@ -122,6 +122,112 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [livePayments, setLivePayments] = useState<any[]>(payments);
   const [telematicsData, setTelematicsData] = useState<any | null>(null);
 
+  // Helper to generate deterministic Maiduguri locations for the active driver
+  const maiduguriSim = useMemo(() => {
+    if (!activeDriver) return { placesVisited: [], currentLoc: null };
+    
+    const driverNum = parseInt((activeDriver as any).company_driver_id?.replace(/\D/g, '') || activeDriver.id?.charCodeAt(0)?.toString() || '1') || 0;
+    const routeIndex = driverNum % 3;
+    
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const routes = [
+      [
+        { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 8*60, depOffset: 8*60 + 30, activity: 'Shift Commencement & Pre-trip cargo loading' },
+        { name: 'Monday Market Hub', lat: 11.8365, lng: 13.1486, arrOffset: 8*60 + 50, depOffset: 9*60 + 40, activity: 'Offloading wholesale consumables' },
+        { name: 'Bolori Junction', lat: 11.8520, lng: 13.1310, arrOffset: 10*60, depOffset: 11*60, activity: 'Tire safety check & fuel top-up' },
+        { name: 'Bulumkutu Bypass', lat: 11.8210, lng: 13.1110, arrOffset: 11*60 + 20, depOffset: 13*60, activity: 'Scheduled fatigue break & lunch rest' },
+        { name: 'Custom Area Depot', lat: 11.8540, lng: 13.1720, arrOffset: 13*60 + 30, depOffset: null, activity: 'Bulk freight offloading & client sign-off' }
+      ],
+      [
+        { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 7*60 + 30, depOffset: 8*60, activity: 'Shift Commencement & Pre-trip safety check' },
+        { name: 'Custom Area Depot', lat: 11.8540, lng: 13.1720, arrOffset: 8*60 + 20, depOffset: 9*60 + 30, activity: 'Inter-state cargo transfer' },
+        { name: 'Muna Garage Terminal', lat: 11.8480, lng: 13.2080, arrOffset: 9*60 + 50, depOffset: 11*60 + 10, activity: 'Agricultural haulage sorting' },
+        { name: 'Tashan Bama Hub', lat: 11.7990, lng: 13.1890, arrOffset: 11*60 + 30, depOffset: 13*60 + 30, activity: 'Rest stop & routine maintenance check' },
+        { name: 'Bama Road Corridor', lat: 11.8020, lng: 13.1950, arrOffset: 13*60 + 50, depOffset: null, activity: 'Grain delivery & warehouse dispatch' }
+      ],
+      [
+        { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 8*60 + 30, depOffset: 9*60, activity: 'Shift Commencement' },
+        { name: 'Bolori Junction', lat: 11.8520, lng: 13.1310, arrOffset: 9*60 + 20, depOffset: 10*60 + 15, activity: 'Spare parts delivery' },
+        { name: 'Bulumkutu Bypass', lat: 11.8210, lng: 13.1110, arrOffset: 10*60 + 40, depOffset: 12*60, activity: 'Trailer inspection & driver physical rest' },
+        { name: 'Monday Market Hub', lat: 11.8365, lng: 13.1486, arrOffset: 12*60 + 20, depOffset: 13*60 + 45, activity: 'Retail dispatch' },
+        { name: 'Maiduguri Main Terminal (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 14*60 + 10, depOffset: null, activity: 'Return to base and debrief' }
+      ]
+    ];
+
+    const selectedRoute = routes[routeIndex];
+    const placesVisited: any[] = [];
+    let currentLoc: any = null;
+
+    selectedRoute.forEach((stop, index) => {
+      if (currentMinutes >= stop.arrOffset) {
+        const arrivedAt = new Date();
+        arrivedAt.setHours(Math.floor(stop.arrOffset / 60), stop.arrOffset % 60, 0, 0);
+
+        let departedAt: Date | null = null;
+        let dwellMinutes = 0;
+        let status = 'active_dwell';
+
+        if (stop.depOffset !== null && currentMinutes >= stop.depOffset) {
+          departedAt = new Date();
+          departedAt.setHours(Math.floor(stop.depOffset / 60), stop.depOffset % 60, 0, 0);
+          dwellMinutes = stop.depOffset - stop.arrOffset;
+          status = 'completed';
+        } else {
+          dwellMinutes = currentMinutes - stop.arrOffset;
+          status = 'active_dwell';
+        }
+
+        placesVisited.push({
+          id: `PLC-${activeDriver.id}-${index}`,
+          place_name: stop.name,
+          arrived_at: arrivedAt.toISOString(),
+          departed_at: departedAt ? departedAt.toISOString() : null,
+          dwell_duration_minutes: dwellMinutes,
+          status,
+          activity: stop.activity,
+          latitude: stop.lat,
+          longitude: stop.lng
+        });
+
+        if (status === 'active_dwell' || index === selectedRoute.length - 1 || (departedAt && currentMinutes < (selectedRoute[index+1]?.arrOffset || 24*60))) {
+          currentLoc = {
+            latitude: stop.lat,
+            longitude: stop.lng,
+            place_name: stop.name,
+            activity: status === 'active_dwell' ? stop.activity : 'In Transit'
+          };
+        }
+      }
+    });
+
+    if (placesVisited.length === 0) {
+      const firstStop = selectedRoute[0];
+      const arrivedAt = new Date();
+      arrivedAt.setHours(Math.floor(firstStop.arrOffset / 60), firstStop.arrOffset % 60, 0, 0);
+      placesVisited.push({
+        id: `PLC-${activeDriver.id}-0`,
+        place_name: firstStop.name,
+        arrived_at: arrivedAt.toISOString(),
+        departed_at: null,
+        dwell_duration_minutes: 0,
+        status: 'active_dwell',
+        activity: firstStop.activity,
+        latitude: firstStop.lat,
+        longitude: firstStop.lng
+      });
+      currentLoc = {
+        latitude: firstStop.lat,
+        longitude: firstStop.lng,
+        place_name: firstStop.name,
+        activity: 'Pre-trip check'
+      };
+    }
+
+    return { placesVisited, currentLoc };
+  }, [activeDriver]);
+
   const fetchDriverInstallmentsAndData = async () => {
     if (!activeDriver?.id) return;
     setLoadingInstallments(true);
@@ -886,28 +992,36 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 
                       {/* Map HUD Overlays */}
                       <div className="absolute top-3 left-3 bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl font-mono text-[11px] text-slate-300 flex flex-col gap-0.5 backdrop-blur-md">
-                        <span className="font-bold text-brand-gold">Abuja - Lokoja Corridor (Km 142)</span>
-                        <span>Coordinates: 9.0765° N, 7.3986° E</span>
-                        <span className="text-emerald-400">Heading: North-North-East (34°)</span>
+                        <span className="font-bold text-brand-gold truncate max-w-[220px]">
+                          {telematicsData?.currentLocation?.place_name || maiduguriSim.currentLoc?.place_name || 'Maiduguri Central Depot'}
+                        </span>
+                        <span>
+                          Coordinates: {(telematicsData?.currentLocation?.latitude || maiduguriSim.currentLoc?.latitude || 11.8311).toFixed(4)}° N, {(telematicsData?.currentLocation?.longitude || maiduguriSim.currentLoc?.longitude || 13.1509).toFixed(4)}° E
+                        </span>
+                        <span className="text-emerald-400">Heading: North-East (45°) • Borno State</span>
                       </div>
 
                       <div className="absolute top-3 right-3 bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl font-mono text-[11px] text-right text-slate-300 flex flex-col gap-0.5 backdrop-blur-md">
                         <span className="font-bold text-white">Geofence Status: OK</span>
                         <span className="text-slate-400">Speed Limit: 80 KM/H</span>
-                        <span className={vehicleSpeed > 80 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
-                          {vehicleSpeed > 80 ? '⚠️ OVERSPEED ALERT' : 'Speed Compliance: 100%'}
+                        <span className={(telematicsData?.currentLocation?.speed || vehicleSpeed) > 80 ? 'text-rose-400 font-bold animate-pulse' : 'text-emerald-400'}>
+                          {(telematicsData?.currentLocation?.speed || vehicleSpeed) > 80 ? '⚠️ OVERSPEED ALERT' : 'Speed Compliance: 100%'}
                         </span>
                       </div>
                     </div>
 
                     {/* Bottom Map Bar */}
                     <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
-                      <div className="flex items-center gap-4 text-slate-400">
-                        <span>Route: Abuja → Lokoja Freight Terminal</span>
-                        <span className="text-brand-gold font-bold">Est Arrival: 14:35 (2h 10m remaining)</span>
+                      <div className="flex items-center gap-4 text-slate-400 flex-wrap">
+                        <span className="font-semibold text-white">
+                          Route: {telematicsData?.placesVisitedToday?.[0]?.place_name || maiduguriSim.placesVisited[0]?.place_name || 'Maiduguri Depot'} → {telematicsData?.placesVisitedToday?.[telematicsData.placesVisitedToday.length - 1]?.place_name || maiduguriSim.placesVisited[maiduguriSim.placesVisited.length - 1]?.place_name || 'Custom Area Depot'}
+                        </span>
+                        <span className="text-brand-gold font-bold">
+                          Est Arrival: {String((new Date().getHours() + 1) % 24).padStart(2, '0')}:45 (1h 15m remaining)
+                        </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => alert("Vehicle Centered on GPS Feed")}>Center View</Button>
+                        <Button variant="outline" size="sm" onClick={() => console.log("Vehicle Centered on GPS Feed")}>Center View</Button>
                       </div>
                     </div>
                   </div>
@@ -990,7 +1104,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                       </button>
 
                       <button 
-                        onClick={() => alert("Snapshots captured & saved to document vault")}
+                        onClick={() => console.log("Snapshots captured & saved to document vault")}
                         className="text-[11px] font-bold text-slate-300 hover:text-brand-gold transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
                         <Camera className="h-3.5 w-3.5 text-brand-gold" />
@@ -1071,6 +1185,84 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                       <span className="text-xs text-slate-400">/ 100</span>
                     </div>
                     <span className="text-[10px] text-emerald-400 font-mono">Low Fatigue Risk</span>
+                  </div>
+                </div>
+
+                {/* Maiduguri Dispatch Logbook Panel */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 mt-6 shadow-2xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-brand-gold animate-pulse" />
+                        Today's Borno State Dispatch Logbook & Dwell Times
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Real-time tracking of route stops, arrivals, dwell durations, and departure records across Maiduguri corridors today.
+                      </p>
+                    </div>
+                    <Badge variant="gold" className="self-start sm:self-center font-mono text-[10px]">
+                      ROUTE: {telematicsData?.placesVisitedToday?.[0]?.place_name || maiduguriSim.placesVisited[0]?.place_name || 'Maiduguri Depot'} → {telematicsData?.placesVisitedToday?.[telematicsData.placesVisitedToday.length - 1]?.place_name || maiduguriSim.placesVisited[maiduguriSim.placesVisited.length - 1]?.place_name || 'Custom Area Depot'}
+                    </Badge>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-300 font-mono">
+                      <thead className="bg-slate-950/50 text-[10px] text-slate-400 uppercase border-b border-slate-800">
+                        <tr>
+                          <th className="p-3">Location / Stop</th>
+                          <th className="p-3">Status & Activity</th>
+                          <th className="p-3">Arrived At</th>
+                          <th className="p-3">Departed At</th>
+                          <th className="p-3 text-right">Dwell Duration</th>
+                          <th className="p-3 text-right">Coordinates</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50">
+                        {(telematicsData?.placesVisitedToday || maiduguriSim.placesVisited).map((stop: any, idx: number) => {
+                          const arrivedStr = stop.arrived_at ? new Date(stop.arrived_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending';
+                          const departedStr = stop.departed_at ? new Date(stop.departed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : stop.status === 'active_dwell' ? 'Still Docked' : 'Ongoing Transit';
+                          const isCurrent = stop.status === 'active_dwell' || (!stop.departed_at && idx === (telematicsData?.placesVisitedToday || maiduguriSim.placesVisited).length - 1);
+                          return (
+                            <tr key={stop.id || idx} className={`transition-colors hover:bg-slate-800/30 ${isCurrent ? 'bg-brand-gold/5 text-brand-gold' : ''}`}>
+                              <td className="p-3 font-semibold">
+                                <div className="flex items-center gap-2">
+                                  <span className={`h-2 w-2 rounded-full ${isCurrent ? 'bg-brand-gold animate-ping' : 'bg-slate-500'}`}></span>
+                                  {stop.place_name}
+                                </div>
+                              </td>
+                              <td className="p-3 text-slate-400">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-slate-200">{stop.activity || 'Fleet operations'}</span>
+                                  <span className="text-[10px] text-slate-500">Stop #{idx + 1}</span>
+                                </div>
+                              </td>
+                              <td className="p-3 text-slate-300">{arrivedStr}</td>
+                              <td className="p-3">
+                                {stop.departed_at ? (
+                                  <span className="text-slate-400">{departedStr}</span>
+                                ) : (
+                                  <span className={`font-bold ${isCurrent ? 'text-brand-gold' : 'text-slate-500'}`}>
+                                    {departedStr}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3 text-right font-bold text-slate-200">
+                                {stop.dwell_duration_minutes > 0 ? (
+                                  <span>{stop.dwell_duration_minutes} mins</span>
+                                ) : isCurrent ? (
+                                  <span className="text-brand-gold animate-pulse">Docked</span>
+                                ) : (
+                                  <span className="text-slate-500">-</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-right text-slate-400 text-[10px]">
+                                {stop.latitude?.toFixed(4)}° N, {stop.longitude?.toFixed(4)}° E
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>

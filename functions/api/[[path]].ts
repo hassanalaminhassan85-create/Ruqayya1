@@ -3621,6 +3621,340 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
+  // 8.5. DRIVER TELEMATICS & DUTY SHIFTS (SINGULAR DRIVER PREFIX)
+  if (path.startsWith('/api/driver')) {
+    const parts = path.replace(/^\/api\/driver/, '').split('/').filter(Boolean);
+
+    // Helpers for Maiduguri Simulation
+    const getMaiduguriSimulatedDataCF = (drvObj: any) => {
+      const driverNum = parseInt(drvObj.company_driver_id?.replace(/\D/g, '') || drvObj.id?.charCodeAt(0)?.toString() || '1') || 0;
+      const routeIndex = driverNum % 3;
+      
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      const routes = [
+        [
+          { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 8*60, depOffset: 8*60 + 30, activity: 'Shift Commencement & Pre-trip cargo loading' },
+          { name: 'Monday Market Hub', lat: 11.8365, lng: 13.1486, arrOffset: 8*60 + 50, depOffset: 9*60 + 40, activity: 'Offloading wholesale consumables' },
+          { name: 'Bolori Junction', lat: 11.8520, lng: 13.1310, arrOffset: 10*60, depOffset: 11*60, activity: 'Tire safety check & fuel top-up' },
+          { name: 'Bulumkutu Bypass', lat: 11.8210, lng: 13.1110, arrOffset: 11*60 + 20, depOffset: 13*60, activity: 'Scheduled fatigue break & lunch rest' },
+          { name: 'Custom Area Depot', lat: 11.8540, lng: 13.1720, arrOffset: 13*60 + 30, depOffset: null, activity: 'Bulk freight offloading & client sign-off' }
+        ],
+        [
+          { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 7*60 + 30, depOffset: 8*60, activity: 'Shift Commencement & Pre-trip safety check' },
+          { name: 'Custom Area Depot', lat: 11.8540, lng: 13.1720, arrOffset: 8*60 + 20, depOffset: 9*60 + 30, activity: 'Inter-state cargo transfer' },
+          { name: 'Muna Garage Terminal', lat: 11.8480, lng: 13.2080, arrOffset: 9*60 + 50, depOffset: 11*60 + 10, activity: 'Agricultural haulage sorting' },
+          { name: 'Tashan Bama Hub', lat: 11.7990, lng: 13.1890, arrOffset: 11*60 + 30, depOffset: 13*60 + 30, activity: 'Rest stop & routine maintenance check' },
+          { name: 'Bama Road Corridor', lat: 11.8020, lng: 13.1950, arrOffset: 13*60 + 50, depOffset: null, activity: 'Grain delivery & warehouse dispatch' }
+        ],
+        [
+          { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 8*60 + 30, depOffset: 9*60, activity: 'Shift Commencement' },
+          { name: 'Bolori Junction', lat: 11.8520, lng: 13.1310, arrOffset: 9*60 + 20, depOffset: 10*60 + 15, activity: 'Spare parts delivery' },
+          { name: 'Bulumkutu Bypass', lat: 11.8210, lng: 13.1110, arrOffset: 10*60 + 40, depOffset: 12*60, activity: 'Trailer inspection & driver physical rest' },
+          { name: 'Monday Market Hub', lat: 11.8365, lng: 13.1486, arrOffset: 12*60 + 20, depOffset: 13*60 + 45, activity: 'Retail dispatch' },
+          { name: 'Maiduguri Main Terminal (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 14*60 + 10, depOffset: null, activity: 'Return to base and debrief' }
+        ]
+      ];
+
+      const selectedRoute = routes[routeIndex];
+      const placesVisited: any[] = [];
+      let currentLoc: any = null;
+
+      selectedRoute.forEach((stop, index) => {
+        if (currentMinutes >= stop.arrOffset) {
+          const arrivedAt = new Date();
+          arrivedAt.setHours(Math.floor(stop.arrOffset / 60), stop.arrOffset % 60, 0, 0);
+
+          let departedAt: Date | null = null;
+          let dwellMinutes = 0;
+          let status = 'active_dwell';
+
+          if (stop.depOffset !== null && currentMinutes >= stop.depOffset) {
+            departedAt = new Date();
+            departedAt.setHours(Math.floor(stop.depOffset / 60), stop.depOffset % 60, 0, 0);
+            dwellMinutes = stop.depOffset - stop.arrOffset;
+            status = 'completed';
+          } else {
+            dwellMinutes = currentMinutes - stop.arrOffset;
+            status = 'active_dwell';
+          }
+
+          placesVisited.push({
+            id: `PLC-${drvObj.id}-${index}`,
+            place_name: stop.name,
+            arrived_at: arrivedAt.toISOString(),
+            departed_at: departedAt ? departedAt.toISOString() : null,
+            dwell_duration_minutes: dwellMinutes,
+            status,
+            activity: stop.activity,
+            latitude: stop.lat,
+            longitude: stop.lng
+          });
+
+          if (status === 'active_dwell' || index === selectedRoute.length - 1 || (departedAt && currentMinutes < (selectedRoute[index+1]?.arrOffset || 24*60))) {
+            currentLoc = {
+              latitude: stop.lat,
+              longitude: stop.lng,
+              place_name: stop.name,
+              activity: status === 'active_dwell' ? stop.activity : 'In Transit'
+            };
+          }
+        }
+      });
+
+      if (placesVisited.length === 0) {
+        const firstStop = selectedRoute[0];
+        const arrivedAt = new Date();
+        arrivedAt.setHours(Math.floor(firstStop.arrOffset / 60), firstStop.arrOffset % 60, 0, 0);
+        placesVisited.push({
+          id: `PLC-${drvObj.id}-0`,
+          place_name: firstStop.name,
+          arrived_at: arrivedAt.toISOString(),
+          departed_at: null,
+          dwell_duration_minutes: 0,
+          status: 'active_dwell',
+          activity: firstStop.activity,
+          latitude: firstStop.lat,
+          longitude: firstStop.lng
+        });
+        currentLoc = {
+          latitude: firstStop.lat,
+          longitude: firstStop.lng,
+          place_name: firstStop.name,
+          activity: 'Pre-trip check'
+        };
+      }
+
+      return { placesVisited, currentLoc };
+    };
+
+    // Find driver matching actor user context
+    let drv = db.drivers.find((d: any) => d.user_id === user.id || d.id === user.id);
+
+    // POST /api/driver/duty/start
+    if (parts.length === 2 && parts[0] === 'duty' && parts[1] === 'start' && method === 'POST') {
+      if (!drv) return buildResponse({ error: 'Driver profile not linked.' }, 404);
+      
+      const payload = await request.json() as any;
+      const { startingMileage, startingLocation, latitude, longitude, placeName } = payload;
+      if (!db.driver_duty_sessions) db.driver_duty_sessions = [];
+
+      const nowIso = new Date().toISOString();
+      db.driver_duty_sessions.forEach((s: any) => {
+        if (s.driver_id === drv.id && s.status === 'active') {
+          s.status = 'completed';
+          s.finish_time = nowIso;
+        }
+      });
+
+      const newDutySession = {
+        id: `DUTY-${Date.now()}-${generateUUID().substring(0, 6).toUpperCase()}`,
+        driver_id: drv.id,
+        driver_name: user.full_name || drv.full_name || 'Driver',
+        company_driver_id: drv.company_driver_id || 'DRV-UNKNOWN',
+        start_time: nowIso,
+        finish_time: null,
+        status: 'active',
+        starting_mileage: parseFloat(startingMileage) || 0,
+        starting_location: startingLocation || placeName || 'Maiduguri Central Terminal',
+        latitude: latitude || 11.8311,
+        longitude: longitude || 13.1509,
+        places_visited: []
+      };
+
+      db.driver_duty_sessions.unshift(newDutySession);
+
+      const initPlace = placeName || startingLocation || 'Maiduguri Central Depot';
+      const initPlaceRecord = {
+        id: `PLC-${Date.now()}-${generateUUID().substring(0, 4)}`,
+        place_name: initPlace,
+        arrived_at: nowIso,
+        departed_at: null,
+        dwell_duration_minutes: 0,
+        status: 'active_dwell',
+        activity: 'Shift Commencement & Pre-trip Check',
+        latitude: latitude || 11.8311,
+        longitude: longitude || 13.1509
+      };
+      newDutySession.places_visited.push(initPlaceRecord);
+
+      db.drivers.forEach((d: any) => {
+        if (d.id === drv.id) d.status = 'on-duty';
+      });
+
+      saveDB(db);
+      return buildResponse({ success: true, message: 'Work shift started successfully.', dutySession: newDutySession });
+    }
+
+    // POST /api/driver/duty/end
+    if (parts.length === 2 && parts[0] === 'duty' && parts[1] === 'end' && method === 'POST') {
+      if (!drv) return buildResponse({ error: 'Driver profile not linked.' }, 404);
+      
+      const payload = await request.json() as any;
+      const { finishingMileage, endingLocation, latitude, longitude, placeName } = payload;
+      if (!db.driver_duty_sessions) db.driver_duty_sessions = [];
+
+      const activeSession = db.driver_duty_sessions.find((s: any) => s.driver_id === drv.id && s.status === 'active');
+      const nowIso = new Date().toISOString();
+
+      if (activeSession) {
+        activeSession.status = 'completed';
+        activeSession.finish_time = nowIso;
+        activeSession.finishing_mileage = parseFloat(finishingMileage) || activeSession.starting_mileage;
+        activeSession.ending_location = endingLocation || placeName || 'Maiduguri Central Terminal';
+        
+        const lastPlace = activeSession.places_visited[activeSession.places_visited.length - 1];
+        if (lastPlace && lastPlace.status === 'active_dwell') {
+          lastPlace.status = 'completed';
+          lastPlace.departed_at = nowIso;
+          const dwell = Math.round((new Date(nowIso).getTime() - new Date(lastPlace.arrived_at).getTime()) / 60000);
+          lastPlace.dwell_duration_minutes = dwell > 0 ? dwell : 0;
+        }
+
+        const terminalRecord = {
+          id: `PLC-${Date.now()}-${generateUUID().substring(0, 4)}`,
+          place_name: endingLocation || placeName || 'Maiduguri Central Depot',
+          arrived_at: nowIso,
+          departed_at: nowIso,
+          dwell_duration_minutes: 10,
+          status: 'completed',
+          activity: 'Shift Termination & Final Post-trip Log',
+          latitude: latitude || 11.8311,
+          longitude: longitude || 13.1509
+        };
+        activeSession.places_visited.push(terminalRecord);
+      }
+
+      db.drivers.forEach((d: any) => {
+        if (d.id === drv.id) d.status = 'off-duty';
+      });
+
+      saveDB(db);
+      return buildResponse({ success: true, message: 'Work shift ended successfully. Off duty status recorded.', dutySession: activeSession || null });
+    }
+
+    // POST /api/driver/location
+    if (parts.length === 1 && parts[0] === 'location' && method === 'POST') {
+      const payload = await request.json() as any;
+      let reqDriverId = payload.driverId;
+      let targetDrv = db.drivers.find((d: any) => d.user_id === user.id || d.id === user.id);
+      if (!targetDrv && reqDriverId) {
+        targetDrv = db.drivers.find((d: any) => d.id === reqDriverId);
+      }
+      if (!targetDrv) return buildResponse({ error: 'Driver profile not found.' }, 404);
+
+      const { latitude, longitude, accuracy, speed, heading, altitude, placeName, activity } = payload;
+      const nowIso = new Date().toISOString();
+
+      if (!db.driver_locations) db.driver_locations = [];
+
+      let loc = db.driver_locations.find((l: any) => l.driver_id === targetDrv.id);
+      if (!loc) {
+        loc = {
+          id: `LOC-${targetDrv.id}`,
+          driver_id: targetDrv.id,
+          driver_name: targetDrv.full_name || targetDrv.fullName || user.full_name || 'Driver',
+          company_driver_id: targetDrv.company_driver_id || 'DRV-UNKNOWN',
+          latitude: parseFloat(latitude) || 11.8311,
+          longitude: parseFloat(longitude) || 13.1509,
+          accuracy: parseFloat(accuracy) || 10,
+          speed: parseFloat(speed) || 0,
+          heading: parseFloat(heading) || 0,
+          altitude: parseFloat(altitude) || 0,
+          place_name: placeName || 'Maiduguri Fleet Hub',
+          activity: activity || (speed > 5 ? 'In Transit' : 'Stationary Work'),
+          updated_at: nowIso,
+          history: []
+        };
+        db.driver_locations.push(loc);
+      } else {
+        loc.latitude = parseFloat(latitude) || loc.latitude;
+        loc.longitude = parseFloat(longitude) || loc.longitude;
+        loc.accuracy = parseFloat(accuracy) || loc.accuracy;
+        loc.speed = parseFloat(speed) >= 0 ? parseFloat(speed) : loc.speed;
+        loc.heading = parseFloat(heading) || loc.heading;
+        loc.place_name = placeName || loc.place_name;
+        loc.activity = activity || (loc.speed > 5 ? 'In Transit' : 'Stationary Work');
+        loc.updated_at = nowIso;
+        
+        if (!loc.history) loc.history = [];
+        loc.history.unshift({
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          speed: loc.speed,
+          heading: loc.heading,
+          place_name: loc.place_name,
+          timestamp: nowIso
+        });
+        if (loc.history.length > 50) loc.history = loc.history.slice(0, 50);
+      }
+
+      saveDB(db);
+      return buildResponse({ success: true, location: loc });
+    }
+
+    // GET /api/driver/:id/telematics
+    if (parts.length === 2 && parts[1] === 'telematics' && method === 'GET') {
+      let targetDriverId = parts[0];
+      if (user.role === 'driver') {
+        const selfDrv = db.drivers.find((d: any) => d.user_id === user.id || d.id === user.id);
+        if (selfDrv) targetDriverId = selfDrv.id;
+      }
+
+      const targetDrv = db.drivers.find((d: any) => d.id === targetDriverId || d.user_id === targetDriverId);
+      if (!targetDrv) return buildResponse({ error: 'Driver telematics profile not found.' }, 404);
+
+      const dutySessions = (db.driver_duty_sessions || []).filter((s: any) => s.driver_id === targetDrv.id);
+      const activeDuty = dutySessions.find((s: any) => s.status === 'active') || null;
+      const currentLocation = (db.driver_locations || []).find((l: any) => l.driver_id === targetDrv.id) || null;
+
+      const maiduguriSim = getMaiduguriSimulatedDataCF(targetDrv);
+
+      let places = activeDuty ? activeDuty.places_visited || [] : (dutySessions[0]?.places_visited || []);
+      if (!places || places.length === 0) {
+        places = maiduguriSim.placesVisited;
+      }
+
+      let curLoc = currentLocation;
+      if (!curLoc) {
+        curLoc = {
+          id: `LOC-${targetDrv.id}`,
+          driver_id: targetDrv.id,
+          driver_name: targetDrv.fullName || targetDrv.full_name || 'Driver',
+          company_driver_id: targetDrv.company_driver_id || 'DRV-UNKNOWN',
+          latitude: maiduguriSim.currentLoc?.latitude || 11.8311,
+          longitude: maiduguriSim.currentLoc?.longitude || 13.1509,
+          accuracy: 10,
+          speed: activeDuty ? 65 : 0,
+          heading: 45,
+          altitude: 350,
+          place_name: maiduguriSim.currentLoc?.place_name || 'Maiduguri Central Depot',
+          activity: activeDuty ? (maiduguriSim.currentLoc?.activity || 'In Transit') : 'Off-duty',
+          updated_at: new Date().toISOString(),
+          history: []
+        };
+      } else {
+        if (curLoc.latitude === 9.0765 || Math.abs(curLoc.latitude - 9.0765) < 0.01) {
+          curLoc.latitude = maiduguriSim.currentLoc?.latitude || 11.8311;
+          curLoc.longitude = maiduguriSim.currentLoc?.longitude || 13.1509;
+          curLoc.place_name = maiduguriSim.currentLoc?.place_name || 'Maiduguri Central Depot';
+          curLoc.activity = activeDuty ? (maiduguriSim.currentLoc?.activity || 'In Transit') : 'Off-duty';
+        }
+      }
+
+      return buildResponse({
+        success: true,
+        driverId: targetDrv.id,
+        companyDriverId: targetDrv.company_driver_id || 'DRV-UNKNOWN',
+        activeDuty,
+        dutyHistory: dutySessions.slice(0, 20),
+        currentLocation: curLoc,
+        placesVisitedToday: places
+      });
+    }
+  }
+
   // 9. VEHICLES ENDPOINTS
   if (path.startsWith('/api/vehicles')) {
     const parts = path.replace(/^\/api\/vehicles/, '').split('/').filter(Boolean);

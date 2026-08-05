@@ -250,8 +250,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     if (!driverData) return;
     setIsUpdatingShift(true);
     try {
-      let lat = 9.0765;
-      let lng = 7.3986;
+      let lat = 11.8311;
+      let lng = 13.1509;
       if ('geolocation' in navigator) {
         await new Promise((resolve) => {
           navigator.geolocation.getCurrentPosition(
@@ -267,7 +267,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       }
       const res = await api.startDriverDuty({
         startingMileage: parseFloat(startingMileage) || 0,
-        startingLocation: shiftLocation || 'Terminal',
+        startingLocation: shiftLocation || 'Maiduguri Central Terminal',
         latitude: lat,
         longitude: lng,
         placeName: shiftLocation || 'Terminal'
