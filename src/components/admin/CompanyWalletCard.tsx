@@ -59,14 +59,14 @@ export const CompanyWalletCard: React.FC<CompanyWalletCardProps> = ({
   // Inflow / Outflow summary stats
   const totalInflow = finance
     .filter(f => f.type === 'revenue' || f.type === 'deposit')
-    .reduce((sum, f) => sum + f.amount, 0) + 
+    .reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0) + 
     payments
       .filter(p => p.status === 'approved')
-      .reduce((sum, p) => sum + p.amount, 0);
+      .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
   const totalOutflow = finance
     .filter(f => f.type === 'expense' || f.type === 'withdrawal')
-    .reduce((sum, f) => sum + f.amount, 0);
+    .reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
   const fetchWalletBalance = async () => {
     try {
@@ -88,7 +88,7 @@ export const CompanyWalletCard: React.FC<CompanyWalletCardProps> = ({
     const handleDbChange = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail && detail.company_settings) {
-        setBalance(detail.company_settings.wallet_balance || 0);
+        setBalance(parseFloat(detail.company_settings.wallet_balance) || 0);
       } else {
         fetchWalletBalance();
       }

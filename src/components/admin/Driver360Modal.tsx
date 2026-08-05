@@ -279,8 +279,80 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     }
   };
 
+  const fetchLiveTelematics = async () => {
+    if (!activeDriver?.id) return;
+    try {
+      const teleRes = await api.getDriverTelematics(activeDriver.id).catch(() => null);
+      if (teleRes && teleRes.success) {
+        setTelematicsData(teleRes);
+      }
+    } catch (err) {
+      console.error("Failed to silently poll telemetry:", err);
+    }
+  };
+
   useEffect(() => {
     fetchDriverInstallmentsAndData();
+    
+    // Silently poll live telematics every 15 seconds while modal is open as a failsafe fallback
+    const pollInterval = setInterval(() => {
+      fetchLiveTelematics();
+    }, 15000);
+
+    // Live sub-second WebSocket listener
+    let ws: WebSocket | null = null;
+    let wsConnectTimeout: any = null;
+
+    const connectWebSocket = () => {
+      if (!activeDriver?.id) return;
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/ws/driver-location?role=admin&driverId=${activeDriver.id}`;
+        
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log('[Admin 360 WS] Connected for real-time tracking.');
+          ws?.send(JSON.stringify({
+            type: 'auth',
+            role: 'admin',
+            driverId: activeDriver.id
+          }));
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'location_update' && data.driverId === activeDriver.id) {
+              console.log('[Admin 360 WS] Received sub-second real-time update:', data.location);
+              setTelematicsData((prev: any) => ({
+                ...(prev || {}),
+                success: true,
+                currentLocation: data.location
+              }));
+            }
+          } catch (err) {
+            console.error('[Admin 360 WS] Failed to parse message:', err);
+          }
+        };
+
+        ws.onclose = () => {
+          console.log('[Admin 360 WS] Closed. Retrying in 5s...');
+          wsConnectTimeout = setTimeout(connectWebSocket, 5000);
+        };
+
+        ws.onerror = (err) => {
+          console.error('[Admin 360 WS] Error:', err);
+          ws?.close();
+        };
+      } catch (err) {
+        console.error('[Admin 360 WS] Failed to connect:', err);
+        wsConnectTimeout = setTimeout(connectWebSocket, 5000);
+      }
+    };
+
+    connectWebSocket();
+
     const handleDBChange = () => {
       if (activeDriver?.id) {
         fetchDriverFullData(activeDriver.id);
@@ -289,7 +361,15 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
       if (onSync) onSync();
     };
     window.addEventListener('db-change', handleDBChange);
-    return () => window.removeEventListener('db-change', handleDBChange);
+    return () => {
+      clearInterval(pollInterval);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+      if (wsConnectTimeout) clearTimeout(wsConnectTimeout);
+      window.removeEventListener('db-change', handleDBChange);
+    };
   }, [activeDriver?.id]);
 
   // Action Modals

@@ -188,10 +188,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const activeVehiclesCount = vehicles.filter(v => v && (v.status === 'assigned' || v.status === 'active')).length;
 
   const totalShareholders = shareholders.length;
-  const totalInvestments = shareholders.reduce((sum, sh) => sum + (sh && sh.investment_amount ? sh.investment_amount : 0), 0);
+  const totalInvestments = shareholders.reduce((sum, sh) => sum + ((parseFloat(sh.investment_amount) || 0)), 0);
 
-  const totalRevenue = financials.filter(f => f && f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0);
-  const totalExpenses = financials.filter(f => f && f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
+  const totalRevenue = financials.filter(f => f && f.type === 'revenue').reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+  const totalExpenses = financials.filter(f => f && f.type === 'expense').reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
   const netProfit = totalRevenue - totalExpenses;
 
   const sharePct = shareholderSettings?.distributionPercentage ?? 2;

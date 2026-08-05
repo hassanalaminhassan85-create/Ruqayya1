@@ -373,7 +373,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
         p.status === 'approved' && 
         String(p.installment_number || p.installmentNumber) === String(targetInstallment)
       )
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
     const hasAuditLog = (localAuditLogs || []).some(log => 
       (log.userId === d.id || log.driverId === d.id) && 
@@ -557,33 +557,33 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   }[lang];
 
   // REAL-TIME LEDGER METRICS
-  const totalRevenue = finance.filter(f => f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0);
-  const totalExpenses = finance.filter(f => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
+  const totalRevenue = finance.filter(f => f.type === 'revenue').reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+  const totalExpenses = finance.filter(f => f.type === 'expense').reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
   const companyWalletBalance = totalRevenue - totalExpenses;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todayCollections = finance
     .filter(f => f.type === 'revenue' && f.category === 'remittance' && f.date?.startsWith(todayStr))
-    .reduce((sum, f) => sum + f.amount, 0);
+    .reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
   const todayExpenses = finance
     .filter(f => f.type === 'expense' && f.date?.startsWith(todayStr))
-    .reduce((sum, f) => sum + f.amount, 0);
+    .reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
   const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM
   const monthlyCollections = finance
     .filter(f => f.type === 'revenue' && f.category === 'remittance' && f.date?.startsWith(currentMonthStr))
-    .reduce((sum, f) => sum + f.amount, 0);
+    .reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
   const monthlyExpenses = finance
     .filter(f => f.type === 'expense' && f.date?.startsWith(currentMonthStr))
-    .reduce((sum, f) => sum + f.amount, 0);
+    .reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
-  const outstandingDriverReceivables = drivers.reduce((sum, d) => sum + (d.remaining_vehicle_balance || 0), 0);
+  const outstandingDriverReceivables = drivers.reduce((sum, d: any) => sum + (parseFloat(d.remaining_vehicle_balance) || 0), 0);
 
   // Shareholder Dividend calculations
   const continuousDividendPool = companyWalletBalance > 0 ? (companyWalletBalance * (distributionPercentage / 100)) : 0;
-  const totalInvestmentsSum = localShareholders.reduce((sum, sh) => sum + (sh.investment_amount || 0), 0);
+  const totalInvestmentsSum = localShareholders.reduce((sum, sh: any) => sum + (parseFloat(sh.investment_amount) || 0), 0);
 
   // Active Tricycles Payroll calculated automatically from trip/keke activity logs over a 30-day cycle
   const activeTricyclesCount = (() => {
@@ -734,11 +734,11 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     const instDue = agreed / 6;
     const paid = (localPayments || [])
       .filter((p: any) => p.driver_id === drv.id && p.status === 'approved')
-      .reduce((sum: number, p: any) => sum + p.amount, 0);
+      .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
     const remainingVeh = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : agreed;
-    const expenseDebits = (drv.expenseHistory || []).reduce((sum: number, ex: any) => sum + ex.amount, 0);
+    const expenseDebits = (drv.expenseHistory || []).reduce((sum, ex: any) => sum + (parseFloat(ex.amount) || 0), 0);
     const currentInstNum = Math.min(6, Math.floor(paid / instDue) + 1);
-    const remainingInstBal = Math.max(0, instDue - (localPayments.filter(p => p.driver_id === drv.id && p.status === 'approved' && p.installment_number === currentInstNum).reduce((s, p) => s + p.amount, 0)));
+    const remainingInstBal = Math.max(0, instDue - (localPayments.filter(p => p.driver_id === drv.id && p.status === 'approved' && p.installment_number === currentInstNum).reduce((s, p: any) => s + (parseFloat(p.amount) || 0), 0)));
     return {
       agreedAmount: agreed,
       installmentDue: instDue,
@@ -770,7 +770,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           p.status === 'approved' && 
           String(p.installment_number || p.installmentNumber) === String(currentInstallmentNumber)
         )
-        .reduce((sum, p) => sum + p.amount, 0)
+        .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0)
     : 0;
 
   const remainingInstallmentBalance = Math.max(0, installmentDue - totalInstallmentPaymentsPaid);
@@ -788,7 +788,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const totalPaidAllTime = matchedDriver
     ? localPayments
         .filter(p => (p.driver_id === matchedDriver.id || p.driverId === matchedDriver.id) && p.status === 'approved')
-        .reduce((sum, p) => sum + p.amount, 0)
+        .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0)
     : 0;
 
   const driverOutstandingDebt = matchedDriver 

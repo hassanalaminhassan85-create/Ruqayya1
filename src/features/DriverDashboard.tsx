@@ -210,40 +210,96 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Periodic Telematics Location Reporting
+  // Periodic & Real-time Telematics Location Reporting via WebSocket
   useEffect(() => {
     if (!isShiftActive || !driverData) return;
-    
-    const reportLocation = () => {
-      if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            try {
-              await api.sendDriverLocation({
-                driverId: driverData.id,
-                latitude: pos.coords.latitude,
-                longitude: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-                speed: pos.coords.speed || 0,
-                heading: pos.coords.heading || 0,
-                altitude: pos.coords.altitude || 0,
-                placeName: 'Active Tracking Location',
-              });
-              fetchTelematics(driverData.id);
-            } catch (err) {
-              console.error("Failed to send location update", err);
-            }
-          },
-          (err) => console.error("Geolocation error:", err),
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
+
+    let ws: WebSocket | null = null;
+    let wsConnectTimeout: any = null;
+    let geoWatchId: number | null = null;
+
+    const connectWebSocket = () => {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/ws/driver-location?role=driver&driverId=${driverData.id}`;
+        
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log('[Driver WS] Connected to tracking gateway.');
+          ws?.send(JSON.stringify({
+            type: 'auth',
+            role: 'driver',
+            driverId: driverData.id
+          }));
+        };
+
+        ws.onclose = () => {
+          console.log('[Driver WS] Disconnected. Reconnecting in 5s...');
+          wsConnectTimeout = setTimeout(connectWebSocket, 5000);
+        };
+
+        ws.onerror = (err) => {
+          console.error('[Driver WS] Error:', err);
+          ws?.close();
+        };
+      } catch (err) {
+        console.error('[Driver WS] Initialization failed:', err);
+        wsConnectTimeout = setTimeout(connectWebSocket, 5000);
       }
     };
-    
-    // Initial report, then every 2 minutes while active
-    reportLocation();
-    const locInterval = setInterval(reportLocation, 120000);
-    return () => clearInterval(locInterval);
+
+    connectWebSocket();
+
+    // High frequency, sub-second tracking using navigator.geolocation.watchPosition
+    if ('geolocation' in navigator) {
+      geoWatchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const payload = {
+            type: 'location',
+            driverId: driverData.id,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            speed: pos.coords.speed || 0,
+            heading: pos.coords.heading || 0,
+            altitude: pos.coords.altitude || 0,
+            placeName: 'Active Gateway Telematics',
+            activity: (pos.coords.speed || 0) > 2 ? 'In Transit' : 'Stationary'
+          };
+
+          // Send over WebSocket if connected
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(payload));
+          } else {
+            // Fallback: Send via traditional REST API
+            try {
+              await api.sendDriverLocation(payload);
+              fetchTelematics(driverData.id);
+            } catch (err) {
+              console.error('Fallback location reporting failed:', err);
+            }
+          }
+        },
+        (err) => {
+          console.error('[Driver Geolocation] Watch error:', err);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        }
+      );
+    }
+
+    return () => {
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+      if (wsConnectTimeout) clearTimeout(wsConnectTimeout);
+      if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
+    };
   }, [isShiftActive, driverData]);
 
   const handleStartShift = async () => {
@@ -412,8 +468,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     try {
       const rawVehPrice = driverData?.vehiclePurchasePrice ?? driverData?.vehicle_purchase_price ?? driverData?.financials?.vehiclePurchasePrice;
       const vehiclePrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
-      const totalPaid = driverData?.total_amount_paid || driverData?.totalAmountPaid || payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-      const currentBalance = driverData?.remaining_vehicle_balance || driverData?.remainingVehicleBalance || Math.max(0, vehiclePrice - totalPaid);
+      const totalPaid = driverData?.total_amount_paid || driverData?.totalAmountPaid || payments.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+      let cb2 = parseFloat(driverData?.remaining_vehicle_balance || driverData?.remainingVehicleBalance); const currentBalance = isNaN(cb2) ? Math.max(0, vehiclePrice - totalPaid) : cb2;
       const newBalance = Math.max(0, currentBalance - paymentAmount);
       const newPaid = totalPaid + paymentAmount;
       const newPercent = ((newPaid / vehiclePrice) * 100).toFixed(2);
@@ -581,8 +637,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
 
   const rawVehPrice = driverData?.vehiclePurchasePrice ?? driverData?.vehicle_purchase_price ?? driverData?.financials?.vehiclePurchasePrice;
   const vehiclePurchasePrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
-  const totalPaid = driverData?.financials?.totalAmountPaid ?? driverData?.total_amount_paid ?? driverData?.totalAmountPaid ?? payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const currentBalance = driverData?.financials?.remainingVehicleBalance ?? driverData?.remaining_vehicle_balance ?? driverData?.remainingVehicleBalance ?? Math.max(0, vehiclePurchasePrice - totalPaid);
+  const totalPaid = driverData?.financials?.totalAmountPaid ?? driverData?.total_amount_paid ?? driverData?.totalAmountPaid ?? payments.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+  let cb = parseFloat(driverData?.financials?.remainingVehicleBalance ?? driverData?.remaining_vehicle_balance ?? driverData?.remainingVehicleBalance); const currentBalance = isNaN(cb) ? Math.max(0, vehiclePurchasePrice - totalPaid) : cb;
 
   // Live real-time calculations as driver changes payment amount
   const livePaymentVal = paymentAmount || 0;

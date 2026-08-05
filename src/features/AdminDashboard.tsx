@@ -256,7 +256,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
       
       const revTotal = (fin || [])
         .filter((f: any) => f.type === 'revenue')
-        .reduce((sum: number, r: any) => sum + r.amount, 0);
+        .reduce((sum, r: any) => sum + (parseFloat(r.amount) || 0), 0);
       setTotalEarnings(revTotal);
     } catch (e) {
       console.error("Failed to sync backend data in AdminDashboard:", e);
@@ -317,7 +317,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
             
             const revTotal = (data.financials || [])
               .filter((f: any) => f.type === 'revenue')
-              .reduce((sum: number, r: any) => sum + r.amount, 0);
+              .reduce((sum, r: any) => sum + (parseFloat(r.amount) || 0), 0);
             setTotalEarnings(revTotal);
           }
         } catch (err) {

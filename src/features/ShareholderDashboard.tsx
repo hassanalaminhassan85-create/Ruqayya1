@@ -55,7 +55,7 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
   // Financial calculations
   const totalInvested = shareholder?.investment_amount || (shareholder as any)?.investmentAmount || 0;
   const equityWeight = shareholder?.equity_percentage || 0;
-  const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((acc, f) => acc + f.amount, 0);
+  const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((acc, f: any) => acc + (parseFloat(f.amount) || 0), 0);
   const totalPool = totalRevenue * 0.02;
   const estimatedEarnings = totalPool * (equityWeight / 100);
   const shTotalWithdrawn = shareholder?.total_withdrawn || 0;
@@ -193,8 +193,8 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
     
     // If we want a local fallback estimation (though backend calculations should be preferred):
     if (!calculations) {
-      const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((acc, f) => acc + f.amount, 0);
-      const totalExpenses = financials.filter(f => f.type === 'expense').reduce((acc, f) => acc + f.amount, 0);
+      const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((acc, f: any) => acc + (parseFloat(f.amount) || 0), 0);
+      const totalExpenses = financials.filter(f => f.type === 'expense').reduce((acc, f: any) => acc + (parseFloat(f.amount) || 0), 0);
       const netGenerated = totalRevenue - totalExpenses;
       const distributionPercentage = 2; // local fallback
       const totalPool = netGenerated > 0 ? (netGenerated * (distributionPercentage / 100)) : 0;

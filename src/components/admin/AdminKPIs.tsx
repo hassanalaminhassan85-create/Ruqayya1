@@ -74,17 +74,17 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
   
   const revenueTotal = finance
     .filter(f => f.type === 'revenue')
-    .reduce((sum, r) => sum + r.amount, 0);
+    .reduce((sum, r: any) => sum + (parseFloat(r.amount) || 0), 0);
     
   const expenseTotal = finance
     .filter(f => f.type === 'expense')
-    .reduce((sum, e) => sum + e.amount, 0);
+    .reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0);
     
   const netEarnings = revenueTotal - expenseTotal;
   
   const approvedPayments = payments
     .filter(p => p.status === 'approved')
-    .reduce((sum, p) => sum + p.amount, 0);
+    .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
   // Shareholder Distribution cash pool (2% setting from db)
   const distributionPool = netEarnings > 0 ? netEarnings * 0.02 : 0;

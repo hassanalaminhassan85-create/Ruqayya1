@@ -283,11 +283,11 @@ function syncCyclesOnRequest(db: any): boolean {
 
       const totalRevenue = (db.financial_records || [])
         .filter((f: any) => f.type === 'revenue' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
-        .reduce((sum: number, f: any) => sum + f.amount, 0);
+        .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
       const totalExpenses = (db.financial_records || [])
         .filter((f: any) => f.type === 'expense' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
-        .reduce((sum: number, f: any) => sum + f.amount, 0);
+        .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
       const netGeneratedAmount = totalRevenue - totalExpenses;
       const distPercentage = db.shareholder_settings?.distributionPercentage || 2;
@@ -305,12 +305,12 @@ function syncCyclesOnRequest(db: any): boolean {
 
       const totalInvestment = (db.shareholders || [])
         .filter((s: any) => s.status === 'approved' || s.status === 'active')
-        .reduce((sum: number, s: any) => sum + (s.investment_amount || 0), 0);
+        .reduce((sum, s: any) => sum + (parseFloat(s.investment_amount) || 0), 0);
 
       if (totalInvestment > 0 && distributionPool > 0) {
         (db.shareholders || []).forEach((sh: any) => {
           if (sh.status === 'approved' || sh.status === 'active') {
-            const shareRatio = (sh.investment_amount || 0) / totalInvestment;
+            const shareRatio = (parseFloat(sh.investment_amount) || 0) / totalInvestment;
             const payoutAmount = Math.round(distributionPool * shareRatio);
             if (payoutAmount > 0) {
               if (!sh.payout_history) sh.payout_history = [];
@@ -532,7 +532,7 @@ function calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) 
     return afterStart && beforeEnd;
   });
 
-  const totalApprovedAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+  const totalApprovedAmount = payments.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
   let totalRestDays = 0;
   const restHistory = driver.restHistory || [];
@@ -1367,9 +1367,9 @@ class D1Manager {
       if (state.company_settings.wallet_initial_amount === undefined) {
         state.company_settings.wallet_initial_amount = state.company_settings.wallet_balance !== undefined ? state.company_settings.wallet_balance : 0;
       }
-      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
-      state.company_settings.wallet_balance = (state.company_settings.wallet_initial_amount || 0) + totalRev - totalExp;
+      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+      state.company_settings.wallet_balance = (parseFloat(state.company_settings.wallet_initial_amount) || 0) + totalRev - totalExp;
     }
 
     this.dbCache = state;
@@ -2286,6 +2286,87 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   const path = url.pathname;
   
+  // Handle Cloudflare Pages Functions WebSockets
+  if (path === '/api/ws/driver-location') {
+    const upgradeHeader = request.headers.get('Upgrade');
+    if (upgradeHeader !== 'websocket') {
+      return buildResponse({ error: 'Expected Upgrade: websocket' }, 426);
+    }
+
+    const webSocketPair = new (globalThis as any).WebSocketPair();
+    const [client, server] = Object.values(webSocketPair) as [any, any];
+
+    server.accept();
+
+    const driverId = url.searchParams.get('driverId') || undefined;
+
+    server.addEventListener('message', async (event: any) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const lat = parseFloat(payload.latitude);
+        const lng = parseFloat(payload.longitude);
+        const targetDriverId = payload.driverId || driverId;
+
+        if (!isNaN(lat) && !isNaN(lng) && targetDriverId) {
+          const dbManager = new D1Manager(env);
+          const db = await dbManager.getDB();
+          if (!db.driver_locations) db.driver_locations = [];
+
+          let loc = db.driver_locations.find((l: any) => l.driver_id === targetDriverId);
+          const nowIso = new Date().toISOString();
+
+          if (!loc) {
+            const drv = db.drivers.find((d: any) => d.id === targetDriverId || d.user_id === targetDriverId);
+            loc = {
+              id: `LOC-${targetDriverId}`,
+              driver_id: targetDriverId,
+              driver_name: drv?.full_name || drv?.fullName || 'Driver',
+              company_driver_id: drv?.company_driver_id || 'DRV-UNKNOWN',
+              latitude: lat,
+              longitude: lng,
+              accuracy: parseFloat(payload.accuracy) || 10,
+              speed: parseFloat(payload.speed) || 0,
+              heading: parseFloat(payload.heading) || 0,
+              altitude: parseFloat(payload.altitude) || 0,
+              place_name: payload.placeName || 'Live Gateway Telematics',
+              activity: payload.activity || (parseFloat(payload.speed) > 2 ? 'In Transit' : 'Stationary'),
+              updated_at: nowIso,
+              history: []
+            };
+            db.driver_locations.push(loc);
+          } else {
+            loc.latitude = lat;
+            loc.longitude = lng;
+            loc.accuracy = parseFloat(payload.accuracy) || loc.accuracy;
+            loc.speed = parseFloat(payload.speed) >= 0 ? parseFloat(payload.speed) : loc.speed;
+            loc.heading = parseFloat(payload.heading) >= 0 ? parseFloat(payload.heading) : loc.heading;
+            loc.altitude = parseFloat(payload.altitude) || loc.altitude;
+            loc.place_name = payload.placeName || 'Live Gateway Telematics';
+            loc.activity = payload.activity || (parseFloat(payload.speed) > 2 ? 'In Transit' : 'Stationary');
+            loc.updated_at = nowIso;
+          }
+
+          if (!loc.history) loc.history = [];
+          loc.history.push({ latitude: lat, longitude: lng, timestamp: nowIso });
+          if (loc.history.length > 20) {
+            loc.history = loc.history.slice(-20);
+          }
+
+          await dbManager.saveDB(db);
+
+          server.send(JSON.stringify({ type: 'location_ack', success: true }));
+        }
+      } catch (err: any) {
+        console.error('[CF WS Error]', err.message);
+      }
+    });
+
+    return new Response(null, {
+      status: 101,
+      webSocket: client
+    });
+  }
+
   // 1. PUBLIC: Health Status
   if (path === '/api/health') {
     return buildResponse({
@@ -3934,13 +4015,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           updated_at: new Date().toISOString(),
           history: []
         };
-      } else {
-        if (curLoc.latitude === 9.0765 || Math.abs(curLoc.latitude - 9.0765) < 0.01) {
-          curLoc.latitude = maiduguriSim.currentLoc?.latitude || 11.8311;
-          curLoc.longitude = maiduguriSim.currentLoc?.longitude || 13.1509;
-          curLoc.place_name = maiduguriSim.currentLoc?.place_name || 'Maiduguri Central Depot';
-          curLoc.activity = activeDuty ? (maiduguriSim.currentLoc?.activity || 'In Transit') : 'Off-duty';
-        }
       }
 
       return buildResponse({
@@ -4078,8 +4152,24 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         db.driver_payments.push(newPayment);
 
         const targetDrv = db.drivers.find((d: any) => d.id === payload.driverId || d.user_id === payload.driverId || d.company_driver_id === payload.driverId);
-        if (targetDrv && initialStatus === 'approved' && payload.outstandingAmount !== undefined) {
-          targetDrv.remaining_vehicle_balance = parseFloat(payload.outstandingAmount);
+        if (targetDrv && initialStatus === 'approved') {
+          if (payload.outstandingAmount !== undefined) {
+            targetDrv.remaining_vehicle_balance = parseFloat(payload.outstandingAmount);
+          } else if (targetDrv.remaining_vehicle_balance !== undefined) {
+            targetDrv.remaining_vehicle_balance = Math.max(0, parseFloat(targetDrv.remaining_vehicle_balance) - parseFloat(newPayment.amount));
+          }
+
+          db.financial_records = db.financial_records || [];
+          db.financial_records.push({
+            id: generateUUID(),
+            type: 'revenue',
+            category: 'freight',
+            amount: newPayment.amount,
+            date: newPayment.date,
+            description: `Installment Payment Approved - Driver ${targetDrv.company_driver_id || 'unassigned'} (Receipt: ${newPayment.receipt_number})`,
+            approvedBy: user.fullName,
+            created_at: new Date().toISOString()
+          });
         }
 
         db.notifications.unshift({
@@ -4144,7 +4234,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             id: generateUUID(),
             type: 'revenue',
             category: 'freight',
-            amount: pay.amount,
+            amount: parseFloat(pay.amount),
             date: pay.date,
             description: `Driver ${pay.driver_id} payment for Installment ${pay.installment_number} (Receipt: ${pay.receipt_number})`
           });
@@ -4155,22 +4245,22 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             if (drv.remaining_vehicle_balance === undefined || drv.remaining_vehicle_balance === null) {
               drv.remaining_vehicle_balance = 15000000;
             }
-            drv.remaining_vehicle_balance = Math.max(0, drv.remaining_vehicle_balance - pay.amount);
+            drv.remaining_vehicle_balance = Math.max(0, parseFloat(drv.remaining_vehicle_balance) - parseFloat(pay.amount));
           }
 
           // Update company wallet balance
           db.company_settings = db.company_settings || {};
-          db.company_settings.wallet_balance = (db.company_settings.wallet_balance || 0) + pay.amount;
+          db.company_settings.wallet_balance = (parseFloat(db.company_settings.wallet_balance) || 0) + pay.amount;
         } else if (status !== 'approved' && oldStatus === 'approved') {
           // Revert remaining balance
           const drv = db.drivers.find((d: any) => d.id === pay.driver_id || d.user_id === pay.driver_id);
           if (drv && drv.remaining_vehicle_balance !== undefined) {
-            drv.remaining_vehicle_balance = drv.remaining_vehicle_balance + pay.amount;
+            drv.remaining_vehicle_balance = parseFloat(drv.remaining_vehicle_balance) + parseFloat(pay.amount);
           }
 
           // Revert company wallet balance
           db.company_settings = db.company_settings || {};
-          db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - pay.amount);
+          db.company_settings.wallet_balance = Math.max(0, (parseFloat(db.company_settings.wallet_balance) || 0) - parseFloat(pay.amount));
 
           // Remove the corresponding ledger record
           db.financial_records = (db.financial_records || []).filter((f: any) => !f.description.includes(pay.receipt_number));
@@ -4247,9 +4337,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         // Update company wallet balance
         db.company_settings = db.company_settings || {};
         if (type === 'revenue' || type === 'deposit') {
-          db.company_settings.wallet_balance = (db.company_settings.wallet_balance || 0) + parsedAmount;
+          db.company_settings.wallet_balance = (parseFloat(db.company_settings.wallet_balance) || 0) + parsedAmount;
         } else if (type === 'expense' || type === 'withdrawal') {
-          db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - parsedAmount);
+          db.company_settings.wallet_balance = Math.max(0, (parseFloat(db.company_settings.wallet_balance) || 0) - parseFloat(parsedAmount));
         }
 
         if (type === 'expense' && driverId) {
@@ -4264,7 +4354,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               date
             });
             const currentRemBalance = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : (drv.agreed_amount || 180000);
-            drv.remaining_vehicle_balance = currentRemBalance + parsedAmount;
+            drv.remaining_vehicle_balance = parseFloat(currentRemBalance) + parsedAmount;
           }
         }
 
@@ -4299,7 +4389,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
       // Update company wallet balance
       db.company_settings = db.company_settings || {};
-      db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - parsedAmount);
+      db.company_settings.wallet_balance = Math.max(0, (parseFloat(db.company_settings.wallet_balance) || 0) - parseFloat(parsedAmount));
 
       // If driver linked, update their expense history and update remaining balance
       if (driverId) {
@@ -4315,7 +4405,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             receipt_url: receiptUrl || ''
           });
           const currentRemBalance = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : (drv.agreed_amount || 180000);
-          drv.remaining_vehicle_balance = currentRemBalance + parsedAmount;
+          drv.remaining_vehicle_balance = parseFloat(currentRemBalance) + parsedAmount;
         }
       }
 
@@ -5860,11 +5950,11 @@ ${JSON.stringify(cleanedContext, null, 2)}
         // Run automatic shareholder distribution engine calculations
         const totalRevenue = (db.financial_records || [])
           .filter((f: any) => f.type === 'revenue' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
-          .reduce((sum: number, f: any) => sum + f.amount, 0);
+          .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
         const totalExpenses = (db.financial_records || [])
           .filter((f: any) => f.type === 'expense' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
-          .reduce((sum: number, f: any) => sum + f.amount, 0);
+          .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
         const netGeneratedAmount = totalRevenue - totalExpenses;
         const distPercentage = db.shareholder_settings?.distributionPercentage || 2;
@@ -5883,13 +5973,13 @@ ${JSON.stringify(cleanedContext, null, 2)}
         // Distribute proportionally to active shareholders
         const totalInvestment = db.shareholders
           .filter((s: any) => s.status === 'active')
-          .reduce((sum: number, s: any) => sum + s.investment_amount, 0);
+          .reduce((sum, s: any) => sum + (parseFloat(s.investment_amount) || 0), 0);
 
         db.shareholders.forEach((sh: any) => {
           if (sh.status === 'active' && totalInvestment > 0) {
-            const shPercentage = sh.investment_amount / totalInvestment;
+            const shPercentage = (parseFloat(sh.investment_amount) || 0) / totalInvestment;
             const shEarnings = distributionPool * shPercentage;
-            sh.earnings_to_date = (sh.earnings_to_date || 0) + shEarnings;
+            sh.earnings_to_date = (parseFloat(sh.earnings_to_date) || 0) + shEarnings;
 
             // Log shareholder financial distribution record
             db.financial_records.push({
@@ -6304,15 +6394,15 @@ ${JSON.stringify(cleanedContext, null, 2)}
       const todayStr = new Date().toISOString().split('T')[0];
       const todayCollections = (db.driver_payments || [])
         .filter((p: any) => p.status === 'approved' && p.date && p.date.startsWith(todayStr))
-        .reduce((sum: number, p: any) => sum + p.amount, 0);
+        .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
       const totalDrivers = (db.drivers || []).length;
       const totalTricycles = (db.vehicles || []).length;
       let companyWalletBalance = db.company_settings?.wallet_balance;
       if (companyWalletBalance === undefined || companyWalletBalance === null) {
-        const initial = db.company_settings?.wallet_initial_amount || 0;
-        const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-        const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+        const initial = parseFloat(db.company_settings?.wallet_initial_amount) || 0;
+        const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+        const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
         companyWalletBalance = initial + totalRev - totalExp;
       }
       const systemHealth = 'Healthy';
@@ -6721,14 +6811,14 @@ ${JSON.stringify(cleanedContext, null, 2)}
       const sh = db.shareholders.find((s: any) => s.id === shareholderId);
       if (!sh) return buildResponse({ error: 'Shareholder not found.' }, 404);
 
-      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
       const netGeneratedAmount = totalRev - totalExp;
       const shareholderPercentage = db.shareholder_settings?.distributionPercentage || 2;
       const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
       
-      const totalInvestmentsSum = db.shareholders.reduce((s: number, r: any) => s + (r.investment_amount || 0), 0);
-      const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+      const totalInvestmentsSum = db.shareholders.reduce((s, r: any) => s + (parseFloat(r.investment_amount) || 0), 0);
+      const pctStake = totalInvestmentsSum > 0 ? (((parseFloat(sh.investment_amount) || 0) / totalInvestmentsSum) * 100) : 0;
       const currentEarnings = distributionPool * (pctStake / 100);
       const totalWithdrawn = sh.total_withdrawn || 0;
       const availableWithdrawal = currentEarnings - totalWithdrawn;
@@ -6743,7 +6833,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
         return buildResponse({ error: `Insufficient company cash balance to fulfill withdrawal. Wallet balance: ₦${walletBalance.toLocaleString()}` }, 400);
       }
 
-      sh.total_withdrawn = totalWithdrawn + withdrawAmt;
+      sh.total_withdrawn = parseFloat(totalWithdrawn) + parseFloat(withdrawAmt);
       sh.updated_at = new Date().toISOString();
 
       if (!db.financial_records) db.financial_records = [];
@@ -6760,7 +6850,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
 
       // Update company wallet balance
       db.company_settings = db.company_settings || {};
-      db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - withdrawAmt);
+      db.company_settings.wallet_balance = Math.max(0, (parseFloat(db.company_settings.wallet_balance) || 0) - parseFloat(withdrawAmt));
 
       if (!db.notifications) db.notifications = [];
       db.notifications.unshift({
@@ -6796,14 +6886,14 @@ ${JSON.stringify(cleanedContext, null, 2)}
       const sh = db.shareholders.find((s: any) => s.id === shareholderId);
       if (!sh) return buildResponse({ error: 'Shareholder not found.' }, 404);
 
-      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
       const netGeneratedAmount = totalRev - totalExp;
       const shareholderPercentage = db.shareholder_settings?.distributionPercentage || 2;
       const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
       
-      const totalInvestmentsSum = db.shareholders.reduce((s: number, r: any) => s + (r.investment_amount || 0), 0);
-      const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+      const totalInvestmentsSum = db.shareholders.reduce((s, r: any) => s + (parseFloat(r.investment_amount) || 0), 0);
+      const pctStake = totalInvestmentsSum > 0 ? (((parseFloat(sh.investment_amount) || 0) / totalInvestmentsSum) * 100) : 0;
       const currentEarnings = distributionPool * (pctStake / 100);
       const totalWithdrawn = sh.total_withdrawn || 0;
       const availableWithdrawal = currentEarnings - totalWithdrawn;
@@ -6813,9 +6903,9 @@ ${JSON.stringify(cleanedContext, null, 2)}
         return buildResponse({ error: `Over-reinvestment prevented. Maximum available: ₦${availableWithdrawal.toLocaleString()}` }, 400);
       }
 
-      sh.investment_amount += reinvestAmt;
+      sh.investment_amount = (parseFloat(sh.investment_amount) || 0) + reinvestAmt;
       sh.total_reinvested = (sh.total_reinvested || 0) + reinvestAmt;
-      sh.total_withdrawn = totalWithdrawn + reinvestAmt;
+      sh.total_withdrawn = parseFloat(totalWithdrawn) + parseFloat(reinvestAmt);
       sh.updated_at = new Date().toISOString();
 
       if (!db.financial_records) db.financial_records = [];
@@ -6917,8 +7007,8 @@ ${JSON.stringify(cleanedContext, null, 2)}
       const abakakaSal = activeVehiclesCount * 1000;
       const totalPayroll = barristerSal + managerSal + adamSal + abakakaSal;
 
-      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+      const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+      const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
       const walletBalance = totalRev - totalExp;
 
       if (walletBalance < totalPayroll) {
@@ -7220,9 +7310,9 @@ ${JSON.stringify(cleanedContext, null, 2)}
         return buildResponse({ error: 'Invalid redemption amount.' }, 400);
       }
 
-      const currentInvestment = sh.investment_amount || 0;
+      const currentInvestment = parseFloat(sh.investment_amount) || 0;
       sh.investment_amount = currentInvestment - capOutAmt;
-      sh.total_cashed_out = (sh.total_cashed_out || 0) + capOutAmt;
+      sh.total_cashed_out = (parseFloat(sh.total_cashed_out) || 0) + capOutAmt;
       sh.updated_at = new Date().toISOString();
 
       if (!db.financial_records) db.financial_records = [];

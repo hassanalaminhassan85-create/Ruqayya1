@@ -244,9 +244,9 @@ export function saveDB(state: DBState): void {
       if (state.company_settings.wallet_initial_amount === undefined) {
         state.company_settings.wallet_initial_amount = state.company_settings.wallet_balance !== undefined ? state.company_settings.wallet_balance : 0;
       }
-      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
-      state.company_settings.wallet_balance = (state.company_settings.wallet_initial_amount || 0) + totalRev - totalExp;
+      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+      state.company_settings.wallet_balance = (parseFloat(state.company_settings.wallet_initial_amount) || 0) + totalRev - totalExp;
     }
     
     cachedDB = state;

@@ -7,6 +7,8 @@ import express from 'express';
 import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
+import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { 
@@ -28,6 +30,120 @@ import { WorkersAIService } from './src/utils/ai_service';
 
 const app = express();
 const PORT = 3000;
+const server = http.createServer(app);
+
+// WebSocket Server for sub-second, real-time driver tracking
+const wss = new WebSocketServer({ noServer: true });
+
+interface WSClient {
+  ws: WebSocket;
+  role: 'driver' | 'admin';
+  driverId?: string;
+}
+const connectedClients = new Set<WSClient>();
+
+wss.on('connection', (ws: WebSocket, request: any) => {
+  const urlObj = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
+  const role = (urlObj.searchParams.get('role') || 'driver') as 'driver' | 'admin';
+  const driverId = urlObj.searchParams.get('driverId') || undefined;
+
+  const client: WSClient = { ws, role, driverId };
+  connectedClients.add(client);
+  console.log(`[NODE WS CONNECTED] Role: ${role}, DriverId: ${driverId || 'None'}. Active: ${connectedClients.size}`);
+
+  ws.on('message', (messageData: string) => {
+    try {
+      const payload = JSON.parse(messageData);
+
+      if (payload.type === 'auth') {
+        if (payload.role) client.role = payload.role;
+        if (payload.driverId) client.driverId = payload.driverId;
+        console.log(`[NODE WS AUTH] Role: ${client.role}, DriverId: ${client.driverId}`);
+        return;
+      }
+
+      if (client.role === 'driver' || payload.type === 'location') {
+        const lat = parseFloat(payload.latitude);
+        const lng = parseFloat(payload.longitude);
+        const targetDriverId = payload.driverId || client.driverId;
+
+        if (!isNaN(lat) && !isNaN(lng) && targetDriverId) {
+          const db = loadDB();
+          if (!db.driver_locations) db.driver_locations = [];
+
+          let loc = db.driver_locations.find((l: any) => l.driver_id === targetDriverId);
+          const nowIso = new Date().toISOString();
+
+          if (!loc) {
+            const drv = db.drivers.find((d: any) => d.id === targetDriverId || d.user_id === targetDriverId);
+            loc = {
+              id: `LOC-${targetDriverId}`,
+              driver_id: targetDriverId,
+              driver_name: drv?.full_name || drv?.fullName || 'Driver',
+              company_driver_id: drv?.company_driver_id || 'DRV-UNKNOWN',
+              latitude: lat,
+              longitude: lng,
+              accuracy: parseFloat(payload.accuracy) || 10,
+              speed: parseFloat(payload.speed) || 0,
+              heading: parseFloat(payload.heading) || 0,
+              altitude: parseFloat(payload.altitude) || 0,
+              place_name: payload.placeName || 'Live Gateway Telematics',
+              activity: payload.activity || (parseFloat(payload.speed) > 2 ? 'In Transit' : 'Stationary'),
+              updated_at: nowIso,
+              history: []
+            };
+            db.driver_locations.push(loc);
+          } else {
+            loc.latitude = lat;
+            loc.longitude = lng;
+            loc.accuracy = parseFloat(payload.accuracy) || loc.accuracy;
+            loc.speed = parseFloat(payload.speed) >= 0 ? parseFloat(payload.speed) : loc.speed;
+            loc.heading = parseFloat(payload.heading) >= 0 ? parseFloat(payload.heading) : loc.heading;
+            loc.altitude = parseFloat(payload.altitude) || loc.altitude;
+            loc.place_name = payload.placeName || 'Live Gateway Telematics';
+            loc.activity = payload.activity || (parseFloat(payload.speed) > 2 ? 'In Transit' : 'Stationary');
+            loc.updated_at = nowIso;
+          }
+
+          if (!loc.history) loc.history = [];
+          loc.history.push({ latitude: lat, longitude: lng, timestamp: nowIso });
+          if (loc.history.length > 20) {
+            loc.history = loc.history.slice(-20);
+          }
+
+          saveDB(db);
+
+          // Sub-second, real-time broadcast to connected admins
+          const broadcastPayload = JSON.stringify({
+            type: 'location_update',
+            driverId: targetDriverId,
+            location: loc
+          });
+
+          for (const otherClient of connectedClients) {
+            if (otherClient.role === 'admin' && otherClient.ws.readyState === WebSocket.OPEN) {
+              if (!otherClient.driverId || otherClient.driverId === targetDriverId) {
+                otherClient.ws.send(broadcastPayload);
+              }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('[NODE WS ERROR] message parsing error:', err.message);
+    }
+  });
+
+  ws.on('close', () => {
+    connectedClients.delete(client);
+    console.log(`[NODE WS CLOSED] Role: ${client.role}, DriverId: ${client.driverId}. Remaining: ${connectedClients.size}`);
+  });
+
+  ws.on('error', (err) => {
+    console.error(`[NODE WS SOCKET ERROR] Role: ${client.role}:`, err);
+    connectedClients.delete(client);
+  });
+});
 
 // Setup generous JSON limits for passport photo and PDF uploads via base64
 app.use(express.json({ limit: '15mb' }));
@@ -572,7 +688,7 @@ async function syncActiveCycleToFirestore(db: any) {
   const cycleStart = canonical.isActive ? new Date(canonical.startDate) : new Date();
   const currentRemit = (db.financial_records || [])
     .filter((f: any) => f.type === 'revenue' && canonical.isActive && new Date(f.date) >= cycleStart)
-    .reduce((sum: number, f: any) => sum + f.amount, 0);
+    .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
   const payload: any = {
     ...canonical,
@@ -666,7 +782,7 @@ export function calculateInstallmentsForDriver(driver: any, db: any, activeCycle
     return afterStart && beforeEnd;
   });
 
-  const totalApprovedAmount = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+  const totalApprovedAmount = payments.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
   // Calculate total rest days during this active cycle to extend installments
   let totalRestDays = 0;
@@ -810,11 +926,11 @@ setInterval(() => {
 
         const totalRevenue = (db.financial_records || [])
           .filter((f: any) => f.type === 'revenue' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
-          .reduce((sum: number, f: any) => sum + f.amount, 0);
+          .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
         const totalExpenses = (db.financial_records || [])
           .filter((f: any) => f.type === 'expense' && new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) <= new Date(endDate))
-          .reduce((sum: number, f: any) => sum + f.amount, 0);
+          .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
         const netGeneratedAmount = totalRevenue - totalExpenses;
         const distPercentage = db.shareholder_settings?.distributionPercentage || 2;
@@ -832,13 +948,13 @@ setInterval(() => {
 
         const totalInvestment = db.shareholders
           .filter((s: any) => s.status === 'active')
-          .reduce((sum: number, s: any) => sum + s.investment_amount, 0);
+          .reduce((sum, s: any) => sum + (parseFloat(s.investment_amount) || 0), 0);
 
         db.shareholders.forEach((sh: any) => {
           if (sh.status === 'active' && totalInvestment > 0) {
-            const shPercentage = sh.investment_amount / totalInvestment;
+            const shPercentage = (parseFloat(sh.investment_amount) || 0) / totalInvestment;
             const shEarnings = distributionPool * shPercentage;
-            sh.earnings_to_date = (sh.earnings_to_date || 0) + shEarnings;
+            sh.earnings_to_date = (parseFloat(sh.earnings_to_date) || 0) + shEarnings;
 
             db.financial_records.push({
               id: generateUUID(),
@@ -2965,14 +3081,6 @@ app.get('/api/driver/:id/telematics', authenticateSession, (req, res) => {
         updated_at: new Date().toISOString(),
         history: []
       };
-    } else {
-      // If location exists but has Abuja coordinates, override with Maiduguri!
-      if (curLoc.latitude === 9.0765 || Math.abs(curLoc.latitude - 9.0765) < 0.01) {
-        curLoc.latitude = maiduguriSim.currentLoc?.latitude || 11.8311;
-        curLoc.longitude = maiduguriSim.currentLoc?.longitude || 13.1509;
-        curLoc.place_name = maiduguriSim.currentLoc?.place_name || 'Maiduguri Central Depot';
-        curLoc.activity = activeDuty ? (maiduguriSim.currentLoc?.activity || 'In Transit') : 'Off-duty';
-      }
     }
 
     res.json({
@@ -5438,9 +5546,9 @@ app.post('/api/finance', authenticateSession, (req, res) => {
     // Update company wallet balance
     db.company_settings = db.company_settings || {};
     if (type === 'revenue' || type === 'deposit') {
-      db.company_settings.wallet_balance = (db.company_settings.wallet_balance || 0) + parsedAmount;
+      db.company_settings.wallet_balance = (parseFloat(db.company_settings.wallet_balance) || 0) + parsedAmount;
     } else if (type === 'expense' || type === 'withdrawal') {
-      db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - parsedAmount);
+      db.company_settings.wallet_balance = Math.max(0, (parseFloat(db.company_settings.wallet_balance) || 0) - parseFloat(parsedAmount));
     }
 
     if (type === 'expense' && driverId) {
@@ -5455,7 +5563,7 @@ app.post('/api/finance', authenticateSession, (req, res) => {
           date
         });
         const currentRemBalance = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : (drv.agreed_amount || 180000);
-        drv.remaining_vehicle_balance = currentRemBalance + parsedAmount;
+        drv.remaining_vehicle_balance = parseFloat(currentRemBalance) + parsedAmount;
       }
     }
 
@@ -6428,13 +6536,13 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
     const driverPaymentsInCycle = (db.driver_payments || []).filter((p: any) => {
       return p.status === 'approved' && new Date(p.date) >= cycleStart && new Date(p.date) <= cycleEnd;
     });
-    const driverCollections = driverPaymentsInCycle.reduce((sum: number, p: any) => sum + p.amount, 0);
+    const driverCollections = driverPaymentsInCycle.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
     // 2. Approved Company Expenses
     const expensesInCycle = (db.financial_records || []).filter((f: any) => {
       return f.type === 'expense' && new Date(f.date) >= cycleStart && new Date(f.date) <= cycleEnd;
     });
-    const totalExpenses = expensesInCycle.reduce((sum: number, f: any) => sum + f.amount, 0);
+    const totalExpenses = expensesInCycle.reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
     // 3. Net Generated Amount (Revenue - Expenses)
     const netGeneratedAmount = driverCollections - totalExpenses;
@@ -6444,7 +6552,7 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
     const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (distributionPercentage / 100)) : 0;
 
     // 5. Individual shareholder earnings
-    const totalShareholderInvestment = (db.shareholders || []).reduce((sum: number, s: any) => sum + s.investment_amount, 0);
+    const totalShareholderInvestment = (db.shareholders || []).reduce((sum, s: any) => sum + (parseFloat(s.investment_amount) || 0), 0);
     const shareholderSummary = (db.shareholders || []).map((s: any) => {
       const weight = totalShareholderInvestment > 0 ? s.investment_amount / totalShareholderInvestment : 0;
       return {
@@ -6459,7 +6567,7 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
     // 6. Driver Payment Summary
     const driverPaymentSummary = db.drivers.map((d: any) => {
       const paymentsForDriver = driverPaymentsInCycle.filter((p: any) => p.driver_id === d.id);
-      const collected = paymentsForDriver.reduce((sum: number, p: any) => sum + p.amount, 0);
+      const collected = paymentsForDriver.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
       const user = db.users.find((u: any) => u.id === d.user_id);
       
       const financials = getDriverFinancials(d, db);
@@ -6468,7 +6576,7 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
       
       // Expenses applied to this driver during this cycle
       const expensesForDriver = expensesInCycle.filter((e: any) => e.driver_id === d.id);
-      const expensesApplied = expensesForDriver.reduce((sum: number, e: any) => sum + e.amount, 0);
+      const expensesApplied = expensesForDriver.reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0);
 
       const closingVehicleBalance = financials.remainingVehicleBalance;
       const openingVehicleBalance = closingVehicleBalance + collected;
@@ -6496,10 +6604,10 @@ app.post('/api/director/cycles/end', authenticateSession, (req, res) => {
 
     // 7. Expense Summary Category Breakdown
     const expenseSummary = {
-      accidentRepairs: expensesInCycle.filter((e: any) => e.category === 'maintenance' && (e.description.toLowerCase().includes('accident') || e.description.toLowerCase().includes('crash') || e.description.toLowerCase().includes('collision'))).reduce((sum: number, e: any) => sum + e.amount, 0),
-      vehicleMaintenance: expensesInCycle.filter((e: any) => e.category === 'maintenance').reduce((sum: number, e: any) => sum + e.amount, 0),
-      operationalExpenses: expensesInCycle.filter((e: any) => e.category === 'fuel' || e.category === 'salary' || e.category === 'tax').reduce((sum: number, e: any) => sum + e.amount, 0),
-      otherExpenses: expensesInCycle.filter((e: any) => e.category !== 'maintenance' && e.category !== 'fuel' && e.category !== 'salary' && e.category !== 'tax').reduce((sum: number, e: any) => sum + e.amount, 0)
+      accidentRepairs: expensesInCycle.filter((e: any) => e.category === 'maintenance' && (e.description.toLowerCase().includes('accident') || e.description.toLowerCase().includes('crash') || e.description.toLowerCase().includes('collision'))).reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0),
+      vehicleMaintenance: expensesInCycle.filter((e: any) => e.category === 'maintenance').reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0),
+      operationalExpenses: expensesInCycle.filter((e: any) => e.category === 'fuel' || e.category === 'salary' || e.category === 'tax').reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0),
+      otherExpenses: expensesInCycle.filter((e: any) => e.category !== 'maintenance' && e.category !== 'fuel' && e.category !== 'salary' && e.category !== 'tax').reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0)
     };
 
     // 8. Vehicle Balance Summary
@@ -6751,7 +6859,7 @@ app.get('/api/operations/state', authenticateSession, (req, res) => {
     const todayStr = new Date().toISOString().split('T')[0];
     const todayCollections = (db.driver_payments || [])
       .filter((p: any) => p.status === 'approved' && p.date && p.date.startsWith(todayStr))
-      .reduce((sum: number, p: any) => sum + p.amount, 0);
+      .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
     const totalDrivers = db.drivers?.length || 0;
     const totalTricycles = db.vehicles?.length || 0;
@@ -7888,7 +7996,7 @@ app.put('/api/payments/:id/status', authenticateSession, (req, res) => {
         id: generateUUID(),
         type: 'revenue',
         category: 'freight',
-        amount: payment.amount,
+        amount: parseFloat(payment.amount),
         date: payment.date,
         description: `Installment Payment Approved - Driver ${drv?.company_driver_id || 'unassigned'} (Receipt: ${payment.receipt_number})`,
         approvedBy: actor.fullName,
@@ -7901,21 +8009,21 @@ app.put('/api/payments/:id/status', authenticateSession, (req, res) => {
           // Initialize remaining balance if not set (default purchase price: ₦15,000,000)
           drv.remaining_vehicle_balance = 15000000;
         }
-        drv.remaining_vehicle_balance = Math.max(0, drv.remaining_vehicle_balance - payment.amount);
+        drv.remaining_vehicle_balance = Math.max(0, parseFloat(drv.remaining_vehicle_balance) - parseFloat(payment.amount));
       }
 
       // Update company wallet balance
       db.company_settings = db.company_settings || {};
-      db.company_settings.wallet_balance = (db.company_settings.wallet_balance || 0) + payment.amount;
+      db.company_settings.wallet_balance = (parseFloat(db.company_settings.wallet_balance) || 0) + payment.amount;
     } else if (status !== 'approved' && oldStatus === 'approved') {
       // Revert remaining balance if applicable
       if (drv && drv.remaining_vehicle_balance !== undefined) {
-        drv.remaining_vehicle_balance = drv.remaining_vehicle_balance + payment.amount;
+        drv.remaining_vehicle_balance = parseFloat(drv.remaining_vehicle_balance) + parseFloat(payment.amount);
       }
 
       // Revert company wallet balance
       db.company_settings = db.company_settings || {};
-      db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - payment.amount);
+      db.company_settings.wallet_balance = Math.max(0, (parseFloat(db.company_settings.wallet_balance) || 0) - parseFloat(payment.amount));
 
       // Remove the corresponding ledger record
       db.financial_records = (db.financial_records || []).filter((f: any) => !f.description.includes(payment.receipt_number));
@@ -7976,7 +8084,7 @@ app.put('/api/payments/:id', authenticateSession, (req, res) => {
       const diff = parseFloat(amount) - payment.amount;
       const drv = db.drivers.find(d => d.id === payment.driver_id);
       if (drv && drv.remaining_vehicle_balance) {
-        drv.remaining_vehicle_balance = Math.max(0, drv.remaining_vehicle_balance - diff);
+        drv.remaining_vehicle_balance = Math.max(0, parseFloat(drv.remaining_vehicle_balance) - parseFloat(diff));
       }
       
       // Update financial ledger record matching this receipt
@@ -8328,7 +8436,7 @@ app.get('/api/shareholders/me', authenticateSession, (req, res) => {
       return res.status(404).json({ error: 'Shareholder profile not found.' });
     }
 
-    const totalInvestments = db.shareholders.reduce((sum, s) => sum + s.investment_amount, 0);
+    const totalInvestments = db.shareholders.reduce((sum, s: any) => sum + (parseFloat(s.investment_amount) || 0), 0);
     const investmentPercentage = totalInvestments > 0 ? (shareholder.investment_amount / totalInvestments) * 100 : 0;
 
     const activeCycle = db.cycles.find(c => c.status === 'active' || c.status === 'paused');
@@ -8336,11 +8444,11 @@ app.get('/api/shareholders/me', authenticateSession, (req, res) => {
 
     const totalRevenues = db.financial_records
       .filter(f => f.type === 'revenue')
-      .reduce((sum, r) => sum + r.amount, 0);
+      .reduce((sum, r: any) => sum + (parseFloat(r.amount) || 0), 0);
 
     const totalExpenses = db.financial_records
       .filter(f => f.type === 'expense')
-      .reduce((sum, e) => sum + e.amount, 0);
+      .reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0);
 
     const netGeneratedAmount = totalRevenues - totalExpenses;
     const distributionPercentage = db.shareholder_settings?.distributionPercentage || 2;
@@ -8406,7 +8514,7 @@ app.post('/api/expenses', authenticateSession, (req, res) => {
 
     // Update company wallet balance
     db.company_settings = db.company_settings || {};
-    db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - parseFloat(amount));
+    db.company_settings.wallet_balance = Math.max(0, (parseFloat(db.company_settings.wallet_balance) || 0) - parseFloat(amount));
 
     // If driver linked, update their expense history and automatically add to their remaining balance
     if (driverId) {
@@ -8422,7 +8530,7 @@ app.post('/api/expenses', authenticateSession, (req, res) => {
           receipt_url: receiptUrl || ''
         });
         const currentRemBalance = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : (drv.agreed_amount || 180000);
-        drv.remaining_vehicle_balance = currentRemBalance + parseFloat(amount);
+        drv.remaining_vehicle_balance = parseFloat(currentRemBalance) + parseFloat(amount);
       }
     }
 
@@ -8534,14 +8642,14 @@ app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
       return res.status(400).json({ error: 'Invalid withdrawal amount.' });
     }
 
-    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
     const netGeneratedAmount = totalRev - totalExp;
     const shareholderPercentage = db.shareholder_settings?.distributionPercentage || 2;
     const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
     
-    const totalInvestmentsSum = db.shareholders.reduce((s: number, r: any) => s + (r.investment_amount || 0), 0);
-    const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+    const totalInvestmentsSum = db.shareholders.reduce((s, r: any) => s + (parseFloat(r.investment_amount) || 0), 0);
+    const pctStake = totalInvestmentsSum > 0 ? (((parseFloat(sh.investment_amount) || 0) / totalInvestmentsSum) * 100) : 0;
     const currentEarnings = distributionPool * (pctStake / 100);
     const totalWithdrawn = sh.total_withdrawn || 0;
     const availableWithdrawal = currentEarnings - totalWithdrawn;
@@ -8554,7 +8662,7 @@ app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
       return res.status(400).json({ error: `Insufficient company cash balance to fulfill withdrawal. Wallet balance: ₦${walletBalance.toLocaleString()}` });
     }
 
-    sh.total_withdrawn = totalWithdrawn + withdrawAmt;
+    sh.total_withdrawn = parseFloat(totalWithdrawn) + parseFloat(withdrawAmt);
     sh.updated_at = new Date().toISOString();
 
     db.financial_records.unshift({
@@ -8570,7 +8678,7 @@ app.post('/api/finance/withdraw', authenticateSession, (req, res) => {
 
     // Update company wallet balance
     db.company_settings = db.company_settings || {};
-    db.company_settings.wallet_balance = Math.max(0, (db.company_settings.wallet_balance || 0) - withdrawAmt);
+    db.company_settings.wallet_balance = Math.max(0, (parseFloat(db.company_settings.wallet_balance) || 0) - parseFloat(withdrawAmt));
 
     db.notifications.unshift({
       id: generateUUID(),
@@ -8628,14 +8736,14 @@ app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
       return res.status(400).json({ error: 'Invalid reinvestment amount.' });
     }
 
-    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
     const netGeneratedAmount = totalRev - totalExp;
     const shareholderPercentage = db.shareholder_settings?.distributionPercentage || 2;
     const distributionPool = netGeneratedAmount > 0 ? (netGeneratedAmount * (shareholderPercentage / 100)) : 0;
     
-    const totalInvestmentsSum = db.shareholders.reduce((s: number, r: any) => s + (r.investment_amount || 0), 0);
-    const pctStake = totalInvestmentsSum > 0 ? ((sh.investment_amount / totalInvestmentsSum) * 100) : 0;
+    const totalInvestmentsSum = db.shareholders.reduce((s, r: any) => s + (parseFloat(r.investment_amount) || 0), 0);
+    const pctStake = totalInvestmentsSum > 0 ? (((parseFloat(sh.investment_amount) || 0) / totalInvestmentsSum) * 100) : 0;
     const currentEarnings = distributionPool * (pctStake / 100);
     const totalWithdrawn = sh.total_withdrawn || 0;
     const availableWithdrawal = currentEarnings - totalWithdrawn;
@@ -8643,9 +8751,9 @@ app.post('/api/finance/reinvest', authenticateSession, (req, res) => {
     const reinvestAmt = parseFloat(amount);
     
 
-    sh.investment_amount += reinvestAmt;
+    sh.investment_amount = (parseFloat(sh.investment_amount) || 0) + reinvestAmt;
     sh.total_reinvested = (sh.total_reinvested || 0) + reinvestAmt;
-    sh.total_withdrawn = totalWithdrawn + reinvestAmt;
+    sh.total_withdrawn = parseFloat(totalWithdrawn) + parseFloat(reinvestAmt);
     sh.updated_at = new Date().toISOString();
 
     db.financial_records.unshift({
@@ -8727,11 +8835,11 @@ app.post('/api/finance/cap-out', authenticateSession, (req, res) => {
       return res.status(400).json({ error: 'Invalid redemption amount.' });
     }
 
-    const currentInvestment = sh.investment_amount || 0;
+    const currentInvestment = parseFloat(sh.investment_amount) || 0;
     
 
     sh.investment_amount = currentInvestment - capOutAmt;
-    sh.total_cashed_out = (sh.total_cashed_out || 0) + capOutAmt;
+    sh.total_cashed_out = (parseFloat(sh.total_cashed_out) || 0) + capOutAmt;
     sh.updated_at = new Date().toISOString();
 
     db.financial_records.unshift({
@@ -8839,8 +8947,8 @@ app.post('/api/finance/payroll', authenticateSession, (req, res) => {
     const abakakaSal = activeVehiclesCount * 1000;
     const totalPayroll = barristerSal + managerSal + adamSal + abakakaSal;
 
-    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue').reduce((sum: number, f: any) => sum + f.amount, 0);
-    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense').reduce((sum: number, f: any) => sum + f.amount, 0);
+    const totalRev = (db.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
+    const totalExp = (db.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
     const walletBalance = totalRev - totalExp;
 
     if (walletBalance < totalPayroll) {
@@ -9354,7 +9462,19 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  // Handle upgrade requests for WebSockets on standard port
+  server.on('upgrade', (request, socket, head) => {
+    const urlObj = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
+    if (urlObj.pathname === '/api/ws/driver-location') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
+
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`Ruqayya ERP full-stack services running on http://0.0.0.0:${PORT}`);
   });
 }

@@ -365,8 +365,8 @@ _Ruqayya Transport Fleet Operations Command_`;
   const approvedPayments = payments.filter(p => p.status === 'approved');
   const rejectedPayments = payments.filter(p => p.status === 'rejected');
 
-  const approvedTotal = approvedPayments.reduce((acc, curr) => acc + curr.amount, 0);
-  const pendingTotal = [...submittedPayments, ...pendingPayments].reduce((acc, curr) => acc + curr.amount, 0);
+  const approvedTotal = approvedPayments.reduce((acc, curr: any) => acc + (parseFloat(curr.amount) || 0), 0);
+  const pendingTotal = [...submittedPayments, ...pendingPayments].reduce((acc, curr: any) => acc + (parseFloat(curr.amount) || 0), 0);
 
   const handlePrintReceipt = () => {
     window.print();
@@ -880,7 +880,7 @@ _Ruqayya Transport Fleet Operations Command_`;
               {lang === 'en' ? `Showing ${filteredPayments.length} of ${payments.length} total payment logs` : `Ana nuna ${filteredPayments.length} daga cikakken tarihin ${payments.length}`}
             </span>
             <span className="font-mono font-bold text-text-main">
-              Total Filtered: ₦{filteredPayments.reduce((sum, item) => sum + item.amount, 0).toLocaleString()}
+              Total Filtered: ₦{filteredPayments.reduce((sum, item: any) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString()}
             </span>
           </div>
 

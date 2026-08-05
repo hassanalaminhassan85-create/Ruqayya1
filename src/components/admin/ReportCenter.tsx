@@ -499,14 +499,14 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
 
   // METRICS COMPILER (Aligned with Financial Command Center SSE logic)
   // We use finance prop which already includes approved driver_payments as 'revenue'
-  const totalInflows = filteredFinance.filter(f => f && f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0);
+  const totalInflows = filteredFinance.filter(f => f && f.type === 'revenue').reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
                        
-  const totalOutflows = filteredFinance.filter(f => f && f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
+  const totalOutflows = filteredFinance.filter(f => f && f.type === 'expense').reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
   const netEarningsProfit = totalInflows - totalOutflows;
 
   // Total Company Wallet (Total In - Total Out for all time/filtered)
-  const totalCompanyWallet = finance.filter(f => f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0) - 
-                             finance.filter(f => f.type === 'expense').reduce((sum, f) => sum + f.amount, 0);
+  const totalCompanyWallet = finance.filter(f => f.type === 'revenue').reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0) - 
+                             finance.filter(f => f.type === 'expense').reduce((sum, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
   // Additional stats
   const activeDriversCount = drivers.filter(d => d && (d.status === 'approved' || d.status === 'available' || d.status === 'on-trip')).length;
@@ -548,7 +548,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   
   // Continuous 2% shareholder pool math - based on total company profit (wallet balance)
   const accumulatedShareholderPool = totalCompanyWallet > 0 ? (totalCompanyWallet * 0.02) : 0;
-  const totalInvestmentStocks = shareholders.reduce((sum, s) => sum + (s && s.investment_amount ? s.investment_amount : 0), 0);
+  const totalInvestmentStocks = shareholders.reduce((sum, s) => sum + ((parseFloat(s.investment_amount) || 0)), 0);
 
   // Active Team Payroll formula: count * salary
   const barristerSal = activeVehiclesCount * 1000;
@@ -775,8 +775,8 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
           <div className="grid grid-cols-1 gap-4">
             {shareholders.filter(s => filterShareholderId === 'all' || s.id === filterShareholderId).map((s, idx) => {
               const transactions = finance.filter(f => f.referenceId === s.id);
-              const totalWithdrawn = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-              const totalReinvested = transactions.filter(t => t.type === 'revenue' && t.category === 'other').reduce((sum, t) => sum + t.amount, 0);
+              const totalWithdrawn = transactions.filter(t => t.type === 'expense').reduce((sum, t: any) => sum + (parseFloat(t.amount) || 0), 0);
+              const totalReinvested = transactions.filter(t => t.type === 'revenue' && t.category === 'other').reduce((sum, t: any) => sum + (parseFloat(t.amount) || 0), 0);
 
               return (
                 <div key={`${s.id}-${idx}`} className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-5">
@@ -821,7 +821,7 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
                       </div>
                       <div>
                         <span className="text-[9px] text-brand-gold font-bold uppercase block tracking-widest mb-1">Wallet</span>
-                        <span className="text-sm font-black text-emerald-600">₦{(s.wallet_balance || 0).toLocaleString()}</span>
+                        <span className="text-sm font-black text-emerald-600">₦{(parseFloat(s.wallet_balance) || 0).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>

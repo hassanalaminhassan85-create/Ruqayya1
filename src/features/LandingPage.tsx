@@ -798,24 +798,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.4, delay: 0.3 }}
-                className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5"
+                className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-3.5 sm:gap-4 pt-4 border-t border-white/5"
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                   <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
                     <CheckCircle className="h-4 w-4 text-emerald-400" />
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">{lang === 'en' ? 'Driver Pay' : 'Kudin Direba'}</h4>
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wide">{lang === 'en' ? 'Driver Pay' : 'Kudin Direba'}</h4>
                     <p className="text-[11px] text-slate-400 mt-0.5">{lang === 'en' ? 'Instant trip payouts' : 'Rabon kudi nan take'}</p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                   <div className="h-8 w-8 rounded-lg bg-[#3B82F6]/10 border border-[#3B82F6]/20 flex items-center justify-center shrink-0">
                     <CheckCircle className="h-4 w-4 text-blue-400" />
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">{lang === 'en' ? 'Shareholder' : 'Hannun Jari'}</h4>
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wide">{lang === 'en' ? 'Shareholder' : 'Hannun Jari'}</h4>
                     <p className="text-[11px] text-slate-400 mt-0.5">{lang === 'en' ? 'Track reinvestments' : 'Kula da jarin ku'}</p>
                   </div>
                 </div>

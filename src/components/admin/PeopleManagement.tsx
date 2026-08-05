@@ -574,7 +574,7 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
   });
 
   // Calculate dynamic investment stats
-  const totalShareholderCapital = shareholders.reduce((sum, s) => sum + (s.investment_amount || 0), 0);
+  const totalShareholderCapital = shareholders.reduce((sum, s: any) => sum + (parseFloat(s.investment_amount) || 0), 0);
 
   // Pending items in registry
   const pendingReviewDrivers = drivers.filter(d => d.status === 'pending');

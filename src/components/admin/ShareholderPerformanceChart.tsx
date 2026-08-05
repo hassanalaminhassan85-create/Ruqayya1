@@ -45,15 +45,15 @@ export const ShareholderPerformanceChart: React.FC<ShareholderPerformanceChartPr
 
       const withdrawals = cycleTransactions
         .filter(t => t.type === 'expense' && (t.category === 'dividend' || t.description.toLowerCase().includes('withdrawal')))
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t: any) => sum + (parseFloat(t.amount) || 0), 0);
 
       const reinvestments = cycleTransactions
         .filter(t => t.type === 'revenue' && (t.description.toLowerCase().includes('reinvestment') || t.description.toLowerCase().includes('reinvest')))
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t: any) => sum + (parseFloat(t.amount) || 0), 0);
 
       const capOuts = cycleTransactions
         .filter(t => t.type === 'expense' && (t.description.toLowerCase().includes('redemption') || t.description.toLowerCase().includes('cap out')))
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t: any) => sum + (parseFloat(t.amount) || 0), 0);
 
       return {
         name: `Cycle ${index + 1}`,

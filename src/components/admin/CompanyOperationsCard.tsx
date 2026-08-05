@@ -143,7 +143,7 @@ export const CompanyOperationsCard: React.FC<CompanyOperationsCardProps> = ({
           const todayStr = new Date().toISOString().split('T')[0];
           const todayCol = (detail.driver_payments || [])
             .filter((p: any) => p.status === 'approved' && p.date && p.date.startsWith(todayStr))
-            .reduce((sum: number, p: any) => sum + p.amount, 0);
+            .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
           setMetrics({
             totalDrivers: detail.drivers?.length || 0,
