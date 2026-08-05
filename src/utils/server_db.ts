@@ -500,3 +500,27 @@ export function saveR2File(fileName: string, base64Content: string): string {
 export function getR2FilePath(savedName: string): string {
   return path.join(R2_DIR, savedName);
 }
+
+export async function getR2File(savedName: string): Promise<string | null> {
+  const filePath = path.join(R2_DIR, savedName);
+  if (fs.existsSync(filePath)) {
+    return filePath;
+  }
+  // Fallback to Firestore persistent storage (Cloudflare R2 emulation sync) during redeployments
+  if (firestore) {
+    try {
+      const docSnap = await firestore.collection('uploaded_files').doc(savedName).get();
+      if (docSnap.exists) {
+        const fileData = docSnap.data();
+        if (fileData && fileData.base64) {
+          fs.writeFileSync(filePath, Buffer.from(fileData.base64, 'base64'));
+          console.log(`[FIRESTORE PERSISTENCE] Successfully restored file ${savedName} from Firestore cloud store to R2 local directory.`);
+          return filePath;
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[FIRESTORE PERSISTENCE ERROR] Failed to fetch file ${savedName} from Firestore fallback:`, err.message);
+    }
+  }
+  return null;
+}

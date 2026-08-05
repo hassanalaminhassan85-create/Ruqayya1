@@ -15,7 +15,7 @@ const NOTIFICATIONS_KEY = 'ruqayya_notifications';
 
 // --- SEED DATA ---
 const DEFAULT_VEHICLES: Vehicle[] = [
-  { id: 'V-001', plateNumber: 'KANO-432-KN', model: 'Bajaj RE 250 (Passenger Keke)', status: 'assigned', fuelType: 'petrol', capacity: '3-Seater', driverId: 'D-001', lastServiceDate: '2026-06-15', mileage: 12450 },
+  { id: 'V-001', plateNumber: 'BORNO-432-BO', model: 'Bajaj RE 250 (Passenger Keke)', status: 'assigned', fuelType: 'petrol', capacity: '3-Seater', driverId: 'D-001', lastServiceDate: '2026-06-15', mileage: 12450 },
   { id: 'V-002', plateNumber: 'LAG-981-LA', model: 'TVS King Deluxe Keke', status: 'assigned', fuelType: 'petrol', capacity: '3-Seater', driverId: 'D-002', lastServiceDate: '2026-05-20', mileage: 9812 },
   { id: 'V-003', plateNumber: 'ABJ-231-AB', model: 'Piaggio Ape City Keke', status: 'idle', fuelType: 'petrol', capacity: '3-Seater', lastServiceDate: '2026-06-01', mileage: 14590 },
   { id: 'V-004', plateNumber: 'KAD-776-KD', model: 'Daylong Utility Tricycle', status: 'maintenance', fuelType: 'petrol', capacity: 'Heavy Load', lastServiceDate: '2026-07-01', mileage: 8430 }

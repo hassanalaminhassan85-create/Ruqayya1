@@ -1416,7 +1416,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               type="text"
               value={plateNumber}
               onChange={(e) => setPlateNumber(e.target.value.toUpperCase())}
-              placeholder="e.g. KANO-432-KN"
+              placeholder="e.g. BORNO-432-BO"
               className="w-full px-3 py-2 text-xs bg-bg-surface border border-border-main rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
             />
           </div>

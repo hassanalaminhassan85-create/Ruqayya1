@@ -767,7 +767,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-[#D4AF37] font-bold font-mono tracking-wider w-fit"
               >
                 <Truck className="h-3.5 w-3.5 animate-pulse" />
-                <span>{lang === 'en' ? 'KANO LOGISTICS & HAULAGE' : 'SUFURI DA GUDANARWA A KANO'}</span>
+                <span>{lang === 'en' ? 'BORNO LOGISTICS & HAULAGE' : 'SUFURI DA GUDANARWA A BORNO'}</span>
               </motion.div>
 
               <motion.h1 

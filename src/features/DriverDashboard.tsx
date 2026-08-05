@@ -1,4 +1,5 @@
 import { compressImageFile } from '../utils/imageCompressor';
+import { uploadUserAvatar, getAvatarUrl } from '../utils/r2';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -518,7 +519,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     );
   }
 
-  // Passport photo URL resolution
+  // Passport photo URL resolution using persistent Cloudflare R2 mapping
   const passportUrl = (() => {
     const doc = (driverData as any)?.documents?.find((d: any) => 
       d.document_type === 'passport_photo' || 
@@ -534,7 +535,8 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       (driverData as any)?.avatar ||
       (driverData as any)?.passport_photo ||
       '';
-    return docUrl || directUrl || '';
+    const rawUrl = docUrl || directUrl || '';
+    return getAvatarUrl(rawUrl);
   })();
 
   const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -544,11 +546,13 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     if (!file) return;
     try {
       const base64 = await compressImageFile(file, 800, 800, 0.75);
+      const userId = driverData?.id || driverData?.user_id || 'driver';
+
       // Save immediately to survive native mobile picker process restarts
       localStorage.setItem('pending_passport_upload', base64);
       localStorage.setItem('pending_passport_timestamp', Date.now().toString());
 
-      // Optimistically update UI state with the new image URL / base64 without page reload
+      // Optimistically update UI state with base64 first
       setDriverData((prev: any) => prev ? {
         ...prev,
         passport_photo_url: base64,
@@ -558,9 +562,13 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
         avatar: base64
       } : prev);
 
+      // Upload directly via Cloudflare R2 multipart upload utility with token signing and Firestore persistence
+      const uploadRes = await uploadUserAvatar(file, userId, file.name);
+      const persistentUrl = uploadRes.success && uploadRes.url ? uploadRes.url : base64;
+
       const res = await api.request('/api/drivers/self', {
         method: 'PUT',
-        body: JSON.stringify({ passportPhoto: base64 })
+        body: JSON.stringify({ passportPhoto: persistentUrl })
       });
 
       if (res && res.success) {
@@ -568,6 +576,15 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
         localStorage.removeItem('pending_passport_timestamp');
         if (res.driver) {
           setDriverData((prev: any) => prev ? { ...prev, ...res.driver } : res.driver);
+        } else {
+          setDriverData((prev: any) => prev ? {
+            ...prev,
+            passport_photo_url: persistentUrl,
+            passportPhoto: persistentUrl,
+            passportPhotoUrl: persistentUrl,
+            passport: persistentUrl,
+            avatar: persistentUrl
+          } : prev);
         }
       } else {
         console.error("Failed to update passport photo on server:", res?.error);

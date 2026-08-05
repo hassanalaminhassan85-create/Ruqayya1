@@ -346,7 +346,7 @@ export default function EnterpriseDirectory({ lang, dictionary }: EnterpriseDire
                 model: 'Actros heavy hauler',
                 year: '2021',
                 colour: 'White',
-                plateNumber: `KANO-${Math.floor(100+Math.random()*900)}-KN`,
+                plateNumber: `BORNO-${Math.floor(100+Math.random()*900)}-BO`,
                 registrationNumber: `REG-${Math.floor(1000+Math.random()*9000)}`,
                 chassisNumber: `WDB9340${Math.floor(10000+Math.random()*90000)}`,
                 engineNumber: `OM501LA-${Math.floor(10000+Math.random()*90000)}`,
