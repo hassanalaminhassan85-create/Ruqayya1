@@ -62,19 +62,21 @@ import { AccountController } from '../components/admin/AccountController';
 import { CycleTimer } from '../components/director/CycleTimer';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { ActivityFeed } from '../components/admin/ActivityFeed';
+import { DriverTrackerDashboard } from '../components/admin/DriverTrackerDashboard';
 import { subscribeToActiveCycle } from '../utils/cycleService';
+import { GEOFENCE_ZONES, MAIDUGURI_HUB } from '../utils/geofencingService';
 
 interface AdminDashboardProps {
   lang: Language;
   dictionary: Dictionary;
-  activeTab?: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings';
-  setActiveTab?: (tab: 'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings') => void;
+  activeTab?: 'dashboard' | 'fleet' | 'drivers' | 'tracker' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings';
+  setActiveTab?: (tab: 'dashboard' | 'fleet' | 'drivers' | 'tracker' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings') => void;
   activeCycle?: any;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary, activeTab: propActiveTab, setActiveTab: propSetActiveTab, activeCycle: propActiveCycle }) => {
   // Tabs & Views
-  const [localActiveTab, setLocalActiveTab] = useState<'dashboard' | 'fleet' | 'drivers' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings'>('dashboard');
+  const [localActiveTab, setLocalActiveTab] = useState<'dashboard' | 'fleet' | 'drivers' | 'tracker' | 'trips' | 'finance' | 'payments' | 'documents' | 'communications' | 'directory' | 'people' | 'accounts' | 'settings'>('dashboard');
   const activeTab = propActiveTab || localActiveTab;
   const setActiveTab = propSetActiveTab || setLocalActiveTab;
   
@@ -149,6 +151,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
 
   // Filter States
   const [driverFilter, setDriverFilter] = useState<'all' | 'pending' | 'approved' | 'correction_requested' | 'rejected'>('all');
+  const [driverTrackerNav, setDriverTrackerNav] = useState<'roster' | 'live' | 'geofencing' | 'performance'>('roster');
   const [fleetSearch, setFleetSearch] = useState('');
   const [fleetPage, setFleetPage] = useState(1);
   const itemsPerPage = 5;
@@ -824,27 +827,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     </>
   )}
 
-          {/* Module Tab Switchers */}
-          <div className="print:hidden">
-            <Tabs
-              activeTab={activeTab}
-              onChange={(id) => { setActiveTab(id as any); setFleetPage(1); }}
-              tabs={[
-                { id: 'dashboard', label: lang === 'en' ? "Overview" : "Bayanai", icon: <Layers className="h-3.5 w-3.5" /> },
-                { id: 'fleet', label: lang === 'en' ? "Tricycle Fleet" : "Rukunin Kekuna", icon: <Truck className="h-3.5 w-3.5" /> },
-                { id: 'drivers', label: `${lang === 'en' ? "Driver Registry" : "Direbobi"} (${drivers.filter(d => d.status === 'pending').length} pending)`, icon: <Users className="h-3.5 w-3.5" /> },
-                { id: 'trips', label: lang === 'en' ? "Daily Remittances" : "Kudaden Remittance", icon: <MapPin className="h-3.5 w-3.5" /> },
-                { id: 'payments', label: lang === 'en' ? "Payment Approvals" : "Tabbatar Biyan Kudi", icon: <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" /> },
-                { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Wallet className="h-3.5 w-3.5" /> },
-                { id: 'documents', label: lang === 'en' ? "Document Hub" : "Taskar Takardu", icon: <FileText className="h-3.5 w-3.5" /> },
-                { id: 'people', label: lang === 'en' ? "People Onboarding" : "Rijistar Mutane", icon: <Users className="h-3.5 w-3.5 text-brand-gold" /> },
-                { id: 'communications', label: lang === 'en' ? "Communications" : "Sada Zumunta", icon: <MessageSquare className="h-3.5 w-3.5" /> },
-                { id: 'directory', label: lang === 'en' ? "Enterprise Directory" : "Kundayen Kamfani", icon: <Users className="h-3.5 w-3.5" /> },
-                { id: 'accounts', label: lang === 'en' ? "Account Controller" : "Ikon Akantoci", icon: <KeyRound className="h-3.5 w-3.5 text-amber-500" /> },
-                { id: 'settings', label: lang === 'en' ? "System Settings" : "Saitunan Tsarin", icon: <Settings className="h-3.5 w-3.5 text-brand-gold" /> }
-              ]}
-            />
-          </div>
 
           {/* Tab Content Display */}
           <div className="bg-bg-surface border border-border-main rounded-2xl p-4 md:p-6 shadow-xs">
@@ -946,10 +928,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
               </div>
             )}
 
-            {/* TAB 2: DRIVER REGISTRY & APPROVAL WORKFLOW */}
+            {/* TAB 2: DRIVER REGISTRY */}
             {activeTab === 'drivers' && (
-              <div className="flex flex-col gap-4">
-                
+              <div className="flex flex-col gap-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   {/* Status Segment Filter */}
                   <div className="flex items-center gap-1.5 flex-wrap bg-bg-base p-1 rounded-lg border border-border-main/30">
@@ -1096,6 +1077,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                   </table>
                 </div>
               </div>
+            )}
+
+            {/* TAB 3: DRIVER TRACKER */}
+            {activeTab === 'tracker' && (
+              <DriverTrackerDashboard onBack={() => setActiveTab('dashboard')} lang={lang} />
             )}
 
             {/* TAB 3: DAILY REMITTANCES */}

@@ -98,6 +98,7 @@ export interface DBState {
   driver_locations?: any[];
   driver_places?: any[];
   messages?: any[];
+  driver_alerts?: any[];
   announcements?: any[];
   push_subscriptions?: any[];
   vapid_keys?: { publicKey: string; privateKey: string } | null;
@@ -128,6 +129,7 @@ const INITIAL_DB_STATE: DBState = {
   cycles: [],
   driver_payments: [],
   driver_ledger: [],
+  driver_alerts: [],
   messages: [],
   announcements: [],
   push_subscriptions: [],

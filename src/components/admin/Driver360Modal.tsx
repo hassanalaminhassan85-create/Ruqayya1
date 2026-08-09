@@ -118,117 +118,11 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [driverExpenses, setDriverExpenses] = useState<any[]>([]);
   const [telematicsData, setTelematicsData] = useState<any | null>(null);
 
-  // Helper to generate deterministic Maiduguri locations for the active driver
-  const maiduguriSim = useMemo(() => {
-    if (!activeDriver) return { placesVisited: [], currentLoc: null };
-    
-    const driverNum = parseInt((activeDriver as any).company_driver_id?.replace(/\D/g, '') || activeDriver.id?.charCodeAt(0)?.toString() || '1') || 0;
-    const routeIndex = driverNum % 3;
-    
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    const routes = [
-      [
-        { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 8*60, depOffset: 8*60 + 30, activity: 'Shift Commencement & Pre-trip cargo loading' },
-        { name: 'Monday Market Hub', lat: 11.8365, lng: 13.1486, arrOffset: 8*60 + 50, depOffset: 9*60 + 40, activity: 'Offloading wholesale consumables' },
-        { name: 'Bolori Junction', lat: 11.8520, lng: 13.1310, arrOffset: 10*60, depOffset: 11*60, activity: 'Tire safety check & fuel top-up' },
-        { name: 'Bulumkutu Bypass', lat: 11.8210, lng: 13.1110, arrOffset: 11*60 + 20, depOffset: 13*60, activity: 'Scheduled fatigue break & lunch rest' },
-        { name: 'Custom Area Depot', lat: 11.8540, lng: 13.1720, arrOffset: 13*60 + 30, depOffset: null, activity: 'Bulk freight offloading & client sign-off' }
-      ],
-      [
-        { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 7*60 + 30, depOffset: 8*60, activity: 'Shift Commencement & Pre-trip safety check' },
-        { name: 'Custom Area Depot', lat: 11.8540, lng: 13.1720, arrOffset: 8*60 + 20, depOffset: 9*60 + 30, activity: 'Inter-state cargo transfer' },
-        { name: 'Muna Garage Terminal', lat: 11.8480, lng: 13.2080, arrOffset: 9*60 + 50, depOffset: 11*60 + 10, activity: 'Agricultural haulage sorting' },
-        { name: 'Tashan Bama Hub', lat: 11.7990, lng: 13.1890, arrOffset: 11*60 + 30, depOffset: 13*60 + 30, activity: 'Rest stop & routine maintenance check' },
-        { name: 'Bama Road Corridor', lat: 11.8020, lng: 13.1950, arrOffset: 13*60 + 50, depOffset: null, activity: 'Grain delivery & warehouse dispatch' }
-      ],
-      [
-        { name: 'Maiduguri Central Depot (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 8*60 + 30, depOffset: 9*60, activity: 'Shift Commencement' },
-        { name: 'Bolori Junction', lat: 11.8520, lng: 13.1310, arrOffset: 9*60 + 20, depOffset: 10*60 + 15, activity: 'Spare parts delivery' },
-        { name: 'Bulumkutu Bypass', lat: 11.8210, lng: 13.1110, arrOffset: 10*60 + 40, depOffset: 12*60, activity: 'Trailer inspection & driver physical rest' },
-        { name: 'Monday Market Hub', lat: 11.8365, lng: 13.1486, arrOffset: 12*60 + 20, depOffset: 13*60 + 45, activity: 'Retail dispatch' },
-        { name: 'Maiduguri Main Terminal (Post Office)', lat: 11.8311, lng: 13.1509, arrOffset: 14*60 + 10, depOffset: null, activity: 'Return to base and debrief' }
-      ]
-    ];
-
-    const selectedRoute = routes[routeIndex];
-    const placesVisited: any[] = [];
-    let currentLoc: any = null;
-
-    selectedRoute.forEach((stop, index) => {
-      if (currentMinutes >= stop.arrOffset) {
-        const arrivedAt = new Date();
-        arrivedAt.setHours(Math.floor(stop.arrOffset / 60), stop.arrOffset % 60, 0, 0);
-
-        let departedAt: Date | null = null;
-        let dwellMinutes = 0;
-        let status = 'active_dwell';
-
-        if (stop.depOffset !== null && currentMinutes >= stop.depOffset) {
-          departedAt = new Date();
-          departedAt.setHours(Math.floor(stop.depOffset / 60), stop.depOffset % 60, 0, 0);
-          dwellMinutes = stop.depOffset - stop.arrOffset;
-          status = 'completed';
-        } else {
-          dwellMinutes = currentMinutes - stop.arrOffset;
-          status = 'active_dwell';
-        }
-
-        placesVisited.push({
-          id: `PLC-${activeDriver.id}-${index}`,
-          place_name: stop.name,
-          arrived_at: arrivedAt.toISOString(),
-          departed_at: departedAt ? departedAt.toISOString() : null,
-          dwell_duration_minutes: dwellMinutes,
-          status,
-          activity: stop.activity,
-          latitude: stop.lat,
-          longitude: stop.lng
-        });
-
-        if (status === 'active_dwell' || index === selectedRoute.length - 1 || (departedAt && currentMinutes < (selectedRoute[index+1]?.arrOffset || 24*60))) {
-          currentLoc = {
-            latitude: stop.lat,
-            longitude: stop.lng,
-            place_name: stop.name,
-            activity: status === 'active_dwell' ? stop.activity : 'In Transit'
-          };
-        }
-      }
-    });
-
-    if (placesVisited.length === 0) {
-      const firstStop = selectedRoute[0];
-      const arrivedAt = new Date();
-      arrivedAt.setHours(Math.floor(firstStop.arrOffset / 60), firstStop.arrOffset % 60, 0, 0);
-      placesVisited.push({
-        id: `PLC-${activeDriver.id}-0`,
-        place_name: firstStop.name,
-        arrived_at: arrivedAt.toISOString(),
-        departed_at: null,
-        dwell_duration_minutes: 0,
-        status: 'active_dwell',
-        activity: firstStop.activity,
-        latitude: firstStop.lat,
-        longitude: firstStop.lng
-      });
-      currentLoc = {
-        latitude: firstStop.lat,
-        longitude: firstStop.lng,
-        place_name: firstStop.name,
-        activity: 'Pre-trip check'
-      };
-    }
-
-    return { placesVisited, currentLoc };
-  }, [activeDriver]);
-
   const liveCoordinates = useMemo(() => {
-    const lat = telematicsData?.currentLocation?.latitude || maiduguriSim.currentLoc?.latitude || 11.8311;
-    const lng = telematicsData?.currentLocation?.longitude || maiduguriSim.currentLoc?.longitude || 13.1509;
+    const lat = telematicsData?.currentLocation?.latitude || 11.8311;
+    const lng = telematicsData?.currentLocation?.longitude || 13.1509;
     return { latitude: lat, longitude: lng };
-  }, [telematicsData, maiduguriSim]);
+  }, [telematicsData]);
 
   const geofenceTelemetry = useMemo(() => {
     return ingestDriverTelemetry(liveCoordinates);
@@ -387,26 +281,12 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 
   // Interactive Live Tracking Map & Telemetry Simulation States
   const [mapSatelliteMode, setMapSatelliteMode] = useState(false);
-  const [isSimulatingMovement, setIsSimulatingMovement] = useState(true);
-  const [vehicleSpeed, setVehicleSpeed] = useState(78);
-  const [fuelLevel, setFuelLevel] = useState(74);
+  const [vehicleSpeed, setVehicleSpeed] = useState(0);
+  const [fuelLevel, setFuelLevel] = useState(100);
   const [activeCamChannel, setActiveCamChannel] = useState<'road' | 'cabin' | 'cargo'>('road');
   const [nightVision, setNightVision] = useState(false);
   const [isImmobilized, setIsImmobilized] = useState(false);
   const [showImmobilizerConfirm, setShowImmobilizerConfirm] = useState(false);
-
-  // Movement simulation effect
-  useEffect(() => {
-    if (!isSimulatingMovement || isImmobilized) return;
-    const interval = setInterval(() => {
-      setVehicleSpeed(prev => {
-        const delta = (Math.random() - 0.48) * 4;
-        const newSpeed = Math.max(0, Math.min(110, Math.round(prev + delta)));
-        return newSpeed;
-      });
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [isSimulatingMovement, isImmobilized]);
 
   // Form states: Log Accident
   const [accDate, setAccDate] = useState(new Date().toISOString().split('T')[0]);
@@ -575,6 +455,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     : cyclePaid;
 
   const safeRemittancePercent = agreedTotal > 0 ? Math.min(100, Math.round((safePaidRemittance / agreedTotal) * 100)) : 0;
+  const shortfall = Math.max(0, agreedTotal - safePaidRemittance);
   
   // Safe Vehicle Equity Ownership % (strictly Cumulative Payments / Total Vehicle Purchase Price)
   const safeOwnershipPercent = vehiclePurchasePrice > 0 
@@ -949,16 +830,22 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         {/* Remittance & Installment Progress */}
         <div className="flex flex-col justify-center bg-slate-950/60 border border-slate-800 p-2.5 px-3.5 rounded-xl text-xs gap-1">
           <div className="flex justify-between items-center text-slate-400 text-[10px] font-bold uppercase">
-            <span>30-Day Cycle Rate</span>
-            <span className="text-emerald-400 font-mono font-bold">₦{agreedTotal.toLocaleString()}</span>
+            <span>30-Day Cycle Status</span>
+            <span className={`${shortfall > 0 ? 'text-rose-400' : 'text-emerald-400'} font-mono font-bold`}>
+              {shortfall > 0 ? `₦${shortfall.toLocaleString()} Shortfall` : 'Settled'}
+            </span>
           </div>
           <div className="flex justify-between items-center font-mono">
-            <span className="text-slate-400 text-[11px]">Milestone Remittance:</span>
-            <span className="text-white font-bold text-xs">₦{safePaidRemittance.toLocaleString()} paid</span>
+            <span className="text-slate-400 text-[11px]">Monthly Obligation:</span>
+            <span className="text-white font-bold text-xs">₦{agreedTotal.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center font-mono">
+            <span className="text-slate-400 text-[11px]">Paid This Cycle:</span>
+            <span className="text-emerald-400 font-bold text-xs">₦{safePaidRemittance.toLocaleString()}</span>
           </div>
           <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
             <div 
-              className="bg-emerald-500 h-full transition-all duration-500" 
+              className={`${shortfall > 0 ? 'bg-amber-500' : 'bg-emerald-500'} h-full transition-all duration-500`} 
               style={{ width: `${safeRemittancePercent}%` }}
             ></div>
           </div>
@@ -967,12 +854,16 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         {/* Vehicle Ownership Asset Balance */}
         <div className="flex flex-col justify-center bg-slate-950/60 border border-slate-800 p-2.5 px-3.5 rounded-xl text-xs gap-1">
           <div className="flex justify-between items-center text-slate-400 text-[10px] font-bold uppercase">
-            <span>Vehicle Asset Ownership</span>
-            <span className="text-brand-gold font-mono font-bold">{safeOwnershipPercent}% Paid</span>
+            <span>Asset Ownership</span>
+            <span className="text-brand-gold font-mono font-bold">{safeOwnershipPercent}% Equity</span>
           </div>
           <div className="flex justify-between items-center font-mono">
-            <span className="text-slate-400 text-[11px]">Outstanding Rig Balance:</span>
+            <span className="text-slate-400 text-[11px]">Remaining Balance:</span>
             <span className="text-brand-gold font-black text-xs">₦{remainingVehicleBalance.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center font-mono">
+            <span className="text-slate-400 text-[11px]">Total Paid to Date:</span>
+            <span className="text-white font-bold text-xs">₦{totalPaid.toLocaleString()}</span>
           </div>
           <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
             <div 
@@ -1168,7 +1059,9 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                         {isImmobilized ? (
                           <Badge variant="danger" className="text-[10px]">ENGINE IMMOBILIZED</Badge>
                         ) : (
-                          <Badge variant="success" className="text-[10px]">GPS ACTIVE</Badge>
+                          <Badge variant={telematicsData?.currentLocation ? 'success' : 'outline'} className="text-[10px]">
+                            {telematicsData?.currentLocation ? 'GPS ACTIVE' : 'NO GPS SIGNAL'}
+                          </Badge>
                         )}
                       </h3>
                       <p className="text-xs text-slate-400">High-precision sensor telemetry stream, live location tracking, and remote rig control</p>
@@ -1183,15 +1076,6 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                       }`}
                     >
                       {mapSatelliteMode ? 'Satellite Mode' : 'Standard Vector Map'}
-                    </button>
-
-                    <button
-                      onClick={() => setIsSimulatingMovement(!isSimulatingMovement)}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        isSimulatingMovement ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      {isSimulatingMovement ? 'GPS Stream: LIVE' : 'GPS Stream: PAUSED'}
                     </button>
 
                     <button
@@ -1242,10 +1126,10 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                       {/* Map HUD Overlays */}
                       <div className="absolute top-3 left-3 bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl font-mono text-[11px] text-slate-300 flex flex-col gap-0.5 backdrop-blur-md">
                         <span className="font-bold text-brand-gold truncate max-w-[220px]">
-                          {telematicsData?.currentLocation?.place_name || maiduguriSim.currentLoc?.place_name || 'Maiduguri Central Depot'}
+                          {telematicsData?.currentLocation?.place_name || 'No GPS Signal'}
                         </span>
                         <span>
-                          Coordinates: {liveCoordinates.latitude.toFixed(4)}° N, {liveCoordinates.longitude.toFixed(4)}° E
+                          {telematicsData?.currentLocation ? `Coordinates: ${liveCoordinates.latitude.toFixed(4)}° N, ${liveCoordinates.longitude.toFixed(4)}° E` : 'Waiting for real-time telemetry...'}
                         </span>
                         <span className="text-emerald-400">Heading: North-East (45°) • Borno State</span>
                         <span className="text-brand-gold font-semibold">
@@ -1271,7 +1155,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                     <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
                       <div className="flex items-center gap-4 text-slate-400 flex-wrap">
                         <span className="font-semibold text-white">
-                          Route: {telematicsData?.placesVisitedToday?.[0]?.place_name || maiduguriSim.placesVisited[0]?.place_name || 'Maiduguri Depot'} → {telematicsData?.placesVisitedToday?.[telematicsData.placesVisitedToday.length - 1]?.place_name || maiduguriSim.placesVisited[maiduguriSim.placesVisited.length - 1]?.place_name || 'Custom Area Depot'}
+                          Route: {telematicsData?.placesVisitedToday?.[0]?.place_name || 'Not Started'} → {telematicsData?.placesVisitedToday?.[telematicsData.placesVisitedToday.length - 1]?.place_name || 'In Progress'}
                         </span>
                         <span className="text-brand-gold font-bold">
                           Est Arrival: {String((new Date().getHours() + 1) % 24).padStart(2, '0')}:45 (1h 15m remaining)
@@ -1458,7 +1342,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                       </p>
                     </div>
                     <Badge variant="gold" className="self-start sm:self-center font-mono text-[10px]">
-                      ROUTE: {telematicsData?.placesVisitedToday?.[0]?.place_name || maiduguriSim.placesVisited[0]?.place_name || 'Maiduguri Depot'} → {telematicsData?.placesVisitedToday?.[telematicsData.placesVisitedToday.length - 1]?.place_name || maiduguriSim.placesVisited[maiduguriSim.placesVisited.length - 1]?.place_name || 'Custom Area Depot'}
+                      ROUTE: {telematicsData?.placesVisitedToday?.[0]?.place_name || 'Base'} → {telematicsData?.placesVisitedToday?.[telematicsData.placesVisitedToday.length - 1]?.place_name || 'Terminal'}
                     </Badge>
                   </div>
 
@@ -1475,10 +1359,10 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/50">
-                        {(telematicsData?.placesVisitedToday || maiduguriSim.placesVisited).map((stop: any, idx: number) => {
+                        {(telematicsData?.placesVisitedToday || []).map((stop: any, idx: number) => {
                           const arrivedStr = stop.arrived_at ? new Date(stop.arrived_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending';
                           const departedStr = stop.departed_at ? new Date(stop.departed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : stop.status === 'active_dwell' ? 'Still Docked' : 'Ongoing Transit';
-                          const isCurrent = stop.status === 'active_dwell' || (!stop.departed_at && idx === (telematicsData?.placesVisitedToday || maiduguriSim.placesVisited).length - 1);
+                          const isCurrent = stop.status === 'active_dwell' || (!stop.departed_at && idx === (telematicsData?.placesVisitedToday || []).length - 1);
                           return (
                             <tr key={stop.id || idx} className={`transition-colors hover:bg-slate-800/30 ${isCurrent ? 'bg-brand-gold/5 text-brand-gold' : ''}`}>
                               <td className="p-3 font-semibold">

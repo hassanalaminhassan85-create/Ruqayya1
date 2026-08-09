@@ -67,7 +67,8 @@ import {
   Sparkles,
   ArrowLeft,
   Clock,
-  KeyRound
+  KeyRound,
+  Navigation
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -559,6 +560,7 @@ export default function App() {
       { id: 'dashboard', label: lang === 'en' ? "Dashboard" : "Gudunmawar Aiki", icon: <Layers className="h-4 w-4 shrink-0" />, active: activeSection === 'dashboard' },
       { id: 'ai-assistant', label: lang === 'en' ? "Ruqayya AI" : "Mataimakin AI", icon: <Sparkles className="h-4 w-4 shrink-0 text-brand-gold" />, active: activeSection === 'ai-assistant' },
       { id: 'drivers', label: lang === 'en' ? "Drivers" : "Direbobi", icon: <Users className="h-4 w-4 shrink-0" />, active: activeSection === 'drivers' },
+      { id: 'tracker', label: lang === 'en' ? "Driver Tracker" : "Kula da Direbobi", icon: <Navigation className="h-4 w-4 shrink-0 text-brand-gold" />, active: activeSection === 'tracker' },
       { id: 'fleet', label: lang === 'en' ? "Fleet" : "Rukunin Motoci", icon: <Truck className="h-4 w-4 shrink-0" />, active: activeSection === 'fleet' },
       { id: 'payments', label: lang === 'en' ? "Payment Approvals" : "Tabbatar Biyan Kudi", icon: <ClipboardCheck className="h-4 w-4 shrink-0 text-emerald-500" />, active: activeSection === 'payments' },
       { id: 'finance', label: lang === 'en' ? "Financial Center" : "Asusun Kamfani", icon: <Coins className="h-4 w-4 shrink-0" />, active: activeSection === 'finance' },
@@ -581,7 +583,7 @@ export default function App() {
       );
     }
     if (currentRole === 'admin') {
-      return items.filter(item => ["dashboard", "fleet", "drivers", "trips", "payments", "finance", "people", "communications", "documents", "directory", "accounts", "ai-assistant", "notifications", "settings", "help"].includes(item.id));
+      return items.filter(item => ["dashboard", "fleet", "drivers", "tracker", "trips", "payments", "finance", "people", "communications", "documents", "directory", "accounts", "ai-assistant", "notifications", "settings", "help"].includes(item.id));
     }
     if (currentRole === 'shareholder') {
       return items.filter(item => 
@@ -601,7 +603,7 @@ export default function App() {
     // Explicitly synchronize role-specific dashboard tabs when sidebar items are clicked
     // This ensures that when we switch back to 'dashboard' section, we land on the correct tab
     if (currentRole === 'admin') {
-      const adminTabs: any[] = ['dashboard', 'fleet', 'drivers', 'payments', 'finance', 'trips', 'documents', 'communications', 'directory', 'people', 'accounts', 'settings'];
+      const adminTabs: any[] = ['dashboard', 'fleet', 'drivers', 'tracker', 'payments', 'finance', 'trips', 'documents', 'communications', 'directory', 'people', 'accounts', 'settings'];
       if (adminTabs.includes(id)) {
         setAdminTab(id);
       }
@@ -713,6 +715,7 @@ export default function App() {
       let adminTabValue = adminTab;
       if (activeSection === 'dashboard') adminTabValue = 'dashboard';
       else if (activeSection === 'drivers') adminTabValue = 'drivers';
+      else if (activeSection === 'tracker') adminTabValue = 'tracker';
       else if (activeSection === 'fleet') adminTabValue = 'fleet';
       else if (activeSection === 'payments') adminTabValue = 'payments';
       else if (activeSection === 'trips') adminTabValue = 'trips';
@@ -724,7 +727,7 @@ export default function App() {
       else if (activeSection === 'accounts') adminTabValue = 'accounts';
       else if (activeSection === 'settings') adminTabValue = 'settings';
       
-      const allowedAdminSections = ["dashboard", "fleet", "drivers", "payments", "finance", "trips", "communications", "documents", "directory", "people", "accounts", "settings"];
+      const allowedAdminSections = ["dashboard", "fleet", "drivers", "tracker", "payments", "finance", "trips", "communications", "documents", "directory", "people", "accounts", "settings"];
       if (!allowedAdminSections.includes(activeSection)) {
         return (
           <div className="flex flex-col items-center justify-center p-12 text-center max-w-md mx-auto py-20 bg-white rounded-[20px] border border-border-main shadow-xs">
@@ -749,6 +752,7 @@ export default function App() {
             if (tab === 'dashboard') setActiveSection('dashboard');
             else if (tab === 'fleet') setActiveSection('fleet');
             else if (tab === 'drivers') setActiveSection('drivers');
+            else if (tab === 'tracker') setActiveSection('tracker');
             else if (tab === 'trips') setActiveSection('trips');
             else if (tab === 'payments') setActiveSection('payments');
             else if (tab === 'documents') setActiveSection('documents');

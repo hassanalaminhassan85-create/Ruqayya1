@@ -260,6 +260,32 @@ export interface CanonicalCycleStatus {
   pausedAt?: string;
 }
 
+// Telematics & GPS Data Types
+export interface GPSData {
+  driverId: string;
+  lat: number;
+  lng: number;
+  speed: number; // km/h
+  heading: number; // degrees
+  accuracy: number; // meters
+  timestamp: string;
+  ignition: boolean;
+  batteryLevel: number;
+  locationName?: string;
+}
+
+export interface TripSegment {
+  id?: string;
+  driverId: string;
+  startTime: string;
+  endTime: string;
+  startLocation: string;
+  endLocation: string;
+  distance: number; // km
+  duration: number; // minutes
+  avgSpeed: number;
+}
+
 // I18n translations type structure
 export interface Dictionary {
   landing: {
