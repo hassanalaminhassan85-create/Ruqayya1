@@ -260,16 +260,87 @@ export function loadDB(): DBState {
             changed = true;
           }
 
-          const totalPaid = (parsed.driver_payments || [])
-            .filter((p: any) => (p.driver_id === drv.id || p.driverId === drv.id) && (p.status === 'approved' || p.status === 'Approved' || p.status === 'completed'))
-            .reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+          const rawAgreed = parseFloat(drv.agreed_amount ?? drv.agreedAmount) || 180000;
+          if (drv.agreed_amount !== rawAgreed || drv.agreedAmount !== rawAgreed) {
+            drv.agreed_amount = rawAgreed;
+            drv.agreedAmount = rawAgreed;
+            changed = true;
+          }
 
-          drv.total_amount_paid = totalPaid;
-          const currentRem = parseFloat(drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance);
-          if (isNaN(currentRem)) {
-            const expectedRemaining = Math.max(0, vehiclePrice - totalPaid);
-            drv.remaining_vehicle_balance = expectedRemaining;
-            drv.remainingVehicleBalance = expectedRemaining;
+          const validIds = new Set(
+            [
+              drv.id,
+              drv.user_id,
+              drv.userId,
+              drv.company_driver_id,
+              drv.companyDriverId,
+              drv.fullName,
+              drv.full_name,
+            ].filter(Boolean),
+          );
+
+          const isApprovedPayment = (p: any) => {
+            if (!p) return false;
+            const matchesDriver =
+              validIds.has(p.driver_id) ||
+              validIds.has(p.driverId) ||
+              validIds.has(p.driver_name) ||
+              validIds.has(p.driverName);
+            if (!matchesDriver) return false;
+            const st = (p.status || "").toLowerCase();
+            return st === "approved" || st === "completed" || st === "paid";
+          };
+
+          const approvedPaymentsInERP = (parsed.driver_payments || []).filter(isApprovedPayment);
+          const totalErpPaid = approvedPaymentsInERP.reduce(
+            (sum: number, p: any) => sum + (parseFloat(p.amount) || 0),
+            0,
+          );
+
+          const linkedExpenses = (parsed.financial_records || []).filter((r: any) => {
+            if (!r || r.type !== "expense") return false;
+            return validIds.has(r.driver_id) || validIds.has(r.driverId);
+          });
+          const totalLedgerExpenses = linkedExpenses.reduce(
+            (sum: number, r: any) => sum + (parseFloat(r.amount) || 0),
+            0,
+          );
+          const totalHistoryExpenses = (drv.expenseHistory || []).reduce(
+            (sum: number, r: any) => sum + (parseFloat(r.amount) || 0),
+            0,
+          );
+          const totalExpenses = Math.max(totalLedgerExpenses, totalHistoryExpenses);
+
+          let initialRemaining = vehiclePrice;
+          let initialPaid = 0;
+
+          if (drv.opening_balance && drv.opening_balance.is_imported) {
+            initialRemaining = parseFloat(drv.opening_balance.remaining_vehicle_balance ?? drv.opening_balance.remainingVehicleBalance);
+            if (isNaN(initialRemaining)) initialRemaining = vehiclePrice;
+            initialPaid = parseFloat(drv.opening_balance.total_paid_to_date ?? drv.opening_balance.totalPaidToDate) || 0;
+          } else {
+            const regRem = parseFloat(drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance);
+            if (!isNaN(regRem)) {
+              initialRemaining = regRem;
+              initialPaid = Math.max(0, vehiclePrice - regRem);
+            } else {
+              initialRemaining = vehiclePrice;
+              initialPaid = 0;
+            }
+          }
+
+          const totalAmountPaid = initialPaid + totalErpPaid;
+          const remainingVehicleBalance = Math.max(0, initialRemaining - totalErpPaid + totalExpenses);
+
+          if (drv.total_amount_paid !== totalAmountPaid || drv.totalAmountPaid !== totalAmountPaid) {
+            drv.total_amount_paid = totalAmountPaid;
+            drv.totalAmountPaid = totalAmountPaid;
+            changed = true;
+          }
+
+          if (drv.remaining_vehicle_balance !== remainingVehicleBalance || drv.remainingVehicleBalance !== remainingVehicleBalance) {
+            drv.remaining_vehicle_balance = remainingVehicleBalance;
+            drv.remainingVehicleBalance = remainingVehicleBalance;
             changed = true;
           }
         });

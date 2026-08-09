@@ -448,13 +448,25 @@ function syncCyclesOnRequest(db: any): boolean {
   return dbChanged;
 }
 
-// Financial calculations matching server.ts
-function getDriverFinancials(driver: any, db: any) {
+export function getDriverFinancials(driver: any, db: any) {
   const rawPrice = driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice;
-  const rawInitialRemaining =
-    driver.remaining_vehicle_balance !== undefined
-      ? driver.remaining_vehicle_balance
-      : driver.remainingVehicleBalance;
+  let vehiclePurchasePrice = 15000000;
+  if (
+    rawPrice !== undefined &&
+    rawPrice !== null &&
+    !isNaN(parseFloat(rawPrice)) &&
+    parseFloat(rawPrice) > 0
+  ) {
+    vehiclePurchasePrice = parseFloat(rawPrice);
+  }
+
+  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
+  const agreedAmount =
+    rawAgreed !== undefined &&
+    rawAgreed !== null &&
+    !isNaN(parseFloat(rawAgreed))
+      ? parseFloat(rawAgreed)
+      : 180000;
 
   const validIds = new Set(
     [
@@ -507,81 +519,35 @@ function getDriverFinancials(driver: any, db: any) {
 
   const totalExpenses = Math.max(totalLedgerExpenses, totalHistoryExpenses);
 
-  let basePurchasePrice = 0;
-  if (
-    rawPrice !== undefined &&
-    rawPrice !== null &&
-    !isNaN(parseFloat(rawPrice)) &&
-    parseFloat(rawPrice) > 0
-  ) {
-    basePurchasePrice = parseFloat(rawPrice);
-  } else {
-    basePurchasePrice = 15000000;
-  }
-
-  const purchasePrice = basePurchasePrice + totalExpenses;
-
-  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
-  const agreedAmount =
-    rawAgreed !== undefined &&
-    rawAgreed !== null &&
-    !isNaN(parseFloat(rawAgreed))
-      ? parseFloat(rawAgreed)
-      : 0;
+  let initialRemaining = vehiclePurchasePrice;
+  let initialPaid = 0;
 
   if (driver.opening_balance && driver.opening_balance.is_imported) {
-    const openingRemaining =
-      parseFloat(
-        driver.opening_balance.remaining_vehicle_balance ??
-          driver.opening_balance.remainingVehicleBalance,
-      ) || 0;
-    const openingPaid =
-      parseFloat(
-        driver.opening_balance.total_paid_to_date ??
-          driver.opening_balance.totalPaidToDate,
-      ) || 0;
-
-    // For imported drivers, the purchase price is explicitly defined or inferred from opening balance
-    const importedPurchasePrice =
-      (rawPrice !== undefined &&
-      rawPrice !== null &&
-      !isNaN(parseFloat(rawPrice)) &&
-      parseFloat(rawPrice) > 0
-        ? parseFloat(rawPrice)
-        : Math.max(15000000, openingRemaining + openingPaid)) + totalExpenses;
-
-    const totalAmountPaid = openingPaid + totalErpPaid;
-    const remainingVehicleBalance =
-      rawInitialRemaining !== undefined &&
-      !isNaN(parseFloat(rawInitialRemaining))
-        ? Math.max(0, parseFloat(rawInitialRemaining) - totalErpPaid)
-        : Math.max(0, importedPurchasePrice - totalAmountPaid);
-
-    return {
-      vehiclePurchasePrice: importedPurchasePrice,
-      totalAmountPaid,
-      remainingVehicleBalance,
-      totalPaymentsMade: countErpPaid,
-      agreedAmount,
-      openingBalance: driver.opening_balance,
-    };
+    const openRem = parseFloat(driver.opening_balance.remaining_vehicle_balance ?? driver.opening_balance.remainingVehicleBalance);
+    initialRemaining = !isNaN(openRem) ? openRem : vehiclePurchasePrice;
+    initialPaid = parseFloat(driver.opening_balance.total_paid_to_date ?? driver.opening_balance.totalPaidToDate) || 0;
   } else {
-    const totalAmountPaid = totalErpPaid;
-    const remainingVehicleBalance =
-      rawInitialRemaining !== undefined &&
-      !isNaN(parseFloat(rawInitialRemaining))
-        ? Math.max(0, parseFloat(rawInitialRemaining) - totalErpPaid)
-        : Math.max(0, purchasePrice - totalAmountPaid);
-
-    return {
-      vehiclePurchasePrice: purchasePrice,
-      totalAmountPaid,
-      remainingVehicleBalance,
-      totalPaymentsMade: countErpPaid,
-      agreedAmount,
-      openingBalance: null,
-    };
+    const regRem = parseFloat(driver.remaining_vehicle_balance ?? driver.remainingVehicleBalance);
+    if (!isNaN(regRem)) {
+      initialRemaining = regRem;
+      initialPaid = Math.max(0, vehiclePurchasePrice - regRem);
+    } else {
+      initialRemaining = vehiclePurchasePrice;
+      initialPaid = 0;
+    }
   }
+
+  const totalAmountPaid = initialPaid + totalErpPaid;
+  const remainingVehicleBalance = Math.max(0, initialRemaining - totalErpPaid + totalExpenses);
+
+  return {
+    vehiclePurchasePrice,
+    totalAmountPaid,
+    remainingVehicleBalance,
+    totalPaymentsMade: countErpPaid,
+    agreedAmount,
+    openingBalance: driver.opening_balance || null,
+  };
 }
 
 function lookupContractTerms(vehicle: any) {

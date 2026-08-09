@@ -545,7 +545,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
 
   const totalExpensesAmount = driverExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
     
-  const totalPaid = (activeDriver as any).financials?.totalAmountPaid ?? (activeDriver as any).totalAmountPaid ?? (activeDriver as any).total_amount_paid ?? totalPaymentsAmount;
+  const totalPaid = parseFloat((activeDriver as any).total_amount_paid ?? (activeDriver as any).totalAmountPaid ?? (activeDriver as any).financials?.totalAmountPaid) || 0;
 
   const rawAgreed = (activeDriver as any).agreed_amount ?? (activeDriver as any).agreedAmount ?? (activeDriver as any).financials?.agreedAmount;
   const agreedTotal = rawAgreed !== undefined && rawAgreed !== null ? parseFloat(rawAgreed) || 0 : 0;
@@ -560,13 +560,9 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     : (vehicleAssigned?.purchasePrice || vehicleAssigned?.purchase_price || 15000000);
 
   // Dynamic Registered Balance
-  const rawRegisteredBal = (activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance;
-  const registeredRemainingBalance = rawRegisteredBal !== undefined && rawRegisteredBal !== null ? parseFloat(rawRegisteredBal) || 0 : 0;
-  
   // Computed Remaining Vehicle Purchase Balance
-  // Initialized with registered balance (if explicitly provided) else full purchase price
-  const baseBalance = (rawRegisteredBal !== undefined && rawRegisteredBal !== null && rawRegisteredBal !== '') ? registeredRemainingBalance : vehiclePurchasePrice;
-  const remainingVehicleBalance = Math.max(0, baseBalance - totalPaymentsAmount + totalExpensesAmount);
+  // The API returns vehiclePurchasePrice as the static base price, and remaining_vehicle_balance as the computed current balance.
+  const remainingVehicleBalance = parseFloat((activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? (activeDriver as any).financials?.remainingVehicleBalance) || 0;
 
   // Remittance cycle math
   const safePaidRemittance = agreedTotal > 0 ? (totalPaid % agreedTotal) : totalPaid;
