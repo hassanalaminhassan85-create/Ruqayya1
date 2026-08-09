@@ -51,6 +51,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
 }) => {
   const [trips, setTrips] = useState<DailyRemittance[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [driverExpenses, setDriverExpenses] = useState<any[]>([]);
   const [driverData, setDriverData] = useState<Driver | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,6 +109,14 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           }
           const p = await api.getPayments(d.id);
           setPayments(p || []);
+          
+          const finRes = await api.getFinance().catch(() => []);
+          if (Array.isArray(finRes)) {
+            setDriverExpenses(finRes.filter((f: any) => 
+              f.type === 'expense' && 
+              (f.driver_id === d.id || f.driver_id === d.user_id)
+            ));
+          }
           
           const allTrips = await api.getTrips();
           const driverIdSet = new Set([
@@ -470,9 +479,23 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       const rawVehPrice = driverData?.vehiclePurchasePrice ?? driverData?.vehicle_purchase_price ?? driverData?.financials?.vehiclePurchasePrice;
       const parsedPrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
       const vehiclePrice = parsedPrice > 500000 ? parsedPrice : 5000000;
-      const totalPaid = driverData?.total_amount_paid || driverData?.totalAmountPaid || payments.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
-      const currentBalance = Math.max(0, vehiclePrice - totalPaid);
+      
+      const totalPaymentsAmt = payments
+        .filter(p => {
+          const st = (p.status || '').toLowerCase();
+          return st === 'approved' || st === 'completed' || st === 'pending';
+        })
+        .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      const totalExpensesAmt = driverExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+      
+      const rawRegBal = driverData?.remaining_vehicle_balance ?? driverData?.remainingVehicleBalance;
+      const regBal = rawRegBal !== undefined && rawRegBal !== null ? parseFloat(rawRegBal) || 0 : 0;
+      const baseBal = (rawRegBal !== undefined && rawRegBal !== null && rawRegBal !== '') ? regBal : vehiclePrice;
+      
+      const currentBalance = Math.max(0, baseBal - totalPaymentsAmt + totalExpensesAmt);
       const newBalance = Math.max(0, currentBalance - paymentAmount);
+      
+      const totalPaid = driverData?.total_amount_paid || driverData?.totalAmountPaid || totalPaymentsAmt;
       const newPaid = totalPaid + paymentAmount;
       const newPercent = ((newPaid / vehiclePrice) * 100).toFixed(2);
 
@@ -658,10 +681,24 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   // Default to 15,000,000 corporate vehicle value if not set on driver profile
   const vehiclePurchasePrice = parsedPrice > 0 ? parsedPrice : 15000000;
   
-  const totalPaid = driverData?.financials?.totalAmountPaid ?? driverData?.total_amount_paid ?? driverData?.totalAmountPaid ?? payments.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+  const totalPaymentsAmount = payments
+    .filter(p => {
+      const st = (p.status || '').toLowerCase();
+      return st === 'approved' || st === 'completed' || st === 'pending';
+    })
+    .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const totalExpensesAmount = driverExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+  const totalPaid = driverData?.financials?.totalAmountPaid ?? driverData?.total_amount_paid ?? driverData?.totalAmountPaid ?? totalPaymentsAmount;
   
-  // Real-time remaining vehicle balance derived strictly from Vehicle Purchase Price - Total Payments Received
-  const currentBalance = Math.max(0, vehiclePurchasePrice - totalPaid);
+  // Dynamic Registered Balance
+  const rawRegisteredBal = driverData?.remaining_vehicle_balance ?? driverData?.remainingVehicleBalance;
+  const registeredRemainingBalance = rawRegisteredBal !== undefined && rawRegisteredBal !== null ? parseFloat(rawRegisteredBal) || 0 : 0;
+  
+  // Initialized with registered balance (if explicitly provided) else full purchase price
+  const baseBalance = (rawRegisteredBal !== undefined && rawRegisteredBal !== null && rawRegisteredBal !== '') ? registeredRemainingBalance : vehiclePurchasePrice;
+  
+  // Real-time remaining vehicle balance derived from base balance - approved payments + expenses
+  const currentBalance = Math.max(0, baseBalance - totalPaymentsAmount + totalExpensesAmount);
 
   // Live real-time calculations as driver changes payment amount
   const livePaymentVal = paymentAmount || 0;

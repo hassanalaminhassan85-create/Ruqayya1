@@ -112,8 +112,9 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [driverTrips, setDriverTrips] = useState<any[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(false);
 
-  // Driver payments state (fetched dynamically if needed)
+  // Driver payments & expenses state (fetched dynamically if needed)
   const [livePayments, setLivePayments] = useState<any[]>(payments);
+  const [driverExpenses, setDriverExpenses] = useState<any[]>([]);
   const [telematicsData, setTelematicsData] = useState<any | null>(null);
 
   // Helper to generate deterministic Maiduguri locations for the active driver
@@ -257,6 +258,15 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
       const payRes = await api.getPayments(activeDriver.id).catch(() => []);
       if (Array.isArray(payRes)) {
         setLivePayments(payRes);
+      }
+
+      // Expenses
+      const finRes = await api.getFinance().catch(() => []);
+      if (Array.isArray(finRes)) {
+        setDriverExpenses(finRes.filter((f: any) => 
+          f.type === 'expense' && 
+          (f.driver_id === activeDriver.id || f.driver_id === activeDriver.user_id)
+        ));
       }
 
       // Telematics & Shift Dwell Data
@@ -526,12 +536,16 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     );
   }, [livePayments, activeDriver]);
   
-  const totalPaid = (activeDriver as any).financials?.totalAmountPaid ?? (activeDriver as any).totalAmountPaid ?? (activeDriver as any).total_amount_paid ?? driverPayments
+  const totalPaymentsAmount = driverPayments
     .filter(p => {
       const st = (p.status || '').toLowerCase();
       return st === 'approved' || st === 'completed' || st === 'pending';
     })
     .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
+  const totalExpensesAmount = driverExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+    
+  const totalPaid = (activeDriver as any).financials?.totalAmountPaid ?? (activeDriver as any).totalAmountPaid ?? (activeDriver as any).total_amount_paid ?? totalPaymentsAmount;
 
   const rawAgreed = (activeDriver as any).agreed_amount ?? (activeDriver as any).agreedAmount ?? (activeDriver as any).financials?.agreedAmount;
   const agreedTotal = rawAgreed !== undefined && rawAgreed !== null ? parseFloat(rawAgreed) || 0 : 0;
@@ -545,8 +559,14 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     ? parsedPrice 
     : (vehicleAssigned?.purchasePrice || vehicleAssigned?.purchase_price || 15000000);
 
+  // Dynamic Registered Balance
+  const rawRegisteredBal = (activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance;
+  const registeredRemainingBalance = rawRegisteredBal !== undefined && rawRegisteredBal !== null ? parseFloat(rawRegisteredBal) || 0 : 0;
+  
   // Computed Remaining Vehicle Purchase Balance
-  const remainingVehicleBalance = Math.max(0, vehiclePurchasePrice - totalPaid);
+  // Initialized with registered balance (if explicitly provided) else full purchase price
+  const baseBalance = (rawRegisteredBal !== undefined && rawRegisteredBal !== null && rawRegisteredBal !== '') ? registeredRemainingBalance : vehiclePurchasePrice;
+  const remainingVehicleBalance = Math.max(0, baseBalance - totalPaymentsAmount + totalExpensesAmount);
 
   // Remittance cycle math
   const safePaidRemittance = agreedTotal > 0 ? (totalPaid % agreedTotal) : totalPaid;

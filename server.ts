@@ -5746,19 +5746,13 @@ function executeRecordPayment(args: any, actor: any, req: express.Request) {
     created_at: new Date().toISOString(),
   });
 
-  // Update remaining vehicle balance on driver profile robustly
-  const rawP = parseFloat(drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice);
-  const purchasePrice = rawP && !isNaN(rawP) && rawP > 500000 ? rawP : 5000000;
-  drv.vehicle_purchase_price = purchasePrice;
-  drv.vehiclePurchasePrice = purchasePrice;
-
-  const totalPaid = (db.driver_payments || [])
-    .filter((p: any) => (p.driver_id === drv.id || p.driverId === drv.id) && (p.status === 'approved' || p.status === 'Approved' || p.status === 'completed'))
-    .reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
-
-  drv.total_amount_paid = totalPaid;
-  drv.remaining_vehicle_balance = Math.max(0, purchasePrice - totalPaid);
-  drv.remainingVehicleBalance = drv.remaining_vehicle_balance;
+  // Update remaining vehicle balance on driver profile robustly using centralized financial logic
+  const fin = getDriverFinancials(drv, db);
+  drv.vehicle_purchase_price = fin.vehiclePurchasePrice;
+  drv.vehiclePurchasePrice = fin.vehiclePurchasePrice;
+  drv.total_amount_paid = fin.totalAmountPaid;
+  drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
+  drv.remainingVehicleBalance = fin.remainingVehicleBalance;
 
   // Send driver a push/in-app notification
   if (!db.notifications) db.notifications = [];
@@ -7694,8 +7688,8 @@ export function getDriverFinancials(driver: any, db: any) {
     // Native Driver
     const totalAmountPaid = totalErpPaid;
     
-    // Check if stored initial balance was incorrectly set to 30-day cycle rate instead of full vehicle cost
-    const validInitial = (rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining)) && parseFloat(rawInitialRemaining) > agreedAmount)
+    // Use registered initial remaining balance if specified by driver/admin
+    const validInitial = (rawInitialRemaining !== undefined && rawInitialRemaining !== null && !isNaN(parseFloat(rawInitialRemaining)))
       ? parseFloat(rawInitialRemaining)
       : purchasePrice;
 
@@ -10153,19 +10147,14 @@ app.put("/api/payments/:id/status", authenticateSession, (req, res) => {
         created_at: new Date().toISOString(),
       });
 
-      // Update remaining vehicle balance if applicable
+      // Update remaining vehicle balance if applicable using centralized financial logic
       if (drv) {
-        const rawP = drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice;
-        const purchasePrice = rawP && !isNaN(parseFloat(rawP)) && parseFloat(rawP) > 0 ? parseFloat(rawP) : 15000000;
-        drv.vehicle_purchase_price = purchasePrice;
-
-        // Calculate total approved driver payments
-        const driverPaid = (db.driver_payments || [])
-          .filter((p: any) => p.driver_id === drv.id && (p.status === 'approved' || p.status === 'completed'))
-          .reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
-
-        drv.total_amount_paid = driverPaid;
-        drv.remaining_vehicle_balance = Math.max(0, purchasePrice - driverPaid);
+        const fin = getDriverFinancials(drv, db);
+        drv.vehicle_purchase_price = fin.vehiclePurchasePrice;
+        drv.vehiclePurchasePrice = fin.vehiclePurchasePrice;
+        drv.total_amount_paid = fin.totalAmountPaid;
+        drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
+        drv.remainingVehicleBalance = fin.remainingVehicleBalance;
       }
 
       // Update company wallet balance

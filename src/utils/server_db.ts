@@ -6,8 +6,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { initializeApp, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase Admin for persistent storage
@@ -18,27 +18,28 @@ export function setFirestore(val: any) {
 try {
   const dbId = (firebaseConfig as any).firestoreDatabaseId || (firebaseConfig as any).databaseId;
   
-  if (getApps().length === 0) {
-    if (firebaseConfig && (firebaseConfig as any).projectId) {
-      initializeApp({
-        projectId: (firebaseConfig as any).projectId
-      });
-      console.log(`Initialized Firebase Admin with projectId: ${(firebaseConfig as any).projectId}`);
-    } else {
-      initializeApp();
-    }
-  }
+  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  const _db = getFirestore(app, dbId);
 
-  // Use the configured database ID
-  if (dbId) {
-    firestore = getFirestore(undefined, dbId);
-    console.log(`Initialized with database: ${dbId}`);
-  } else {
-    firestore = getFirestore();
-    console.log(`Initialized with default database`);
-  }
-} catch (e) {
-  console.error("Firebase Admin initialization failed:", e);
+  // Wrap client SDK to match admin SDK interface expected by the rest of the file
+  firestore = {
+    collection: (colName: string) => ({
+      doc: (docName: string) => ({
+        get: async () => {
+          const snap = await getDoc(doc(_db, colName, docName));
+          return {
+            exists: snap.exists(),
+            data: () => snap.data()
+          };
+        },
+        set: (data: any) => setDoc(doc(_db, colName, docName), data)
+      })
+    })
+  };
+  
+  console.log(`Initialized Firebase Client SDK for server persistence.`);
+} catch (err) {
+  console.warn('Failed to initialize Firebase:', err);
 }
 
 const CLOUD_DB_COLLECTION = 'system_state';
@@ -264,10 +265,9 @@ export function loadDB(): DBState {
             .reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
           drv.total_amount_paid = totalPaid;
-          const expectedRemaining = Math.max(0, vehiclePrice - totalPaid);
           const currentRem = parseFloat(drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance);
-          const agreed = parseFloat(drv.agreed_amount ?? drv.agreedAmount) || 0;
-          if (isNaN(currentRem) || currentRem <= agreed || currentRem > vehiclePrice || currentRem !== expectedRemaining) {
+          if (isNaN(currentRem)) {
+            const expectedRemaining = Math.max(0, vehiclePrice - totalPaid);
             drv.remaining_vehicle_balance = expectedRemaining;
             drv.remainingVehicleBalance = expectedRemaining;
             changed = true;
@@ -324,12 +324,29 @@ export function saveDB(state: DBState): void {
           if (dbId && dbId !== '(default)') {
             console.warn('Named database not found. Falling back to default database for future syncs.');
             try {
-              firestore = getFirestore();
+              const _fallbackDb = getFirestore(getApps()[0]);
+              firestore = {
+                collection: (colName: string) => ({
+                  doc: (docName: string) => ({
+                    get: async () => {
+                      const snap = await getDoc(doc(_fallbackDb, colName, docName));
+                      return {
+                        exists: snap.exists(),
+                        data: () => snap.data()
+                      };
+                    },
+                    set: (data: any) => setDoc(doc(_fallbackDb, colName, docName), data)
+                  })
+                })
+              };
             } catch (fallbackErr) {
-              console.warn('Failed to fallback to default database:', fallbackErr);
+              firestore = null;
             }
+          } else {
+            firestore = null;
           }
-        } else if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
+        }
+        else if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
           console.warn('PERMISSION_DENIED on Firestore. Disabling cloud sync to rely on local storage.');
           firestore = null;
         }
