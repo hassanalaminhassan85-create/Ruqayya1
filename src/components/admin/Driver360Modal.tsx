@@ -564,8 +564,15 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   // The API returns vehiclePurchasePrice as the static base price, and remaining_vehicle_balance as the computed current balance.
   const remainingVehicleBalance = parseFloat((activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? (activeDriver as any).financials?.remainingVehicleBalance) || 0;
 
-  // Remittance cycle math
-  const safePaidRemittance = agreedTotal > 0 ? (totalPaid % agreedTotal) : totalPaid;
+  // Synchronized to the current cycle ID using the installments sum. If remainingVehicleBalance is 0, the count is stopped/fully satisfied.
+  const cyclePaid = installments.length > 0 
+    ? installments.reduce((sum: number, inst: any) => sum + (inst.paidAmount || 0), 0) 
+    : (agreedTotal > 0 ? (totalPaid % agreedTotal) : totalPaid);
+
+  const safePaidRemittance = remainingVehicleBalance <= 0 && totalPaid >= vehiclePurchasePrice 
+    ? agreedTotal 
+    : cyclePaid;
+
   const safeRemittancePercent = agreedTotal > 0 ? Math.min(100, Math.round((safePaidRemittance / agreedTotal) * 100)) : 0;
   
   // Safe Vehicle Equity Ownership % (strictly Cumulative Payments / Total Vehicle Purchase Price)

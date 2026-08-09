@@ -4538,14 +4538,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               drv.vehicle_purchase_price ??
               drv.vehiclePurchasePrice ??
               financials.vehiclePurchasePrice,
-            remaining_vehicle_balance:
-              drv.remaining_vehicle_balance ??
-              drv.remainingVehicleBalance ??
-              financials.remainingVehicleBalance,
-            remainingVehicleBalance:
-              drv.remaining_vehicle_balance ??
-              drv.remainingVehicleBalance ??
-              financials.remainingVehicleBalance,
+            remaining_vehicle_balance: financials.remainingVehicleBalance,
+            remainingVehicleBalance: financials.remainingVehicleBalance,
             totalAmountPaid: financials.totalAmountPaid,
             total_amount_paid: financials.totalAmountPaid,
             financials,
@@ -4874,14 +4868,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               drv.vehicle_purchase_price ??
               drv.vehiclePurchasePrice ??
               financials.vehiclePurchasePrice,
-            remaining_vehicle_balance:
-              drv.remaining_vehicle_balance ??
-              drv.remainingVehicleBalance ??
-              financials.remainingVehicleBalance,
-            remainingVehicleBalance:
-              drv.remaining_vehicle_balance ??
-              drv.remainingVehicleBalance ??
-              financials.remainingVehicleBalance,
+            remaining_vehicle_balance: financials.remainingVehicleBalance,
+            remainingVehicleBalance: financials.remainingVehicleBalance,
             totalAmountPaid: financials.totalAmountPaid,
             total_amount_paid: financials.totalAmountPaid,
             financials,
@@ -5999,17 +5987,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               d.company_driver_id === payload.driverId,
           );
           if (targetDrv && initialStatus === "approved") {
-            if (payload.outstandingAmount !== undefined) {
-              targetDrv.remaining_vehicle_balance = parseFloat(
-                payload.outstandingAmount,
-              );
-            } else if (targetDrv.remaining_vehicle_balance !== undefined) {
-              targetDrv.remaining_vehicle_balance = Math.max(
-                0,
-                parseFloat(targetDrv.remaining_vehicle_balance) -
-                  parseFloat(newPayment.amount),
-              );
-            }
+            const fin = getDriverFinancials(targetDrv, db);
+            targetDrv.remaining_vehicle_balance = fin.remainingVehicleBalance;
+            targetDrv.remainingVehicleBalance = fin.remainingVehicleBalance;
+            targetDrv.total_amount_paid = fin.totalAmountPaid;
+            targetDrv.totalAmountPaid = fin.totalAmountPaid;
 
             db.financial_records = db.financial_records || [];
             db.financial_records.push({
