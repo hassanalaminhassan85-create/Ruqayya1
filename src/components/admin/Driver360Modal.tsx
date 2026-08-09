@@ -15,6 +15,7 @@ import { Button } from '../ui/Button';
 import { Badge, Alert } from '../ui/SharedComponents';
 import { Driver, Vehicle } from '../../types';
 import { api } from '../../utils/api';
+import { getAuthorizedUrl } from '../../utils/security';
 
 interface Driver360ModalProps {
   lang: 'en' | 'ha';
@@ -80,14 +81,6 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
-
-  const getAuthorizedUrl = (urlPath: string) => {
-    if (!urlPath) return '';
-    if (urlPath.startsWith('/api/documents/preview/') && !urlPath.includes('token=')) {
-      return `${urlPath}?token=${encodeURIComponent(token)}`;
-    }
-    return urlPath;
-  };
 
   const driverPassportUrl = getAuthorizedUrl(
     (activeDriver as any).passport_photo_url || 
@@ -431,7 +424,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [editRemainingBalance, setEditRemainingBalance] = useState(((activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? '').toString());
   const [editStatus, setEditStatus] = useState(activeDriver.status || 'approved');
   const [editClassification, setEditClassification] = useState<'Smart' | 'Assisted'>(activeDriver.classification || 'Assisted');
-  const [editPassportPhoto, setEditPassportPhoto] = useState((activeDriver as any).passport_photo_url || (activeDriver as any).passportPhoto || '');
+  const initPassport = (activeDriver as any).passport_photo_url || (activeDriver as any).passportPhoto || '';
+  const [editPassportPhoto, setEditPassportPhoto] = useState(initPassport.split('?')[0]);
 
   // Guarantor Edit States
   const [editGuarantorName, setEditGuarantorName] = useState(activeDriver.guarantor?.fullName || (activeDriver.guarantor as any)?.full_name || '');
@@ -439,7 +433,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [editGuarantorAddress, setEditGuarantorAddress] = useState(activeDriver.guarantor?.address || '');
   const [editGuarantorRelationship, setEditGuarantorRelationship] = useState(activeDriver.guarantor?.relationship || '');
   const [editGuarantorNin, setEditGuarantorNin] = useState(activeDriver.guarantor?.nin || '');
-  const [editGuarantorPassport, setEditGuarantorPassport] = useState(activeDriver.guarantor?.passportPhoto || (activeDriver.guarantor as any)?.passport_photo_url || '');
+  const initGuarPass = activeDriver.guarantor?.passportPhoto || (activeDriver.guarantor as any)?.passport_photo_url || '';
+  const [editGuarantorPassport, setEditGuarantorPassport] = useState(initGuarPass.split('?')[0]);
 
   // Vehicle Edit States
   const [editVehicleBrand, setEditVehicleBrand] = useState('');
@@ -493,7 +488,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     setEditRemainingBalance(((activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? '').toString());
     setEditStatus(activeDriver.status || 'approved');
     setEditClassification(activeDriver.classification || 'Assisted');
-    setEditPassportPhoto((activeDriver as any).passport_photo_url || (activeDriver as any).passportPhoto || '');
+    const rawPass = (activeDriver as any).passport_photo_url || (activeDriver as any).passportPhoto || '';
+    setEditPassportPhoto(rawPass.split('?')[0]);
 
     const g = activeDriver.guarantor || {};
     setEditGuarantorName(g.fullName || (g as any).full_name || '');
@@ -501,7 +497,8 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     setEditGuarantorAddress(g.address || '');
     setEditGuarantorRelationship(g.relationship || '');
     setEditGuarantorNin(g.nin || '');
-    setEditGuarantorPassport(g.passportPhoto || (g as any).passport_photo_url || '');
+    const rawGuarPass = g.passportPhoto || (g as any).passport_photo_url || '';
+    setEditGuarantorPassport(rawGuarPass.split('?')[0]);
 
     const v = vehicleAssigned || {};
     setEditVehicleBrand(v.brand || '');
@@ -541,12 +538,24 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const outstandingInstallment = Math.max(0, agreedTotal - totalPaid);
   
   const rawPrice = (activeDriver as any).vehicle_purchase_price ?? (activeDriver as any).vehiclePurchasePrice ?? (activeDriver as any).financials?.vehiclePurchasePrice;
-  const vehiclePurchasePrice = rawPrice !== undefined && rawPrice !== null ? parseFloat(rawPrice) || 0 : 0;
-  const remainingVehicleBalance = (activeDriver as any).remaining_vehicle_balance ?? (activeDriver as any).remainingVehicleBalance ?? (activeDriver as any).financials?.remainingVehicleBalance ?? Math.max(0, vehiclePurchasePrice - totalPaid);
+  const parsedPrice = rawPrice !== undefined && rawPrice !== null ? parseFloat(rawPrice) || 0 : 0;
+  
+  // Safe Effective Vehicle Purchase Price (Default fallback to vehicle cost or 15,000,000 corporate rig value, never 0!)
+  const vehiclePurchasePrice = parsedPrice > 0 
+    ? parsedPrice 
+    : (vehicleAssigned?.purchasePrice || vehicleAssigned?.purchase_price || 15000000);
 
+  // Computed Remaining Vehicle Purchase Balance
+  const remainingVehicleBalance = Math.max(0, vehiclePurchasePrice - totalPaid);
+
+  // Remittance cycle math
   const safePaidRemittance = agreedTotal > 0 ? (totalPaid % agreedTotal) : totalPaid;
-  const safeRemittancePercent = agreedTotal > 0 ? Math.min(100, Math.round((safePaidRemittance / agreedTotal) * 100)) : (totalPaid > 0 ? 100 : 0);
-  const safeOwnershipPercent = vehiclePurchasePrice > 0 ? Math.min(100, Math.max(0, Math.round(((vehiclePurchasePrice - remainingVehicleBalance) / vehiclePurchasePrice) * 100))) : (totalPaid > 0 ? 100 : 0);
+  const safeRemittancePercent = agreedTotal > 0 ? Math.min(100, Math.round((safePaidRemittance / agreedTotal) * 100)) : 0;
+  
+  // Safe Vehicle Equity Ownership % (strictly Cumulative Payments / Total Vehicle Purchase Price)
+  const safeOwnershipPercent = vehiclePurchasePrice > 0 
+    ? Math.min(100, Math.max(0, Math.round((totalPaid / vehiclePurchasePrice) * 100))) 
+    : 0;
 
   // Non-null asset identification fallback for Chassis and Engine numbers
   const chassisNum = vehicleAssigned?.chassisNumber || vehicleAssigned?.chassis_number || `CHAS-2026-${(activeDriver.company_driver_id || activeDriver.id).substring(0, 6).toUpperCase()}`;

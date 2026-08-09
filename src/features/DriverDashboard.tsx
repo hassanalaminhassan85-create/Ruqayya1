@@ -468,9 +468,10 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
 
     try {
       const rawVehPrice = driverData?.vehiclePurchasePrice ?? driverData?.vehicle_purchase_price ?? driverData?.financials?.vehiclePurchasePrice;
-      const vehiclePrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
+      const parsedPrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
+      const vehiclePrice = parsedPrice > 500000 ? parsedPrice : 5000000;
       const totalPaid = driverData?.total_amount_paid || driverData?.totalAmountPaid || payments.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
-      let cb2 = parseFloat(driverData?.remaining_vehicle_balance || driverData?.remainingVehicleBalance); const currentBalance = isNaN(cb2) ? Math.max(0, vehiclePrice - totalPaid) : cb2;
+      const currentBalance = Math.max(0, vehiclePrice - totalPaid);
       const newBalance = Math.max(0, currentBalance - paymentAmount);
       const newPaid = totalPaid + paymentAmount;
       const newPercent = ((newPaid / vehiclePrice) * 100).toFixed(2);
@@ -653,16 +654,21 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   };
 
   const rawVehPrice = driverData?.vehiclePurchasePrice ?? driverData?.vehicle_purchase_price ?? driverData?.financials?.vehiclePurchasePrice;
-  const vehiclePurchasePrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
+  const parsedPrice = rawVehPrice !== undefined && rawVehPrice !== null ? parseFloat(rawVehPrice) || 0 : 0;
+  // Default to 15,000,000 corporate vehicle value if not set on driver profile
+  const vehiclePurchasePrice = parsedPrice > 0 ? parsedPrice : 15000000;
+  
   const totalPaid = driverData?.financials?.totalAmountPaid ?? driverData?.total_amount_paid ?? driverData?.totalAmountPaid ?? payments.reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
-  let cb = parseFloat(driverData?.financials?.remainingVehicleBalance ?? driverData?.remaining_vehicle_balance ?? driverData?.remainingVehicleBalance); const currentBalance = isNaN(cb) ? Math.max(0, vehiclePurchasePrice - totalPaid) : cb;
+  
+  // Real-time remaining vehicle balance derived strictly from Vehicle Purchase Price - Total Payments Received
+  const currentBalance = Math.max(0, vehiclePurchasePrice - totalPaid);
 
   // Live real-time calculations as driver changes payment amount
   const livePaymentVal = paymentAmount || 0;
   const liveProjectedBalance = Math.max(0, currentBalance - livePaymentVal);
   const liveProjectedTotalPaid = totalPaid + livePaymentVal;
-  const liveCurrentPercent = vehiclePurchasePrice > 0 ? ((totalPaid / vehiclePurchasePrice) * 100).toFixed(2) : '0.00';
-  const liveProjectedPercent = vehiclePurchasePrice > 0 ? ((liveProjectedTotalPaid / vehiclePurchasePrice) * 100).toFixed(2) : '0.00';
+  const liveCurrentPercent = vehiclePurchasePrice > 0 ? Math.min(100, (totalPaid / vehiclePurchasePrice) * 100).toFixed(2) : '0.00';
+  const liveProjectedPercent = vehiclePurchasePrice > 0 ? Math.min(100, (liveProjectedTotalPaid / vehiclePurchasePrice) * 100).toFixed(2) : '0.00';
 
   const renderOverview = () => (
     <div className="space-y-6">

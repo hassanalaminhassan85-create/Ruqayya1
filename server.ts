@@ -3191,15 +3191,16 @@ app.put("/api/drivers/:id", authenticateSession, (req, res) => {
     const u = db.users.find((usr: any) => usr.id === drv.user_id);
 
     if (payload.passportPhoto) {
-      drv.passport_photo_url = payload.passportPhoto;
-      drv.passportPhoto = payload.passportPhoto;
+      const cleanPassport = typeof payload.passportPhoto === 'string' ? payload.passportPhoto.split('?')[0] : payload.passportPhoto;
+      drv.passport_photo_url = cleanPassport;
+      drv.passportPhoto = cleanPassport;
       if (!db.driver_documents) db.driver_documents = [];
       const existingDoc = db.driver_documents.find(
         (d: any) =>
           d.driver_id === drv.id && d.document_type === "passport_photo",
       );
       if (existingDoc) {
-        existingDoc.file_url = payload.passportPhoto;
+        existingDoc.file_url = cleanPassport;
         existingDoc.created_at = new Date().toISOString();
         existingDoc.created_by = actor.fullName;
       } else {
@@ -3207,7 +3208,7 @@ app.put("/api/drivers/:id", authenticateSession, (req, res) => {
           id: generateUUID(),
           driver_id: drv.id,
           document_type: "passport_photo",
-          file_url: payload.passportPhoto,
+          file_url: cleanPassport,
           created_at: new Date().toISOString(),
           created_by: actor.fullName,
           status: "active",
@@ -3298,8 +3299,9 @@ app.put("/api/drivers/:id", authenticateSession, (req, res) => {
       if (payload.guarantor.nin !== undefined)
         drv.guarantor.nin = payload.guarantor.nin;
       if (payload.guarantor.passportPhoto !== undefined) {
-        drv.guarantor.passportPhoto = payload.guarantor.passportPhoto;
-        drv.guarantor.passport_photo_url = payload.guarantor.passportPhoto;
+        const cleanGuarantorPassport = typeof payload.guarantor.passportPhoto === 'string' ? payload.guarantor.passportPhoto.split('?')[0] : payload.guarantor.passportPhoto;
+        drv.guarantor.passportPhoto = cleanGuarantorPassport;
+        drv.guarantor.passport_photo_url = cleanGuarantorPassport;
       }
     }
 
@@ -5744,20 +5746,19 @@ function executeRecordPayment(args: any, actor: any, req: express.Request) {
     created_at: new Date().toISOString(),
   });
 
-  // Update remaining vehicle balance on driver profile
-  if (drv.remaining_vehicle_balance !== undefined) {
-    drv.remaining_vehicle_balance = Math.max(
-      0,
-      parseFloat(drv.remaining_vehicle_balance) - newPayment.amount,
-    );
-  } else {
-    const purchasePrice =
-      parseFloat(drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice) || 0;
-    drv.remaining_vehicle_balance = Math.max(
-      0,
-      purchasePrice - newPayment.amount,
-    );
-  }
+  // Update remaining vehicle balance on driver profile robustly
+  const rawP = parseFloat(drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice);
+  const purchasePrice = rawP && !isNaN(rawP) && rawP > 500000 ? rawP : 5000000;
+  drv.vehicle_purchase_price = purchasePrice;
+  drv.vehiclePurchasePrice = purchasePrice;
+
+  const totalPaid = (db.driver_payments || [])
+    .filter((p: any) => (p.driver_id === drv.id || p.driverId === drv.id) && (p.status === 'approved' || p.status === 'Approved' || p.status === 'completed'))
+    .reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+
+  drv.total_amount_paid = totalPaid;
+  drv.remaining_vehicle_balance = Math.max(0, purchasePrice - totalPaid);
+  drv.remainingVehicleBalance = drv.remaining_vehicle_balance;
 
   // Send driver a push/in-app notification
   if (!db.notifications) db.notifications = [];
@@ -7109,12 +7110,12 @@ app.post("/api/finance", authenticateSession, (req, res) => {
     if (type === "revenue" || type === "deposit") {
       db.company_settings.wallet_balance =
         (parseFloat(db.company_settings.wallet_balance) || 0) +
-        parseFloat(parsedAmount);
+        (Number(parsedAmount) || 0);
     } else if (type === "expense" || type === "withdrawal") {
       db.company_settings.wallet_balance = Math.max(
         0,
         (parseFloat(db.company_settings.wallet_balance) || 0) -
-          parseFloat(parsedAmount),
+          (Number(parsedAmount) || 0),
       );
     }
 
@@ -7692,12 +7693,13 @@ export function getDriverFinancials(driver: any, db: any) {
   } else {
     // Native Driver
     const totalAmountPaid = totalErpPaid;
-    // Calculate remaining vehicle balance using single source of truth
-    const remainingVehicleBalance =
-      rawInitialRemaining !== undefined &&
-      !isNaN(parseFloat(rawInitialRemaining))
-        ? Math.max(0, parseFloat(rawInitialRemaining) - totalErpPaid)
-        : Math.max(0, purchasePrice - totalAmountPaid);
+    
+    // Check if stored initial balance was incorrectly set to 30-day cycle rate instead of full vehicle cost
+    const validInitial = (rawInitialRemaining !== undefined && !isNaN(parseFloat(rawInitialRemaining)) && parseFloat(rawInitialRemaining) > agreedAmount)
+      ? parseFloat(rawInitialRemaining)
+      : purchasePrice;
+
+    const remainingVehicleBalance = Math.max(0, validInitial - totalAmountPaid);
 
     return {
       vehiclePurchasePrice: purchasePrice,
@@ -10153,15 +10155,17 @@ app.put("/api/payments/:id/status", authenticateSession, (req, res) => {
 
       // Update remaining vehicle balance if applicable
       if (drv) {
-        if (!drv.remaining_vehicle_balance) {
-          // Initialize remaining balance if not set (default purchase price: ₦15,000,000)
-          drv.remaining_vehicle_balance = 15000000;
-        }
-        drv.remaining_vehicle_balance = Math.max(
-          0,
-          parseFloat(drv.remaining_vehicle_balance) -
-            parseFloat(payment.amount),
-        );
+        const rawP = drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice;
+        const purchasePrice = rawP && !isNaN(parseFloat(rawP)) && parseFloat(rawP) > 0 ? parseFloat(rawP) : 15000000;
+        drv.vehicle_purchase_price = purchasePrice;
+
+        // Calculate total approved driver payments
+        const driverPaid = (db.driver_payments || [])
+          .filter((p: any) => p.driver_id === drv.id && (p.status === 'approved' || p.status === 'completed'))
+          .reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+
+        drv.total_amount_paid = driverPaid;
+        drv.remaining_vehicle_balance = Math.max(0, purchasePrice - driverPaid);
       }
 
       // Update company wallet balance
@@ -10251,7 +10255,7 @@ app.put("/api/payments/:id", authenticateSession, (req, res) => {
       if (drv && drv.remaining_vehicle_balance) {
         drv.remaining_vehicle_balance = Math.max(
           0,
-          parseFloat(drv.remaining_vehicle_balance) - parseFloat(diff),
+          parseFloat(drv.remaining_vehicle_balance) - Number(diff),
         );
       }
 
@@ -10975,7 +10979,7 @@ app.post("/api/finance/withdraw", authenticateSession, (req, res) => {
         });
     }
 
-    sh.total_withdrawn = parseFloat(totalWithdrawn) + parseFloat(withdrawAmt);
+    sh.total_withdrawn = Number(totalWithdrawn) + Number(withdrawAmt);
     sh.updated_at = new Date().toISOString();
 
     db.financial_records.unshift({
@@ -10994,7 +10998,7 @@ app.post("/api/finance/withdraw", authenticateSession, (req, res) => {
     db.company_settings.wallet_balance = Math.max(
       0,
       (parseFloat(db.company_settings.wallet_balance) || 0) -
-        parseFloat(withdrawAmt),
+        (Number(withdrawAmt) || 0),
     );
 
     db.notifications.unshift({
@@ -11102,7 +11106,7 @@ app.post("/api/finance/reinvest", authenticateSession, (req, res) => {
     sh.investment_amount =
       (parseFloat(sh.investment_amount) || 0) + reinvestAmt;
     sh.total_reinvested = (sh.total_reinvested || 0) + reinvestAmt;
-    sh.total_withdrawn = parseFloat(totalWithdrawn) + parseFloat(reinvestAmt);
+    sh.total_withdrawn = Number(totalWithdrawn) + Number(reinvestAmt);
     sh.updated_at = new Date().toISOString();
 
     db.financial_records.unshift({

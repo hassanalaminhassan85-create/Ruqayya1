@@ -1991,6 +1991,38 @@ class D1Manager {
   private async ensureDefaults(parsed: any): Promise<any> {
     let changed = false;
 
+    // Sanitize tokenized passport and document URLs (strip ?token= query parameters)
+    if (parsed.drivers && Array.isArray(parsed.drivers)) {
+      parsed.drivers.forEach((drv: any) => {
+        if (drv.passport_photo_url && typeof drv.passport_photo_url === 'string' && drv.passport_photo_url.includes('?token=')) {
+          drv.passport_photo_url = drv.passport_photo_url.split('?')[0];
+          changed = true;
+        }
+        if (drv.passportPhoto && typeof drv.passportPhoto === 'string' && drv.passportPhoto.includes('?token=')) {
+          drv.passportPhoto = drv.passportPhoto.split('?')[0];
+          changed = true;
+        }
+        if (drv.guarantor) {
+          if (drv.guarantor.passportPhoto && typeof drv.guarantor.passportPhoto === 'string' && drv.guarantor.passportPhoto.includes('?token=')) {
+            drv.guarantor.passportPhoto = drv.guarantor.passportPhoto.split('?')[0];
+            changed = true;
+          }
+          if (drv.guarantor.passport_photo_url && typeof drv.guarantor.passport_photo_url === 'string' && drv.guarantor.passport_photo_url.includes('?token=')) {
+            drv.guarantor.passport_photo_url = drv.guarantor.passport_photo_url.split('?')[0];
+            changed = true;
+          }
+        }
+      });
+    }
+    if (parsed.driver_documents && Array.isArray(parsed.driver_documents)) {
+      parsed.driver_documents.forEach((doc: any) => {
+        if (doc.file_url && typeof doc.file_url === 'string' && doc.file_url.includes('?token=')) {
+          doc.file_url = doc.file_url.split('?')[0];
+          changed = true;
+        }
+      });
+    }
+
     if (!parsed.company_settings) {
       parsed.company_settings = {
         companyName: "Ruqayya Transport Limited",
@@ -4770,8 +4802,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             const u = db.users.find((usr: any) => usr.id === drv.user_id);
 
             if (payload.passportPhoto) {
-              drv.passport_photo_url = payload.passportPhoto;
-              drv.passportPhoto = payload.passportPhoto;
+              const cleanPassport = typeof payload.passportPhoto === 'string' ? payload.passportPhoto.split('?')[0] : payload.passportPhoto;
+              drv.passport_photo_url = cleanPassport;
+              drv.passportPhoto = cleanPassport;
               if (!db.driver_documents) db.driver_documents = [];
               const existingDoc = db.driver_documents.find(
                 (d: any) =>
@@ -4779,7 +4812,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                   d.document_type === "passport_photo",
               );
               if (existingDoc) {
-                existingDoc.file_url = payload.passportPhoto;
+                existingDoc.file_url = cleanPassport;
                 existingDoc.created_at = new Date().toISOString();
                 existingDoc.created_by = user.fullName;
               } else {
@@ -4787,7 +4820,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
                   id: generateUUID(),
                   driver_id: drv.id,
                   document_type: "passport_photo",
-                  file_url: payload.passportPhoto,
+                  file_url: cleanPassport,
                   created_at: new Date().toISOString(),
                   created_by: user.fullName,
                   status: "active",
@@ -4884,9 +4917,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               if (payload.guarantor.nin !== undefined)
                 drv.guarantor.nin = payload.guarantor.nin;
               if (payload.guarantor.passportPhoto !== undefined) {
-                drv.guarantor.passportPhoto = payload.guarantor.passportPhoto;
-                drv.guarantor.passport_photo_url =
-                  payload.guarantor.passportPhoto;
+                const cleanGuarantorPassport = typeof payload.guarantor.passportPhoto === 'string' ? payload.guarantor.passportPhoto.split('?')[0] : payload.guarantor.passportPhoto;
+                drv.guarantor.passportPhoto = cleanGuarantorPassport;
+                drv.guarantor.passport_photo_url = cleanGuarantorPassport;
               }
             }
 

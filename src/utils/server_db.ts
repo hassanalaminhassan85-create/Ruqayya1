@@ -216,6 +216,65 @@ export function loadDB(): DBState {
       if (!parsed.push_subscriptions) { parsed.push_subscriptions = []; changed = true; }
       if (parsed.vapid_keys === undefined) { parsed.vapid_keys = null; changed = true; }
 
+      // Sanitize tokenized passport and document URLs (strip ?token= query parameters)
+      if (parsed.drivers && Array.isArray(parsed.drivers)) {
+        parsed.drivers.forEach((drv: any) => {
+          if (drv.passport_photo_url && typeof drv.passport_photo_url === 'string' && drv.passport_photo_url.includes('?token=')) {
+            drv.passport_photo_url = drv.passport_photo_url.split('?')[0];
+            changed = true;
+          }
+          if (drv.passportPhoto && typeof drv.passportPhoto === 'string' && drv.passportPhoto.includes('?token=')) {
+            drv.passportPhoto = drv.passportPhoto.split('?')[0];
+            changed = true;
+          }
+          if (drv.guarantor) {
+            if (drv.guarantor.passportPhoto && typeof drv.guarantor.passportPhoto === 'string' && drv.guarantor.passportPhoto.includes('?token=')) {
+              drv.guarantor.passportPhoto = drv.guarantor.passportPhoto.split('?')[0];
+              changed = true;
+            }
+            if (drv.guarantor.passport_photo_url && typeof drv.guarantor.passport_photo_url === 'string' && drv.guarantor.passport_photo_url.includes('?token=')) {
+              drv.guarantor.passport_photo_url = drv.guarantor.passport_photo_url.split('?')[0];
+              changed = true;
+            }
+          }
+        });
+      }
+      if (parsed.driver_documents && Array.isArray(parsed.driver_documents)) {
+        parsed.driver_documents.forEach((doc: any) => {
+          if (doc.file_url && typeof doc.file_url === 'string' && doc.file_url.includes('?token=')) {
+            doc.file_url = doc.file_url.split('?')[0];
+            changed = true;
+          }
+        });
+      }
+
+      // Sanitize driver vehicle purchase price and remaining vehicle balance (Fix for 360 / installment remaining balance bug)
+      if (parsed.drivers && Array.isArray(parsed.drivers)) {
+        parsed.drivers.forEach((drv: any) => {
+          const rawPrice = parseFloat(drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice) || 0;
+          const vehiclePrice = rawPrice > 0 ? rawPrice : 15000000;
+          if (drv.vehicle_purchase_price !== vehiclePrice || drv.vehiclePurchasePrice !== vehiclePrice) {
+            drv.vehicle_purchase_price = vehiclePrice;
+            drv.vehiclePurchasePrice = vehiclePrice;
+            changed = true;
+          }
+
+          const totalPaid = (parsed.driver_payments || [])
+            .filter((p: any) => (p.driver_id === drv.id || p.driverId === drv.id) && (p.status === 'approved' || p.status === 'Approved' || p.status === 'completed'))
+            .reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+
+          drv.total_amount_paid = totalPaid;
+          const expectedRemaining = Math.max(0, vehiclePrice - totalPaid);
+          const currentRem = parseFloat(drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance);
+          const agreed = parseFloat(drv.agreed_amount ?? drv.agreedAmount) || 0;
+          if (isNaN(currentRem) || currentRem <= agreed || currentRem > vehiclePrice || currentRem !== expectedRemaining) {
+            drv.remaining_vehicle_balance = expectedRemaining;
+            drv.remainingVehicleBalance = expectedRemaining;
+            changed = true;
+          }
+        });
+      }
+
       if (changed) {
         saveDB(parsed);
       }

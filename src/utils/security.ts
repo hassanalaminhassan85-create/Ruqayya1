@@ -224,3 +224,21 @@ export function seedAuditLogsIfEmpty() {
     logAuditEvent("sys-admin", "admin", "OBJECT_STORAGE_BINDING", "Cloudflare R2 'ruqayya' bucket credentials mapped.");
   }
 }
+
+/**
+ * Safely normalizes an image or document URL, stripping any stale or expired ?token= 
+ * query parameters and attaching a fresh, valid session token if it is an authorized API path.
+ */
+export function getAuthorizedUrl(urlPath: string, customToken?: string): string {
+  if (!urlPath) return '';
+  if (urlPath.startsWith('data:') || urlPath.startsWith('blob:')) {
+    return urlPath;
+  }
+  const cleanPath = urlPath.split('?')[0];
+  const token = customToken || SecureSession.getToken() || '';
+  if ((cleanPath.startsWith('/api/documents/') || cleanPath.startsWith('/api/files/') || cleanPath.startsWith('/api/')) && token) {
+    return `${cleanPath}?token=${encodeURIComponent(token)}`;
+  }
+  return urlPath;
+}
+

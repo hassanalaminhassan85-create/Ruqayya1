@@ -735,7 +735,9 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     const paid = (localPayments || [])
       .filter((p: any) => p.driver_id === drv.id && p.status === 'approved')
       .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
-    const remainingVeh = drv.remaining_vehicle_balance !== undefined ? drv.remaining_vehicle_balance : agreed;
+    const rawPrice = parseFloat(drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice) || 5000000;
+    const vehiclePrice = rawPrice > 500000 ? rawPrice : 5000000;
+    const remainingVeh = Math.max(0, vehiclePrice - paid);
     const expenseDebits = (drv.expenseHistory || []).reduce((sum, ex: any) => sum + (parseFloat(ex.amount) || 0), 0);
     const currentInstNum = Math.min(6, Math.floor(paid / instDue) + 1);
     const remainingInstBal = Math.max(0, instDue - (localPayments.filter(p => p.driver_id === drv.id && p.status === 'approved' && p.installment_number === currentInstNum).reduce((s, p: any) => s + (parseFloat(p.amount) || 0), 0)));
@@ -776,20 +778,16 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
   const remainingInstallmentBalance = Math.max(0, installmentDue - totalInstallmentPaymentsPaid);
   const driverWalletBalance = matchedDriver ? ((matchedDriver as any).wallet_balance || (matchedDriver as any).walletBalance || 0) : 0;
   
-  // Real-time outstanding vehicle balance from driver record (No hardcoded 14,250,000)
-  const outstandingVehicleBalance = matchedDriver 
-    ? ((matchedDriver as any).remaining_vehicle_balance !== undefined 
-        ? (matchedDriver as any).remaining_vehicle_balance 
-        : ((matchedDriver as any).remainingVehicleBalance !== undefined 
-            ? (matchedDriver as any).remainingVehicleBalance 
-            : 0)) 
-    : 0;
-
   const totalPaidAllTime = matchedDriver
     ? localPayments
         .filter(p => (p.driver_id === matchedDriver.id || p.driverId === matchedDriver.id) && p.status === 'approved')
         .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0)
     : 0;
+
+  // Real-time outstanding vehicle balance from vehicle purchase price minus total paid
+  const rawPriceMatched = matchedDriver ? (parseFloat((matchedDriver as any).vehicle_purchase_price ?? (matchedDriver as any).vehiclePurchasePrice) || 5000000) : 5000000;
+  const vehiclePriceMatched = rawPriceMatched > 500000 ? rawPriceMatched : 5000000;
+  const outstandingVehicleBalance = matchedDriver ? Math.max(0, vehiclePriceMatched - totalPaidAllTime) : 0;
 
   const driverOutstandingDebt = matchedDriver 
     ? Math.max(0, (currentInstallmentNumber - 1) * installmentDue - (totalPaidAllTime - totalInstallmentPaymentsPaid)) 

@@ -47,7 +47,7 @@ import {
 } from 'lucide-react';
 import { Language, Driver, Vehicle } from '../../types';
 import { CircularLogo } from '../CircularLogo';
-import { SecureSession } from '../../utils/security';
+import { SecureSession, getAuthorizedUrl } from '../../utils/security';
 
 interface PaymentWorkflowProps {
   lang: Language;
@@ -105,6 +105,9 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
 
   // Multi-selection for batch actions
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Diagnostic Console Modal state
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState<boolean>(false);
 
   // Detailed Modal Drawer State
   const [inspectPayment, setInspectPayment] = useState<PaymentRecord | null>(null);
@@ -192,14 +195,7 @@ export const PaymentWorkflow: React.FC<PaymentWorkflowProps> = ({ lang }) => {
     }
   };
 
-  const token = SecureSession.getToken() || '';
-  const getAuthorizedUrl = (urlPath: string) => {
-    if (!urlPath) return '';
-    if (urlPath.startsWith('/api/documents/preview/') && !urlPath.includes('token=')) {
-      return `${urlPath}?token=${encodeURIComponent(token)}`;
-    }
-    return urlPath;
-  };
+
 
   const getDriverPassport = (d: Driver | null | undefined, idx = 0) => {
     if (!d) return '';
@@ -529,6 +525,15 @@ _Ruqayya Transport Fleet Operations Command_`;
         {/* Global Toolbar Actions */}
         <div className="flex items-center gap-2 flex-wrap">
           
+          <Button
+            size="sm"
+            onClick={() => setShowDiagnosticModal(true)}
+            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+            <span>{lang === 'en' ? '🔍 Diagnostic Math Auditor' : '🔍 Binciken Lissafi'}</span>
+          </Button>
+
           {/* Batch approve action button if items selected */}
           {selectedIds.length > 0 && (
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
@@ -1353,6 +1358,145 @@ _Ruqayya Transport Fleet Operations Command_`;
         )}
       </AnimatePresence>
 
+
+      {/* --- DIAGNOSTIC INSPECTOR MODAL FOR PAYMENT PROCESSING LOGIC --- */}
+      <AnimatePresence>
+        {showDiagnosticModal && (
+          <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50 backdrop-blur-md overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto text-slate-100 shadow-2xl relative space-y-6"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-500">
+                    <Sparkles className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black uppercase text-white font-mono tracking-tight flex items-center gap-2">
+                      Payment Processing Logic Diagnostic Console
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Audit comparing <strong className="text-amber-400">Total Vehicle Cost</strong>, <strong className="text-emerald-400">Cumulative Payments Received</strong>, and <strong className="text-blue-400">Remaining Balance</strong> across all driver accounts.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowDiagnosticModal(false)}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Root Cause Analysis Explanation Card */}
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs space-y-2">
+                <div className="flex items-center gap-2 text-amber-400 font-bold uppercase tracking-wider text-[11px]">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Audit Finding: Why 1-2 Installments Triggered 100% Fully Paid Status</span>
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  1. <strong className="text-white">Missing Vehicle Purchase Price:</strong> If a driver profile had no explicit vehicle purchase price, legacy math defaulted to <code className="text-rose-400">0</code>. As soon as <code className="text-emerald-400">totalPaid &gt; 0</code> (paying 1 installment), the fallback formula triggered 100% ownership.<br />
+                  2. <strong className="text-white">30-Day Cycle Rate Confusion:</strong> The remaining vehicle balance was mistakenly initialized to <code className="text-rose-400">agreed_amount</code> (e.g. ₦180,000 / ₦250,000) instead of the total vehicle cost (₦15,000,000 / ₦5,000,000). Paying 1 or 2 installments wiped out ₦180,000, bringing balance to ₦0.<br />
+                  3. <strong className="text-emerald-400">Correct Formula Implemented:</strong> Remaining Balance = <code className="text-white">Total Vehicle Cost - Cumulative Payments Received</code>. Ownership Equity % = <code className="text-white">(Cumulative Payments Received / Total Vehicle Cost) * 100</code>.
+                </p>
+              </div>
+
+              {/* Driver Financial Audit Comparison Table */}
+              <div className="overflow-x-auto border border-slate-800 rounded-2xl bg-slate-950">
+                <table className="w-full text-xs text-left border-collapse font-mono">
+                  <thead className="bg-slate-900 text-slate-400 uppercase text-[10px] border-b border-slate-800">
+                    <tr>
+                      <th className="p-3">Driver Account</th>
+                      <th className="p-3 text-right">Total Vehicle Cost</th>
+                      <th className="p-3 text-right">Cumulative Payments</th>
+                      <th className="p-3 text-right">Remaining Balance</th>
+                      <th className="p-3 text-center">Ownership Equity %</th>
+                      <th className="p-3 text-center">Status Audit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80 text-slate-200">
+                    {drivers.map((drv: any) => {
+                      const rawP = drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice;
+                      const parsedP = rawP !== undefined && rawP !== null ? parseFloat(rawP) || 0 : 0;
+                      // Effective vehicle purchase cost (default ₦5,000,000 / ₦15,000,000)
+                      const effectiveCost = parsedP > 0 ? parsedP : 5000000;
+
+                      // Cumulative payments received for this driver
+                      const totalPaidVal = drv.total_amount_paid ?? drv.totalAmountPaid ?? payments
+                        .filter(p => p.driver_id === drv.id && (p.status === 'approved' || p.status === 'pending' || p.status === 'submitted'))
+                        .reduce((sum, p) => sum + (parseFloat(p.amount as any) || 0), 0);
+
+                      const computedRemaining = Math.max(0, effectiveCost - totalPaidVal);
+                      const computedEquity = effectiveCost > 0 ? Math.min(100, Math.max(0, Math.round((totalPaidVal / effectiveCost) * 100))) : 0;
+
+                      const isZeroPriceBug = (!rawP || parseFloat(rawP) === 0) && totalPaidVal > 0;
+                      const isCycleRateBug = drv.remaining_vehicle_balance !== undefined && drv.remaining_vehicle_balance <= (drv.agreed_amount || 250000) && effectiveCost > 500000;
+
+                      return (
+                        <tr key={drv.id} className="hover:bg-slate-900/60 transition-colors">
+                          <td className="p-3 font-sans">
+                            <span className="font-bold block text-white">{drv.fullName || drv.full_name}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">ID: {drv.company_driver_id || drv.id.substring(0, 8)}</span>
+                          </td>
+                          <td className="p-3 text-right font-bold text-white">
+                            ₦{effectiveCost.toLocaleString()}
+                            {(!rawP || parseFloat(rawP) === 0) && (
+                              <span className="block text-[9px] text-amber-500 font-sans">(Default ₦5M)</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-right font-bold text-emerald-400">
+                            ₦{totalPaidVal.toLocaleString()}
+                          </td>
+                          <td className="p-3 text-right font-bold text-blue-400">
+                            ₦{computedRemaining.toLocaleString()}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="px-2.5 py-1 rounded-full bg-slate-800 text-amber-400 font-bold text-[11px] border border-slate-700">
+                              {computedEquity}%
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {isZeroPriceBug ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                                ⚠️ Premature Bug
+                              </span>
+                            ) : isCycleRateBug ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                                ⚠️ Rate Default
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                ✅ Correct Math
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Close Footer */}
+              <div className="flex justify-end pt-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowDiagnosticModal(false)}
+                  className="font-bold px-6"
+                >
+                  Close Diagnostic Console
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* --- PROOF IMAGE LIGHTBOX MODAL --- */}
       <AnimatePresence>

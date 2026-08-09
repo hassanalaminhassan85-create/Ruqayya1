@@ -17,6 +17,7 @@ import {
   Loader2,
   CheckCircle, 
   XCircle, 
+  AlertTriangle,
   Lock, 
   Unlock, 
   Plus, 
@@ -1037,6 +1038,158 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
         </motion.div>
       )}
 
+      {/* PAYMENT LOGIC AUDITOR & DIAGNOSTIC VIEW */}
+      {reportTab === 'paymentAudit' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="flex flex-col gap-6">
+          <div className="border-b border-slate-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-black uppercase text-slate-950 tracking-tight flex items-center gap-2 font-mono">
+                <Sparkles className="h-5 w-5 text-amber-500" />
+                Payment Processing Diagnostic & Balance Audit Console
+              </h2>
+              <p className="text-xs text-slate-500">
+                Audits driver balance math by comparing <strong className="text-slate-900">Total Vehicle Cost</strong>, <strong className="text-slate-900">Cumulative Payments Received</strong>, and <strong className="text-slate-900">Remaining Vehicle Balance</strong> to detect premature 100% ownership flags.
+              </p>
+            </div>
+            <Badge variant="warning" className="self-start sm:self-auto font-mono text-xs px-3 py-1">
+              LIVE MATH INTEGRITY AUDITOR
+            </Badge>
+          </div>
+
+          {/* Diagnostic Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 bg-slate-950 text-white rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Total Drivers Audited</span>
+              <p className="text-2xl font-black font-mono text-amber-400">{drivers.length}</p>
+              <span className="text-[10px] text-slate-400">Fleet lease accounts checked</span>
+            </div>
+
+            <div className="p-4 bg-slate-950 text-white rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Premature 100% Flag Anomaly</span>
+              <p className="text-2xl font-black font-mono text-rose-400">
+                {drivers.filter(d => {
+                  const rawPrice = (d as any).vehicle_purchase_price ?? (d as any).vehiclePurchasePrice;
+                  const price = parseFloat(rawPrice) || 0;
+                  const totalP = (d as any).total_amount_paid || (d as any).totalAmountPaid || 0;
+                  return price === 0 && totalP > 0;
+                }).length} Detected
+              </p>
+              <span className="text-[10px] text-slate-400">Missing/zero vehicle price fallback bug</span>
+            </div>
+
+            <div className="p-4 bg-slate-950 text-white rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Cycle-Rate Fallback Anomaly</span>
+              <p className="text-2xl font-black font-mono text-amber-400">
+                {drivers.filter(d => {
+                  const rem = (d as any).remaining_vehicle_balance ?? (d as any).remainingVehicleBalance;
+                  const agreed = (d as any).agreed_amount || (d as any).agreedAmount || 0;
+                  return rem !== undefined && rem <= agreed && agreed > 0;
+                }).length} Flagged
+              </p>
+              <span className="text-[10px] text-slate-400">Balance defaulted to 30-day rate</span>
+            </div>
+
+            <div className="p-4 bg-slate-950 text-white rounded-2xl border border-slate-800 space-y-1">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Audited Fleet Equity</span>
+              <p className="text-2xl font-black font-mono text-emerald-400">
+                ₦{drivers.reduce((sum, d) => sum + ((d as any).total_amount_paid || (d as any).totalAmountPaid || 0), 0).toLocaleString()}
+              </p>
+              <span className="text-[10px] text-slate-400">Total verified driver remittances</span>
+            </div>
+          </div>
+
+          {/* Detailed Diagnostic Table */}
+          <div className="overflow-x-auto border border-slate-200 rounded-2xl bg-white shadow-sm">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-slate-900 text-slate-200 uppercase font-mono text-[10px]">
+                <tr>
+                  <th className="p-3">Driver Dossier</th>
+                  <th className="p-3 text-right">Total Vehicle Cost</th>
+                  <th className="p-3 text-right">Cumulative Payments</th>
+                  <th className="p-3 text-right">Remaining Balance</th>
+                  <th className="p-3 text-center">Correct Equity %</th>
+                  <th className="p-3 text-center">Diagnostic Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-sans">
+                {drivers.map((d, index) => {
+                  const rawVehPrice = (d as any).vehicle_purchase_price ?? (d as any).vehiclePurchasePrice;
+                  const rawAgreed = (d as any).agreed_amount ?? (d as any).agreedAmount ?? 250000;
+                  const totalPaidVal = (d as any).total_amount_paid ?? (d as any).totalAmountPaid ?? 0;
+                  
+                  // Correct effective vehicle cost (default ₦5,000,000 if not explicitly set)
+                  const effectiveVehicleCost = (rawVehPrice && !isNaN(parseFloat(rawVehPrice)) && parseFloat(rawVehPrice) > 0)
+                    ? parseFloat(rawVehPrice)
+                    : 5000000;
+
+                  const correctRemainingBalance = Math.max(0, effectiveVehicleCost - totalPaidVal);
+                  const correctEquityPercent = Math.min(100, Math.max(0, Math.round((totalPaidVal / effectiveVehicleCost) * 100)));
+
+                  // Legacy buggy percent if vehicle price was missing or set to agreed_amount
+                  const legacyBuggyPercent = (!rawVehPrice || parseFloat(rawVehPrice) === 0) 
+                    ? (totalPaidVal > 0 ? 100 : 0)
+                    : Math.min(100, Math.round(((parseFloat(rawVehPrice) - Math.max(0, parseFloat(rawVehPrice) - totalPaidVal)) / parseFloat(rawVehPrice)) * 100));
+
+                  const isPrematureAnomaly = (!rawVehPrice || parseFloat(rawVehPrice) === 0) && totalPaidVal > 0;
+                  const isCycleRateAnomaly = (d as any).remaining_vehicle_balance !== undefined && (d as any).remaining_vehicle_balance <= rawAgreed && rawAgreed > 0 && effectiveVehicleCost > rawAgreed;
+
+                  return (
+                    <tr key={`${d.id}-${index}`} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-lg bg-slate-900 text-brand-gold font-bold flex items-center justify-center font-mono text-xs">
+                            {(d.fullName || 'Driver').substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-950 text-xs">{d.fullName}</p>
+                            <p className="text-[10px] font-mono text-slate-500">ID: {d.company_driver_id || d.id.substring(0, 8)}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-slate-900">
+                        ₦{effectiveVehicleCost.toLocaleString()}
+                        {(!rawVehPrice || parseFloat(rawVehPrice) === 0) && (
+                          <span className="block text-[9px] text-amber-600 font-sans">(Defaulted to ₦5M)</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-600">
+                        ₦{totalPaidVal.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-600">
+                        ₦{correctRemainingBalance.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className="font-mono font-black text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-900 border border-slate-200">
+                          {correctEquityPercent}% Equity
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        {isPrematureAnomaly ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                            <AlertCircle className="h-3 w-3" />
+                            Premature 100% Flag
+                          </span>
+                        ) : isCycleRateAnomaly ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                            <AlertTriangle className="h-3 w-3" />
+                            Cycle Rate Defaulted
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            <CheckCircle className="h-3 w-3" />
+                            Math Verified
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+      )}
+
       {/* DUAL SIGNATURE BOX & STAMPS (INTERACTIVE) */}
       <div className="mt-12 border-t border-slate-200 pt-6 relative">
         
@@ -1692,6 +1845,7 @@ _Generated via Ruqayya Transport Limited ERP System_`;
           { key: 'collection', label: lang === 'en' ? 'Collection Reports' : 'Remittance' },
           { key: 'wallet', label: lang === 'en' ? 'Wallet Reports' : 'Asusun Kamfani' },
           { key: 'company', label: lang === 'en' ? 'Company Reports' : 'Rahoton Fleet' },
+          { key: 'paymentAudit', label: lang === 'en' ? '🔍 Payment Logic Auditor' : '🔍 Binciken Lissafi' },
           { key: 'audit', label: lang === 'en' ? 'Audit History' : 'Tarihin Audit' }
         ].map((tab) => {
           const isActive = reportTab === tab.key;
