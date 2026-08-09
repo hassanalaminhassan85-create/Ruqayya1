@@ -527,14 +527,14 @@ export function getDriverFinancials(driver: any, db: any) {
     initialRemaining = !isNaN(openRem) ? openRem : vehiclePurchasePrice;
     initialPaid = parseFloat(driver.opening_balance.total_paid_to_date ?? driver.opening_balance.totalPaidToDate) || 0;
   } else {
-    const regRem = parseFloat(driver.remaining_vehicle_balance ?? driver.remainingVehicleBalance);
-    if (!isNaN(regRem)) {
-      initialRemaining = regRem;
-      initialPaid = Math.max(0, vehiclePurchasePrice - regRem);
-    } else {
-      initialRemaining = vehiclePurchasePrice;
-      initialPaid = 0;
-    }
+    // Correct Mathematical Logic:
+    // If a driver is not imported from a legacy system, their starting point
+    // of ownership is the static vehicle purchase price, with 0 initial payments.
+    // All payments are recorded in real-time in the ERP central ledger.
+    // By using vehiclePurchasePrice instead of recursively referencing the dynamic and already reduced
+    // remaining_vehicle_balance from the database, we eliminate the compounding double-subtraction bug!
+    initialRemaining = vehiclePurchasePrice;
+    initialPaid = 0;
   }
 
   const totalAmountPaid = initialPaid + totalErpPaid;
@@ -4975,17 +4975,28 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               payload.remainingVehicleBalance !== "" &&
               !isNaN(parseFloat(payload.remainingVehicleBalance))
             ) {
-              drv.remaining_vehicle_balance = parseFloat(
-                payload.remainingVehicleBalance,
-              );
-              drv.remainingVehicleBalance = parseFloat(
-                payload.remainingVehicleBalance,
-              );
-              if (drv.opening_balance) {
-                drv.opening_balance.remaining_vehicle_balance = parseFloat(
-                  payload.remainingVehicleBalance,
-                );
-              }
+              const parsedVal = parseFloat(payload.remainingVehicleBalance);
+              const validIds = new Set([drv.id, drv.user_id, drv.userId, drv.company_driver_id, drv.companyDriverId].filter(Boolean));
+              const totalErpPaid = (db.driver_payments || []).filter((p: any) => {
+                const matches = validIds.has(p.driver_id) || validIds.has(p.driverId);
+                const st = (p.status || "").toLowerCase();
+                return matches && (st === "approved" || st === "completed" || st === "paid");
+              }).reduce((sum: number, p: any) => sum + (parseFloat(p.amount) || 0), 0);
+              
+              const totalLedgerExpenses = (db.financial_records || []).filter((r: any) => r.type === "expense" && (validIds.has(r.driver_id) || validIds.has(r.driverId))).reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0);
+              const totalHistoryExpenses = (drv.expenseHistory || []).reduce((sum: number, r: any) => sum + (parseFloat(r.amount) || 0), 0);
+              const totalExpenses = Math.max(totalLedgerExpenses, totalHistoryExpenses);
+
+              drv.opening_balance = {
+                is_imported: true,
+                remaining_vehicle_balance: parsedVal + totalErpPaid - totalExpenses,
+                total_paid_to_date: (drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice ?? 15000000) - (parsedVal + totalErpPaid - totalExpenses),
+                manually_adjusted: true,
+                adjusted_at: new Date().toISOString()
+              };
+              
+              drv.remaining_vehicle_balance = parsedVal;
+              drv.remainingVehicleBalance = parsedVal;
             }
             if (payload.classification !== undefined) {
               drv.classification = payload.classification;
@@ -6111,22 +6122,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               description: `Driver ${pay.driver_id} payment for Installment ${pay.installment_number} (Receipt: ${pay.receipt_number})`,
             });
 
-            // Update driver remaining vehicle balance upon admin approval
+            // Update driver remaining vehicle balance upon admin approval using centralized financial logic
             const drv = db.drivers.find(
               (d: any) => d.id === pay.driver_id || d.user_id === pay.driver_id,
             );
             if (drv) {
-              if (
-                drv.remaining_vehicle_balance === undefined ||
-                drv.remaining_vehicle_balance === null
-              ) {
-                drv.remaining_vehicle_balance = 15000000;
-              }
-              drv.remaining_vehicle_balance = Math.max(
-                0,
-                parseFloat(drv.remaining_vehicle_balance) -
-                  parseFloat(pay.amount),
-              );
+              const fin = getDriverFinancials(drv, db);
+              drv.vehicle_purchase_price = fin.vehiclePurchasePrice;
+              drv.vehiclePurchasePrice = fin.vehiclePurchasePrice;
+              drv.total_amount_paid = fin.totalAmountPaid;
+              drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
+              drv.remainingVehicleBalance = fin.remainingVehicleBalance;
             }
 
             // Update company wallet balance
@@ -6135,14 +6141,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               (parseFloat(db.company_settings.wallet_balance) || 0) +
               parseFloat(pay.amount);
           } else if (status !== "approved" && oldStatus === "approved") {
-            // Revert remaining balance
+            // Revert remaining balance using centralized financial logic
             const drv = db.drivers.find(
               (d: any) => d.id === pay.driver_id || d.user_id === pay.driver_id,
             );
-            if (drv && drv.remaining_vehicle_balance !== undefined) {
-              drv.remaining_vehicle_balance =
-                parseFloat(drv.remaining_vehicle_balance) +
-                parseFloat(pay.amount);
+            if (drv) {
+              const fin = getDriverFinancials(drv, db);
+              drv.vehicle_purchase_price = fin.vehiclePurchasePrice;
+              drv.vehiclePurchasePrice = fin.vehiclePurchasePrice;
+              drv.total_amount_paid = fin.totalAmountPaid;
+              drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
+              drv.remainingVehicleBalance = fin.remainingVehicleBalance;
             }
 
             // Revert company wallet balance
@@ -6202,6 +6211,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           if (payload.date) pay.date = payload.date;
           if (payload.receiptNumber) pay.receipt_number = payload.receiptNumber;
           if (payload.remarks !== undefined) pay.remarks = payload.remarks;
+
+          // Recalculate and update cached driver financials dynamically based on updated payments!
+          const drv = db.drivers.find((d: any) => d.id === pay.driver_id);
+          if (drv) {
+            const fin = getDriverFinancials(drv, db);
+            drv.vehicle_purchase_price = fin.vehiclePurchasePrice;
+            drv.vehiclePurchasePrice = fin.vehiclePurchasePrice;
+            drv.total_amount_paid = fin.totalAmountPaid;
+            drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
+            drv.remainingVehicleBalance = fin.remainingVehicleBalance;
+          }
 
           writeAuditLog(
             user.id,
