@@ -22,10 +22,92 @@ const DEFAULT_VEHICLES: Vehicle[] = [
 ];
 
 const DEFAULT_DRIVERS: Driver[] = [
-  { id: 'D-001', fullName: 'Driver MUSA', licenseNumber: 'NGA-DL-882103', licenseExpiry: '2028-11-12', phone: '+234 803 123 4567', email: 'musa.driver@ruqayyatransport.com', status: 'on-trip', assignedVehicleId: 'V-001', rating: 4.8 },
-  { id: 'D-002', fullName: 'Babangida Ibrahim', licenseNumber: 'NGA-DL-119280', licenseExpiry: '2027-04-18', phone: '+234 806 987 6543', email: 'b.ibrahim@ruqayyatransport.com', status: 'on-trip', assignedVehicleId: 'V-002', rating: 4.9 },
-  { id: 'D-003', fullName: 'Sani Yusuf Bello', licenseNumber: 'NGA-DL-554612', licenseExpiry: '2029-01-30', phone: '+234 812 345 6789', email: 'sani.yusuf@ruqayyatransport.com', status: 'available', rating: 4.5 },
-  { id: 'D-004', fullName: 'Ruqayya Kabir Mohammed', licenseNumber: 'NGA-DL-302194', licenseExpiry: '2028-08-15', phone: '+234 905 555 1234', email: 'ruqayya.k@ruqayyatransport.com', status: 'off-duty', rating: 5.0 }
+  { 
+    id: 'D-001', 
+    fullName: 'Driver MUSA', 
+    licenseNumber: 'NGA-DL-882103', 
+    licenseExpiry: '2028-11-12', 
+    phone: '+234 803 123 4567', 
+    email: 'musa.driver@ruqayyatransport.com', 
+    status: 'on-trip', 
+    assignedVehicleId: 'V-001', 
+    rating: 4.8,
+    vehiclePurchasePrice: 15000000,
+    remaining_vehicle_balance: 14500000,
+    total_amount_paid: 500000,
+    expenseHistory: [],
+    agreed_amount: 180000,
+    debt_amount: 0,
+    total_installments: 100,
+    paid_installments: 10,
+    ledger_balance: 0,
+    total_credits: 0,
+    total_debits: 0
+  },
+  { 
+    id: 'D-002', 
+    fullName: 'Babangida Ibrahim', 
+    licenseNumber: 'NGA-DL-119280', 
+    licenseExpiry: '2027-04-18', 
+    phone: '+234 806 987 6543', 
+    email: 'b.ibrahim@ruqayyatransport.com', 
+    status: 'on-trip', 
+    assignedVehicleId: 'V-002', 
+    rating: 4.9,
+    vehiclePurchasePrice: 15000000,
+    remaining_vehicle_balance: 14200000,
+    total_amount_paid: 800000,
+    expenseHistory: [],
+    agreed_amount: 180000,
+    debt_amount: 0,
+    total_installments: 100,
+    paid_installments: 15,
+    ledger_balance: 0,
+    total_credits: 0,
+    total_debits: 0
+  },
+  { 
+    id: 'D-003', 
+    fullName: 'Sani Yusuf Bello', 
+    licenseNumber: 'NGA-DL-554612', 
+    licenseExpiry: '2029-01-30', 
+    phone: '+234 812 345 6789', 
+    email: 'sani.yusuf@ruqayyatransport.com', 
+    status: 'available', 
+    rating: 4.5,
+    vehiclePurchasePrice: 15000000,
+    remaining_vehicle_balance: 15000000,
+    total_amount_paid: 0,
+    expenseHistory: [],
+    agreed_amount: 180000,
+    debt_amount: 0,
+    total_installments: 100,
+    paid_installments: 0,
+    ledger_balance: 0,
+    total_credits: 0,
+    total_debits: 0
+  },
+  { 
+    id: 'D-004', 
+    fullName: 'Ruqayya Kabir Mohammed', 
+    licenseNumber: 'NGA-DL-302194', 
+    licenseExpiry: '2028-08-15', 
+    phone: '+234 905 555 1234', 
+    email: 'ruqayya.k@ruqayyatransport.com', 
+    status: 'off-duty', 
+    rating: 5.0,
+    vehiclePurchasePrice: 15000000,
+    remaining_vehicle_balance: 14000000,
+    total_amount_paid: 1000000,
+    expenseHistory: [],
+    agreed_amount: 180000,
+    debt_amount: 0,
+    total_installments: 100,
+    paid_installments: 20,
+    ledger_balance: 0,
+    total_credits: 0,
+    total_debits: 0
+  }
 ];
 
 const DEFAULT_TRIPS: DailyRemittance[] = [
@@ -99,10 +181,23 @@ export const dbStore = {
   // Drivers
   getDrivers: (): Driver[] => getStoreItem(DRIVERS_KEY, DEFAULT_DRIVERS),
   saveDrivers: (data: Driver[]) => saveStoreItem(DRIVERS_KEY, data),
-  addDriver: (driver: Omit<Driver, 'id' | 'rating' | 'status'>): Driver => {
+  addDriver: (driver: Omit<Driver, 'id' | 'rating' | 'status' | 'vehiclePurchasePrice' | 'remaining_vehicle_balance' | 'total_amount_paid' | 'expenseHistory' | 'agreed_amount' | 'debt_amount' | 'total_installments' | 'paid_installments'>): Driver => {
     const drivers = dbStore.getDrivers();
     const id = `D-${(drivers.length + 1).toString().padStart(3, '0')}`;
-    const newDriver: Driver = { id, ...driver, rating: 5.0, status: 'available' };
+    const newDriver: Driver = { 
+      id, 
+      ...driver, 
+      rating: 5.0, 
+      status: 'available',
+      vehiclePurchasePrice: 15000000,
+      remaining_vehicle_balance: 15000000,
+      total_amount_paid: 0,
+      expenseHistory: [],
+      agreed_amount: 180000,
+      debt_amount: 0,
+      total_installments: 100,
+      paid_installments: 0
+    };
     drivers.push(newDriver);
     dbStore.saveDrivers(drivers);
     logAuditEvent("user-session", "admin", "REGISTER_DRIVER", `Registered driver ${id} - ${driver.fullName}`);

@@ -2369,11 +2369,26 @@ export const PeopleManagement: React.FC<PeopleManagementProps> = ({
                     <span className="text-center text-text-muted font-mono">{selectedShareholderLedger.investment_date}</span>
                     <span className="text-right font-mono font-bold">+{selectedShareholderLedger.investment_amount.toLocaleString()}</span>
                   </div>
-                  {/* Any simulated cycle payouts */}
-                  <div className="grid grid-cols-3 p-2 bg-bg-base/20">
-                    <span className="text-brand-navy font-bold">Earnings Disbursed</span>
-                    <span className="text-center text-text-muted font-mono">Cycle Closed</span>
-                    <span className="text-right font-mono text-text-muted">Dynamic Pool Split</span>
+                  <div className="grid grid-cols-3 p-2 bg-bg-base/10">
+                    <span className="text-amber-600 font-bold">Cash Withdrawn</span>
+                    <span className="text-center text-text-muted font-mono">Disbursed</span>
+                    <span className="text-right font-mono font-bold text-rose-600">
+                      -₦{(Number(selectedShareholderLedger.total_withdrawn_cash) || Number(selectedShareholderLedger.total_withdrawn) || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 p-2">
+                    <span className="text-brand-navy font-bold">Total Reinvested</span>
+                    <span className="text-center text-text-muted font-mono">Rollover</span>
+                    <span className="text-right font-mono font-bold text-emerald-600">
+                      +₦{(Number(selectedShareholderLedger.total_reinvested) || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 p-2 bg-bg-base/20 font-black border-t border-border-main/40 mt-1">
+                    <span className="text-text-main">Available Dividend</span>
+                    <span className="text-center text-text-muted font-mono">Live</span>
+                    <span className="text-right font-mono text-emerald-600">
+                      ₦{( (Number(selectedShareholderLedger.earnings_to_date) || 0) - (Number(selectedShareholderLedger.total_withdrawn_cash) || Number(selectedShareholderLedger.total_withdrawn) || 0) - (Number(selectedShareholderLedger.total_reinvested) || 0) ).toLocaleString()}
+                    </span>
                   </div>
                 </div>
               </div>

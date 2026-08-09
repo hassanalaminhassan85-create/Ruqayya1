@@ -1956,7 +1956,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                   <option value="">-- No Driver Association --</option>
                   {drivers.map((d, idx) => (
                     <option key={`${d.id}-${idx}`} value={d.id}>
-                      {d.fullName} ({d.vehicle?.plateNumber || 'No Plate'}) - Balance: ₦{(d.remaining_vehicle_balance || d.agreed_amount || 180000).toLocaleString()}
+                      {d.fullName} ({d.vehicle?.plateNumber || 'No Plate'}) - Clearing Balance: ₦{(d.ledger_balance || 0).toLocaleString()}
                     </option>
                   ))}
                 </select>
@@ -2001,14 +2001,20 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                         <Badge variant={drv.status === 'approved' ? 'success' : 'warning'}>{drv.status}</Badge>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-[11px] font-mono border-t border-slate-200/60 pt-2">
+                      <div className="grid grid-cols-3 gap-2 text-[10px] font-mono border-t border-slate-200/60 pt-2">
                         <div>
-                          <span className="text-[9px] text-slate-400 block uppercase font-sans">Remaining Bal:</span>
-                          <span className="font-bold text-rose-600">₦{fin.remainingVehicleBalance.toLocaleString()}</span>
+                          <span className="text-[9px] text-slate-400 block uppercase font-sans">Ledger Bal:</span>
+                          <span className={`font-bold ${(drv.ledger_balance || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {(drv.ledger_balance || 0) >= 0 ? '+' : ''}₦{(drv.ledger_balance || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-400 block uppercase font-sans">Remaining:</span>
+                          <span className="font-bold text-slate-700">₦{fin.remainingVehicleBalance.toLocaleString()}</span>
                         </div>
                         <div>
                           <span className="text-[9px] text-slate-400 block uppercase font-sans">Total Paid:</span>
-                          <span className="font-bold text-emerald-600">₦{fin.totalPaid.toLocaleString()}</span>
+                          <span className="font-bold text-brand-gold">₦{fin.totalPaid.toLocaleString()}</span>
                         </div>
                       </div>
 

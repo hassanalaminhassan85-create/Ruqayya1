@@ -591,6 +591,10 @@ export const api = {
     return api.request('/api/shareholders/me');
   },
 
+  getShareholderBalance: async () => {
+    return api.request('/api/shareholders/me/balance');
+  },
+
   getOperationsState: async () => {
     return api.request('/api/operations/state');
   },

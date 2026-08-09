@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type Role = 'public' | 'driver' | 'admin' | 'director' | 'shareholder';
+export type Role = 'public' | 'driver' | 'admin' | 'director' | 'shareholder' | 'manager';
 export type Language = 'en' | 'ha';
 export type Theme = 'light' | 'dark';
 
@@ -21,6 +21,13 @@ export interface Vehicle {
 }
 
 // Driver Data Types
+export interface ExpenseRecord { 
+  id: string; 
+  amount: number; 
+  description: string; 
+  date: string; 
+}
+
 export interface Driver {
   id: string;
   fullName: string;
@@ -28,12 +35,28 @@ export interface Driver {
   licenseExpiry: string;
   phone: string;
   email: string;
-  status: 'pending' | 'approved' | 'rejected' | 'correction_requested' | 'available' | 'on-trip' | 'off-duty' | 'suspended';
+  status: 'pending' | 'approved' | 'rejected' | 'correction_requested' | 'available' | 'on-trip' | 'off-duty' | 'suspended' | 'active' | 'completed';
   assignedVehicleId?: string;
   rating: number;
   company_driver_id?: string;
   address?: string;
   nin?: string;
+  
+  // Financial Fields
+  vehiclePurchasePrice: number;
+  remaining_vehicle_balance: number;
+  total_amount_paid: number;
+  expenseHistory: ExpenseRecord[];
+  agreed_amount: number;
+  debt_amount: number;
+  total_installments: number;
+  paid_installments: number;
+
+  // Unified Ledger Fields
+  ledger_balance: number;
+  total_credits: number;
+  total_debits: number;
+
   guarantor?: {
     fullName: string;
     phone: string;
@@ -42,6 +65,12 @@ export interface Driver {
     nin: string;
     passportPhotoUrl?: string;
   };
+  
+  // Overdue Freeze Fields
+  overdue_frozen?: boolean;
+  overdue_frozen_since?: string;
+  next_installment_due_date?: string | null;
+
   vehicle?: {
     id?: string;
     brand: string;
@@ -60,6 +89,18 @@ export interface Driver {
     file_url: string;
     created_at: string;
   }>;
+}
+
+export interface DriverLedgerEntry {
+  id: string;
+  driverId: string;
+  type: 'debit' | 'credit';
+  category: 'vehicle_payment' | 'expense' | 'penalty' | 'adjustment' | 'remittance';
+  amount: number;
+  description: string;
+  date: string;
+  cycleId?: string;
+  referenceId?: string;
 }
 
 // Daily Remittance & Collection Data Types
@@ -82,12 +123,15 @@ export interface DailyRemittance {
 export interface FinancialRecord {
   id: string;
   type: 'revenue' | 'expense';
-  category: 'remittance' | 'fuel' | 'maintenance' | 'salary' | 'tax' | 'dividend' | 'other';
+  category: 'remittance' | 'fuel' | 'maintenance' | 'salary' | 'tax' | 'dividend' | 'other' | 'penalty' | 'deposit' | 'withdrawal';
   amount: number;
   date: string;
   referenceId?: string;
   description: string;
   approvedBy?: string;
+  cycleId?: string; // Track which business cycle this belongs to
+  driver_id?: string;
+  driverId?: string;
 }
 
 // Fuel Voucher Request
@@ -136,6 +180,12 @@ export interface AppNotification {
 }
 
 // Shareholder
+export interface InvestmentRecord { 
+  date: string; 
+  percentage: number; 
+  amountInvested: number; 
+}
+
 export interface Shareholder {
   id: string;
   full_name: string;
@@ -151,6 +201,22 @@ export interface Shareholder {
   status?: string;
   total_withdrawn?: number;
   total_reinvested?: number;
+  earnings_to_date: number;
+
+  // Financial Fields
+  investmentPercentage: number;
+  total_withdrawn_cash: number;
+  available_balance: number;
+  investmentHistory: InvestmentRecord[];
+  total_invested: number;
+}
+
+export interface ShareholderCycleEarnings {
+  shareholderId: string;
+  cycleId: string;
+  rateApplied: number; // Locked at cycle time
+  amountEarned: number;
+  dateRecorded: string;
 }
 
 // Operating Cycle Data Types

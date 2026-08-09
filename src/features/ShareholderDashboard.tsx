@@ -38,9 +38,11 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
 }) => {
   const [shareholder, setShareholder] = useState<Shareholder | null>(null);
   const [calculations, setCalculations] = useState<any>(null);
+  const [serverBalance, setServerBalance] = useState<{ availableBalance: number, totalEarned: number, totalWithdrawn: number } | null>(null);
   const [financials, setFinancials] = useState<FinancialRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [ledgerLoading, setLedgerLoading] = useState(true);
+  const [globalError, setGlobalError] = useState<string | null>(null);
   const [sseConnected, setSseConnected] = useState(false);
 
   // Action states
@@ -52,15 +54,15 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
   const [shActionError, setShActionError] = useState('');
   const [shActionSuccess, setShActionSuccess] = useState('');
 
-  // Financial calculations
+  // Financial values from server balance API
+  const availableWithdrawable = serverBalance?.availableBalance || 0;
+  const estimatedEarnings = serverBalance?.totalEarned || 0;
+  const shTotalWithdrawn = serverBalance?.totalWithdrawnCash || serverBalance?.totalWithdrawn || 0;
+
+  // Other financial metadata
   const totalInvested = shareholder?.investment_amount || (shareholder as any)?.investmentAmount || 0;
   const equityWeight = shareholder?.equity_percentage || 0;
-  const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((acc, f: any) => acc + (parseFloat(f.amount) || 0), 0);
-  const totalPool = totalRevenue * 0.02;
-  const estimatedEarnings = totalPool * (equityWeight / 100);
-  const shTotalWithdrawn = shareholder?.total_withdrawn || 0;
-  const availableWithdrawable = Math.max(0, estimatedEarnings - shTotalWithdrawn);
-  const shTotalReinvested = shareholder?.total_reinvested || 0;
+  const shTotalReinvested = serverBalance?.totalReinvested || shareholder?.total_reinvested || 0;
 
   const fetchLedgerData = async () => {
     setLedgerLoading(true);
@@ -75,8 +77,14 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
   };
 
   const fetchData = async () => {
+    setLoading(true);
+    setGlobalError(null);
     try {
-      const res = await api.getSelfShareholderData();
+      const [res, balanceRes] = await Promise.all([
+        api.getSelfShareholderData(),
+        api.getShareholderBalance()
+      ]);
+      
       const sh = res.shareholder ? {
         ...res.shareholder,
         equity_percentage: res.calculations?.investmentPercentage ?? res.shareholder.equity_percentage ?? 0
@@ -85,9 +93,13 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
       if (res.calculations) {
         setCalculations(res.calculations);
       }
+      if (balanceRes) {
+        setServerBalance(balanceRes);
+      }
       await fetchLedgerData();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch shareholder data:", err);
+      setGlobalError(err.message || "Failed to synchronize financial data with server. Please refresh.");
     } finally {
       setLoading(false);
     }
@@ -184,25 +196,9 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
   const renderOverview = () => {
     if (!shareholder) return null;
 
-    // Financial calculations
+    // Financial metadata
     const totalInvested = shareholder.investment_amount || (shareholder as any).investmentAmount || 0;
     const equityWeight = shareholder.equity_percentage || 0;
-    
-    // Use backend calculations if available
-    let estimatedEarnings = calculations?.totalEarnings || 0;
-    
-    // If we want a local fallback estimation (though backend calculations should be preferred):
-    if (!calculations) {
-      const totalRevenue = financials.filter(f => f.type === 'revenue').reduce((acc, f: any) => acc + (parseFloat(f.amount) || 0), 0);
-      const totalExpenses = financials.filter(f => f.type === 'expense').reduce((acc, f: any) => acc + (parseFloat(f.amount) || 0), 0);
-      const netGenerated = totalRevenue - totalExpenses;
-      const distributionPercentage = 2; // local fallback
-      const totalPool = netGenerated > 0 ? (netGenerated * (distributionPercentage / 100)) : 0;
-      estimatedEarnings = totalPool * (equityWeight / 100);
-    }
-    
-    const shTotalWithdrawn = shareholder.total_withdrawn || 0;
-    const availableWithdrawable = Math.max(0, estimatedEarnings - shTotalWithdrawn);
     const shTotalReinvested = shareholder.total_reinvested || 0;
 
     return (
@@ -533,6 +529,11 @@ export const ShareholderDashboard: React.FC<ShareholderDashboardProps & { authTo
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto p-4 md:p-6 bg-bg-base min-h-screen">
+      {globalError && (
+        <div className="mb-4">
+          <Alert type="danger">{globalError}</Alert>
+        </div>
+      )}
       {shActionSuccess && (
         <div className="fixed top-20 right-4 z-[60] animate-bounce">
           <Alert type="success">{shActionSuccess}</Alert>

@@ -77,6 +77,7 @@ export interface DBState {
   admins: any[];
   drivers: any[];
   shareholders: any[];
+  shareholder_cycle_earnings?: any[];
   guarantors: any[];
   vehicles: any[];
   vehicle_documents: any[];
@@ -92,6 +93,7 @@ export interface DBState {
   trip_manifests: any[];
   cycles: any[];
   driver_payments: any[];
+  driver_ledger: any[];
   driver_duty_sessions?: any[];
   driver_locations?: any[];
   driver_places?: any[];
@@ -125,6 +127,7 @@ const INITIAL_DB_STATE: DBState = {
   trip_manifests: [],
   cycles: [],
   driver_payments: [],
+  driver_ledger: [],
   messages: [],
   announcements: [],
   push_subscriptions: [],
@@ -138,7 +141,9 @@ const INITIAL_DB_STATE: DBState = {
     currency: "₦",
     timeZone: "Africa/Lagos",
     languageDefault: "en",
-    themeDefault: "light"
+    themeDefault: "light",
+    wallet_balance: 0,
+    wallet_initial_amount: 0
   },
   shareholder_settings: {
     distributionPercentage: 2
@@ -201,11 +206,13 @@ export function loadDB(): DBState {
       if (!parsed.admins) { parsed.admins = []; changed = true; }
       if (!parsed.drivers) { parsed.drivers = []; changed = true; }
       if (!parsed.shareholders) { parsed.shareholders = []; changed = true; }
+      if (!parsed.shareholder_cycle_earnings) { parsed.shareholder_cycle_earnings = []; changed = true; }
       if (!parsed.vehicles) { parsed.vehicles = []; changed = true; }
       if (!parsed.audit_logs) { parsed.audit_logs = []; changed = true; }
       if (!parsed.notifications) { parsed.notifications = []; changed = true; }
       if (!parsed.financial_records) { parsed.financial_records = []; changed = true; }
       if (!parsed.driver_payments) { parsed.driver_payments = []; changed = true; }
+      if (!parsed.driver_ledger) { parsed.driver_ledger = []; changed = true; }
       if (!parsed.driver_duty_sessions) { parsed.driver_duty_sessions = []; changed = true; }
       if (!parsed.driver_locations) { parsed.driver_locations = []; changed = true; }
       if (!parsed.driver_places) { parsed.driver_places = []; changed = true; }
@@ -249,103 +256,6 @@ export function loadDB(): DBState {
         });
       }
 
-      // Sanitize driver vehicle purchase price and remaining vehicle balance (Fix for 360 / installment remaining balance bug)
-      if (parsed.drivers && Array.isArray(parsed.drivers)) {
-        parsed.drivers.forEach((drv: any) => {
-          const rawPrice = parseFloat(drv.vehicle_purchase_price ?? drv.vehiclePurchasePrice) || 0;
-          const vehiclePrice = rawPrice > 0 ? rawPrice : 15000000;
-          if (drv.vehicle_purchase_price !== vehiclePrice || drv.vehiclePurchasePrice !== vehiclePrice) {
-            drv.vehicle_purchase_price = vehiclePrice;
-            drv.vehiclePurchasePrice = vehiclePrice;
-            changed = true;
-          }
-
-          const rawAgreed = parseFloat(drv.agreed_amount ?? drv.agreedAmount) || 180000;
-          if (drv.agreed_amount !== rawAgreed || drv.agreedAmount !== rawAgreed) {
-            drv.agreed_amount = rawAgreed;
-            drv.agreedAmount = rawAgreed;
-            changed = true;
-          }
-
-          const validIds = new Set(
-            [
-              drv.id,
-              drv.user_id,
-              drv.userId,
-              drv.company_driver_id,
-              drv.companyDriverId,
-              drv.fullName,
-              drv.full_name,
-            ].filter(Boolean),
-          );
-
-          const isApprovedPayment = (p: any) => {
-            if (!p) return false;
-            const matchesDriver =
-              validIds.has(p.driver_id) ||
-              validIds.has(p.driverId) ||
-              validIds.has(p.driver_name) ||
-              validIds.has(p.driverName);
-            if (!matchesDriver) return false;
-            const st = (p.status || "").toLowerCase();
-            return st === "approved" || st === "completed" || st === "paid";
-          };
-
-          const approvedPaymentsInERP = (parsed.driver_payments || []).filter(isApprovedPayment);
-          const totalErpPaid = approvedPaymentsInERP.reduce(
-            (sum: number, p: any) => sum + (parseFloat(p.amount) || 0),
-            0,
-          );
-
-          const linkedExpenses = (parsed.financial_records || []).filter((r: any) => {
-            if (!r || r.type !== "expense") return false;
-            return validIds.has(r.driver_id) || validIds.has(r.driverId);
-          });
-          const totalLedgerExpenses = linkedExpenses.reduce(
-            (sum: number, r: any) => sum + (parseFloat(r.amount) || 0),
-            0,
-          );
-          const totalHistoryExpenses = (drv.expenseHistory || []).reduce(
-            (sum: number, r: any) => sum + (parseFloat(r.amount) || 0),
-            0,
-          );
-          const totalExpenses = Math.max(totalLedgerExpenses, totalHistoryExpenses);
-
-          let initialRemaining = vehiclePrice;
-          let initialPaid = 0;
-
-          if (drv.opening_balance && drv.opening_balance.is_imported) {
-            initialRemaining = parseFloat(drv.opening_balance.remaining_vehicle_balance ?? drv.opening_balance.remainingVehicleBalance);
-            if (isNaN(initialRemaining)) initialRemaining = vehiclePrice;
-            initialPaid = parseFloat(drv.opening_balance.total_paid_to_date ?? drv.opening_balance.totalPaidToDate) || 0;
-          } else {
-            const regRem = parseFloat(drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance);
-            if (!isNaN(regRem)) {
-              initialRemaining = regRem;
-              initialPaid = Math.max(0, vehiclePrice - regRem);
-            } else {
-              initialRemaining = vehiclePrice;
-              initialPaid = 0;
-            }
-          }
-
-          const totalAmountPaid = initialPaid + totalErpPaid;
-          const remainingVehicleBalance = Math.max(0, initialRemaining - totalErpPaid + totalExpenses);
-
-          if (drv.total_amount_paid !== totalAmountPaid || drv.totalAmountPaid !== totalAmountPaid) {
-            drv.total_amount_paid = totalAmountPaid;
-            drv.totalAmountPaid = totalAmountPaid;
-            changed = true;
-          }
-
-          if (drv.remaining_vehicle_balance !== remainingVehicleBalance || drv.remainingVehicleBalance !== remainingVehicleBalance) {
-            drv.remaining_vehicle_balance = remainingVehicleBalance;
-            drv.remainingVehicleBalance = remainingVehicleBalance;
-            changed = true;
-          }
-        });
-      }
-
       if (changed) {
         saveDB(parsed);
       }
@@ -368,17 +278,6 @@ export function setDBChangeListener(listener: () => void) {
 
 export function saveDB(state: DBState): void {
   try {
-    // Automatically recalculate Company Wallet balance
-    if (state) {
-      if (!state.company_settings) state.company_settings = {};
-      if (state.company_settings.wallet_initial_amount === undefined) {
-        state.company_settings.wallet_initial_amount = state.company_settings.wallet_balance !== undefined ? state.company_settings.wallet_balance : 0;
-      }
-      const totalRev = (state.financial_records || []).filter((f: any) => f.type === 'revenue' || f.type === 'deposit').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
-      const totalExp = (state.financial_records || []).filter((f: any) => f.type === 'expense' || f.type === 'withdrawal').reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
-      state.company_settings.wallet_balance = (parseFloat(state.company_settings.wallet_initial_amount) || 0) + totalRev - totalExp;
-    }
-    
     cachedDB = state;
     fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), 'utf8');
     
@@ -466,6 +365,7 @@ export function seedDBIfEmpty() {
     db.trip_manifests = [];
     db.cycles = [];
     db.driver_payments = [];
+    db.driver_ledger = [];
     db.messages = [];
     db.announcements = [];
     db.push_subscriptions = [];

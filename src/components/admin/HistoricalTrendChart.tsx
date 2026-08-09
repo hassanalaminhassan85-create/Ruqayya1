@@ -36,12 +36,22 @@ export const HistoricalTrendChart: React.FC<HistoricalTrendChartProps> = ({
 
       // Filter transactions for this cycle
       const cycleTransactions = finance.filter(f => {
-        const transDate = new Date(f.date);
-        const cycleStart = new Date(cycle.startDate);
-        const cycleEnd = cycle.endDate ? new Date(cycle.endDate) : new Date();
-        const matchesDate = transDate >= cycleStart && transDate <= cycleEnd;
+        // Priority 1: Exact cycle matching via cycleId
+        if (f.cycleId && cycle.id) {
+          if (f.cycleId !== cycle.id) return false;
+        } else {
+          // Priority 2: Fallback to Date boundaries with exclusive end (Legacy support)
+          const transDate = new Date(f.date);
+          const cStart = new Date(cycle.startDate);
+          const cEnd = cycle.endDate ? new Date(cycle.endDate) : new Date();
+          
+          // Use inclusive start, exclusive end to prevent microsecond overlap double-counting
+          const matchesDate = transDate >= cStart && transDate < cEnd;
+          if (!matchesDate) return false;
+        }
+
         const matchesShareholder = shareholderId === 'all' || !shareholderId || f.referenceId === shareholderId;
-        return matchesDate && matchesShareholder;
+        return matchesShareholder;
       });
 
       const withdrawals = cycleTransactions

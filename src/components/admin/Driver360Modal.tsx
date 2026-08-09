@@ -8,7 +8,8 @@ import {
   User, FileText, Wallet, Video, Maximize2, Activity, Gauge, 
   Zap, Lock, Unlock, CheckCircle2, Clock, Coins, Search, 
   Filter, Calendar, MapPin, Radio, Signal, Cpu, Layers, Volume2, 
-  Camera, Check, ChevronRight, Sparkles, AlertCircle, Phone, Mail, Award, Key
+  Camera, Check, ChevronRight, Sparkles, AlertCircle, Phone, Mail, Award, Key,
+  BookOpen, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -99,7 +100,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   ) : '';
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'telematics' | 'dossier' | 'edit-profile' | 'payments' | 'docs' | 'trips'>('telematics');
+  const [activeTab, setActiveTab] = useState<'telematics' | 'dossier' | 'edit-profile' | 'payments' | 'ledger' | 'docs' | 'trips'>('telematics');
   
   // Installments state
   const [installments, setInstallments] = useState<any[]>([]);
@@ -989,6 +990,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
           { id: 'dossier', label: '360° Profile & Guarantor', icon: User },
           { id: 'edit-profile', label: 'Edit Driver Details', icon: Edit },
           { id: 'payments', label: 'Installments & Remittances', icon: Wallet },
+          { id: 'ledger', label: 'Unified Driver Ledger', icon: BookOpen },
           { id: 'docs', label: 'Digital Document Vault', icon: FileText },
           { id: 'trips', label: 'Trip Logbook & Safety', icon: Activity },
         ].map(tab => {
@@ -1022,6 +1024,130 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
             transition={{ duration: 0.2 }}
             className="h-full"
           >
+            {/* TAB: UNIFIED DRIVER LEDGER (Clearing Account) */}
+            {activeTab === 'ledger' && (
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-brand-gold" />
+                      Unified Driver Ledger Statement
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">Real-time debit-credit clearing account showing the total financial standing of the driver.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-3 rounded-2xl border ${activeDriver.ledger_balance >= 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'} flex flex-col items-end min-w-[180px]`}>
+                      <span className="text-[10px] font-bold uppercase text-slate-400">Net Clearing Balance</span>
+                      <span className={`text-xl font-black font-mono ${activeDriver.ledger_balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {activeDriver.ledger_balance >= 0 ? '+' : ''}₦{(activeDriver.ledger_balance || 0).toLocaleString()}
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-500 uppercase mt-0.5">
+                        {activeDriver.ledger_balance >= 0 ? 'SURPLUS ACCOUNT' : 'OUTSTANDING DEBT'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-center text-center group hover:border-emerald-500/30 transition-all">
+                    <div className="p-3 bg-emerald-500/10 rounded-full text-emerald-500 mb-2 group-hover:scale-110 transition-transform">
+                      <ArrowUpRight className="h-6 w-6" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Total Credits (Inflow)</span>
+                    <span className="text-2xl font-black text-white font-mono mt-1">₦{(activeDriver.total_credits || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-center text-center group hover:border-rose-500/30 transition-all">
+                    <div className="p-3 bg-rose-500/10 rounded-full text-rose-500 mb-2 group-hover:scale-110 transition-transform">
+                      <ArrowDownRight className="h-6 w-6" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Total Debits (Obligations)</span>
+                    <span className="text-2xl font-black text-white font-mono mt-1">₦{(activeDriver.total_debits || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                  <div className="p-4 border-b border-slate-800 bg-slate-800/40 flex items-center justify-between">
+                    <h4 className="text-xs font-black text-white uppercase tracking-widest">Transaction Statement History</h4>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Showing all clearing entries</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500 font-mono">
+                          <th className="p-4">Date & ID</th>
+                          <th className="p-4">Category</th>
+                          <th className="p-4">Description</th>
+                          <th className="p-4 text-right">Debit (-)</th>
+                          <th className="p-4 text-right">Credit (+)</th>
+                          <th className="p-4 text-right">Balance After</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800 text-slate-200">
+                        {(() => {
+                          const ledgerEntries = (window as any).lastSSEState?.driver_ledger?.filter((e: any) => e.driverId === activeDriver.id) || [];
+                          const sortedEntries = [...ledgerEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                          
+                          let runningBalance = 0;
+                          return sortedEntries.reverse().map((e: any, idx: number) => {
+                            // Since we reversed, we need to calculate runningBalance differently for display or just show the entry.
+                            // Better to calculate once forwards and then reverse for display.
+                            return null; // placeholder
+                          });
+                        })()}
+                        {/* Correct rendering of ledger */}
+                        {(() => {
+                          const ledgerEntries = (window as any).lastSSEState?.driver_ledger?.filter((e: any) => e.driverId === activeDriver.id) || [];
+                          const sortedEntries = [...ledgerEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                          
+                          let currentBal = 0;
+                          const entriesWithBal = sortedEntries.map((e: any) => {
+                            if (e.type === 'debit') currentBal -= e.amount;
+                            else currentBal += e.amount;
+                            return { ...e, balanceAt: currentBal };
+                          });
+
+                          if (entriesWithBal.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={6} className="p-8 text-center text-slate-500 italic">No ledger transactions recorded yet.</td>
+                              </tr>
+                            );
+                          }
+
+                          return entriesWithBal.reverse().map((e: any) => (
+                            <tr key={e.id} className="hover:bg-slate-800/30 transition-colors">
+                              <td className="p-4">
+                                <div className="font-bold text-white">{new Date(e.date).toLocaleDateString()}</div>
+                                <div className="text-[10px] text-slate-500 font-mono">{e.id}</div>
+                              </td>
+                              <td className="p-4">
+                                <Badge variant={e.type === 'credit' ? 'success' : 'warning'} className="text-[9px]">
+                                  {e.category.replace('_', ' ').toUpperCase()}
+                                </Badge>
+                              </td>
+                              <td className="p-4">
+                                <div className="font-semibold text-slate-300">{e.description}</div>
+                                {e.cycleId && <div className="text-[10px] text-brand-gold font-bold">Cycle ID: {e.cycleId}</div>}
+                              </td>
+                              <td className="p-4 text-right font-mono font-bold text-rose-400">
+                                {e.type === 'debit' ? `₦${e.amount.toLocaleString()}` : '-'}
+                              </td>
+                              <td className="p-4 text-right font-mono font-bold text-emerald-400">
+                                {e.type === 'credit' ? `₦${e.amount.toLocaleString()}` : '-'}
+                              </td>
+                              <td className="p-4 text-right font-mono font-black text-white">
+                                ₦{e.balanceAt.toLocaleString()}
+                              </td>
+                            </tr>
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* TAB 1: WORLD-CLASS LIVE TRACKING SYSTEM & TELEMATICS */}
             {activeTab === 'telematics' && (
               <div className="flex flex-col gap-6">

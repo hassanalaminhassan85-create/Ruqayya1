@@ -13,7 +13,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import {
   loadDB,
-  saveDB,
+  saveDB as persistDB,
   seedDBIfEmpty,
   hashPassword,
   verifyPassword,
@@ -28,10 +28,100 @@ import {
 } from "./src/utils/server_db";
 import { PushService } from "./src/utils/PushService";
 import { WorkersAIService } from "./src/utils/ai_service";
+import { FinancialCalculator } from "./src/services/FinancialCalculator";
 
 const app = express();
 const PORT = 3000;
 const server = http.createServer(app);
+
+/**
+ * Ensures financial consistency across the database state.
+ * This is the single source of truth for computed financial fields.
+ */
+function syncFinancialState(db: any) {
+  if (db.drivers && Array.isArray(db.drivers)) {
+    db.drivers.forEach((drv: any) => {
+      // Seed initial ledger if empty to reconcile legacy debt/surplus
+      if (!db.driver_ledger) db.driver_ledger = [];
+      const hasEntries = db.driver_ledger.some((e: any) => e.driverId === drv.id);
+      if (!hasEntries) {
+        // Record legacy debt if any
+        if (drv.debt_amount > 0) {
+          recordDriverLedgerEntry(db, drv.id, {
+            type: 'debit',
+            category: 'adjustment',
+            amount: drv.debt_amount,
+            description: 'Legacy Debt Reconciliation Adjustment'
+          });
+        }
+      }
+
+      const fin = FinancialCalculator.getDriverFinancials(drv, db);
+      drv.vehicle_purchase_price = fin.vehiclePurchasePrice;
+      drv.vehiclePurchasePrice = fin.vehiclePurchasePrice;
+      drv.total_amount_paid = fin.totalAmountPaid;
+      drv.totalAmountPaid = fin.totalAmountPaid;
+      drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
+      drv.remainingVehicleBalance = fin.remainingVehicleBalance;
+      
+      // Sync unified ledger balance
+      drv.ledger_balance = fin.ledgerBalance;
+      drv.total_debits = fin.totalDebits;
+      drv.total_credits = fin.totalCredits;
+
+      // Unified Status derivation from Ledger Balance
+      // If balance is positive, they are clear. If negative, they have outstanding debt.
+      // We only automatically transition from 'suspended' back to 'active' if they clear their debt.
+      if (drv.status === 'suspended' && drv.ledger_balance >= 0) {
+        drv.status = 'active';
+      } else if ((drv.status === 'active' || drv.status === 'approved') && drv.ledger_balance < 0) {
+        // If they have substantial debt (e.g. more than one installment overdue), consider them suspended
+        // For now, any debt makes them 'overdue' in visual terms, but we only auto-suspend if it's significant
+        const oneInstallment = (drv.agreed_amount || 180000) / 6;
+        if (drv.ledger_balance <= -oneInstallment) {
+           drv.status = 'suspended';
+        }
+      }
+
+      // Maintain next_installment_due_date for real-time tracking
+      const activeCycle = (db.cycles || []).find((c: any) => c.status === "active" || c.status === "paused");
+      if (activeCycle && activeCycle.status === "active" && !drv.overdue_frozen) {
+        const installments = FinancialCalculator.calculateInstallmentsForDriver(drv, db, activeCycle);
+        const nextInst = installments.find((i: any) => i.status !== "Completed");
+        drv.next_installment_due_date = nextInst ? nextInst.endDate : null;
+      } else if (activeCycle && activeCycle.status === "paused") {
+        drv.next_installment_due_date = null;
+      }
+    });
+  }
+  if (!db.company_settings) db.company_settings = {};
+  db.company_settings.wallet_balance = FinancialCalculator.calculateCompanyWallet(db);
+}
+
+function recordDriverLedgerEntry(db: any, driverId: string, entry: {
+  type: 'debit' | 'credit',
+  category: 'vehicle_payment' | 'expense' | 'penalty' | 'adjustment' | 'remittance',
+  amount: number,
+  description: string,
+  cycleId?: string,
+  referenceId?: string
+}) {
+  if (!db.driver_ledger) db.driver_ledger = [];
+  db.driver_ledger.push({
+    id: `LGR-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+    driverId,
+    ...entry,
+    date: new Date().toISOString()
+  });
+}
+
+/**
+ * Local wrapper for database persistence that enforces business logic consistency.
+ */
+function saveDB(db: any) {
+  syncFinancialState(db);
+  persistDB(db);
+}
 
 // WebSocket Server for sub-second, real-time driver tracking
 const wss = new WebSocketServer({ noServer: true });
@@ -405,6 +495,12 @@ function authenticateSession(
                 .toISOString()
                 .split("T")[0],
               status: "approved",
+              vehiclePurchasePrice: 15000000,
+              vehicle_purchase_price: 15000000,
+              remainingVehicleBalance: 15000000,
+              remaining_vehicle_balance: 15000000,
+              totalAmountPaid: 0,
+              total_amount_paid: 0,
               created_at: new Date().toISOString(),
             });
           }
@@ -517,7 +613,7 @@ function generateFilteredPayload(
     const vehicle = mappedVehicles.find(
       (v: any) => v.driverId === d.id || v.driver_id === d.id,
     );
-    const financials = getDriverFinancials(d, db);
+    const financials = FinancialCalculator.getDriverFinancials(d, db);
     const documents = (db.driver_documents || []).filter(
       (doc: any) => doc.driver_id === d.id,
     );
@@ -591,6 +687,7 @@ function generateFilteredPayload(
       vehicle_documents: db.vehicle_documents || [],
       driver_documents: db.driver_documents || [],
       company_documents: db.company_documents || [],
+      driver_ledger: db.driver_ledger || [],
     };
   } else if (role === "admin") {
     // Admins receive operational events
@@ -612,6 +709,7 @@ function generateFilteredPayload(
       vehicle_documents: db.vehicle_documents || [],
       driver_documents: db.driver_documents || [],
       company_documents: db.company_documents || [],
+      driver_ledger: db.driver_ledger || [],
     };
   } else if (role === "shareholder") {
     // Shareholders receive shareholder-related events and their own details
@@ -666,6 +764,9 @@ function generateFilteredPayload(
           !n.target_role &&
           (!n.target_roles || n.target_roles.length === 0)),
     );
+    const driverLedger = (db.driver_ledger || []).filter(
+      (e: any) => e.driverId === driverProfileId,
+    );
     const driverMessages = (db.messages || []).filter(
       (m: any) =>
         m.sender_id === activeDriver.user_id ||
@@ -683,6 +784,7 @@ function generateFilteredPayload(
       trip_manifests: driverTrips,
       notifications: driverNotifications,
       messages: driverMessages,
+      driver_ledger: driverLedger,
     };
   } else {
     // Public or unidentified
@@ -754,6 +856,17 @@ function getCanonicalCycleStatus(db: any): any {
       activeCycle.pausedAt = null;
       activeCycle.pauseReason = "";
       activeCycle.pauseDays = 0;
+
+      // Auto-unfreeze drivers if they were frozen by this cycle
+      if (db.drivers && Array.isArray(db.drivers)) {
+        db.drivers.forEach((drv: any) => {
+          if (drv.overdue_frozen) {
+            drv.overdue_frozen = false;
+            drv.overdue_frozen_since = null;
+          }
+        });
+      }
+
       if (db.company_operations_state) {
         db.company_operations_state.status = "Operational Mode";
       }
@@ -855,7 +968,7 @@ async function syncActiveCycleToFirestore(db: any) {
       (f: any) =>
         f.type === "revenue" &&
         canonical.isActive &&
-        new Date(f.date) >= cycleStart,
+        (f.cycleId === canonical.cycleId || new Date(f.date) >= cycleStart),
     )
     .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
 
@@ -944,186 +1057,13 @@ function computeActiveDuration(cycle: any): number {
 }
 
 // Helper: Calculate installments for a driver
-export function calculateInstallmentsForDriver(
+// Redundant implementation removed, now points to FinancialCalculator
+export function calculateInstallmentsForDriver_Legacy(
   driver: any,
   db: any,
   activeCycle: any,
 ) {
-  const agreedAmount =
-    parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 0;
-  const installmentTarget = Math.round(agreedAmount / 6);
-
-  // Find all approved payments for this driver during the active cycle using safe YYYY-MM-DD string comparisons
-  const cycleStartRaw = activeCycle
-    ? activeCycle.startDate || activeCycle.start_time || activeCycle.created_at
-    : null;
-  const startStr = cycleStartRaw
-    ? typeof cycleStartRaw === "string"
-      ? cycleStartRaw.split("T")[0]
-      : new Date(cycleStartRaw).toISOString().split("T")[0]
-    : new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().split("T")[0];
-
-  const cycleEndRaw = activeCycle
-    ? activeCycle.endDate || activeCycle.end_time
-    : null;
-  const endStr = cycleEndRaw
-    ? typeof cycleEndRaw === "string"
-      ? cycleEndRaw.split("T")[0]
-      : new Date(cycleEndRaw).toISOString().split("T")[0]
-    : new Date().toISOString().split("T")[0];
-
-  const payments = (db.driver_payments || []).filter((p: any) => {
-    const isMatchingDriver =
-      p.driver_id === driver.id ||
-      p.driver_id === driver.user_id ||
-      p.driver_id === driver.company_driver_id ||
-      p.driverId === driver.id ||
-      p.driverId === driver.user_id ||
-      p.driverId === driver.company_driver_id;
-    if (!isMatchingDriver || p.status !== "approved") return false;
-    const pDateStr =
-      typeof p.date === "string"
-        ? p.date.split("T")[0]
-        : new Date(p.date).toISOString().split("T")[0];
-    const afterStart = pDateStr >= startStr;
-    const beforeEnd =
-      activeCycle && activeCycle.endDate ? pDateStr <= endStr : true;
-    return afterStart && beforeEnd;
-  });
-
-  const totalApprovedAmount = payments.reduce(
-    (sum, p: any) => sum + (parseFloat(p.amount) || 0),
-    0,
-  );
-
-  // Calculate total rest days during this active cycle to extend installments
-  let totalRestDays = 0;
-  const restHistory = driver.restHistory || [];
-  if (activeCycle) {
-    restHistory.forEach((rest: any) => {
-      const restStart = new Date(rest.startDate);
-      const restEnd = new Date(rest.endDate);
-      const rawCycleStart =
-        activeCycle.startDate ||
-        activeCycle.start_time ||
-        activeCycle.created_at;
-      const cycleStart = rawCycleStart ? new Date(rawCycleStart) : new Date();
-
-      if (restEnd >= cycleStart) {
-        const overlapStart = restStart < cycleStart ? cycleStart : restStart;
-        const overlapEnd = restEnd;
-        const diffTime = overlapEnd.getTime() - overlapStart.getTime();
-        const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        if (days > 0) {
-          totalRestDays += days;
-        }
-      }
-    });
-  }
-
-  const today = new Date();
-  const isCurrentlyOnRest =
-    driver.status === "off-duty" ||
-    restHistory.some((rest: any) => {
-      const start = new Date(rest.startDate);
-      const end = new Date(rest.endDate);
-      return today >= start && today <= end;
-    });
-
-  const rawCycleStart = activeCycle
-    ? activeCycle.startDate || activeCycle.start_time || activeCycle.created_at
-    : null;
-  let startDate = rawCycleStart
-    ? new Date(rawCycleStart)
-    : new Date(Date.now() - 30 * 24 * 3600 * 1000);
-
-  const nowMs = Date.now();
-  const cycleStartMs = startDate.getTime();
-  const elapsedDays = Math.max(
-    1,
-    Math.floor((nowMs - cycleStartMs) / (1000 * 60 * 60 * 24)) + 1,
-  );
-  const currentRealTimeInstallment = Math.min(
-    6,
-    Math.max(1, Math.ceil(elapsedDays / 5)),
-  );
-
-  const installments = [];
-  let remainingPaidPool = totalApprovedAmount;
-
-  // Calculate total paused time from the master cycle to shift installment deadlines
-  let masterPausedMs = (activeCycle?.totalPausedSeconds || 0) * 1000;
-  if (activeCycle?.status === "paused" && activeCycle?.pausedAt) {
-    masterPausedMs += Date.now() - new Date(activeCycle.pausedAt).getTime();
-  }
-
-  for (let k = 1; k <= 6; k++) {
-    const startDay = (k - 1) * 5 + 1;
-    const endDay = k * 5;
-
-    // Shift the schedule by both driver-specific rest days AND company-wide paused time
-    const normalEndDate = new Date(
-      startDate.getTime() + (endDay - 1) * 24 * 3600 * 1000,
-    );
-    const extendedEndDate = new Date(
-      normalEndDate.getTime() +
-        totalRestDays * 24 * 3600 * 1000 +
-        masterPausedMs,
-    );
-
-    const normalStartDate = new Date(
-      startDate.getTime() + (startDay - 1) * 24 * 3600 * 1000,
-    );
-    const extendedStartDate = new Date(
-      normalStartDate.getTime() +
-        totalRestDays * 24 * 3600 * 1000 +
-        masterPausedMs,
-    );
-
-    const dueAmount = installmentTarget;
-    const paidAmount = Math.min(dueAmount, remainingPaidPool);
-    remainingPaidPool = Math.max(0, remainingPaidPool - paidAmount);
-
-    const remaining = dueAmount - paidAmount;
-
-    let status = "Pending";
-    if (remaining <= 0) {
-      status = "Completed";
-    } else if (paidAmount > 0) {
-      status = "Partially Paid";
-    } else if (!isCurrentlyOnRest && today > extendedEndDate) {
-      status = "Overdue";
-    }
-
-    const isCurrentRealTime = k === currentRealTimeInstallment;
-
-    // Let's attach payments to this milestone
-    const matchingPayments = payments.filter(
-      (p: any) => p.installment_number === k || p.installmentNumber === k,
-    );
-
-    installments.push({
-      installmentNumber: k,
-      dueAmount,
-      paidAmount,
-      remainingAmount: remaining,
-      startDate: extendedStartDate.toISOString().split("T")[0],
-      endDate: extendedEndDate.toISOString().split("T")[0],
-      status,
-      isCurrentRealTime,
-      payments: matchingPayments.map((p: any) => ({
-        id: p.id,
-        amount: p.amount,
-        receiptNumber: p.receipt_number || p.receiptNumber || "RTL-REC",
-        approvedBy: p.approved_by || p.recorded_by || p.approvedBy || "Admin",
-        date: p.date || p.created_at || new Date().toISOString(),
-        paymentMethod: p.payment_method || p.paymentMethod || "Bank Transfer",
-        remarks: p.remarks || p.notes || "",
-      })),
-    });
-  }
-
-  return installments;
+  return FinancialCalculator.calculateInstallmentsForDriver(driver, db, activeCycle);
 }
 
 // Background automated engine for status checks, overdue alerts and progress updates
@@ -1158,7 +1098,7 @@ setInterval(() => {
       dbChanged = true;
     }
 
-    if (activeCycle && canonical.isActive) {
+    if (activeCycle && canonical.isActive && activeCycle.status !== "paused") {
       const daysElapsed = canonical.currentDay;
       const currentDayInDB = db.company_operations_state.currentDay || 1;
       const totalAllowedDays = canonical.totalCycleDays;
@@ -1182,8 +1122,7 @@ setInterval(() => {
           .filter(
             (f: any) =>
               f.type === "revenue" &&
-              new Date(f.date) >= new Date(activeCycle.startDate) &&
-              new Date(f.date) <= new Date(endDate),
+              (f.cycleId === activeCycle.id || (new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) < new Date(endDate))),
           )
           .reduce(
             (sum: number, f: any) => sum + (parseFloat(f.amount) || 0),
@@ -1194,8 +1133,7 @@ setInterval(() => {
           .filter(
             (f: any) =>
               f.type === "expense" &&
-              new Date(f.date) >= new Date(activeCycle.startDate) &&
-              new Date(f.date) <= new Date(endDate),
+              (f.cycleId === activeCycle.id || (new Date(f.date) >= new Date(activeCycle.startDate) && new Date(f.date) < new Date(endDate))),
           )
           .reduce(
             (sum: number, f: any) => sum + (parseFloat(f.amount) || 0),
@@ -1244,6 +1182,7 @@ setInterval(() => {
               amount: shEarnings,
               date: endDate,
               description: `Auto dividend distribution: ${sh.full_name} (${(shPercentage * 100).toFixed(1)}%)`,
+              cycleId: activeCycle.id,
             });
           }
         });
@@ -1280,6 +1219,29 @@ setInterval(() => {
         for (const inst of installments) {
           const today = new Date();
           const instEndDate = new Date(inst.endDate);
+          const instStartDate = new Date(inst.startDate);
+
+          // Unified Ledger: Record Installment Debit if not already present
+          const hasInstallmentDebit = (db.driver_ledger || []).some(
+            (e: any) => 
+              e.driverId === driver.id && 
+              e.category === 'vehicle_payment' && 
+              e.cycleId === activeCycle.id &&
+              e.description.includes(`Installment ${inst.installmentNumber}`)
+          );
+
+          // We record the debit as soon as the installment window starts
+          if (!hasInstallmentDebit && today >= instStartDate) {
+            recordDriverLedgerEntry(db, driver.id, {
+              type: 'debit',
+              category: 'vehicle_payment',
+              amount: inst.dueAmount,
+              description: `Scheduled Lease Installment #${inst.installmentNumber}`,
+              cycleId: activeCycle.id
+            });
+            dbChanged = true;
+          }
+
           const hoursRemaining =
             (instEndDate.getTime() - today.getTime()) / (1000 * 60 * 60);
 
@@ -1303,6 +1265,16 @@ setInterval(() => {
                 amount: overdueCharge,
                 appliedAt: new Date().toISOString(),
               });
+
+              // Unified Ledger Entry
+              recordDriverLedgerEntry(db, driver.id, {
+                type: 'debit',
+                category: 'penalty',
+                amount: overdueCharge,
+                description: `Overdue Charge Penalty (Installment ${inst.installmentNumber})`,
+                cycleId: activeCycle.id
+              });
+
               db.financial_records.push({
                 id: generateUUID(),
                 type: "revenue",
@@ -1310,6 +1282,7 @@ setInterval(() => {
                 amount: overdueCharge,
                 date: new Date().toISOString(),
                 description: `Overdue Charge Penalty: Driver ${driver.fullName || "Candidate"}`,
+                cycleId: activeCycle.id,
               });
               db.notifications.unshift({
                 id: generateUUID(),
@@ -1773,13 +1746,15 @@ app.post("/api/auth/register-driver", (req, res) => {
     const vehPrice =
       personal.vehiclePurchasePrice !== undefined &&
       personal.vehiclePurchasePrice !== null &&
-      !isNaN(parseFloat(personal.vehiclePurchasePrice))
+      !isNaN(parseFloat(personal.vehiclePurchasePrice)) &&
+      parseFloat(personal.vehiclePurchasePrice) > 0
         ? parseFloat(personal.vehiclePurchasePrice)
-        : 0;
+        : 15000000;
     const remBal =
       personal.remainingVehicleBalance !== undefined &&
       personal.remainingVehicleBalance !== null &&
-      !isNaN(parseFloat(personal.remainingVehicleBalance))
+      !isNaN(parseFloat(personal.remainingVehicleBalance)) &&
+      parseFloat(personal.remainingVehicleBalance) > 0
         ? parseFloat(personal.remainingVehicleBalance)
         : vehPrice;
     const compDrvId =
@@ -1828,6 +1803,8 @@ app.post("/api/auth/register-driver", (req, res) => {
       vehiclePurchasePrice: vehPrice,
       remaining_vehicle_balance: remBal,
       remainingVehicleBalance: remBal,
+      total_amount_paid: 0,
+      totalAmountPaid: 0,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       status: "approved", // Approved immediately upon registration
@@ -2211,16 +2188,31 @@ app.post("/api/drivers/import", authenticateSession, (req, res) => {
       agreed_amount: !isNaN(parseFloat(personal.agreedAmount))
         ? parseFloat(personal.agreedAmount)
         : 0,
-      vehicle_purchase_price: !isNaN(parseFloat(personal.vehiclePurchasePrice))
-        ? parseFloat(personal.vehiclePurchasePrice)
+      agreedAmount: !isNaN(parseFloat(personal.agreedAmount))
+        ? parseFloat(personal.agreedAmount)
         : 0,
-      remaining_vehicle_balance: parseFloat(personal.remainingVehicleBalance),
+      vehicle_purchase_price: !isNaN(parseFloat(personal.vehiclePurchasePrice)) && parseFloat(personal.vehiclePurchasePrice) > 0
+        ? parseFloat(personal.vehiclePurchasePrice)
+        : 15000000,
+      vehiclePurchasePrice: !isNaN(parseFloat(personal.vehiclePurchasePrice)) && parseFloat(personal.vehiclePurchasePrice) > 0
+        ? parseFloat(personal.vehiclePurchasePrice)
+        : 15000000,
+      remaining_vehicle_balance: !isNaN(parseFloat(personal.remainingVehicleBalance)) && parseFloat(personal.remainingVehicleBalance) >= 0
+        ? parseFloat(personal.remainingVehicleBalance)
+        : (!isNaN(parseFloat(personal.vehiclePurchasePrice)) && parseFloat(personal.vehiclePurchasePrice) > 0 ? parseFloat(personal.vehiclePurchasePrice) : 15000000),
+      remainingVehicleBalance: !isNaN(parseFloat(personal.remainingVehicleBalance)) && parseFloat(personal.remainingVehicleBalance) >= 0
+        ? parseFloat(personal.remainingVehicleBalance)
+        : (!isNaN(parseFloat(personal.vehiclePurchasePrice)) && parseFloat(personal.vehiclePurchasePrice) > 0 ? parseFloat(personal.vehiclePurchasePrice) : 15000000),
+      total_amount_paid: !isNaN(parseFloat(personal.totalPaidToDate)) ? parseFloat(personal.totalPaidToDate) : 0,
+      totalAmountPaid: !isNaN(parseFloat(personal.totalPaidToDate)) ? parseFloat(personal.totalPaidToDate) : 0,
       status: "approved",
       opening_balance: {
         is_imported: true,
-        remaining_vehicle_balance: parseFloat(personal.remainingVehicleBalance),
-        total_paid_to_date: parseFloat(personal.totalPaidToDate),
-        agreed_amount: parseFloat(personal.agreedAmount),
+        remaining_vehicle_balance: !isNaN(parseFloat(personal.remainingVehicleBalance)) && parseFloat(personal.remainingVehicleBalance) >= 0
+          ? parseFloat(personal.remainingVehicleBalance)
+          : (!isNaN(parseFloat(personal.vehiclePurchasePrice)) && parseFloat(personal.vehiclePurchasePrice) > 0 ? parseFloat(personal.vehiclePurchasePrice) : 15000000),
+        total_paid_to_date: parseFloat(personal.totalPaidToDate) || 0,
+        agreed_amount: parseFloat(personal.agreedAmount) || 0,
         current_installment_position:
           parseInt(personal.currentInstallmentPosition) || 1,
         opening_balance_date:
@@ -5726,6 +5718,7 @@ function executeRecordPayment(args: any, actor: any, req: express.Request) {
 
   // Create payment record
   const rNumber = `RCP-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`;
+  const canonical = getCanonicalCycleStatus(db);
   const newPayment = {
     id: `PAY-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
     driver_id: drv.id,
@@ -5741,13 +5734,25 @@ function executeRecordPayment(args: any, actor: any, req: express.Request) {
     approved_by: actor.fullName || actor.username || "System AI",
     remarks: remarks || "Recorded via AI Copilot",
     created_at: new Date().toISOString(),
+    cycleId: canonical.cycleId !== "No Active Cycle" ? canonical.cycleId : (targetCycle ? targetCycle.id : null),
   };
 
   if (!db.driver_payments) db.driver_payments = [];
   db.driver_payments.unshift(newPayment);
 
+  // Unified Ledger Entry
+  recordDriverLedgerEntry(db, drv.id, {
+    type: 'credit',
+    category: 'remittance',
+    amount: newPayment.amount,
+    description: `Installment Remittance Approved via AI (Receipt: ${newPayment.receipt_number})`,
+    cycleId: newPayment.cycleId || null,
+    referenceId: newPayment.id
+  });
+
   // Post to financial ledger
   if (!db.financial_records) db.financial_records = [];
+  const canonical_for_ledger = getCanonicalCycleStatus(db);
   db.financial_records.unshift({
     id: generateUUID(),
     type: "revenue",
@@ -5757,6 +5762,7 @@ function executeRecordPayment(args: any, actor: any, req: express.Request) {
     description: `Installment Payment Approved via AI - Driver ${drv.company_driver_id || "unassigned"} (Receipt: ${newPayment.receipt_number})`,
     approvedBy: actor.fullName || actor.username || "System AI",
     created_at: new Date().toISOString(),
+    cycleId: newPayment.cycleId || (canonical_for_ledger.cycleId !== "No Active Cycle" ? canonical_for_ledger.cycleId : null),
   });
 
   // Update remaining vehicle balance on driver profile robustly using centralized financial logic
@@ -5853,6 +5859,18 @@ function executeRecordExpense(args: any, actor: any, req: express.Request) {
 
   if (!db.financial_records) db.financial_records = [];
   db.financial_records.unshift(newRecord);
+
+  // Unified Ledger Entry
+  if (drv) {
+    recordDriverLedgerEntry(db, drv.id, {
+      type: 'debit',
+      category: 'expense',
+      amount: newRecord.amount,
+      description: `Expense posted via AI: ${description}`,
+      cycleId: targetCycle ? targetCycle.id : undefined,
+      referenceId: newRecord.id
+    });
+  }
 
   // If maintenance category and associated driver, log to driver accident/maintenance history
   if (drv && category === "maintenance") {
@@ -6858,6 +6876,7 @@ app.post("/api/shareholders", authenticateSession, (req, res) => {
     db.shareholders.push(newShareholder);
 
     // Register finance record for corporate transparency
+    const canonical = getCanonicalCycleStatus(db);
     db.financial_records.unshift({
       id: generateUUID(),
       type: "revenue",
@@ -6865,6 +6884,7 @@ app.post("/api/shareholders", authenticateSession, (req, res) => {
       amount: investmentAmount,
       date: investmentDate,
       description: `Corporate equity capital investment - Shareholder ${fullName}`,
+      cycleId: canonical.cycleId !== "No Active Cycle" ? canonical.cycleId : null,
     });
 
     // Notify shareholder of capital contribution
@@ -7097,6 +7117,7 @@ app.post("/api/finance", authenticateSession, (req, res) => {
 
     const db = loadDB();
     const parsedAmount = parseFloat(amount) || 0;
+    const canonical = getCanonicalCycleStatus(db);
     const newRecord = {
       id: generateUUID(),
       type,
@@ -7108,23 +7129,10 @@ app.post("/api/finance", authenticateSession, (req, res) => {
       driver_id: driverId || null,
       approvedBy: actor.fullName,
       created_at: new Date().toISOString(),
+      cycleId: canonical.cycleId !== "No Active Cycle" ? canonical.cycleId : null,
     };
 
     db.financial_records.unshift(newRecord);
-
-    // Update company wallet balance
-    db.company_settings = db.company_settings || {};
-    if (type === "revenue" || type === "deposit") {
-      db.company_settings.wallet_balance =
-        (parseFloat(db.company_settings.wallet_balance) || 0) +
-        (Number(parsedAmount) || 0);
-    } else if (type === "expense" || type === "withdrawal") {
-      db.company_settings.wallet_balance = Math.max(
-        0,
-        (parseFloat(db.company_settings.wallet_balance) || 0) -
-          (Number(parsedAmount) || 0),
-      );
-    }
 
     if (type === "expense" && driverId) {
       const drv = db.drivers.find((d) => d.id === driverId);
@@ -7140,7 +7148,7 @@ app.post("/api/finance", authenticateSession, (req, res) => {
         const currentRemBalance =
           drv.remaining_vehicle_balance !== undefined
             ? drv.remaining_vehicle_balance
-            : drv.agreed_amount || 180000;
+            : drv.vehiclePurchasePrice || 15000000;
         drv.remaining_vehicle_balance =
           parseFloat(currentRemBalance) + parsedAmount;
       }
@@ -7391,6 +7399,7 @@ app.post("/api/trips", authenticateSession, (req, res) => {
     vehicle.status = "assigned";
     driver.status = "on-trip";
 
+    const canonical = getCanonicalCycleStatus(db);
     // Post estimated revenue to financial ledger pending delivery
     db.financial_records.unshift({
       id: generateUUID(),
@@ -7401,6 +7410,7 @@ app.post("/api/trips", authenticateSession, (req, res) => {
       description: `Dispatched Trip Revenue - Manifest ${newTrip.manifest_number}`,
       approvedBy: actor.fullName,
       created_at: new Date().toISOString(),
+      cycleId: canonical.cycleId !== "No Active Cycle" ? canonical.cycleId : null,
     });
 
     db.trip_manifests.push(newTrip);
@@ -7580,105 +7590,15 @@ export function lookupContractTerms(vehicle: any) {
 }
 
 export function getDriverFinancials(driver: any, db: any) {
-  const rawPrice = driver.vehicle_purchase_price ?? driver.vehiclePurchasePrice;
-  let vehiclePurchasePrice = 15000000;
-  if (
-    rawPrice !== undefined &&
-    rawPrice !== null &&
-    !isNaN(parseFloat(rawPrice)) &&
-    parseFloat(rawPrice) > 0
-  ) {
-    vehiclePurchasePrice = parseFloat(rawPrice);
-  }
+  return FinancialCalculator.getDriverFinancials(driver, db);
+}
 
-  const rawAgreed = driver.agreed_amount ?? driver.agreedAmount;
-  const agreedAmount =
-    rawAgreed !== undefined &&
-    rawAgreed !== null &&
-    !isNaN(parseFloat(rawAgreed))
-      ? parseFloat(rawAgreed)
-      : 180000;
-
-  const validIds = new Set(
-    [
-      driver.id,
-      driver.user_id,
-      driver.userId,
-      driver.company_driver_id,
-      driver.companyDriverId,
-      driver.fullName,
-      driver.full_name,
-    ].filter(Boolean),
-  );
-
-  const isApprovedPayment = (p: any) => {
-    if (!p) return false;
-    const matchesDriver =
-      validIds.has(p.driver_id) ||
-      validIds.has(p.driverId) ||
-      validIds.has(p.driver_name) ||
-      validIds.has(p.driverName);
-    if (!matchesDriver) return false;
-    const st = (p.status || "").toLowerCase();
-    return st === "approved" || st === "completed" || st === "paid";
-  };
-
-  const approvedPaymentsInERP = (db.driver_payments || []).filter(
-    isApprovedPayment,
-  );
-  const totalErpPaid = approvedPaymentsInERP.reduce(
-    (sum: number, p: any) => sum + (parseFloat(p.amount) || 0),
-    0,
-  );
-  const countErpPaid = approvedPaymentsInERP.length;
-
-  // Sum up all expenses linked to this driver in the central ledger
-  const linkedExpenses = (db.financial_records || []).filter((r: any) => {
-    if (!r || r.type !== "expense") return false;
-    return validIds.has(r.driver_id) || validIds.has(r.driverId);
-  });
-  const totalLedgerExpenses = linkedExpenses.reduce(
-    (sum: number, r: any) => sum + (parseFloat(r.amount) || 0),
-    0,
-  );
-
-  // Also check driver's own expenseHistory array as a fallback
-  const totalHistoryExpenses = (driver.expenseHistory || []).reduce(
-    (sum: number, r: any) => sum + (parseFloat(r.amount) || 0),
-    0,
-  );
-
-  const totalExpenses = Math.max(totalLedgerExpenses, totalHistoryExpenses);
-
-  let initialRemaining = vehiclePurchasePrice;
-  let initialPaid = 0;
-
-  if (driver.opening_balance && driver.opening_balance.is_imported) {
-    const openRem = parseFloat(driver.opening_balance.remaining_vehicle_balance ?? driver.opening_balance.remainingVehicleBalance);
-    initialRemaining = !isNaN(openRem) ? openRem : vehiclePurchasePrice;
-    initialPaid = parseFloat(driver.opening_balance.total_paid_to_date ?? driver.opening_balance.totalPaidToDate) || 0;
-  } else {
-    // Correct Mathematical Logic:
-    // If a driver is not imported from a legacy system, their starting point
-    // of ownership is the static vehicle purchase price, with 0 initial payments.
-    // All payments are recorded in real-time in the ERP central ledger.
-    // By using vehiclePurchasePrice instead of recursively referencing the dynamic and already reduced
-    // remaining_vehicle_balance from the database, we eliminate the compounding double-subtraction bug!
-    initialRemaining = vehiclePurchasePrice;
-    initialPaid = 0;
-  }
-
-  const totalAmountPaid = initialPaid + totalErpPaid;
-  const remainingVehicleBalance = Math.max(0, initialRemaining - totalErpPaid + totalExpenses);
-
-  return {
-    vehiclePurchasePrice,
-    totalAmountPaid,
-    remainingVehicleBalance,
-    totalPaymentsMade: countErpPaid,
-    agreedAmount,
-    openingBalance: driver.opening_balance || null,
-  };
+export function calculateInstallmentsForDriver(
+  driver: any,
+  db: any,
+  activeCycle: any,
+) {
+  return FinancialCalculator.calculateInstallmentsForDriver(driver, db, activeCycle);
 }
 
 // GET dynamic driver installments list
@@ -8005,6 +7925,15 @@ app.post(
       }
       db.company_operations_state.status = "Paused";
 
+      // Freeze all active drivers' deadlines as per corporate pause policy
+      db.drivers.forEach((drv: any) => {
+        if (drv.status === "active" || drv.status === "approved") {
+          // We set the frozen flags to stop the overdue clock
+          drv.overdue_frozen = true;
+          drv.overdue_frozen_since = activeCycle.pausedAt;
+        }
+      });
+
       db.notifications.unshift({
         id: generateUUID(),
         target_roles: ["admin", "director"],
@@ -8188,6 +8117,23 @@ app.post("/api/director/cycles/resume", authenticateSession, (req, res) => {
     pausedCycle.resumedAt = now.toISOString();
     pausedCycle.resumedBy = actor.fullName;
     pausedCycle.pausedAt = null; // IMPORTANT: Clear pausedAt to stop the clock on the pause
+
+    // Unfreeze all active drivers and extend their static due dates if they exist
+    const pauseDurationMs = pauseDurationSeconds * 1000;
+    db.drivers.forEach((drv: any) => {
+      if (drv.overdue_frozen) {
+        if (drv.next_installment_due_date) {
+          try {
+            const currentDue = new Date(drv.next_installment_due_date).getTime();
+            drv.next_installment_due_date = new Date(currentDue + pauseDurationMs).toISOString();
+          } catch (e) {
+            // fallback if date was invalid
+          }
+        }
+        drv.overdue_frozen = false;
+        drv.overdue_frozen_since = null;
+      }
+    });
 
     if (pausedCycle.pauseHistory && pausedCycle.pauseHistory.length > 0) {
       pausedCycle.pauseHistory[0].resumedBy = actor.fullName;
@@ -8500,6 +8446,7 @@ app.post("/api/director/cycles/end", authenticateSession, (req, res) => {
         description: `Disbursed Shareholders Pool (${distributionPercentage}%) for Cycle ${closedCycle.id}`,
         approvedBy: actor.fullName,
         created_at: new Date().toISOString(),
+        cycleId: closedCycle.id,
       });
     }
 
@@ -8516,18 +8463,35 @@ app.post("/api/director/cycles/end", authenticateSession, (req, res) => {
       created_at: new Date().toISOString(),
     });
 
-    // Notify Shareholders
+    // Notify Shareholders & Record Cycle Earnings & Update Cumulative earnings_to_date
+    db.shareholder_cycle_earnings = db.shareholder_cycle_earnings || [];
     shareholderSummary.forEach((sh) => {
-      if (sh.earnings > 0) {
-        const targetSh = db.shareholders.find((s) => s.id === sh.id);
-        if (targetSh && targetSh.user_id) {
+      const targetSh = db.shareholders.find((s: any) => s.id === sh.id);
+      if (targetSh) {
+        const earned = Number(sh.earnings) || 0;
+        
+        // Update cumulative earnings_to_date on the shareholder (immutably preserved)
+        targetSh.earnings_to_date = (Number(targetSh.earnings_to_date) || 0) + earned;
+        targetSh.updated_at = new Date().toISOString();
+
+        // Save individual locked rate cycle earnings record
+        db.shareholder_cycle_earnings.push({
+          shareholderId: targetSh.id,
+          cycleId: closedCycle.id,
+          rateApplied: Number(sh.investmentWeight) || 0,
+          amountEarned: earned,
+          dateRecorded: new Date().toISOString(),
+        });
+
+        // Send Notification
+        if (earned > 0 && targetSh.user_id) {
           db.notifications.unshift({
             id: generateUUID(),
             user_id: targetSh.user_id,
             title_en: "Cycle Dividend Allocated",
             title_ha: "An Ware Ribar Jari",
-            message_en: `Cycle ${closedCycle.id} has ended. Your dividend allocation is ₦${sh.earnings.toLocaleString()}.`,
-            message_ha: `Zagayen ${closedCycle.id} ya kare. Ribar da kake da ita shine ₦${sh.earnings.toLocaleString()}.`,
+            message_en: `Cycle ${closedCycle.id} has ended. Your dividend allocation is ₦${earned.toLocaleString()}.`,
+            message_ha: `Zagayen ${closedCycle.id} ya kare. Ribar da kake da ita shine ₦${earned.toLocaleString()}.`,
             type: "success",
             read_status: 0,
             created_at: new Date().toISOString(),
@@ -9255,7 +9219,8 @@ app.post("/api/operations/config-wallet", authenticateSession, (req, res) => {
 
     const db = loadDB();
     db.company_settings = db.company_settings || {};
-    db.company_settings.wallet_balance = parseFloat(balance);
+    db.company_settings.wallet_initial_amount = parseFloat(balance);
+    db.company_settings.wallet_balance = db.company_settings.wallet_initial_amount; // Temp assign, will be recalculated in saveDB
     db.company_settings.wallet_initialized = true;
 
     saveDB(db);
@@ -9993,10 +9958,10 @@ app.post("/api/payments", authenticateSession, (req, res) => {
         return res.status(404).json({ error: "Driver profile not found." });
       }
       driverId = drvRecord.id;
-    } else if (actor.role !== "admin" && actor.role !== "director") {
+    } else if (actor.role !== "admin" && actor.role !== "director" && actor.role !== "manager") {
       return res
         .status(403)
-        .json({ error: "Access Denied: Drivers, Admins, or Directors only." });
+        .json({ error: "Access Denied: Drivers, Admins, Directors, or Managers only." });
     }
 
     const {
@@ -10024,7 +9989,9 @@ app.post("/api/payments", authenticateSession, (req, res) => {
       referenceNumber ||
       `RCP-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`;
 
-    const newPayment = {
+    const canonical = getCanonicalCycleStatus(db);
+    const isAdmin = actor.role === 'admin' || actor.role === 'director';
+    const newPayment: any = {
       id: `PAY-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
       driver_id: driverId,
       amount: parseFloat(amount),
@@ -10034,26 +10001,78 @@ app.post("/api/payments", authenticateSession, (req, res) => {
       receipt_number: rNumber,
       payment_method: paymentMethod || "bank_transfer",
       reference_number: referenceNumber || rNumber,
-      status: isDriverSelf ? "submitted" : "pending", // 'submitted' if driver, 'pending' if admin
+      status: isAdmin ? "approved" : (isDriverSelf ? "submitted" : "pending"),
+      approved_by: isAdmin ? actor.id : null,
+      approved_at: isAdmin ? new Date().toISOString() : null,
+      entered_by: actor.id,
+      entered_at: new Date().toISOString(),
       recorded_by: actor.fullName,
       remarks: remarks || "",
       created_at: new Date().toISOString(),
+      cycleId: canonical.cycleId !== "No Active Cycle" ? canonical.cycleId : null,
     };
 
     db.driver_payments.unshift(newPayment);
 
-    // Register active notification for admins/directors
-    db.notifications.unshift({
-      id: generateUUID(),
-      target_roles: ["admin", "director"],
-      title_en: "New Driver Payment Submitted",
-      title_ha: "An Shigar da Sabon Biyan Kudi",
-      message_en: `Driver payment of ₦${parseFloat(amount).toLocaleString()} submitted for ${drv.company_driver_id || "unassigned"} (Installment ${installmentNumber}). Review required.`,
-      message_ha: `An shigar da biyan kudi na ₦${parseFloat(amount).toLocaleString()} na direba ${drv.company_driver_id || "unassigned"} (Kashi ${installmentNumber}). Tana jiran amincewa.`,
-      type: "warning",
-      read_status: 0,
-      created_at: new Date().toISOString(),
-    });
+    // If approved, apply immediately
+    if (isAdmin) {
+      const canonical_for_ledger = getCanonicalCycleStatus(db);
+      // Automatically post to financial ledger as corporate revenue
+      db.financial_records.unshift({
+        id: generateUUID(),
+        type: "revenue",
+        category: "freight",
+        amount: parseFloat(amount),
+        date: newPayment.date,
+        description: `Installment Payment Auto-Approved - Driver ${drv?.company_driver_id || "unassigned"} (Receipt: ${newPayment.receipt_number})`,
+        approvedBy: actor.fullName,
+        created_at: new Date().toISOString(),
+        cycleId: newPayment.cycleId || (canonical_for_ledger.cycleId !== "No Active Cycle" ? canonical_for_ledger.cycleId : null),
+      });
+
+      // Unified Ledger Entry
+      recordDriverLedgerEntry(db, driverId, {
+        type: 'credit',
+        category: 'remittance',
+        amount: parseFloat(amount),
+        description: `Installment Remittance Approval (Receipt: ${newPayment.receipt_number})`,
+        cycleId: newPayment.cycleId || null,
+        referenceId: newPayment.id
+      });
+
+      // Apply payment to driver balance immediately
+      drv.total_amount_paid = (parseFloat(drv.total_amount_paid) || 0) + parseFloat(amount);
+      drv.remaining_vehicle_balance = (parseFloat(drv.remaining_vehicle_balance) || 0) - parseFloat(amount);
+      
+      // Update camelCase counterparts if they exist for redundancy/legacy support
+      drv.totalAmountPaid = drv.total_amount_paid;
+      drv.remainingVehicleBalance = drv.remaining_vehicle_balance;
+
+      db.notifications.unshift({
+        id: generateUUID(),
+        user_id: drv.user_id,
+        title_en: "Payment Auto-Approved",
+        title_ha: "An Amince da Biyan Kudi",
+        message_en: `Your payment of ₦${parseFloat(amount).toLocaleString()} has been auto-approved and applied to your balance.`,
+        message_ha: `An amince da biyan kudin ku na ₦${parseFloat(amount).toLocaleString()} kuma an rage daga sauran kudin ku.`,
+        type: "success",
+        read_status: 0,
+        created_at: new Date().toISOString(),
+      });
+    } else {
+      // Register active notification for admins/directors
+      db.notifications.unshift({
+        id: generateUUID(),
+        target_roles: ["admin", "director"],
+        title_en: "New Driver Payment Submitted",
+        title_ha: "An Shigar da Sabon Biyan Kudi",
+        message_en: `Driver payment of ₦${parseFloat(amount).toLocaleString()} submitted for ${drv.company_driver_id || "unassigned"} (Installment ${installmentNumber}). Review required.`,
+        message_ha: `An shigar da biyan kudi na ₦${parseFloat(amount).toLocaleString()} na direba ${drv.company_driver_id || "unassigned"} (Kashi ${installmentNumber}). Tana jiran amincewa.`,
+        type: "warning",
+        read_status: 0,
+        created_at: new Date().toISOString(),
+      });
+    }
 
     saveDB(db);
 
@@ -10122,21 +10141,25 @@ app.put("/api/payments/:id/status", authenticateSession, (req, res) => {
         created_at: new Date().toISOString(),
       });
 
+      // Unified Ledger Entry
+      recordDriverLedgerEntry(db, payment.driver_id, {
+        type: 'credit',
+        category: 'remittance',
+        amount: parseFloat(payment.amount),
+        description: `Installment Remittance (Receipt: ${payment.receipt_number})`,
+        cycleId: payment.cycleId || null,
+        referenceId: payment.id
+      });
+
       // Update remaining vehicle balance if applicable using centralized financial logic
       if (drv) {
-        const fin = getDriverFinancials(drv, db);
+        const fin = FinancialCalculator.getDriverFinancials(drv, db);
         drv.vehicle_purchase_price = fin.vehiclePurchasePrice;
         drv.vehiclePurchasePrice = fin.vehiclePurchasePrice;
         drv.total_amount_paid = fin.totalAmountPaid;
         drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
         drv.remainingVehicleBalance = fin.remainingVehicleBalance;
       }
-
-      // Update company wallet balance
-      db.company_settings = db.company_settings || {};
-      db.company_settings.wallet_balance =
-        (parseFloat(db.company_settings.wallet_balance) || 0) +
-        parseFloat(payment.amount);
     } else if (status !== "approved" && oldStatus === "approved") {
       // Revert remaining balance if applicable using centralized financial logic
       if (drv) {
@@ -10147,14 +10170,6 @@ app.put("/api/payments/:id/status", authenticateSession, (req, res) => {
         drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
         drv.remainingVehicleBalance = fin.remainingVehicleBalance;
       }
-
-      // Revert company wallet balance
-      db.company_settings = db.company_settings || {};
-      db.company_settings.wallet_balance = Math.max(
-        0,
-        (parseFloat(db.company_settings.wallet_balance) || 0) -
-          parseFloat(payment.amount),
-      );
 
       // Remove the corresponding ledger record
       db.financial_records = (db.financial_records || []).filter(
@@ -10677,13 +10692,23 @@ app.get("/api/shareholders/me", authenticateSession, (req, res) => {
     const currentCycleEarnings =
       distributionPool * (investmentPercentage / 100);
 
-    let totalEarnings = 0;
-    completedCycles.forEach((c) => {
-      if (c.metrics && c.metrics.distributionPool) {
-        totalEarnings +=
-          c.metrics.distributionPool * (investmentPercentage / 100);
-      }
-    });
+    let totalEarnings = Number(shareholder.earnings_to_date) || 0;
+    if (totalEarnings === 0) {
+      // Robust historical lookup fallback for backward compatibility
+      completedCycles.forEach((c) => {
+        if (c.metrics && c.metrics.shareholderSummary) {
+          const shSummary = c.metrics.shareholderSummary.find(
+            (s: any) => s.id === shareholder.id,
+          );
+          if (shSummary) {
+            totalEarnings += Number(shSummary.earnings) || 0;
+          }
+        } else if (c.metrics && c.metrics.distributionPool) {
+          totalEarnings +=
+            c.metrics.distributionPool * (investmentPercentage / 100);
+        }
+      });
+    }
 
     res.json({
       shareholder,
@@ -10698,6 +10723,87 @@ app.get("/api/shareholders/me", authenticateSession, (req, res) => {
         activeCycle,
         completedCycles,
       },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Retrieve Shareholder Balance (Single Source of Truth)
+app.get("/api/shareholders/me/balance", authenticateSession, (req, res) => {
+  try {
+    const actor = (req as any).user;
+    if (actor.role !== "shareholder") {
+      return res.status(403).json({ error: "Access Denied." });
+    }
+
+    const db = loadDB();
+    const shareholder = db.shareholders.find(
+      (s) => s.email.toLowerCase() === actor.email.toLowerCase(),
+    );
+    if (!shareholder) {
+      return res.status(404).json({ error: "Shareholder profile not found." });
+    }
+
+    const totalInvestments = db.shareholders.reduce(
+      (sum, s: any) => sum + (parseFloat(s.investment_amount) || 0),
+      0,
+    );
+    const investmentPercentage =
+      totalInvestments > 0
+        ? (shareholder.investment_amount / totalInvestments) * 100
+        : 0;
+
+    const completedCycles = db.cycles.filter((c) => c.status === "completed");
+
+    // Use current session's financial records for live "current cycle" estimation
+    const totalRevenues = (db.financial_records || [])
+      .filter((f) => f.type === "revenue")
+      .reduce((sum, r: any) => sum + (parseFloat(r.amount) || 0), 0);
+
+    const totalExpenses = (db.financial_records || [])
+      .filter((f) => f.type === "expense")
+      .reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0);
+
+    const netGeneratedAmount = totalRevenues - totalExpenses;
+    const distributionPercentage =
+      db.shareholder_settings?.distributionPercentage || 2;
+    const distributionPool =
+      netGeneratedAmount > 0
+        ? netGeneratedAmount * (distributionPercentage / 100)
+        : 0;
+    
+    // totalEarned = distributed earnings + current estimated earnings
+    let totalEarned = Number(shareholder.earnings_to_date) || 0;
+    
+    // Fallback for older records where earnings_to_date might not have been tracked correctly
+    if (totalEarned === 0) {
+      completedCycles.forEach((c) => {
+        if (c.metrics && c.metrics.shareholderSummary) {
+          const shSummary = c.metrics.shareholderSummary.find(
+            (s: any) => s.id === shareholder.id,
+          );
+          if (shSummary) {
+            totalEarned += Number(shSummary.earnings) || 0;
+          }
+        } else if (c.metrics && c.metrics.distributionPool) {
+          totalEarned += c.metrics.distributionPool * (investmentPercentage / 100);
+        }
+      });
+    }
+
+    const currentCycleEarnings = distributionPool * (investmentPercentage / 100);
+    const combinedTotalEarned = totalEarned + currentCycleEarnings;
+    const totalWithdrawnCash = Number(shareholder.total_withdrawn_cash) || 0;
+    const totalReinvested = Number(shareholder.total_reinvested) || 0;
+    const availableBalance = Math.max(0, combinedTotalEarned - totalWithdrawnCash - totalReinvested);
+
+    res.json({
+      availableBalance,
+      totalEarned: combinedTotalEarned,
+      totalWithdrawn: totalWithdrawnCash, // Map cash to legacy field for UI compatibility
+      totalWithdrawnCash,
+      totalReinvested
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -10736,14 +10842,6 @@ app.post("/api/expenses", authenticateSession, (req, res) => {
 
     db.financial_records.unshift(expenseRecord);
 
-    // Update company wallet balance
-    db.company_settings = db.company_settings || {};
-    db.company_settings.wallet_balance = Math.max(
-      0,
-      (parseFloat(db.company_settings.wallet_balance) || 0) -
-        parseFloat(amount),
-    );
-
     // If driver linked, update their expense history and automatically add to their remaining balance
     if (driverId) {
       const drv = db.drivers.find((d) => d.id === driverId);
@@ -10757,12 +10855,19 @@ app.post("/api/expenses", authenticateSession, (req, res) => {
           date,
           receipt_url: receiptUrl || "",
         });
-        const currentRemBalance =
-          drv.remaining_vehicle_balance !== undefined
-            ? drv.remaining_vehicle_balance
-            : drv.agreed_amount || 180000;
-        drv.remaining_vehicle_balance =
-          parseFloat(currentRemBalance) + parseFloat(amount);
+
+        // Unified Ledger Entry
+        recordDriverLedgerEntry(db, driverId, {
+          type: 'debit',
+          category: 'expense',
+          amount: parseFloat(amount),
+          description: `Direct Expense: ${description}`,
+          referenceId: expenseRecord.id
+        });
+
+        const fin = FinancialCalculator.getDriverFinancials(drv, db);
+        drv.remaining_vehicle_balance = fin.remainingVehicleBalance;
+        drv.remainingVehicleBalance = fin.remainingVehicleBalance;
       }
     }
 
@@ -10932,13 +11037,42 @@ app.post("/api/finance/withdraw", authenticateSession, (req, res) => {
       totalInvestmentsSum > 0
         ? ((parseFloat(sh.investment_amount) || 0) / totalInvestmentsSum) * 100
         : 0;
-    const currentEarnings = distributionPool * (pctStake / 100);
-    const totalWithdrawn = sh.total_withdrawn || 0;
-    const availableWithdrawal = currentEarnings - totalWithdrawn;
+
+    let currentEarnings = Number(sh.earnings_to_date) || 0;
+    if (currentEarnings === 0) {
+      // Robust historical lookup fallback for backward compatibility
+      const completedCycles = (db.cycles || []).filter((c: any) => c.status === "completed");
+      completedCycles.forEach((c: any) => {
+        if (c.metrics && c.metrics.shareholderSummary) {
+          const shSummary = c.metrics.shareholderSummary.find(
+            (s: any) => s.id === sh.id,
+          );
+          if (shSummary) {
+            currentEarnings += Number(shSummary.earnings) || 0;
+          }
+        } else if (c.metrics && c.metrics.distributionPool) {
+          currentEarnings += c.metrics.distributionPool * (pctStake / 100);
+        }
+      });
+    }
+
+    const totalWithdrawnCash = sh.total_withdrawn_cash || 0;
+    const totalReinvested = sh.total_reinvested || 0;
+    const availableWithdrawal = currentEarnings - totalWithdrawnCash - totalReinvested;
 
     const withdrawAmt = parseFloat(amount);
 
-    const walletBalance = totalRev - totalExp;
+    if (withdrawAmt > availableWithdrawal) {
+      return res
+        .status(400)
+        .json({
+          error: `Insufficient available dividend balance to execute withdrawal. Requested: ₦${withdrawAmt.toLocaleString()}, Available: ₦${availableWithdrawal.toLocaleString()}`,
+        });
+    }
+
+    const walletBalance = db.company_settings?.wallet_balance !== undefined
+      ? parseFloat(db.company_settings.wallet_balance)
+      : (totalRev - totalExp);
     if (walletBalance < withdrawAmt) {
       return res
         .status(400)
@@ -10947,7 +11081,9 @@ app.post("/api/finance/withdraw", authenticateSession, (req, res) => {
         });
     }
 
-    sh.total_withdrawn = Number(totalWithdrawn) + Number(withdrawAmt);
+    sh.total_withdrawn_cash = Number(totalWithdrawnCash) + Number(withdrawAmt);
+    // Maintain legacy field for backward compatibility
+    sh.total_withdrawn = sh.total_withdrawn_cash; 
     sh.updated_at = new Date().toISOString();
 
     db.financial_records.unshift({
@@ -10960,14 +11096,6 @@ app.post("/api/finance/withdraw", authenticateSession, (req, res) => {
       approvedBy: actor.fullName || actor.email || "Shareholder",
       created_at: new Date().toISOString(),
     });
-
-    // Update company wallet balance
-    db.company_settings = db.company_settings || {};
-    db.company_settings.wallet_balance = Math.max(
-      0,
-      (parseFloat(db.company_settings.wallet_balance) || 0) -
-        (Number(withdrawAmt) || 0),
-    );
 
     db.notifications.unshift({
       id: generateUUID(),
@@ -11065,16 +11193,42 @@ app.post("/api/finance/reinvest", authenticateSession, (req, res) => {
       totalInvestmentsSum > 0
         ? ((parseFloat(sh.investment_amount) || 0) / totalInvestmentsSum) * 100
         : 0;
-    const currentEarnings = distributionPool * (pctStake / 100);
-    const totalWithdrawn = sh.total_withdrawn || 0;
-    const availableWithdrawal = currentEarnings - totalWithdrawn;
+
+    let currentEarnings = Number(sh.earnings_to_date) || 0;
+    if (currentEarnings === 0) {
+      // Robust historical lookup fallback for backward compatibility
+      const completedCycles = (db.cycles || []).filter((c: any) => c.status === "completed");
+      completedCycles.forEach((c: any) => {
+        if (c.metrics && c.metrics.shareholderSummary) {
+          const shSummary = c.metrics.shareholderSummary.find(
+            (s: any) => s.id === sh.id,
+          );
+          if (shSummary) {
+            currentEarnings += Number(shSummary.earnings) || 0;
+          }
+        } else if (c.metrics && c.metrics.distributionPool) {
+          currentEarnings += c.metrics.distributionPool * (pctStake / 100);
+        }
+      });
+    }
+
+    const totalWithdrawnCash = sh.total_withdrawn_cash || 0;
+    const totalReinvested = sh.total_reinvested || 0;
+    const availableWithdrawal = currentEarnings - totalWithdrawnCash - totalReinvested;
 
     const reinvestAmt = parseFloat(amount);
+
+    if (reinvestAmt > availableWithdrawal) {
+      return res
+        .status(400)
+        .json({
+          error: `Insufficient available dividend balance to execute reinvestment. Requested: ₦${reinvestAmt.toLocaleString()}, Available: ₦${availableWithdrawal.toLocaleString()}`,
+        });
+    }
 
     sh.investment_amount =
       (parseFloat(sh.investment_amount) || 0) + reinvestAmt;
     sh.total_reinvested = (sh.total_reinvested || 0) + reinvestAmt;
-    sh.total_withdrawn = Number(totalWithdrawn) + Number(reinvestAmt);
     sh.updated_at = new Date().toISOString();
 
     db.financial_records.unshift({
@@ -11175,6 +11329,14 @@ app.post("/api/finance/cap-out", authenticateSession, (req, res) => {
     }
 
     const currentInvestment = parseFloat(sh.investment_amount) || 0;
+
+    if (capOutAmt > currentInvestment) {
+      return res
+        .status(400)
+        .json({
+          error: `Insufficient capital stock to execute redemption. Requested: ₦${capOutAmt.toLocaleString()}, Current Capital: ₦${currentInvestment.toLocaleString()}`,
+        });
+    }
 
     sh.investment_amount = currentInvestment - capOutAmt;
     sh.total_cashed_out = (parseFloat(sh.total_cashed_out) || 0) + capOutAmt;
@@ -11316,7 +11478,9 @@ app.post("/api/finance/payroll", authenticateSession, (req, res) => {
     const totalExp = (db.financial_records || [])
       .filter((f: any) => f.type === "expense" || f.type === "withdrawal")
       .reduce((sum: number, f: any) => sum + (parseFloat(f.amount) || 0), 0);
-    const walletBalance = totalRev - totalExp;
+    const walletBalance = db.company_settings?.wallet_balance !== undefined
+      ? parseFloat(db.company_settings.wallet_balance)
+      : (totalRev - totalExp);
 
     if (walletBalance < totalPayroll) {
       return res

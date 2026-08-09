@@ -71,6 +71,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
   const [isSubmittingPayment, setIsSubmittingPayment] = useState<boolean>(false);
   const [paymentSuccessReceipt, setPaymentSuccessReceipt] = useState<any | null>(null);
   const [isLoadingInstallments, setIsLoadingInstallments] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Telematics & Shift States
   const [telematicsData, setTelematicsData] = useState<any | null>(null);
@@ -402,6 +403,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     setPayNowStep(1);
     setPaymentSuccessReceipt(null);
     setReferenceNumber(`TRX-${Date.now().toString().slice(-6)}`);
+    setApiError(null);
     try {
       setIsLoadingInstallments(true);
       let currentDriver = driverData;
@@ -431,15 +433,25 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
         if (list.length === 0) {
           const agreed = currentDriver.agreed_amount ?? currentDriver.agreedAmount ?? 0;
           const perInst = Math.round(agreed / 6);
-          list = [1, 2, 3, 4, 5, 6].map(k => ({
-            installmentNumber: k,
-            dueAmount: perInst,
-            paidAmount: 0,
-            remainingAmount: perInst,
-            startDate: new Date().toISOString().split('T')[0],
-            endDate: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().split('T')[0],
-            status: 'Pending'
-          }));
+          const today = new Date();
+          list = [1, 2, 3, 4, 5, 6].map(k => {
+            const startOffset = (k - 1) * 5;
+            const endOffset = k * 5;
+            const startDate = new Date(today);
+            startDate.setDate(today.getDate() + startOffset);
+            const endDate = new Date(today);
+            endDate.setDate(today.getDate() + endOffset);
+            
+            return {
+              installmentNumber: k,
+              dueAmount: perInst,
+              paidAmount: 0,
+              remainingAmount: perInst,
+              startDate: startDate.toISOString().split('T')[0],
+              endDate: endDate.toISOString().split('T')[0],
+              status: 'Pending'
+            };
+          });
         }
         setInstallments(list);
         if (list.length > 0) {
@@ -452,8 +464,9 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
           setPaymentAmount(realTimeInst.remainingAmount || (currentAgreed > 0 ? Math.round(currentAgreed / 6) : 0));
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load cycles or installments:", err);
+      setApiError(err.message || "Network error. Could not sync installments.");
     } finally {
       setIsLoadingInstallments(false);
     }
@@ -1544,7 +1557,24 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                       <span className="text-xs text-text-muted italic">6 Installments per Cycle</span>
                     </div>
 
-                    {isLoadingInstallments ? (
+                    {apiError ? (
+                      <div className="py-8 px-4 text-center bg-red-500/5 border border-red-500/20 rounded-xl space-y-3">
+                        <AlertTriangle className="h-8 w-8 text-red-500 mx-auto" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-bold text-red-500">Failed to load installments</p>
+                          <p className="text-[10px] text-text-muted max-w-[200px] mx-auto leading-relaxed">
+                            {apiError}
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={() => openPayNowModal()} 
+                          className="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg text-xs flex items-center justify-center gap-2"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Retry Sync
+                        </Button>
+                      </div>
+                    ) : isLoadingInstallments ? (
                       <div className="py-12 text-center text-xs text-text-muted animate-pulse">
                         Querying installment schedules for your rig...
                       </div>

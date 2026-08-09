@@ -73,17 +73,44 @@ export const AdminKPIs: React.FC<AdminKPIsProps> = ({
   const totalVehicles = vehicles.length;
   
   const revenueTotal = finance
-    .filter(f => f.type === 'revenue')
+    .filter(f => {
+      if (f.type !== 'revenue') return false;
+      if (!activeCycle) return true;
+      if (f.cycleId && activeCycle.id) return f.cycleId === activeCycle.id;
+      
+      const fDate = new Date(f.date);
+      const cStart = new Date(activeCycle.startDate);
+      const cEnd = new Date(activeCycle.endDate);
+      return fDate >= cStart && fDate < cEnd;
+    })
     .reduce((sum, r: any) => sum + (parseFloat(r.amount) || 0), 0);
     
   const expenseTotal = finance
-    .filter(f => f.type === 'expense')
+    .filter(f => {
+      if (f.type !== 'expense') return false;
+      if (!activeCycle) return true;
+      if (f.cycleId && activeCycle.id) return f.cycleId === activeCycle.id;
+      
+      const fDate = new Date(f.date);
+      const cStart = new Date(activeCycle.startDate);
+      const cEnd = new Date(activeCycle.endDate);
+      return fDate >= cStart && fDate < cEnd;
+    })
     .reduce((sum, e: any) => sum + (parseFloat(e.amount) || 0), 0);
     
   const netEarnings = revenueTotal - expenseTotal;
   
   const approvedPayments = payments
-    .filter(p => p.status === 'approved')
+    .filter(p => {
+      if (p.status !== 'approved') return false;
+      if (!activeCycle) return true;
+      if (p.cycleId && activeCycle.id) return p.cycleId === activeCycle.id;
+      
+      const pDate = new Date(p.date);
+      const cStart = new Date(activeCycle.startDate);
+      const cEnd = new Date(activeCycle.endDate);
+      return pDate >= cStart && pDate < cEnd;
+    })
     .reduce((sum, p: any) => sum + (parseFloat(p.amount) || 0), 0);
 
   // Shareholder Distribution cash pool (2% setting from db)

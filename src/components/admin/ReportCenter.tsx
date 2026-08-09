@@ -471,31 +471,65 @@ export const ReportCenter: React.FC<ReportCenterProps> = ({
   
   const filteredFinance = finance.filter(f => {
     if (!f || !f.date) return false;
-    const fTime = parseDate(f.date.slice(0, 10));
-    const start = parseDate(dateFrom);
-    const end = parseDate(dateTo);
-    
-    // Date Range Match
-    const matchesDate = fTime >= start && fTime <= end;
+
+    // Use cycleId if available for precision
+    if (activeCycle && f.cycleId) {
+      if (f.cycleId !== activeCycle.id) return false;
+    } else {
+      const fDate = new Date(f.date);
+      const start = new Date(dateFrom);
+      // Use dateTo but handle it exclusively if it matches activeCycle.endDate
+      const end = new Date(dateTo);
+      if (dateTo === activeCycle?.endDate?.split('T')[0]) {
+        // If it's the cycle end, use the full timestamp
+        const fullEnd = new Date(activeCycle.endDate);
+        if (fDate >= start && fDate < fullEnd) {
+          // OK
+        } else {
+          return false;
+        }
+      } else {
+        // General date range (inclusive end day for manual filters)
+        end.setHours(23, 59, 59, 999);
+        if (fDate < start || fDate > end) return false;
+      }
+    }
     
     // Category Match
     const matchesCategory = filterExpenseCategory === 'all' || 
                             (f.type === 'expense' && f.category === filterExpenseCategory);
                             
-    return matchesDate && matchesCategory;
+    return matchesCategory;
   });
 
   const filteredPayments = payments.filter(p => {
     if (!p || !p.date) return false;
-    const pTime = parseDate(p.date.slice(0, 10));
-    const start = parseDate(dateFrom);
-    const end = parseDate(dateTo);
-    
-    const matchesDate = pTime >= start && pTime <= end;
+
+    // Use cycleId if available for precision
+    if (activeCycle && p.cycleId) {
+      if (p.cycleId !== activeCycle.id) return false;
+    } else {
+      const pDate = new Date(p.date);
+      const start = new Date(dateFrom);
+      const end = new Date(dateTo);
+      
+      if (dateTo === activeCycle?.endDate?.split('T')[0]) {
+        const fullEnd = new Date(activeCycle.endDate);
+        if (pDate >= start && pDate < fullEnd) {
+          // OK
+        } else {
+          return false;
+        }
+      } else {
+        end.setHours(23, 59, 59, 999);
+        if (pDate < start || pDate > end) return false;
+      }
+    }
+
     const matchesDriver = filterDriverId === 'all' || p.driver_id === filterDriverId;
     const matchesStatus = filterPaymentStatus === 'all' || p.status === filterPaymentStatus;
     
-    return matchesDate && matchesDriver && matchesStatus;
+    return matchesDriver && matchesStatus;
   });
 
   // METRICS COMPILER (Aligned with Financial Command Center SSE logic)
