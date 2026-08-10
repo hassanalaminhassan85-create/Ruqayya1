@@ -666,5 +666,9 @@ export const api = {
 
   getDriverTelematics: async (driverId: string) => {
     return api.request(`/api/driver/${driverId}/telematics`);
+  },
+
+  getDriverTrackerList: async () => {
+    return api.request('/api/drivers/tracker');
   }
 };

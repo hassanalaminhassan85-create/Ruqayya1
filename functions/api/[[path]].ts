@@ -4424,6 +4424,88 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         .split("/")
         .filter(Boolean);
 
+      // GET /api/drivers/tracker
+      if (parts.length === 1 && parts[0] === "tracker" && method === "GET") {
+        const list = (db.drivers || []).filter(Boolean).map((d: any) => {
+          const loc = (db.driver_locations || []).find((l: any) => l.driver_id === d.id);
+          const u = db.users.find((userObj: any) => userObj.id === d.user_id);
+          const activeDuty = (db.driver_duty_sessions || []).find((s: any) => s.driver_id === d.id && s.status === 'active');
+          const sim = getMaiduguriSimulatedDataCF(d);
+          const locationName = loc?.place_name || sim.currentLoc?.place_name || "Maiduguri Hub";
+          const status = activeDuty ? "Moving" : (loc?.speed > 0 ? "Moving" : (d.status === 'active' || d.status === 'approved' ? "Idle" : "Offline"));
+          const speed = activeDuty ? (loc?.speed || 48) : (loc?.speed || 0);
+
+          return {
+            id: d.id,
+            fullName: u?.full_name || d.fullName || d.full_name || "Driver",
+            company_driver_id: d.company_driver_id || d.companyDriverId || "RQT-UNKNOWN",
+            avatar: d.passport_photo_url || null,
+            status,
+            speed,
+            location: locationName,
+            latitude: loc?.latitude || sim.currentLoc?.latitude || 11.8311,
+            longitude: loc?.longitude || sim.currentLoc?.longitude || 13.1509,
+            lastUpdate: loc?.updated_at ? new Date(loc.updated_at).toLocaleTimeString() : "Just now",
+            vehicle_plate: d.vehicle_id || "N/A"
+          };
+        });
+        return buildResponse(list);
+      }
+
+      // GET /api/drivers/tracker/:driverId
+      if (parts.length === 2 && parts[0] === "tracker" && method === "GET") {
+        const targetId = parts[1];
+        const d = db.drivers.find((drv: any) => drv.id === targetId || drv.company_driver_id === targetId);
+        if (!d) return buildResponse({ error: "Driver not found" }, 404);
+
+        const u = db.users.find((usr: any) => usr.id === d.user_id);
+        const loc = (db.driver_locations || []).find((l: any) => l.driver_id === d.id);
+        const activeDuty = (db.driver_duty_sessions || []).find((s: any) => s.driver_id === d.id && s.status === 'active');
+        const sim = getMaiduguriSimulatedDataCF(d);
+        const alerts = (db.driver_alerts || []).filter((a: any) => a.driver_id === d.id);
+
+        const currentLat = loc?.latitude || sim.currentLoc?.latitude || 11.8311;
+        const currentLng = loc?.longitude || sim.currentLoc?.longitude || 13.1509;
+        const speed = activeDuty ? (loc?.speed || 58) : (loc?.speed || 0);
+
+        return buildResponse({
+          driver: {
+            id: d.id,
+            fullName: u?.full_name || d.fullName || d.full_name || "Driver",
+            company_driver_id: d.company_driver_id || d.companyDriverId || "RQT-UNKNOWN",
+            vehicle_model: d.vehicle_model || "Tricycle / SinoTruck",
+            avatar: d.passport_photo_url || null,
+            phone: u?.phone || d.phone || "N/A",
+            status: activeDuty ? "Moving" : (speed > 0 ? "Moving" : "Idle")
+          },
+          gps: {
+            latitude: currentLat,
+            longitude: currentLng,
+            location_name: loc?.place_name || sim.currentLoc?.place_name || "Maiduguri Central Depot",
+            heading: loc?.heading || 45,
+            speed
+          },
+          telemetry: {
+            rpm: speed > 0 ? 2100 + (speed * 12) : 800,
+            fuel_level: Math.max(15, 85 - (Math.floor(Date.now() / 60000) % 50)),
+            coolant_temp: speed > 0 ? 88 : 72,
+            battery_voltage: 13.8,
+            oil_pressure: "4.2 bar",
+            brake_wear: "88%"
+          },
+          trip: {
+            distance: 42.5,
+            avg_speed: 48,
+            driving_hours: 4.2,
+            fuel_used: 8.4
+          },
+          alerts: alerts.length > 0 ? alerts : [
+            { severity: 'Normal', message: 'Geofence boundary active - Maiduguri Urban Zone', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+          ],
+          placesVisitedToday: sim.placesVisited || []
+        });
+      }
+
       // GET /api/drivers (List drivers)
       if (parts.length === 0 && method === "GET") {
         const searchParam = url.searchParams.get("search")?.toLowerCase() || "";

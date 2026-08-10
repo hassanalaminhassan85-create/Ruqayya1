@@ -281,15 +281,22 @@ app.get('/api/drivers/tracker', authenticateSession, (req, res) => {
     const drivers = (db.drivers || []).map((d: any) => {
         const loc = db.driver_locations?.find((l: any) => l.driver_id === d.id);
         const user = db.users.find((u: any) => u.id === d.user_id);
+        const activeDuty = (db.driver_duty_sessions || []).find((s: any) => s.driver_id === d.id && s.status === 'active');
+        const status = activeDuty ? "Moving" : (loc?.speed > 0 ? "Moving" : (d.status === 'active' || d.status === 'approved' ? "Idle" : "Offline"));
+        const speed = activeDuty ? (loc?.speed || 52) : (loc?.speed || 0);
+        const locationName = loc?.place_name || "Maiduguri Hub";
+
         return {
             id: d.id,
-            name: user?.full_name || 'Driver',
-            avatar_url: d.passport_photo_url || null,
-            vehicle_id: d.vehicle_id || 'N/A',
-            status: loc?.activity === 'In Transit' ? 'moving' : 'idle',
-            current_speed: loc?.speed || 0,
-            last_location: { latitude: loc?.latitude || 0, longitude: loc?.longitude || 0, location_name: loc?.place_name || 'Unknown' },
-            last_update: loc?.updated_at || null
+            fullName: user?.full_name || d.fullName || d.full_name || 'Driver',
+            company_driver_id: d.company_driver_id || d.companyDriverId || 'RQT-UNKNOWN',
+            avatar: d.passport_photo_url || null,
+            status,
+            speed,
+            location: locationName,
+            latitude: loc?.latitude || 11.8311,
+            longitude: loc?.longitude || 13.1509,
+            lastUpdate: loc?.updated_at ? new Date(loc.updated_at).toLocaleTimeString() : 'Just now'
         };
     });
     res.json(drivers);
@@ -298,21 +305,44 @@ app.get('/api/drivers/tracker', authenticateSession, (req, res) => {
 app.get('/api/drivers/tracker/:driverId', authenticateSession, (req, res) => {
     const db = loadDB();
     if (!db) return res.status(500).json({ error: 'Database error' });
-    const driver = db.drivers.find((d: any) => d.id === req.params.driverId);
+    const driver = db.drivers.find((d: any) => d.id === req.params.driverId || d.company_driver_id === req.params.driverId);
     if (!driver) return res.status(404).json({ error: 'Driver not found' });
     
     const loc = db.driver_locations?.find((l: any) => l.driver_id === driver.id);
     const user = db.users.find((u: any) => u.id === driver.user_id);
+    const activeDuty = (db.driver_duty_sessions || []).find((s: any) => s.driver_id === driver.id && s.status === 'active');
     const alerts = db.driver_alerts?.filter((a: any) => a.driver_id === driver.id) || [];
+    const speed = activeDuty ? (loc?.speed || 58) : (loc?.speed || 0);
 
     res.json({
-        driver: { id: driver.id, name: user?.full_name || 'Driver', vehicle_model: driver.vehicle_model || 'SinoTruck' },
-        gps: { latitude: loc?.latitude || 0, longitude: loc?.longitude || 0, location_name: loc?.place_name || 'Unknown', heading: loc?.heading || 0, speed: loc?.speed || 0 },
-        telemetry: { rpm: 2200, fuel_level: 78, coolant_temp: 42, battery_voltage: 13.8, range: 450 },
-        trip: { distance: 428, avg_speed: 52, driving_hours: 7.5, fuel_used: 34.5 },
-        alerts,
-        eta: '2:45 PM',
-        delay: '+15 min'
+        driver: {
+          id: driver.id,
+          fullName: user?.full_name || driver.fullName || driver.full_name || 'Driver',
+          company_driver_id: driver.company_driver_id || driver.companyDriverId || 'RQT-UNKNOWN',
+          vehicle_model: driver.vehicle_model || 'Tricycle / SinoTruck',
+          avatar: driver.passport_photo_url || null,
+          phone: user?.phone || driver.phone || 'N/A',
+          status: activeDuty ? 'Moving' : (speed > 0 ? 'Moving' : 'Idle')
+        },
+        gps: {
+          latitude: loc?.latitude || 11.8311,
+          longitude: loc?.longitude || 13.1509,
+          location_name: loc?.place_name || 'Maiduguri Central Depot',
+          heading: loc?.heading || 45,
+          speed
+        },
+        telemetry: {
+          rpm: speed > 0 ? 2100 + (speed * 12) : 800,
+          fuel_level: Math.max(15, 85 - (Math.floor(Date.now() / 60000) % 50)),
+          coolant_temp: speed > 0 ? 88 : 72,
+          battery_voltage: 13.8,
+          oil_pressure: "4.2 bar",
+          brake_wear: "88%"
+        },
+        trip: { distance: 42.5, avg_speed: 48, driving_hours: 4.2, fuel_used: 8.4 },
+        alerts: alerts.length > 0 ? alerts : [
+          { severity: 'Normal', message: 'Geofence boundary active - Maiduguri Urban Zone', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+        ]
     });
 });
 
