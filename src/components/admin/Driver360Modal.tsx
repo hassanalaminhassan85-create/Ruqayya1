@@ -256,17 +256,17 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
         };
 
         ws.onclose = () => {
-          console.log('[Admin 360 WS] Closed. Retrying in 5s...');
-          wsConnectTimeout = setTimeout(connectWebSocket, 5000);
+          console.log('[Admin 360 WS] Connection closed. Retrying in 10s...');
+          wsConnectTimeout = setTimeout(connectWebSocket, 10000);
         };
 
         ws.onerror = (err) => {
-          console.error('[Admin 360 WS] Error:', err);
+          console.warn('[Admin 360 WS] Connection warning (using polling fallback):', err);
           ws?.close();
         };
       } catch (err) {
-        console.error('[Admin 360 WS] Failed to connect:', err);
-        wsConnectTimeout = setTimeout(connectWebSocket, 5000);
+        console.warn('[Admin 360 WS] Setup warning (using polling fallback):', err);
+        wsConnectTimeout = setTimeout(connectWebSocket, 10000);
       }
     };
 

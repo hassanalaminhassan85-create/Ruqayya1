@@ -126,6 +126,46 @@ function saveDB(db: any) {
   persistDB(db);
 }
 
+// Maiduguri Geofencing and Landmark Reverse Geocoding Configuration
+const HUB_LAT = 11.8311;
+const HUB_LNG = 13.1509;
+const GEOFENCE_RADIUS_KM = 35.0; // 35km urban operational boundary
+
+const MAIDUGURI_WAYPOINTS = [
+  { name: "Post Office Central Terminal", lat: 11.8311, lng: 13.1509 },
+  { name: "Monday Market Distribution Hub", lat: 11.8365, lng: 13.1486 },
+  { name: "Custom Area Depot", lat: 11.8540, lng: 13.1720 },
+  { name: "Bolori Highway Junction", lat: 11.8520, lng: 13.1310 },
+  { name: "Bulumkutu Bypass", lat: 11.8210, lng: 13.1110 },
+  { name: "Muna Garage Terminal", lat: 11.8480, lng: 13.2080 },
+  { name: "Tashan Bama Corridor", lat: 11.7990, lng: 13.1890 },
+];
+
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371.0; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function resolveNearestWaypoint(lat: number, lng: number): { name: string; distance: number } {
+  let min_dist = Infinity;
+  let best_name = "Maiduguri Metropolitan Zone";
+  for (const wp of MAIDUGURI_WAYPOINTS) {
+    const d = haversineDistance(lat, lng, wp.lat, wp.lng);
+    if (d < min_dist) {
+      min_dist = d;
+      best_name = wp.name;
+    }
+  }
+  return { name: best_name, distance: parseFloat(min_dist.toFixed(2)) };
+}
+
 // WebSocket Server for sub-second, real-time driver tracking
 const wss = new WebSocketServer({ noServer: true });
 
@@ -169,7 +209,21 @@ wss.on("connection", (ws: WebSocket, request: any) => {
         const lng = parseFloat(payload.longitude);
         const targetDriverId = payload.driverId || client.driverId;
 
-        if (!isNaN(lat) && !isNaN(lng) && targetDriverId) {
+        // --- Server-Side Validation ---
+        // 1. Check if latitude and longitude are valid numbers and within realistic range
+        if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+          console.warn(`[NODE WS VALIDATION FAILED] Invalid coordinates: ${payload.latitude}, ${payload.longitude}`);
+          return;
+        }
+
+        // 2. Accuracy sanity filtering (discard noise above 150m accuracy)
+        const accuracy = parseFloat(payload.accuracy) || 10;
+        if (accuracy > 150) {
+          console.warn(`[NODE WS VALIDATION FAILED] High accuracy error (${accuracy}m), discarding noisy update.`);
+          return;
+        }
+
+        if (targetDriverId) {
           const db = loadDB();
           if (!db.driver_locations) db.driver_locations = [];
 
@@ -177,6 +231,30 @@ wss.on("connection", (ws: WebSocket, request: any) => {
             (l: any) => l.driver_id === targetDriverId,
           );
           const nowIso = new Date().toISOString();
+
+          // Resolve nearest waypoint (Landmark Geocoding)
+          const nearest = resolveNearestWaypoint(lat, lng);
+          const placeName = `${nearest.name} (${nearest.distance}km away)`;
+
+          // --- Geofence Check ---
+          const distFromHub = haversineDistance(lat, lng, HUB_LAT, HUB_LNG);
+          if (distFromHub > GEOFENCE_RADIUS_KM) {
+            if (!db.driver_alerts) db.driver_alerts = [];
+            const hasExistingAlert = db.driver_alerts.some(
+              (a: any) => a.driver_id === targetDriverId && a.type === "GEOFENCE_BREACH" && !a.acknowledged
+            );
+            if (!hasExistingAlert) {
+              db.driver_alerts.unshift({
+                id: `ALT-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+                driver_id: targetDriverId,
+                type: "GEOFENCE_BREACH",
+                severity: "Critical",
+                message: `Geofence breach! Driver is ${distFromHub.toFixed(1)}km away from Maiduguri Hub (Zone: ${nearest.name}).`,
+                acknowledged: false,
+                created_at: nowIso
+              });
+            }
+          }
 
           if (!loc) {
             const drv = db.drivers.find(
@@ -190,11 +268,11 @@ wss.on("connection", (ws: WebSocket, request: any) => {
               company_driver_id: drv?.company_driver_id || "DRV-UNKNOWN",
               latitude: lat,
               longitude: lng,
-              accuracy: parseFloat(payload.accuracy) || 10,
+              accuracy: accuracy,
               speed: parseFloat(payload.speed) || 0,
               heading: parseFloat(payload.heading) || 0,
               altitude: parseFloat(payload.altitude) || 0,
-              place_name: payload.placeName || "Live Gateway Telematics",
+              place_name: placeName,
               activity:
                 payload.activity ||
                 (parseFloat(payload.speed) > 2 ? "In Transit" : "Stationary"),
@@ -205,7 +283,7 @@ wss.on("connection", (ws: WebSocket, request: any) => {
           } else {
             loc.latitude = lat;
             loc.longitude = lng;
-            loc.accuracy = parseFloat(payload.accuracy) || loc.accuracy;
+            loc.accuracy = accuracy;
             loc.speed =
               parseFloat(payload.speed) >= 0
                 ? parseFloat(payload.speed)
@@ -215,7 +293,7 @@ wss.on("connection", (ws: WebSocket, request: any) => {
                 ? parseFloat(payload.heading)
                 : loc.heading;
             loc.altitude = parseFloat(payload.altitude) || loc.altitude;
-            loc.place_name = payload.placeName || "Live Gateway Telematics";
+            loc.place_name = placeName;
             loc.activity =
               payload.activity ||
               (parseFloat(payload.speed) > 2 ? "In Transit" : "Stationary");
@@ -282,9 +360,23 @@ app.get('/api/drivers/tracker', authenticateSession, (req, res) => {
         const loc = db.driver_locations?.find((l: any) => l.driver_id === d.id);
         const user = db.users.find((u: any) => u.id === d.user_id);
         const activeDuty = (db.driver_duty_sessions || []).find((s: any) => s.driver_id === d.id && s.status === 'active');
-        const status = activeDuty ? "Moving" : (loc?.speed > 0 ? "Moving" : (d.status === 'active' || d.status === 'approved' ? "Idle" : "Offline"));
-        const speed = activeDuty ? (loc?.speed || 52) : (loc?.speed || 0);
-        const locationName = loc?.place_name || "Maiduguri Hub";
+        
+        const isFresh = loc && loc.updated_at && (Date.now() - new Date(loc.updated_at).getTime() < 45000);
+        let status = "Offline";
+        if (activeDuty) {
+          if (isFresh) {
+            status = (loc && loc.speed > 2) ? "Moving" : "Stationary";
+          } else {
+            status = loc ? "No Signal" : "No GPS";
+          }
+        } else if (isFresh) {
+          status = "Off Duty";
+        } else {
+          status = "Offline";
+        }
+
+        const speed = isFresh ? (loc?.speed || 0) : 0;
+        const locationName = isFresh ? (loc?.place_name || "Active Spot") : (loc ? `Last seen: ${loc.place_name}` : "No GPS Signal");
 
         return {
             id: d.id,
@@ -294,9 +386,9 @@ app.get('/api/drivers/tracker', authenticateSession, (req, res) => {
             status,
             speed,
             location: locationName,
-            latitude: loc?.latitude || 11.8311,
-            longitude: loc?.longitude || 13.1509,
-            lastUpdate: loc?.updated_at ? new Date(loc.updated_at).toLocaleTimeString() : 'Just now'
+            latitude: loc?.latitude || null,
+            longitude: loc?.longitude || null,
+            lastUpdate: loc?.updated_at ? new Date(loc.updated_at).toLocaleTimeString() : 'Never'
         };
     });
     res.json(drivers);
@@ -312,7 +404,23 @@ app.get('/api/drivers/tracker/:driverId', authenticateSession, (req, res) => {
     const user = db.users.find((u: any) => u.id === driver.user_id);
     const activeDuty = (db.driver_duty_sessions || []).find((s: any) => s.driver_id === driver.id && s.status === 'active');
     const alerts = db.driver_alerts?.filter((a: any) => a.driver_id === driver.id) || [];
-    const speed = activeDuty ? (loc?.speed || 58) : (loc?.speed || 0);
+    
+    const isFresh = loc && loc.updated_at && (Date.now() - new Date(loc.updated_at).getTime() < 45000);
+    let status = "Offline";
+    if (activeDuty) {
+      if (isFresh) {
+        status = (loc && loc.speed > 2) ? "Moving" : "Stationary";
+      } else {
+        status = loc ? "No Signal" : "No GPS";
+      }
+    } else if (isFresh) {
+      status = "Off Duty";
+    } else {
+      status = "Offline";
+    }
+
+    const speed = isFresh ? (loc?.speed || 0) : 0;
+    const locationName = isFresh ? (loc?.place_name || "Active Spot") : (loc ? `Last seen: ${loc.place_name}` : "No GPS Signal");
 
     res.json({
         driver: {
@@ -322,13 +430,13 @@ app.get('/api/drivers/tracker/:driverId', authenticateSession, (req, res) => {
           vehicle_model: driver.vehicle_model || 'Tricycle / SinoTruck',
           avatar: driver.passport_photo_url || null,
           phone: user?.phone || driver.phone || 'N/A',
-          status: activeDuty ? 'Moving' : (speed > 0 ? 'Moving' : 'Idle')
+          status
         },
         gps: {
-          latitude: loc?.latitude || 11.8311,
-          longitude: loc?.longitude || 13.1509,
-          location_name: loc?.place_name || 'Maiduguri Central Depot',
-          heading: loc?.heading || 45,
+          latitude: loc?.latitude || null,
+          longitude: loc?.longitude || null,
+          location_name: locationName,
+          heading: loc?.heading || 0,
           speed
         },
         telemetry: {
@@ -339,7 +447,7 @@ app.get('/api/drivers/tracker/:driverId', authenticateSession, (req, res) => {
           oil_pressure: "4.2 bar",
           brake_wear: "88%"
         },
-        trip: { distance: 42.5, avg_speed: 48, driving_hours: 4.2, fuel_used: 8.4 },
+        trip: { distance: loc?.history ? parseFloat((loc.history.length * 0.4).toFixed(1)) : 0, avg_speed: speed > 0 ? speed : 0, driving_hours: loc?.history ? parseFloat((loc.history.length * 0.05).toFixed(1)) : 0, fuel_used: loc?.history ? parseFloat((loc.history.length * 0.1).toFixed(1)) : 0 },
         alerts: alerts.length > 0 ? alerts : [
           { severity: 'Normal', message: 'Geofence boundary active - Maiduguri Urban Zone', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
         ]
@@ -3792,7 +3900,45 @@ app.post("/api/driver/location", authenticateSession, (req, res) => {
       placeName,
       activity,
     } = req.body;
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    // --- Server-Side Validation ---
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: "Invalid coordinates provided." });
+    }
+
+    const acc = parseFloat(accuracy) || 10;
+    if (acc > 150) {
+      return res.status(400).json({ error: "Noisy GPS signal discarded (>150m accuracy error)." });
+    }
+
     const nowIso = new Date().toISOString();
+
+    // Resolve nearest waypoint (Landmark Geocoding)
+    const nearest = resolveNearestWaypoint(lat, lng);
+    const resolvedPlaceName = `${nearest.name} (${nearest.distance}km away)`;
+
+    // --- Geofence Check ---
+    const distFromHub = haversineDistance(lat, lng, HUB_LAT, HUB_LNG);
+    if (distFromHub > GEOFENCE_RADIUS_KM) {
+      if (!db.driver_alerts) db.driver_alerts = [];
+      const hasExistingAlert = db.driver_alerts.some(
+        (a: any) => a.driver_id === drv.id && a.type === "GEOFENCE_BREACH" && !a.acknowledged
+      );
+      if (!hasExistingAlert) {
+        db.driver_alerts.unshift({
+          id: `ALT-${Date.now()}-${generateUUID().substring(0, 4).toUpperCase()}`,
+          driver_id: drv.id,
+          type: "GEOFENCE_BREACH",
+          severity: "Critical",
+          message: `Geofence breach! Driver is ${distFromHub.toFixed(1)}km away from Maiduguri Hub (Zone: ${nearest.name}).`,
+          acknowledged: false,
+          created_at: nowIso
+        });
+      }
+    }
 
     if (!db.driver_locations) db.driver_locations = [];
 
@@ -3803,25 +3949,25 @@ app.post("/api/driver/location", authenticateSession, (req, res) => {
         driver_id: drv.id,
         driver_name: drv.full_name || actor.fullName,
         company_driver_id: drv.company_driver_id || "DRV-UNKNOWN",
-        latitude: parseFloat(latitude) || 11.8311,
-        longitude: parseFloat(longitude) || 13.1509,
-        accuracy: parseFloat(accuracy) || 10,
+        latitude: lat,
+        longitude: lng,
+        accuracy: acc,
         speed: parseFloat(speed) || 0,
         heading: parseFloat(heading) || 0,
         altitude: parseFloat(altitude) || 0,
-        place_name: placeName || "Maiduguri Fleet Hub",
-        activity: activity || (speed > 5 ? "In Transit" : "Stationary Work"),
+        place_name: resolvedPlaceName,
+        activity: activity || (parseFloat(speed) > 5 ? "In Transit" : "Stationary Work"),
         updated_at: nowIso,
         history: [],
       };
       db.driver_locations.push(loc);
     } else {
-      loc.latitude = parseFloat(latitude) || loc.latitude;
-      loc.longitude = parseFloat(longitude) || loc.longitude;
-      loc.accuracy = parseFloat(accuracy) || loc.accuracy;
+      loc.latitude = lat;
+      loc.longitude = lng;
+      loc.accuracy = acc;
       loc.speed = parseFloat(speed) >= 0 ? parseFloat(speed) : loc.speed;
       loc.heading = parseFloat(heading) || loc.heading;
-      loc.place_name = placeName || loc.place_name;
+      loc.place_name = resolvedPlaceName;
       loc.activity =
         activity || (loc.speed > 5 ? "In Transit" : "Stationary Work");
       loc.updated_at = nowIso;
@@ -11945,16 +12091,11 @@ async function startServer() {
 
   // Handle upgrade requests for WebSockets on standard port
   server.on("upgrade", (request, socket, head) => {
-    const urlObj = new URL(
-      request.url || "",
-      `http://${request.headers.host || "localhost"}`,
-    );
-    if (urlObj.pathname === "/api/ws/driver-location") {
+    const reqUrl = request.url || "";
+    if (reqUrl.includes("/api/ws/driver-location")) {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit("connection", ws, request);
       });
-    } else {
-      socket.destroy();
     }
   });
 

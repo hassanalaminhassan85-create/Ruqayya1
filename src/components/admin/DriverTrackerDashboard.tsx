@@ -49,8 +49,72 @@ export function DriverTrackerDashboard({ onBack, lang }: DriverTrackerDashboardP
 
   useEffect(() => {
     fetchTrackerList();
-    const interval = setInterval(fetchTrackerList, 10000); // Poll real-time updates every 10s
-    return () => clearInterval(interval);
+    
+    // Polling fallback
+    const interval = setInterval(fetchTrackerList, 15000); // 15s fallback polling
+
+    // WebSocket connection for instant, sub-second live updates
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+
+    const connectWS = () => {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/ws/driver-location?role=admin`;
+        
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log('[Admin Dashboard WS] Connected.');
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.type === 'location_update' && payload.driverId && payload.location) {
+              const loc = payload.location;
+              setDrivers(prev => prev.map(d => {
+                if (d.id === payload.driverId) {
+                  return {
+                    ...d,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    speed: loc.speed,
+                    location: loc.place_name || d.location,
+                    status: loc.activity || d.status,
+                    lastUpdate: new Date(loc.updated_at).toLocaleTimeString()
+                  };
+                }
+                return d;
+              }));
+            }
+          } catch (err) {
+            console.error('[Admin Dashboard WS] Error parsing message:', err);
+          }
+        };
+
+        ws.onclose = () => {
+          console.log('[Admin Dashboard WS] Connection closed. Retrying in 10s...');
+          reconnectTimeout = setTimeout(connectWS, 10000);
+        };
+
+        ws.onerror = (err) => {
+          console.warn('[Admin Dashboard WS] Connection warning (using polling fallback):', err);
+          ws?.close();
+        };
+      } catch (err) {
+        console.warn('[Admin Dashboard WS] Setup warning (using polling fallback):', err);
+        reconnectTimeout = setTimeout(connectWS, 10000);
+      }
+    };
+
+    connectWS();
+
+    return () => {
+      clearInterval(interval);
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
   }, []);
 
   if (selectedDriverId) {

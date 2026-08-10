@@ -85,8 +85,76 @@ export function DriverTrackerDetails({ driverId, onBack, lang }: DriverTrackerDe
 
   useEffect(() => {
     fetchDriverData();
-    const interval = setInterval(fetchDriverData, 6000);
-    return () => clearInterval(interval);
+    
+    // Polling fallback
+    const interval = setInterval(fetchDriverData, 10000);
+
+    // WebSocket connection for instant, sub-second live updates
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+
+    const connectWS = () => {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/ws/driver-location?role=admin&driverId=${driverId}`;
+        
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log('[Admin Details WS] Connected for driver:', driverId);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.type === 'location_update' && payload.driverId === driverId && payload.location) {
+              const loc = payload.location;
+              setData((prev: any) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  driver: {
+                    ...prev.driver,
+                    status: loc.activity || prev.driver.status
+                  },
+                  gps: {
+                    ...prev.gps,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    location_name: loc.place_name || prev.gps.location_name,
+                    heading: loc.heading || prev.gps.heading,
+                    speed: loc.speed
+                  }
+                };
+              });
+            }
+          } catch (err) {
+            console.error('[Admin Details WS] Error parsing message:', err);
+          }
+        };
+
+        ws.onclose = () => {
+          console.log('[Admin Details WS] Connection closed. Retrying in 10s...');
+          reconnectTimeout = setTimeout(connectWS, 10000);
+        };
+
+        ws.onerror = (err) => {
+          console.warn('[Admin Details WS] Connection warning (using polling fallback):', err);
+          ws?.close();
+        };
+      } catch (err) {
+        console.warn('[Admin Details WS] Setup warning (using polling fallback):', err);
+        reconnectTimeout = setTimeout(connectWS, 10000);
+      }
+    };
+
+    connectWS();
+
+    return () => {
+      clearInterval(interval);
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
   }, [driverId]);
 
   if (loading || !data) {

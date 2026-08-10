@@ -255,17 +255,17 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
         };
 
         ws.onclose = () => {
-          console.log('[Driver WS] Disconnected. Reconnecting in 5s...');
-          wsConnectTimeout = setTimeout(connectWebSocket, 5000);
+          console.log('[Driver WS] Connection closed. Retrying in 10s...');
+          wsConnectTimeout = setTimeout(connectWebSocket, 10000);
         };
 
         ws.onerror = (err) => {
-          console.error('[Driver WS] Error:', err);
+          console.warn('[Driver WS] Connection warning (using standard HTTPS/polling API fallback):', err);
           ws?.close();
         };
       } catch (err) {
-        console.error('[Driver WS] Initialization failed:', err);
-        wsConnectTimeout = setTimeout(connectWebSocket, 5000);
+        console.warn('[Driver WS] Initialization warning (using standard HTTPS/polling API fallback):', err);
+        wsConnectTimeout = setTimeout(connectWebSocket, 10000);
       }
     };
 
