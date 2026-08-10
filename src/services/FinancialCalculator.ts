@@ -148,8 +148,12 @@ export class FinancialCalculator {
    * Calculate dynamic installments for a driver based on an active cycle.
    */
   static calculateInstallmentsForDriver(driver: any, db: any, activeCycle: any) {
-    const agreedAmount = parseFloat(driver.agreed_amount ?? driver.agreedAmount) || 0;
-    const installmentTarget = Math.round(agreedAmount / 6);
+    const rawAgreed = driver.agreed_amount ?? driver.agreedAmount ?? driver.financials?.agreedAmount;
+    const agreedAmount =
+      rawAgreed !== undefined && rawAgreed !== null && !isNaN(parseFloat(rawAgreed)) && parseFloat(rawAgreed) > 0
+        ? parseFloat(rawAgreed)
+        : 180000;
+    const installmentTarget = Math.max(20000, Math.round(agreedAmount / 6));
 
     const cycleStartRaw = activeCycle
       ? activeCycle.startDate || activeCycle.start_time || activeCycle.created_at

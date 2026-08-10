@@ -17,6 +17,7 @@ import { Badge, Alert } from '../ui/SharedComponents';
 import { Driver, Vehicle } from '../../types';
 import { api } from '../../utils/api';
 import { getAuthorizedUrl } from '../../utils/security';
+import { subscribeToActiveCycle, ActiveCycleData } from '../../utils/cycleService';
 
 interface Driver360ModalProps {
   lang: 'en' | 'ha';
@@ -108,6 +109,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [selectedMilestone, setSelectedMilestone] = useState<any | null>(null);
   const [instSortKey, setInstSortKey] = useState<'installmentNumber' | 'amountDue' | 'amountPaid' | 'status'>('installmentNumber');
   const [instSortOrder, setInstSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [selectedCycleIdFilter, setSelectedCycleIdFilter] = useState<string>('active');
 
   // Driver trips state
   const [driverTrips, setDriverTrips] = useState<any[]>([]);
@@ -117,6 +119,16 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
   const [livePayments, setLivePayments] = useState<any[]>(payments);
   const [driverExpenses, setDriverExpenses] = useState<any[]>([]);
   const [telematicsData, setTelematicsData] = useState<any | null>(null);
+  const [activeCycleInfo, setActiveCycleInfo] = useState<ActiveCycleData | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeToActiveCycle((data) => {
+      if (data && data.isActive) {
+        setActiveCycleInfo(data);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const liveCoordinates = useMemo(() => {
     const lat = telematicsData?.currentLocation?.latitude || 11.8311;
@@ -2092,6 +2104,85 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
                     <span>Record Remittance</span>
                   </Button>
                 </div>
+
+                {/* Real-time Synchronized Active Cycle Banner */}
+                <Card className="bg-slate-900 border-slate-800 rounded-2xl p-5 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+                  <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 pb-4 border-b border-slate-800">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-brand-gold">
+                        <Layers className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Active Operating Cycle</span>
+                          <Badge variant="amber" className="text-[9px] uppercase font-mono px-2 py-0.5">
+                            {activeCycleInfo?.cycleId || 'CYC-001'}
+                          </Badge>
+                          <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded font-mono">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            REAL-TIME SYNCHRONIZED
+                          </span>
+                        </div>
+                        <h4 className="text-base font-black text-white font-mono mt-0.5">
+                          30-Day Milestone Installments — {activeCycleInfo?.cycleId || 'CYC-001'}
+                        </h4>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-mono">View Cycle:</span>
+                      <select 
+                        value={selectedCycleIdFilter}
+                        onChange={(e) => setSelectedCycleIdFilter(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 text-white text-xs rounded-lg px-3 py-1.5 font-mono focus:border-brand-gold outline-none"
+                      >
+                        <option value="active">Current Active Cycle ({activeCycleInfo?.cycleId || 'CYC-001'})</option>
+                        <option value="CYC-001">Cycle #1 (CYC-001)</option>
+                        <option value="CYC-002">Next Cycle #2 (CYC-002)</option>
+                        <option value="CYC-003">Next Cycle #3 (CYC-003)</option>
+                        <option value="CYC-004">Next Cycle #4 (CYC-004)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Metrics Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 font-mono">
+                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">30-Day Agreed Rate</span>
+                      <span className="text-base font-black text-white mt-1 block">₦{agreedTotal.toLocaleString()}</span>
+                      <span className="text-[10px] text-slate-500 font-sans mt-0.5 block">Standard Cycle Target</span>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Paid For Current Cycle</span>
+                      <span className="text-base font-black text-emerald-400 mt-1 block">₦{safePaidRemittance.toLocaleString()}</span>
+                      <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-emerald-400 h-full rounded-full transition-all" style={{ width: `${safeRemittancePercent}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Outstanding Balance</span>
+                      <span className={`text-base font-black mt-1 block ${shortfall > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        ₦{shortfall.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-sans mt-0.5 block">
+                        {shortfall > 0 ? 'Remittance Due' : 'Fully Satisfied'}
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Cycle End / Expiration</span>
+                      <span className="text-xs font-bold text-amber-400 mt-1 block">
+                        {activeCycleInfo?.endDate ? new Date(activeCycleInfo.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'End of Active Month'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-sans mt-0.5 block">
+                        {activeCycleInfo?.daysRemaining !== undefined ? `${activeCycleInfo.daysRemaining} days remaining` : '30-Day Active Window'}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
 
                 {/* Milestones Cards Grid */}
                 {loadingInstallments ? (

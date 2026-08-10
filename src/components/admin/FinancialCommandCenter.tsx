@@ -739,6 +739,12 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
     const remainingVeh = parseFloat(drv.remaining_vehicle_balance ?? drv.remainingVehicleBalance ?? drv.financials?.remainingVehicleBalance) || 0;
     const currentInstNum = Math.min(6, Math.floor(paid / instDue) + 1);
     const remainingInstBal = Math.max(0, instDue - (localPayments.filter(p => p.driver_id === drv.id && p.status === 'approved' && p.installment_number === currentInstNum).reduce((s, p: any) => s + (parseFloat(p.amount) || 0), 0)));
+    const activeCycleId = selectedCycle || (localActiveCycle as any)?.cycleId || (localActiveCycle as any)?.id || 'CYC-001';
+    
+    const isCycleFullyPaid = paid >= agreed;
+    const isCyclePartiallyPaid = paid > 0 && paid < agreed;
+    const cycleStatus = isCycleFullyPaid ? 'Fully Paid' : (isCyclePartiallyPaid ? 'Partially Paid' : 'Due');
+
     return {
       agreedAmount: agreed,
       installmentDue: instDue,
@@ -746,7 +752,9 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
       currentInstallmentNumber: currentInstNum,
       remainingInstallmentBalance: remainingInstBal,
       remainingVehicleBalance: remainingVeh,
-      expenseDebits
+      expenseDebits,
+      activeCycleId,
+      cycleStatus
     };
   };
 
@@ -3824,16 +3832,32 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col gap-1.5 font-mono">
-                <div className="flex justify-between text-slate-700">
-                  <span>Current Installment #:</span>
-                  <span className="font-bold">Cycle #{fin.currentInstallmentNumber}</span>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col gap-1.5 font-mono text-xs">
+                <div className="flex justify-between items-center text-slate-700">
+                  <span className="font-bold">Real-Time Active Cycle ID:</span>
+                  <span className="font-black text-brand-navy bg-amber-100 px-2 py-0.5 rounded text-[11px]">{fin.activeCycleId}</span>
                 </div>
-                <div className="flex justify-between text-slate-700">
+                <div className="flex justify-between items-center text-slate-700">
+                  <span>Current Installment / Milestone #:</span>
+                  <span className="font-bold text-slate-900">Installment #{fin.currentInstallmentNumber} (I#{fin.currentInstallmentNumber})</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-700">
+                  <span>Cycle Payment Status:</span>
+                  <span className={`font-extrabold px-2 py-0.5 rounded text-[10px] uppercase ${
+                    fin.cycleStatus === 'Fully Paid' 
+                      ? 'bg-emerald-100 text-emerald-800' 
+                      : fin.cycleStatus === 'Partially Paid' 
+                      ? 'bg-amber-100 text-amber-800' 
+                      : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {fin.cycleStatus}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-slate-700">
                   <span>Remaining Installment Balance:</span>
                   <span className="font-bold text-amber-600">₦{fin.remainingInstallmentBalance.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-slate-700 border-t border-slate-200 pt-1.5">
+                <div className="flex justify-between items-center text-slate-700 border-t border-slate-200 pt-1.5">
                   <span>Total Expense Debits:</span>
                   <span className="font-bold text-rose-600">₦{fin.expenseDebits.toLocaleString()}</span>
                 </div>

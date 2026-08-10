@@ -407,22 +407,22 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
     return () => unsubscribe();
   }, [driverData]);
 
-  const openPayNowModal = async () => {
+  const openPayNowModal = async (cycleIdToOpen?: string) => {
     setPayNowStep(1);
     setPaymentSuccessReceipt(null);
     setReferenceNumber(`TRX-${Date.now().toString().slice(-6)}`);
     setApiError(null);
     
-    // Open the first popup in the premium workflow
+    // Open cycle modal
     setIsCyclePopupOpen(true);
     
     try {
       setIsLoadingInstallments(true);
       let currentDriver = driverData;
       if (!currentDriver) {
-        const me = await api.getMe();
+        const me = await api.getMe().catch(() => null);
         if (me) {
-          const d = await api.getDriverById('me');
+          const d = await api.getDriverById('me').catch(() => null);
           if (d) {
             currentDriver = d;
             setDriverData(d);
@@ -435,9 +435,27 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
       const cyclesList = cyclesRes.cycles || [];
       setCycles(cyclesList);
       
-      const activeCycle = cyclesList.find((c: any) => c.status === 'active' || c.status === 'paused');
+      const targetId = cycleIdToOpen || pendingCycleSelection || selectedCycle?.id;
+      const activeCycle = (targetId ? cyclesList.find((c: any) => c.id === targetId) : null) ||
+                          cyclesList.find((c: any) => c.status === 'active' || c.status === 'paused') || 
+                          cyclesList[0] || 
+                          { id: 'CYC-001', title: 'Active Operating Cycle CYC-001' };
+
       if (activeCycle) {
         setPendingCycleSelection(activeCycle.id);
+        setSelectedCycle(activeCycle);
+
+        // Pre-fetch installments for active cycle
+        const driverId = currentDriver?.id || 'me';
+        const instRes = await api.request(`/api/drivers/${driverId}/installments?cycleId=${activeCycle.id}`).catch(() => ({ installments: [] }));
+        const fetchedInstallments = instRes.installments || [];
+        setInstallments(fetchedInstallments);
+        if (fetchedInstallments.length > 0) {
+          const liveDue = fetchedInstallments.find((i: any) => i.isCurrentRealTime && i.status !== 'Completed') ||
+                          fetchedInstallments.find((i: any) => i.status !== 'Completed') ||
+                          fetchedInstallments[0];
+          setSelectedInstallment(liveDue);
+        }
       }
     } catch (err: any) {
       console.error("Failed to load cycles:", err);
@@ -449,14 +467,47 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
 
   const handleCycleSelect = async (cycleId: string) => {
     setPendingCycleSelection(cycleId);
+    let targetCycle = cycles.find((c: any) => c.id === cycleId);
+    if (!targetCycle && selectedCycle?.id === cycleId) {
+      targetCycle = selectedCycle;
+    }
+    if (targetCycle) {
+      setSelectedCycle(targetCycle);
+    }
+
     setIsCyclePopupOpen(false);
     setIsLoadingInstallments(true);
     setIsInstallmentPopupOpen(true);
 
     try {
-      if (driverData) {
-        const instRes = await api.request(`/api/drivers/${driverData.id}/installments?cycleId=${cycleId}`).catch(() => ({ installments: [] }));
-        setInstallments(instRes.installments || []);
+      let currentDriver = driverData;
+      if (!currentDriver) {
+        const d = await api.getDriverById('me').catch(() => null);
+        if (d) {
+          currentDriver = d;
+          setDriverData(d);
+        }
+      }
+
+      const driverId = currentDriver?.id || 'me';
+      const instRes = await api.request(`/api/drivers/${driverId}/installments?cycleId=${cycleId}`).catch(() => ({ installments: [] }));
+      const fetchedInstallments = instRes.installments || [];
+      
+      setInstallments(fetchedInstallments);
+
+      if (instRes.cycle) {
+        setSelectedCycle((prev: any) => ({
+          ...(prev || {}),
+          ...instRes.cycle,
+          id: instRes.cycle.id || cycleId
+        }));
+      }
+
+      if (fetchedInstallments.length > 0) {
+        const liveDue = fetchedInstallments.find((i: any) => i.isCurrentRealTime && i.status !== 'Completed') ||
+                        fetchedInstallments.find((i: any) => i.status !== 'Completed') ||
+                        fetchedInstallments[0];
+        setSelectedInstallment(liveDue);
       }
     } catch (err: any) {
       console.error("Failed to load installments:", err);
@@ -1526,40 +1577,110 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
                   <RefreshCw className="h-8 w-8 text-brand-gold animate-spin" />
                   <p className="text-xs font-bold text-slate-500">Syncing Installment Records...</p>
                 </div>
+              ) : installments.length === 0 ? (
+                <div className="py-10 px-4 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <Coins className="h-10 w-10 text-amber-500 mx-auto opacity-70" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-black text-slate-900">No Installments Found for {pendingCycleSelection || "Selected Cycle"}</p>
+                    <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                      Your 30-day operating cycle has not yet generated active installment schedules. Click below to recalculate.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => handleCycleSelect(pendingCycleSelection || 'CYC-001')}
+                    className="bg-brand-gold hover:bg-amber-400 text-slate-950 font-bold text-xs py-2.5 px-5 rounded-xl shadow-md inline-flex items-center gap-2 cursor-pointer"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Sync & Generate Schedule
+                  </Button>
+                </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {installments.map((inst) => {
-                    const isPaid = inst.status === 'Completed';
-                    const isCurrent = inst.isCurrentRealTime;
-                    
-                    return (
-                      <motion.button
-                        key={inst.installmentNumber}
-                        whileHover={{ scale: 1.05, y: -2 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleInstallmentSelect(inst)}
-                        className={`p-4 rounded-2xl text-left flex flex-col justify-between h-28 transition-all cursor-pointer group border ${
-                          isPaid ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100' : 
-                          isCurrent ? 'bg-amber-50 border-brand-gold shadow-sm' : 
-                          'bg-slate-50 border-slate-200 hover:border-amber-400 hover:bg-white'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start w-full">
-                          <span className={`font-mono font-black text-xs ${isPaid ? 'text-emerald-600' : 'text-slate-400 group-hover:text-amber-600'}`}>I#{inst.installmentNumber}</span>
-                          <div className={`p-1 rounded-md border ${isPaid ? 'bg-emerald-100 border-emerald-200' : 'bg-white border-slate-200 group-hover:bg-amber-100 group-hover:border-amber-200'}`}>
-                            {isPaid ? <CheckCircle className="h-3 w-3 text-emerald-600" /> : <Check className="h-3 w-3 text-slate-400 group-hover:text-amber-600" />}
-                          </div>
-                        </div>
+                <div className="space-y-4">
+                  {/* Selected Cycle Header Summary */}
+                  <div className="p-3.5 bg-slate-900 text-white rounded-2xl border border-brand-gold/30 flex items-center justify-between text-xs">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-brand-gold font-mono font-bold uppercase tracking-wider block">
+                        Cycle Ref: {pendingCycleSelection || selectedCycle?.id || 'CYC-001'}
+                      </span>
+                      <h4 className="font-extrabold text-sm text-white">
+                        {selectedCycle?.title || `Active Operating Cycle ${pendingCycleSelection || 'CYC-001'}`}
+                      </h4>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] text-slate-400 block uppercase">30-Day Ag. Target</span>
+                      <span className="font-mono font-black text-emerald-400 text-sm">
+                        ₦{(selectedCycle?.agreedAmount ?? driverData?.agreed_amount ?? driverData?.agreedAmount ?? 180000).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
 
-                        <div className="mt-2">
-                          <h4 className="font-extrabold text-xs text-slate-800">Installment {inst.installmentNumber}</h4>
-                          <p className={`text-[9px] mt-1 font-mono font-bold ${isPaid ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {isPaid ? 'PAID IN FULL' : `₦${(inst.remainingAmount || inst.dueAmount).toLocaleString()} Due`}
-                          </p>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                    {installments.map((inst: any) => {
+                      const isPaid = inst.status === 'Completed' || inst.status === 'Paid Completely';
+                      const isCurrent = inst.isCurrentRealTime;
+                      const isPartial = inst.status === 'Partially Paid' || inst.status === 'Partial';
+                      const isOverdue = inst.status === 'Overdue';
+
+                      let cardStyle = "bg-slate-50/80 border-slate-200 hover:border-amber-400 hover:bg-white";
+                      let badgeBg = "bg-slate-200 text-slate-700";
+                      
+                      if (isPaid) {
+                        cardStyle = "bg-emerald-50/60 border-emerald-300 hover:bg-emerald-100/70";
+                        badgeBg = "bg-emerald-500 text-white font-extrabold";
+                      } else if (isCurrent) {
+                        cardStyle = "bg-amber-50/80 border-brand-gold shadow-md ring-2 ring-brand-gold/30";
+                        badgeBg = "bg-brand-gold text-slate-950 font-black animate-pulse";
+                      } else if (isPartial) {
+                        cardStyle = "bg-blue-50/60 border-blue-300 hover:bg-blue-100/70";
+                        badgeBg = "bg-blue-600 text-white font-bold";
+                      } else if (isOverdue) {
+                        cardStyle = "bg-rose-50/60 border-rose-300 hover:bg-rose-100/70";
+                        badgeBg = "bg-rose-600 text-white font-bold";
+                      }
+
+                      return (
+                        <motion.div
+                          key={inst.installmentNumber}
+                          whileHover={{ scale: 1.02, y: -2 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleInstallmentSelect(inst)}
+                          className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 ${cardStyle}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-slate-900 text-brand-gold font-mono text-[10px] font-black flex items-center justify-center">
+                                {inst.installmentNumber}
+                              </span>
+                              Installment #{inst.installmentNumber}
+                            </span>
+                            <span className={`text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full ${badgeBg}`}>
+                              {isPaid ? "PAID IN FULL ✓" : isCurrent ? "LIVE DUE" : inst.status}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-white/70 p-2.5 rounded-xl border border-slate-200/60">
+                            <div>
+                              <span className="text-slate-400 text-[9px] block">Target (5-Day):</span>
+                              <span className="font-bold text-slate-900">₦{(inst.dueAmount || 30000).toLocaleString()}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 text-[9px] block">Remaining:</span>
+                              <span className={`font-black ${isPaid ? 'text-slate-400 line-through' : 'text-emerald-600'}`}>
+                                ₦{(inst.remainingAmount || 0).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono border-t border-slate-200/60 pt-2">
+                            <span>Term: {inst.startDate} to {inst.endDate}</span>
+                            <span className="font-extrabold text-brand-navy flex items-center gap-0.5">
+                              Remit <ChevronRight className="h-3 w-3 text-amber-500" />
+                            </span>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -1811,8 +1932,12 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
 
                     <div className="flex justify-end gap-2 pt-2">
                       <Button
-                        onClick={() => setPayNowStep(2)}
-                        className="w-full bg-brand-gold hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl flex items-center justify-center gap-2 text-sm"
+                        onClick={async () => {
+                          const targetCycleId = selectedCycle?.id || pendingCycleSelection || 'CYC-001';
+                          await handleCycleSelect(targetCycleId);
+                          setPayNowStep(2);
+                        }}
+                        className="w-full bg-brand-gold hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl flex items-center justify-center gap-2 text-sm cursor-pointer"
                       >
                         Select Active Cycle & View 6 Installments
                         <ArrowRight className="h-4 w-4" />

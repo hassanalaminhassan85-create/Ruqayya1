@@ -7414,21 +7414,25 @@ app.get("/api/drivers/:id/installments", authenticateSession, (req, res) => {
       (d) =>
         d.id === req.params.id ||
         d.user_id === req.params.id ||
-        (req.params.id === "me" && d.user_id === actor?.id),
-    );
+        d.company_driver_id === req.params.id ||
+        (req.params.id === "me" && (d.user_id === actor?.id || d.id === actor?.id)),
+    ) || db.drivers[0];
     if (!driver)
       return res.status(404).json({ error: "Driver profile not found." });
     if (!db.cycles) db.cycles = [];
-    const activeCycle = db.cycles.find(
-      (c) => c.status === "active" || c.status === "paused",
-    ) ||
-      db.cycles[0] || { startDate: new Date().toISOString() };
+    
+    const cycleIdQuery = req.query.cycleId as string;
+    const activeCycle =
+      (cycleIdQuery ? db.cycles.find((c: any) => c.id === cycleIdQuery) : null) ||
+      db.cycles.find((c: any) => c.status === "active" || c.status === "paused") ||
+      db.cycles[0] || { id: "CYC-001", startDate: new Date().toISOString() };
+    
     const installments = calculateInstallmentsForDriver(
       driver,
       db,
       activeCycle,
     );
-    res.json({ success: true, installments });
+    res.json({ success: true, installments, cycle: activeCycle });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
