@@ -1,6 +1,241 @@
 import { Buffer } from "node:buffer";
 import { WorkersAIService } from "../../src/utils/ai_service";
 
+      function getMaiduguriSimulatedDataCF(drvObj: any) {
+        const driverNum =
+          parseInt(
+            String(drvObj.company_driver_id || "").replace(/\D/g, "") ||
+              drvObj.id?.charCodeAt(0)?.toString() ||
+              "1",
+          ) || 0;
+        const routeIndex = driverNum % 3;
+
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+        const routes = [
+          [
+            {
+              name: "Maiduguri Central Depot (Post Office)",
+              lat: 11.8311,
+              lng: 13.1509,
+              arrOffset: 8 * 60,
+              depOffset: 8 * 60 + 30,
+              activity: "Shift Commencement & Pre-trip cargo loading",
+            },
+            {
+              name: "Monday Market Hub",
+              lat: 11.8365,
+              lng: 13.1486,
+              arrOffset: 8 * 60 + 50,
+              depOffset: 9 * 60 + 40,
+              activity: "Offloading wholesale consumables",
+            },
+            {
+              name: "Bolori Junction",
+              lat: 11.852,
+              lng: 13.131,
+              arrOffset: 10 * 60,
+              depOffset: 11 * 60,
+              activity: "Tire safety check & fuel top-up",
+            },
+            {
+              name: "Bulumkutu Bypass",
+              lat: 11.821,
+              lng: 13.111,
+              arrOffset: 11 * 60 + 20,
+              depOffset: 13 * 60,
+              activity: "Scheduled fatigue break & lunch rest",
+            },
+            {
+              name: "Custom Area Depot",
+              lat: 11.854,
+              lng: 13.172,
+              arrOffset: 13 * 60 + 30,
+              depOffset: null,
+              activity: "Bulk freight offloading & client sign-off",
+            },
+          ],
+          [
+            {
+              name: "Maiduguri Central Depot (Post Office)",
+              lat: 11.8311,
+              lng: 13.1509,
+              arrOffset: 7 * 60 + 30,
+              depOffset: 8 * 60,
+              activity: "Shift Commencement & Pre-trip safety check",
+            },
+            {
+              name: "Custom Area Depot",
+              lat: 11.854,
+              lng: 13.172,
+              arrOffset: 8 * 60 + 20,
+              depOffset: 9 * 60 + 30,
+              activity: "Inter-state cargo transfer",
+            },
+            {
+              name: "Muna Garage Terminal",
+              lat: 11.848,
+              lng: 13.208,
+              arrOffset: 9 * 60 + 50,
+              depOffset: 11 * 60 + 10,
+              activity: "Agricultural haulage sorting",
+            },
+            {
+              name: "Tashan Bama Hub",
+              lat: 11.799,
+              lng: 13.189,
+              arrOffset: 11 * 60 + 30,
+              depOffset: 13 * 60 + 30,
+              activity: "Rest stop & routine maintenance check",
+            },
+            {
+              name: "Bama Road Corridor",
+              lat: 11.802,
+              lng: 13.195,
+              arrOffset: 13 * 60 + 50,
+              depOffset: null,
+              activity: "Grain delivery & warehouse dispatch",
+            },
+          ],
+          [
+            {
+              name: "Maiduguri Central Depot (Post Office)",
+              lat: 11.8311,
+              lng: 13.1509,
+              arrOffset: 8 * 60 + 30,
+              depOffset: 9 * 60,
+              activity: "Shift Commencement",
+            },
+            {
+              name: "Bolori Junction",
+              lat: 11.852,
+              lng: 13.131,
+              arrOffset: 9 * 60 + 20,
+              depOffset: 10 * 60 + 15,
+              activity: "Spare parts delivery",
+            },
+            {
+              name: "Bulumkutu Bypass",
+              lat: 11.821,
+              lng: 13.111,
+              arrOffset: 10 * 60 + 40,
+              depOffset: 12 * 60,
+              activity: "Trailer inspection & driver physical rest",
+            },
+            {
+              name: "Monday Market Hub",
+              lat: 11.8365,
+              lng: 13.1486,
+              arrOffset: 12 * 60 + 20,
+              depOffset: 13 * 60 + 45,
+              activity: "Retail dispatch",
+            },
+            {
+              name: "Maiduguri Main Terminal (Post Office)",
+              lat: 11.8311,
+              lng: 13.1509,
+              arrOffset: 14 * 60 + 10,
+              depOffset: null,
+              activity: "Return to base and debrief",
+            },
+          ],
+        ];
+
+        const selectedRoute = routes[routeIndex];
+        const placesVisited: any[] = [];
+        let currentLoc: any = null;
+
+        selectedRoute.forEach((stop, index) => {
+          if (currentMinutes >= stop.arrOffset) {
+            const arrivedAt = new Date();
+            arrivedAt.setHours(
+              Math.floor(stop.arrOffset / 60),
+              stop.arrOffset % 60,
+              0,
+              0,
+            );
+
+            let departedAt: Date | null = null;
+            let dwellMinutes = 0;
+            let status = "active_dwell";
+
+            if (stop.depOffset !== null && currentMinutes >= stop.depOffset) {
+              departedAt = new Date();
+              departedAt.setHours(
+                Math.floor(stop.depOffset / 60),
+                stop.depOffset % 60,
+                0,
+                0,
+              );
+              dwellMinutes = stop.depOffset - stop.arrOffset;
+              status = "completed";
+            } else {
+              dwellMinutes = currentMinutes - stop.arrOffset;
+              status = "active_dwell";
+            }
+
+            placesVisited.push({
+              id: `PLC-${drvObj.id}-${index}`,
+              place_name: stop.name,
+              arrived_at: arrivedAt.toISOString(),
+              departed_at: departedAt ? departedAt.toISOString() : null,
+              dwell_duration_minutes: dwellMinutes,
+              status,
+              activity: stop.activity,
+              latitude: stop.lat,
+              longitude: stop.lng,
+            });
+
+            if (
+              status === "active_dwell" ||
+              index === selectedRoute.length - 1 ||
+              (departedAt &&
+                currentMinutes <
+                  (selectedRoute[index + 1]?.arrOffset || 24 * 60))
+            ) {
+              currentLoc = {
+                latitude: stop.lat,
+                longitude: stop.lng,
+                place_name: stop.name,
+                activity:
+                  status === "active_dwell" ? stop.activity : "In Transit",
+              };
+            }
+          }
+        });
+
+        if (placesVisited.length === 0) {
+          const firstStop = selectedRoute[0];
+          const arrivedAt = new Date();
+          arrivedAt.setHours(
+            Math.floor(firstStop.arrOffset / 60),
+            firstStop.arrOffset % 60,
+            0,
+            0,
+          );
+          placesVisited.push({
+            id: `PLC-${drvObj.id}-0`,
+            place_name: firstStop.name,
+            arrived_at: arrivedAt.toISOString(),
+            departed_at: null,
+            dwell_duration_minutes: 0,
+            status: "active_dwell",
+            activity: firstStop.activity,
+            latitude: firstStop.lat,
+            longitude: firstStop.lng,
+          });
+          currentLoc = {
+            latitude: firstStop.lat,
+            longitude: firstStop.lng,
+            place_name: firstStop.name,
+            activity: "Pre-trip check",
+          };
+        }
+
+        return { placesVisited, currentLoc };
+      };
+
 declare global {
   type PagesFunction<
     Env = any,
@@ -942,7 +1177,7 @@ function generateFilteredPayload(
   }));
 
   const mappedDrivers = (db.drivers || []).map((d: any) => {
-    const user = db.users.find((u: any) => u.id === d.user_id);
+    const user = (db.users || []).find((u: any) => u.id === d.user_id);
     const guarantor = db.guarantors.find((g: any) => g.driver_id === d.id);
     const vehicle = mappedVehicles.find(
       (v: any) =>
@@ -2480,7 +2715,7 @@ async function generateVapidHeader(
 }
 
 // Helper to send a single push notification natively using standard fetch
-async function sendPushNotification(
+async function sendPushNotification(db: any, dbManager: any, 
   env: Env,
   subscription: any,
   payload: string,
@@ -2703,7 +2938,7 @@ async function sendPushNotificationToUserOrRole(
 
   for (const item of subscriptionsToNotify) {
     try {
-      const pushRes = await sendPushNotification(
+      const pushRes = await sendPushNotification(db, null, 
         env,
         item.subscription,
         payload,
@@ -2824,7 +3059,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             const roleId = `role-${roleName}`;
 
             // Find existing user by username or email prefix
-            let user = db.users.find(
+            let user = (db.users || []).find(
               (u: any) =>
                 u.username === userKey ||
                 u.email?.toLowerCase().startsWith(userKey.toLowerCase()),
@@ -3002,7 +3237,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         };
       }
 
-      const user = db.users.find((u: any) => u.id === session.user_id);
+      const user = (db.users || []).find((u: any) => u.id === session.user_id);
       if (!user) {
         return {
           authenticated: false,
@@ -3355,7 +3590,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             }
           }
           if (!userFound && db.users) {
-            const usr = db.users.find((u: any) => u.id === userId);
+            const usr = (db.users || []).find((u: any) => u.id === userId);
             if (usr) {
                usr.avatar = previewUrl;
                usr.passport_photo_url = previewUrl;
@@ -3391,7 +3626,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           );
         }
 
-        const hasExistingDirectors = db.users.some(
+        const hasExistingDirectors = (db.users || []).some(
           (u: any) => u.role_id === "role-director",
         );
 
@@ -3418,7 +3653,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             );
           }
 
-          const creator = db.users.find((u: any) => u.id === session.user_id);
+          const creator = (db.users || []).find((u: any) => u.id === session.user_id);
           if (!creator || creator.role_id !== "role-director") {
             return buildResponse(
               {
@@ -3431,7 +3666,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
 
         if (
-          db.users.some(
+          (db.users || []).some(
             (u: any) =>
               u.email && u.email.toLowerCase() === email.toLowerCase(),
           )
@@ -3524,7 +3759,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           return buildResponse({ error: "Missing registration details." }, 400);
         }
 
-        const emailExists = db.users.some(
+        const emailExists = (db.users || []).some(
           (u: any) =>
             u.email && u.email.toLowerCase() === personal.email.toLowerCase(),
         );
@@ -3780,7 +4015,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         if (username) {
           // Passwordless enterprise gateway login
           const userKey = username.trim().toUpperCase();
-          user = db.users.find(
+          user = (db.users || []).find(
             (u: any) =>
               u.username === userKey ||
               u.email?.toLowerCase().startsWith(userKey.toLowerCase()),
@@ -3917,7 +4152,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           }
 
           const cleanEmail = email.trim().toLowerCase();
-          user = db.users.find(
+          user = (db.users || []).find(
             (u: any) =>
               u.email &&
               u.email.trim().toLowerCase() === cleanEmail &&
@@ -4020,19 +4255,19 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const { role } = (await request.json()) as any;
         let targetUser = null;
         if (role === "director")
-          targetUser = db.users.find(
+          targetUser = (db.users || []).find(
             (u: any) => u.email === "director@ruqayyatransport.com",
           );
         else if (role === "admin")
-          targetUser = db.users.find(
+          targetUser = (db.users || []).find(
             (u: any) => u.email === "admin@ruqayyatransport.com",
           );
         else if (role === "driver")
-          targetUser = db.users.find(
+          targetUser = (db.users || []).find(
             (u: any) => u.email === "musa.garba@ruqayyatransport.com",
           );
         else if (role === "shareholder")
-          targetUser = db.users.find(
+          targetUser = (db.users || []).find(
             (u: any) => u.email === "kabir.m@ruqayyatransport.com",
           );
 
@@ -4108,7 +4343,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     // 5. GET ACTIVE PROFILE PAYLOAD
     if (path === "/api/auth/me" && method === "GET") {
-      const userRec = db.users.find((u: any) => u.id === user.id);
+      const userRec = (db.users || []).find((u: any) => u.id === user.id);
       if (!userRec)
         return buildResponse({ error: "User record missing." }, 404);
 
@@ -4298,7 +4533,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (path === "/api/auth/me" && method === "PUT") {
       try {
         const payload = (await request.json()) as any;
-        const userRec = db.users.find((u: any) => u.id === user.id);
+        const userRec = (db.users || []).find((u: any) => u.id === user.id);
         if (!userRec)
           return buildResponse({ error: "User record missing." }, 404);
 
@@ -4448,7 +4683,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       if (parts.length === 1 && parts[0] === "tracker" && method === "GET") {
         const list = (db.drivers || []).filter(Boolean).map((d: any) => {
           const loc = (db.driver_locations || []).find((l: any) => l.driver_id === d.id);
-          const u = db.users.find((userObj: any) => userObj.id === d.user_id);
+          const u = (db.users || []).find((userObj: any) => userObj.id === d.user_id);
           const activeDuty = (db.driver_duty_sessions || []).find((s: any) => s.driver_id === d.id && s.status === 'active');
           const sim = getMaiduguriSimulatedDataCF(d);
           const locationName = loc?.place_name || sim.currentLoc?.place_name || "Maiduguri Hub";
@@ -4478,7 +4713,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         let d = (db.drivers || []).find((drv: any) => drv.id === targetId || drv.company_driver_id === targetId);
         if (!d) return buildResponse({ error: "Driver not found" }, 404);
 
-        const u = db.users.find((usr: any) => usr.id === d.user_id);
+        const u = (db.users || []).find((usr: any) => usr.id === d.user_id);
         const loc = (db.driver_locations || []).find((l: any) => l.driver_id === d.id);
         const activeDuty = (db.driver_duty_sessions || []).find((s: any) => s.driver_id === d.id && s.status === 'active');
         const sim = getMaiduguriSimulatedDataCF(d);
@@ -4537,7 +4772,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
         const results = list.map((drv: any) => {
           const u =
-            db.users.find((userObj: any) => userObj.id === drv.user_id) || {};
+            (db.users || []).find((userObj: any) => userObj.id === drv.user_id) || {};
           const g =
             db.guarantors.find((gua: any) => gua.driver_id === drv.id) || null;
           const v =
@@ -4830,7 +5065,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
         try {
           const { phone, address, password } = (await request.json()) as any;
-          const u = db.users.find((usr: any) => usr.id === user.id);
+          const u = (db.users || []).find((usr: any) => usr.id === user.id);
 
           if (u) {
             if (phone) u.phone = phone;
@@ -4878,7 +5113,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           return buildResponse({ error: "Driver profile not found." }, 404);
 
         if (method === "GET") {
-          const u = db.users.find((usr: any) => usr.id === drv.user_id) || {};
+          const u = (db.users || []).find((usr: any) => usr.id === drv.user_id) || {};
           const g =
             db.guarantors.find((gua: any) => gua.driver_id === drv.id) || null;
           const v =
@@ -5009,7 +5244,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             return buildResponse({ error: "Access Denied." }, 403);
           try {
             const payload = (await request.json()) as any;
-            const u = db.users.find((usr: any) => usr.id === drv.user_id);
+            const u = (db.users || []).find((usr: any) => usr.id === drv.user_id);
 
             if (payload.passportPhoto) {
               const cleanPassport = typeof payload.passportPhoto === 'string' ? payload.passportPhoto.split('?')[0] : payload.passportPhoto;
@@ -5279,7 +5514,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           drv.updated_at = new Date().toISOString();
           if (companyDriverId) drv.company_driver_id = companyDriverId;
 
-          const u = db.users.find((usr: any) => usr.id === drv.user_id);
+          const u = (db.users || []).find((usr: any) => usr.id === drv.user_id);
           if (u) u.status = status === "approved" ? "active" : "inactive";
 
           // Notify Driver
@@ -5407,240 +5642,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         .filter(Boolean);
 
       // Helpers for Maiduguri Simulation
-      function getMaiduguriSimulatedDataCF(drvObj: any) {
-        const driverNum =
-          parseInt(
-            drvObj.company_driver_id?.replace(/\D/g, "") ||
-              drvObj.id?.charCodeAt(0)?.toString() ||
-              "1",
-          ) || 0;
-        const routeIndex = driverNum % 3;
-
-        const now = new Date();
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-        const routes = [
-          [
-            {
-              name: "Maiduguri Central Depot (Post Office)",
-              lat: 11.8311,
-              lng: 13.1509,
-              arrOffset: 8 * 60,
-              depOffset: 8 * 60 + 30,
-              activity: "Shift Commencement & Pre-trip cargo loading",
-            },
-            {
-              name: "Monday Market Hub",
-              lat: 11.8365,
-              lng: 13.1486,
-              arrOffset: 8 * 60 + 50,
-              depOffset: 9 * 60 + 40,
-              activity: "Offloading wholesale consumables",
-            },
-            {
-              name: "Bolori Junction",
-              lat: 11.852,
-              lng: 13.131,
-              arrOffset: 10 * 60,
-              depOffset: 11 * 60,
-              activity: "Tire safety check & fuel top-up",
-            },
-            {
-              name: "Bulumkutu Bypass",
-              lat: 11.821,
-              lng: 13.111,
-              arrOffset: 11 * 60 + 20,
-              depOffset: 13 * 60,
-              activity: "Scheduled fatigue break & lunch rest",
-            },
-            {
-              name: "Custom Area Depot",
-              lat: 11.854,
-              lng: 13.172,
-              arrOffset: 13 * 60 + 30,
-              depOffset: null,
-              activity: "Bulk freight offloading & client sign-off",
-            },
-          ],
-          [
-            {
-              name: "Maiduguri Central Depot (Post Office)",
-              lat: 11.8311,
-              lng: 13.1509,
-              arrOffset: 7 * 60 + 30,
-              depOffset: 8 * 60,
-              activity: "Shift Commencement & Pre-trip safety check",
-            },
-            {
-              name: "Custom Area Depot",
-              lat: 11.854,
-              lng: 13.172,
-              arrOffset: 8 * 60 + 20,
-              depOffset: 9 * 60 + 30,
-              activity: "Inter-state cargo transfer",
-            },
-            {
-              name: "Muna Garage Terminal",
-              lat: 11.848,
-              lng: 13.208,
-              arrOffset: 9 * 60 + 50,
-              depOffset: 11 * 60 + 10,
-              activity: "Agricultural haulage sorting",
-            },
-            {
-              name: "Tashan Bama Hub",
-              lat: 11.799,
-              lng: 13.189,
-              arrOffset: 11 * 60 + 30,
-              depOffset: 13 * 60 + 30,
-              activity: "Rest stop & routine maintenance check",
-            },
-            {
-              name: "Bama Road Corridor",
-              lat: 11.802,
-              lng: 13.195,
-              arrOffset: 13 * 60 + 50,
-              depOffset: null,
-              activity: "Grain delivery & warehouse dispatch",
-            },
-          ],
-          [
-            {
-              name: "Maiduguri Central Depot (Post Office)",
-              lat: 11.8311,
-              lng: 13.1509,
-              arrOffset: 8 * 60 + 30,
-              depOffset: 9 * 60,
-              activity: "Shift Commencement",
-            },
-            {
-              name: "Bolori Junction",
-              lat: 11.852,
-              lng: 13.131,
-              arrOffset: 9 * 60 + 20,
-              depOffset: 10 * 60 + 15,
-              activity: "Spare parts delivery",
-            },
-            {
-              name: "Bulumkutu Bypass",
-              lat: 11.821,
-              lng: 13.111,
-              arrOffset: 10 * 60 + 40,
-              depOffset: 12 * 60,
-              activity: "Trailer inspection & driver physical rest",
-            },
-            {
-              name: "Monday Market Hub",
-              lat: 11.8365,
-              lng: 13.1486,
-              arrOffset: 12 * 60 + 20,
-              depOffset: 13 * 60 + 45,
-              activity: "Retail dispatch",
-            },
-            {
-              name: "Maiduguri Main Terminal (Post Office)",
-              lat: 11.8311,
-              lng: 13.1509,
-              arrOffset: 14 * 60 + 10,
-              depOffset: null,
-              activity: "Return to base and debrief",
-            },
-          ],
-        ];
-
-        const selectedRoute = routes[routeIndex];
-        const placesVisited: any[] = [];
-        let currentLoc: any = null;
-
-        selectedRoute.forEach((stop, index) => {
-          if (currentMinutes >= stop.arrOffset) {
-            const arrivedAt = new Date();
-            arrivedAt.setHours(
-              Math.floor(stop.arrOffset / 60),
-              stop.arrOffset % 60,
-              0,
-              0,
-            );
-
-            let departedAt: Date | null = null;
-            let dwellMinutes = 0;
-            let status = "active_dwell";
-
-            if (stop.depOffset !== null && currentMinutes >= stop.depOffset) {
-              departedAt = new Date();
-              departedAt.setHours(
-                Math.floor(stop.depOffset / 60),
-                stop.depOffset % 60,
-                0,
-                0,
-              );
-              dwellMinutes = stop.depOffset - stop.arrOffset;
-              status = "completed";
-            } else {
-              dwellMinutes = currentMinutes - stop.arrOffset;
-              status = "active_dwell";
-            }
-
-            placesVisited.push({
-              id: `PLC-${drvObj.id}-${index}`,
-              place_name: stop.name,
-              arrived_at: arrivedAt.toISOString(),
-              departed_at: departedAt ? departedAt.toISOString() : null,
-              dwell_duration_minutes: dwellMinutes,
-              status,
-              activity: stop.activity,
-              latitude: stop.lat,
-              longitude: stop.lng,
-            });
-
-            if (
-              status === "active_dwell" ||
-              index === selectedRoute.length - 1 ||
-              (departedAt &&
-                currentMinutes <
-                  (selectedRoute[index + 1]?.arrOffset || 24 * 60))
-            ) {
-              currentLoc = {
-                latitude: stop.lat,
-                longitude: stop.lng,
-                place_name: stop.name,
-                activity:
-                  status === "active_dwell" ? stop.activity : "In Transit",
-              };
-            }
-          }
-        });
-
-        if (placesVisited.length === 0) {
-          const firstStop = selectedRoute[0];
-          const arrivedAt = new Date();
-          arrivedAt.setHours(
-            Math.floor(firstStop.arrOffset / 60),
-            firstStop.arrOffset % 60,
-            0,
-            0,
-          );
-          placesVisited.push({
-            id: `PLC-${drvObj.id}-0`,
-            place_name: firstStop.name,
-            arrived_at: arrivedAt.toISOString(),
-            departed_at: null,
-            dwell_duration_minutes: 0,
-            status: "active_dwell",
-            activity: firstStop.activity,
-            latitude: firstStop.lat,
-            longitude: firstStop.lng,
-          });
-          currentLoc = {
-            latitude: firstStop.lat,
-            longitude: firstStop.lng,
-            place_name: firstStop.name,
-            activity: "Pre-trip check",
-          };
-        }
-
-        return { placesVisited, currentLoc };
-      };
 
       // Find driver matching actor user context
       let drv = db.drivers.find(
@@ -8002,7 +8003,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
               );
             }
 
-            let targetUser = db.users.find(
+            let targetUser = (db.users || []).find(
               (u: any) => u.email && u.email.toLowerCase() === email,
             );
             const uId = targetUser ? targetUser.id : generateUUID();
@@ -8147,7 +8148,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
         try {
           const { phone, email, address, password, passportPhoto } =
             (await request.json()) as any;
-          const u = db.users.find(
+          const u = (db.users || []).find(
             (usr: any) =>
               usr.id === user.id ||
               (usr.email &&
@@ -8162,7 +8163,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
             sh.phone = phone;
           }
           if (email) {
-            const emailExists = db.users.some(
+            const emailExists = (db.users || []).some(
               (usr: any) =>
                 usr.id !== u.id &&
                 usr.email &&
@@ -8837,7 +8838,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
         try {
           const { full_name, email, password, pin } =
             (await request.json()) as any;
-          if (db.users.some((u: any) => u.email === email))
+          if ((db.users || []).some((u: any) => u.email === email))
             return buildResponse({ error: "Email already exists" }, 400);
           const hashedPassword = await generateHash(password);
           const hashedPin = await generateHash(pin);
@@ -8862,7 +8863,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
         try {
           const id = ctrl.split("/")[1];
           const updates = (await request.json()) as any;
-          const admin = db.users.find((u: any) => u.id === id);
+          const admin = (db.users || []).find((u: any) => u.id === id);
           if (admin) {
             if (updates.full_name) admin.full_name = updates.full_name;
             if (updates.email) admin.email = updates.email;
@@ -9006,7 +9007,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
         try {
           const { full_name, email, password, pin } =
             (await request.json()) as any;
-          if (db.users.some((u: any) => u.email === email))
+          if ((db.users || []).some((u: any) => u.email === email))
             return buildResponse({ error: "Email already exists" }, 400);
           const hashedPassword = await generateHash(password);
           const hashedPin = await generateHash(pin || "1234");
@@ -9032,7 +9033,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
         try {
           const id = ctrl.split("/")[1];
           const updates = (await request.json()) as any;
-          const dirUser = db.users.find((u: any) => u.id === id);
+          const dirUser = (db.users || []).find((u: any) => u.id === id);
           if (dirUser) {
             if (updates.full_name) dirUser.full_name = updates.full_name;
             if (updates.email) dirUser.email = updates.email;
@@ -10441,7 +10442,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
         }
 
         if (
-          db.users.some(
+          (db.users || []).some(
             (u: any) =>
               u.email && u.email.toLowerCase() === email.toLowerCase(),
           )
@@ -10535,7 +10536,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
           );
         }
 
-        const userRec = db.users.find((u: any) => u.id === user.id);
+        const userRec = (db.users || []).find((u: any) => u.id === user.id);
         if (!userRec) {
           return buildResponse({ error: "User account not found." }, 404);
         }
@@ -11038,7 +11039,7 @@ ${JSON.stringify(cleanedContext, null, 2)}
       }
       try {
         const mappedAdmins = (db.admins || []).map((adm: any) => {
-          const u = db.users.find((x: any) => x.id === adm.user_id);
+          const u = (db.users || []).find((x: any) => x.id === adm.user_id);
           return {
             ...adm,
             fullName: u?.full_name || adm.fullName || "Admin User",
