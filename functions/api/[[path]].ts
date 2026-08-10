@@ -945,7 +945,16 @@ function generateFilteredPayload(
     const user = db.users.find((u: any) => u.id === d.user_id);
     const guarantor = db.guarantors.find((g: any) => g.driver_id === d.id);
     const vehicle = mappedVehicles.find(
-      (v: any) => v.driverId === d.id || v.driver_id === d.id,
+      (v: any) =>
+        v.driverId === d.id ||
+        v.driver_id === d.id ||
+        v.driverId === d.user_id ||
+        v.driver_id === d.user_id ||
+        v.driverId === d.company_driver_id ||
+        v.driver_id === d.company_driver_id ||
+        v.id === d.vehicle_id ||
+        v.id === d.vehicleId ||
+        v.id === d.assignedVehicleId,
     );
     const financials = getDriverFinancials(d, db);
     const documents = (db.driver_documents || []).filter(
@@ -4121,7 +4130,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           const guarantor =
             db.guarantors.find((g: any) => g.driver_id === dr.id) || null;
           const vehicle =
-            db.vehicles.find((v: any) => v.driver_id === dr.id) || null;
+            db.vehicles.find(
+              (v: any) =>
+                v.driver_id === dr.id ||
+                v.driverId === dr.id ||
+                v.driver_id === dr.user_id ||
+                v.driverId === dr.user_id ||
+                v.driver_id === dr.company_driver_id ||
+                v.driverId === dr.company_driver_id ||
+                v.id === dr.vehicle_id ||
+                v.id === dr.vehicleId ||
+                v.id === dr.assignedVehicleId,
+            ) || null;
           const financials = getDriverFinancials(dr, db);
           const documents = (db.driver_documents || [])
             .filter((doc: any) => doc.driver_id === dr.id)
@@ -4521,7 +4541,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           const g =
             db.guarantors.find((gua: any) => gua.driver_id === drv.id) || null;
           const v =
-            db.vehicles.find((veh: any) => veh.driver_id === drv.id) || null;
+            db.vehicles.find(
+              (veh: any) =>
+                veh.driver_id === drv.id ||
+                veh.driverId === drv.id ||
+                veh.driver_id === drv.user_id ||
+                veh.driverId === drv.user_id ||
+                veh.driver_id === drv.company_driver_id ||
+                veh.driverId === drv.company_driver_id ||
+                veh.id === drv.vehicle_id ||
+                veh.id === drv.vehicleId ||
+                veh.id === drv.assignedVehicleId,
+            ) || null;
           const financials = getDriverFinancials(drv, db);
           const documents = (db.driver_documents || [])
             .filter((doc: any) => doc.driver_id === drv.id)
@@ -4851,7 +4882,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           const g =
             db.guarantors.find((gua: any) => gua.driver_id === drv.id) || null;
           const v =
-            db.vehicles.find((veh: any) => veh.driver_id === drv.id) || null;
+            db.vehicles.find(
+              (veh: any) =>
+                veh.driver_id === drv.id ||
+                veh.driverId === drv.id ||
+                veh.driver_id === drv.user_id ||
+                veh.driverId === drv.user_id ||
+                veh.driver_id === drv.company_driver_id ||
+                veh.driverId === drv.company_driver_id ||
+                veh.id === drv.vehicle_id ||
+                veh.id === drv.vehicleId ||
+                veh.id === drv.assignedVehicleId,
+            ) || null;
           const financials = getDriverFinancials(drv, db);
           const documents = (db.driver_documents || [])
             .filter((doc: any) => doc.driver_id === drv.id)
@@ -5915,7 +5957,42 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
       // GET /api/vehicles
       if (parts.length === 0 && method === "GET") {
-        return buildResponse(db.vehicles || []);
+        const mappedVehiclesList = (db.vehicles || []).map((v: any) => {
+          const assignedDriver = (db.drivers || []).find(
+            (d: any) =>
+              d.id === v.driver_id ||
+              d.id === v.driverId ||
+              d.user_id === v.driver_id ||
+              d.user_id === v.driverId ||
+              d.vehicle_id === v.id ||
+              d.vehicleId === v.id ||
+              d.assignedVehicleId === v.id,
+          );
+          const driverUser = assignedDriver
+            ? (db.users || []).find((u: any) => u.id === assignedDriver.user_id)
+            : null;
+
+          return {
+            ...v,
+            plateNumber: v.plate_number || v.plateNumber || "",
+            plate_number: v.plate_number || v.plateNumber || "",
+            driverId: v.driver_id || v.driverId || assignedDriver?.id || null,
+            driver_id: v.driver_id || v.driverId || assignedDriver?.id || null,
+            driverName:
+              driverUser?.full_name ||
+              assignedDriver?.fullName ||
+              assignedDriver?.full_name ||
+              null,
+            fuelType: v.fuel_type || v.fuelType || "diesel",
+            capacity: v.capacity || "30 Tons",
+            lastServiceDate:
+              v.last_service_date ||
+              v.lastServiceDate ||
+              new Date().toISOString().split("T")[0],
+            mileage: v.mileage !== undefined ? v.mileage : 0,
+          };
+        });
+        return buildResponse(mappedVehiclesList);
       }
 
       // POST /api/vehicles
