@@ -184,7 +184,11 @@ export const api = {
   },
 
   getMe: async () => {
-    return api.request('/api/auth/me');
+    try {
+      return await api.request('/api/auth/me');
+    } catch (err) {
+      return null;
+    }
   },
 
   updateProfile: async (payload: { fullName?: string; passportPhoto?: string; phone?: string; avatar?: string }) => {

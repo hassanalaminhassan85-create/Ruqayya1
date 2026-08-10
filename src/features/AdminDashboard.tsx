@@ -65,6 +65,7 @@ import { ActivityFeed } from '../components/admin/ActivityFeed';
 import { DriverTrackerDashboard } from '../components/admin/DriverTrackerDashboard';
 import { subscribeToActiveCycle } from '../utils/cycleService';
 import { GEOFENCE_ZONES, MAIDUGURI_HUB } from '../utils/geofencingService';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface AdminDashboardProps {
   lang: Language;
@@ -456,6 +457,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
     }
   };
 
+  const handleUpdateDriverOperationalStatus = async (driverId: string, status: string) => {
+    try {
+      await api.updateDriverStatus(driverId, { status: status as any });
+      syncAllData();
+    } catch (err) {
+      console.error("Failed to update driver operational status:", err);
+    }
+  };
+
   // Filter Drivers based on Selector Tab
   const filteredDrivers = drivers.filter(d => {
     if (driverFilter === 'all') return true;
@@ -832,9 +842,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
           <div className="bg-bg-surface border border-border-main rounded-2xl p-4 md:p-6 shadow-xs">
             
             {/* TAB 1: FLEET ASSETS */}
-            {activeTab === 'fleet' && (
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
+            {activeTab === 'fleet' && (() => {
+              const activeCount = drivers.filter(d => d.status === 'active' || d.status === 'available' || d.status === 'approved').length;
+              const onTripCount = drivers.filter(d => d.status === 'on-trip').length;
+              const onBreakCount = drivers.filter(d => d.status === 'off-duty' || d.status === 'break').length;
+              const offlineCount = drivers.filter(d => d.status === 'pending' || d.status === 'offline' || d.status === 'suspended' || d.status === 'rejected' || !d.status).length;
+
+              const availabilityData = [
+                { name: 'Active', value: activeCount || (drivers.length === 0 ? 1 : 0), color: '#10b981' },
+                { name: 'On-Trip', value: onTripCount, color: '#3b82f6' },
+                { name: 'On-Break', value: onBreakCount, color: '#f59e0b' },
+                { name: 'Offline', value: offlineCount, color: '#64748b' }
+              ];
+
+              return (
+                <div className="flex flex-col gap-6">
+                  {/* Driver Availability Donut Chart Widget */}
+                  <div className="bg-bg-base border border-border-main p-4 md:p-5 rounded-2xl shadow-xs">
+                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                      <div>
+                        <h3 className="text-xs font-black uppercase text-text-main flex items-center gap-1.5">
+                          <Activity className="h-4 w-4 text-brand-gold animate-pulse" />
+                          {lang === 'en' ? "Real-Time Driver Availability Status" : "Matsayin Kasancewar Direbobi a Aiki"}
+                        </h3>
+                        <p className="text-[10px] text-text-muted mt-0.5">
+                          {lang === 'en' ? "Live fleet driver status breakdown across Active, On-Trip, On-Break, and Offline nodes." : "Rabewar matsayin direbobin rukunin motoci."}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 rounded-lg bg-brand-gold/10 border border-brand-gold/20 text-brand-gold font-mono text-[10px] font-bold">
+                          {drivers.length} TOTAL DRIVERS
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                      <div className="lg:col-span-5 h-56 w-full flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={availabilityData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={55}
+                              outerRadius={85}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {availabilityData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                              formatter={(value: any, name: any) => [`${value} Drivers`, name]}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="lg:col-span-7 grid grid-cols-2 gap-3">
+                        {availabilityData.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-3 p-3 bg-bg-surface border border-border-main/60 rounded-xl shadow-xs">
+                            <div className="h-3.5 w-3.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: item.color }} />
+                            <div>
+                              <span className="text-[10px] font-bold text-text-muted uppercase block leading-tight">{item.name}</span>
+                              <span className="text-base font-black text-text-main font-mono">{item.value}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
                     <input
@@ -926,7 +1006,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                   </div>
                 )}
               </div>
-            )}
+            )})()}
 
             {/* TAB 2: DRIVER REGISTRY */}
             {activeTab === 'drivers' && (
@@ -1032,13 +1112,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ lang, dictionary
                               )}
                             </td>
                             <td className="p-3">
-                              <Badge variant={
-                                d.status === 'pending' ? 'warning' :
-                                d.status === 'correction_requested' ? 'default' :
-                                d.status === 'rejected' ? 'danger' : 'success'
-                              }>
-                                {(d.status || '').toUpperCase()}
-                              </Badge>
+                              <div className="flex flex-col gap-1.5">
+                                <Badge variant={
+                                  d.status === 'pending' ? 'warning' :
+                                  d.status === 'correction_requested' ? 'default' :
+                                  d.status === 'rejected' ? 'danger' : 'success'
+                                }>
+                                  {(d.status || '').toUpperCase()}
+                                </Badge>
+                                {d.status !== 'pending' && d.status !== 'correction_requested' && d.status !== 'rejected' && (
+                                  <div className="flex items-center gap-1 flex-wrap mt-1">
+                                    {(['active', 'on-trip', 'off-duty', 'offline'] as const).map(st => {
+                                      const isCurrent = (d.status || 'active') === st || (st === 'active' && d.status === 'approved');
+                                      const label = st === 'active' ? 'Active' : st === 'on-trip' ? 'On-Trip' : st === 'off-duty' ? 'Break' : 'Offline';
+                                      const bgClass = isCurrent
+                                        ? st === 'active' ? 'bg-emerald-600 text-white' : st === 'on-trip' ? 'bg-blue-600 text-white' : st === 'off-duty' ? 'bg-amber-500 text-slate-950' : 'bg-slate-700 text-slate-200'
+                                        : 'bg-bg-base text-text-muted hover:text-text-main border border-border-main';
+                                      return (
+                                        <button
+                                          key={st}
+                                          onClick={() => handleUpdateDriverOperationalStatus(d.id, st)}
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-all ${bgClass}`}
+                                          title={`Set status to ${label}`}
+                                        >
+                                          {label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="p-3 text-center">
                               {d.status === 'pending' || d.status === 'correction_requested' || d.status === 'rejected' ? (

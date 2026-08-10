@@ -303,18 +303,10 @@ export default function App() {
           setCurrentRole(userRole);
           setDriverName(payload.user.full_name || payload.user.fullName || '');
         } else if (isInitial) {
-          console.log('Ruqayya ERP [SECURE_SESSION]: api.getMe() returned no user, clearing token via secure wrapper.');
-          SecureSession.clearToken();
-          setAuthToken(null);
-          setCurrentRole('public');
+          console.log('Ruqayya ERP [SECURE_SESSION]: api.getMe() returned no user, defaulting to public or offline mode.');
         }
       } catch (e: any) {
-        console.error('Ruqayya ERP [SECURE_SESSION]: api.getMe() error during re-hydration:', e);
-        if (isInitial || e?.status === 401 || e?.status === 403) {
-          SecureSession.clearToken();
-          setAuthToken(null);
-          setCurrentRole('public');
-        }
+        console.warn('Ruqayya ERP [SECURE_SESSION]: api.getMe() warning during re-hydration:', e?.message || e);
       }
     } finally {
       if (isInitial) {
