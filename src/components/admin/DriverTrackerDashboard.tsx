@@ -33,102 +33,14 @@ export function DriverTrackerDashboard({ onBack, lang }: DriverTrackerDashboardP
     try {
       setRefreshing(true);
       const res = await api.getDriverTrackerList();
-      if (Array.isArray(res) && res.length > 0) {
+      if (Array.isArray(res)) {
         setDrivers(res);
       } else {
-        const drvRes = await api.getDrivers();
-        if (Array.isArray(drvRes) && drvRes.length > 0) {
-          const mapped = drvRes.map((d: any, idx: number) => ({
-            id: d.id || `D-00${idx + 1}`,
-            fullName: d.fullName || d.full_name || `Driver ${idx + 1}`,
-            company_driver_id: d.company_driver_id || d.companyDriverId || `RQT-10${idx + 1}`,
-            avatar: d.passport_photo_url || d.passportPhotoUrl || null,
-            status: idx % 2 === 0 ? 'Moving' : 'Idle',
-            speed: idx % 2 === 0 ? 48 : 0,
-            location: d.vehicle?.plate_number ? `Vehicle: ${d.vehicle.plate_number}` : (idx % 2 === 0 ? 'Maiduguri Main Market Route' : 'Maiduguri Central Depot'),
-            lastUpdate: 'Just now'
-          }));
-          setDrivers(mapped);
-        } else {
-          // Robust Default Fallback Drivers for immediate world-class experience
-          setDrivers([
-            {
-              id: 'D-001',
-              fullName: 'Alhaji Musa Goni',
-              company_driver_id: 'RQT-101',
-              avatar: null,
-              status: 'Moving',
-              speed: 52,
-              location: 'Baga Road Commercial Hub, Maiduguri',
-              lastUpdate: 'Just now'
-            },
-            {
-              id: 'D-002',
-              fullName: 'Babangida Ibrahim',
-              company_driver_id: 'RQT-102',
-              avatar: null,
-              status: 'Moving',
-              speed: 45,
-              location: 'Custom Area Terminal, Maiduguri',
-              lastUpdate: '1 min ago'
-            },
-            {
-              id: 'D-003',
-              fullName: 'Sani Yusuf Bello',
-              company_driver_id: 'RQT-103',
-              avatar: null,
-              status: 'Idle',
-              speed: 0,
-              location: 'Maiduguri Central Depot (Bay 4)',
-              lastUpdate: 'Just now'
-            },
-            {
-              id: 'D-004',
-              fullName: 'Ruqayya Kabir Mohammed',
-              company_driver_id: 'RQT-104',
-              avatar: null,
-              status: 'Moving',
-              speed: 38,
-              location: 'University Road Transit Route',
-              lastUpdate: '2 mins ago'
-            }
-          ]);
-        }
+        setDrivers([]);
       }
     } catch (err) {
-      console.error("Failed to fetch real-time driver tracker list, using fallback:", err);
-      setDrivers([
-        {
-          id: 'D-001',
-          fullName: 'Alhaji Musa Goni',
-          company_driver_id: 'RQT-101',
-          avatar: null,
-          status: 'Moving',
-          speed: 52,
-          location: 'Baga Road Commercial Hub, Maiduguri',
-          lastUpdate: 'Just now'
-        },
-        {
-          id: 'D-002',
-          fullName: 'Babangida Ibrahim',
-          company_driver_id: 'RQT-102',
-          avatar: null,
-          status: 'Moving',
-          speed: 45,
-          location: 'Custom Area Terminal, Maiduguri',
-          lastUpdate: '1 min ago'
-        },
-        {
-          id: 'D-003',
-          fullName: 'Sani Yusuf Bello',
-          company_driver_id: 'RQT-103',
-          avatar: null,
-          status: 'Idle',
-          speed: 0,
-          location: 'Maiduguri Central Depot (Bay 4)',
-          lastUpdate: 'Just now'
-        }
-      ]);
+      console.error("Failed to fetch real-time driver tracker list:", err);
+      setDrivers([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

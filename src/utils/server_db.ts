@@ -285,7 +285,8 @@ export function saveDB(state: DBState): void {
     
     // Fire-and-forget sync to cloud
     if (firestore) {
-      firestore.collection(CLOUD_DB_COLLECTION).doc(CLOUD_DB_DOC).set(state).then(() => {
+      const safeState = JSON.parse(JSON.stringify(state));
+      firestore.collection(CLOUD_DB_COLLECTION).doc(CLOUD_DB_DOC).set(safeState).then(() => {
         console.log('Successfully synced database to Firestore.');
       }).catch((err: any) => {
         console.warn('Failed to sync database to Firestore (relying on local storage):', err.message, 'Code:', err.code);

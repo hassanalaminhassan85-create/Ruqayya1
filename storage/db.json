@@ -1,459 +1,661 @@
 {
-  "users": [
+  "driver_documents": [],
+  "cycles": [
     {
-      "id": "36535156-2aed-4207-83ca-176b4f7059a0",
-      "username": "MMR",
-      "email": "director@ruqayyatransport.com",
-      "phone": "+234 803 111 0001",
-      "password_hash": "d2c1c58593fddd645aa6fab3da4e12a68ff7506d9218c358cc959b11284973ce26b685de0277e780f4f524745899da190ad9e021eed1d0caf71b6c0b8aabf075",
-      "full_name": "Executive Director MMR",
-      "role_id": "role-director",
-      "created_at": "2026-07-20T12:10:36.126Z",
-      "updated_at": "2026-07-20T12:10:36.126Z",
-      "status": "active"
-    },
-    {
-      "id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "username": "ADAM",
-      "email": "admin@ruqayyatransport.com",
-      "phone": "+234 803 222 0002",
-      "password_hash": "caa211097e71777b95c779acc72d2a9432d0e4b32a8c74970d04c98e4c0630850eafec0efe5dbd7cdc4db3ddc98241337439445d921a7911ea4e467086cc167a",
-      "full_name": "Operations Admin ADAM",
-      "role_id": "role-admin",
-      "created_at": "2026-07-20T12:10:36.127Z",
-      "updated_at": "2026-07-20T12:10:36.127Z",
-      "status": "active"
-    },
-    {
-      "id": "99e7f37c-b4e5-4db3-83e3-957347d5f0dc",
-      "username": "KABIR",
-      "email": "kabir.m@ruqayyatransport.com",
-      "phone": "+234 803 555 0001",
-      "password_hash": "5c53323d04059d0c99cc75b8010b78e03a04c089a55044002882055d7507f2e171824cdfb09821f896b162efb103caa8a040ff56773bc0ec82197ab3e8e2042c",
-      "full_name": "Alhaji Kabir Mohammed",
-      "role_id": "role-shareholder",
-      "created_at": "2026-08-01T13:48:59.244Z",
-      "updated_at": "2026-08-01T13:48:59.244Z",
-      "status": "active"
-    },
-    {
-      "id": "a6f3a796-a5f0-4a3a-a473-0e6fa093ebb2",
-      "username": "AMINA",
-      "email": "amina.g@ruqayyatransport.com",
-      "phone": "+234 803 555 0002",
-      "password_hash": "5c53323d04059d0c99cc75b8010b78e03a04c089a55044002882055d7507f2e171824cdfb09821f896b162efb103caa8a040ff56773bc0ec82197ab3e8e2042c",
-      "full_name": "Hajiya Amina Garba",
-      "role_id": "role-shareholder",
-      "created_at": "2026-08-01T13:48:59.245Z",
-      "updated_at": "2026-08-01T13:48:59.245Z",
-      "status": "active"
+      "id": "CYC-050",
+      "pauseDays": 2,
+      "pauseHistory": [
+        {
+          "reason": "Ok",
+          "extendedEndDate": "2026-08-30",
+          "pauseDays": 2,
+          "pausedBy": "Operations Admin ADAM",
+          "pausedAt": "2026-08-01T20:41:43.692Z",
+          "id": "cacf0fb2-8f9f-4f60-aaa9-005319c3f9ed"
+        },
+        {
+          "reason": "Jj",
+          "pausedBy": "Operations Admin ADAM",
+          "resumedBy": "Operations Admin ADAM",
+          "resumedAt": "2026-07-29T09:03:28.205Z",
+          "resumeReason": "Ok",
+          "pausedAt": "2026-07-29T09:03:17.870Z",
+          "id": "bfbae93f-27f2-4b57-9c78-c35b09f21118"
+        },
+        {
+          "id": "f4b7a15b-437f-4bad-b7f6-40004c908da7",
+          "pausedAt": "2026-07-29T08:56:17.986Z",
+          "reason": "Uu",
+          "resumedBy": "Operations Admin ADAM",
+          "resumedAt": "2026-07-29T09:02:48.473Z",
+          "resumeReason": "Resumed by administrator",
+          "pausedBy": "Operations Admin ADAM"
+        },
+        {
+          "resumeReason": "Resumed by administrator",
+          "pausedBy": "Operations Admin ADAM",
+          "id": "46a5137f-9213-4861-997c-d62ecabe13a4",
+          "reason": "Ok",
+          "resumedBy": "Operations Admin ADAM",
+          "resumedAt": "2026-07-29T08:55:41.186Z",
+          "pausedAt": "2026-07-29T08:34:00.214Z"
+        }
+      ],
+      "resumedAt": "2026-07-29T09:03:28.205Z",
+      "status": "active",
+      "financials": [],
+      "created_by": "Operations Admin ADAM",
+      "startDate": "2026-07-29",
+      "pausedBy": "Operations Admin ADAM",
+      "resumedBy": "Operations Admin ADAM",
+      "pauseReason": "",
+      "locked": false,
+      "endDate": "2026-08-30",
+      "extendedDays": 2,
+      "created_at": "2026-07-29T07:44:42.563Z",
+      "pausedAt": null,
+      "endGoalTons": 200
     }
   ],
-  "directors": [
+  "shareholder_settings": {
+    "distributionPercentage": 2
+  },
+  "driver_places": [],
+  "driver_ledger": [
     {
-      "id": "85d3c1b3-7abd-4d32-a682-88221474456d",
-      "user_id": "36535156-2aed-4207-83ca-176b4f7059a0",
-      "company_id": "DIR-2026-001",
-      "passport_photo_url": "",
-      "created_at": "2026-07-20T12:10:36.127Z",
-      "status": "active"
+      "id": "LGR-1786358280797-EEF0",
+      "driverId": "D-001",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #1",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.798Z"
+    },
+    {
+      "id": "LGR-1786358280798-F062",
+      "driverId": "D-001",
+      "type": "debit",
+      "category": "penalty",
+      "amount": 5000,
+      "description": "Overdue Charge Penalty (Installment 1)",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.798Z"
+    },
+    {
+      "id": "LGR-1786358280798-863E",
+      "driverId": "D-001",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #2",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.798Z"
+    },
+    {
+      "id": "LGR-1786358280798-E473",
+      "driverId": "D-001",
+      "type": "debit",
+      "category": "penalty",
+      "amount": 5000,
+      "description": "Overdue Charge Penalty (Installment 2)",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.798Z"
+    },
+    {
+      "id": "LGR-1786358280798-0819",
+      "driverId": "D-001",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #3",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.798Z"
+    },
+    {
+      "id": "LGR-1786358280799-4E2E",
+      "driverId": "D-002",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #1",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-C57F",
+      "driverId": "D-002",
+      "type": "debit",
+      "category": "penalty",
+      "amount": 5000,
+      "description": "Overdue Charge Penalty (Installment 1)",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-DF80",
+      "driverId": "D-002",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #2",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-E09F",
+      "driverId": "D-002",
+      "type": "debit",
+      "category": "penalty",
+      "amount": 5000,
+      "description": "Overdue Charge Penalty (Installment 2)",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-660E",
+      "driverId": "D-002",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #3",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-AB1D",
+      "driverId": "D-003",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #1",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-0722",
+      "driverId": "D-003",
+      "type": "debit",
+      "category": "penalty",
+      "amount": 5000,
+      "description": "Overdue Charge Penalty (Installment 1)",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-D80B",
+      "driverId": "D-003",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #2",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-C775",
+      "driverId": "D-003",
+      "type": "debit",
+      "category": "penalty",
+      "amount": 5000,
+      "description": "Overdue Charge Penalty (Installment 2)",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-E9C7",
+      "driverId": "D-003",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #3",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280799-A8C0",
+      "driverId": "D-004",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #1",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "LGR-1786358280800-1020",
+      "driverId": "D-004",
+      "type": "debit",
+      "category": "penalty",
+      "amount": 5000,
+      "description": "Overdue Charge Penalty (Installment 1)",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.800Z"
+    },
+    {
+      "id": "LGR-1786358280800-7746",
+      "driverId": "D-004",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #2",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.800Z"
+    },
+    {
+      "id": "LGR-1786358280800-5FBC",
+      "driverId": "D-004",
+      "type": "debit",
+      "category": "penalty",
+      "amount": 5000,
+      "description": "Overdue Charge Penalty (Installment 2)",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.800Z"
+    },
+    {
+      "id": "LGR-1786358280800-9B20",
+      "driverId": "D-004",
+      "type": "debit",
+      "category": "vehicle_payment",
+      "amount": 30000,
+      "description": "Scheduled Lease Installment #3",
+      "cycleId": "CYC-050",
+      "date": "2026-08-10T10:38:00.800Z"
     }
   ],
-  "admins": [
+  "messages": [],
+  "announcements": [],
+  "vapid_keys": {
+    "publicKey": "BBTQfoPW8_OAvjAy5iR8e3ce-PvQN4AS9JkeK7rIC-49ONqCYCSn4EWD1BBKB7lDR-_8UOXhf2jLkvGfTq_ucrc",
+    "privateKey": "6huXoUbKJyFaCxjNwjvN6fq-HP3K5Js_L5y0yqKIaZc"
+  },
+  "driver_locations": [],
+  "company_settings": {
+    "email": "info@ruqayyatransport.com",
+    "companyName": "Ruqayya Transport Limited",
+    "timeZone": "Africa/Lagos",
+    "wallet_initial_amount": 0,
+    "themeDefault": "light",
+    "languageDefault": "en",
+    "wallet_balance": 40000,
+    "phone": "+234 803 123 4567",
+    "companyAddress": "No 14 Zaria Road, Kano, Nigeria",
+    "currency": "₦",
+    "companyLogo": ""
+  },
+  "financial_records": [
     {
-      "id": "ba9fcd9e-c17f-4e36-ad8b-5103790ca861",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "company_id": "ADM-2026-001",
-      "passport_photo_url": "",
-      "created_at": "2026-07-20T12:10:36.127Z",
-      "status": "active"
+      "id": "c93d148a-5a23-4a22-94ce-00b0f56d6b3d",
+      "type": "revenue",
+      "category": "penalty",
+      "amount": 5000,
+      "date": "2026-08-10T10:38:00.798Z",
+      "description": "Overdue Charge Penalty: Driver Alhaji Musa Goni",
+      "cycleId": "CYC-050"
+    },
+    {
+      "id": "bb9141f1-4493-4d84-b68b-942f9c3e0b30",
+      "type": "revenue",
+      "category": "penalty",
+      "amount": 5000,
+      "date": "2026-08-10T10:38:00.798Z",
+      "description": "Overdue Charge Penalty: Driver Alhaji Musa Goni",
+      "cycleId": "CYC-050"
+    },
+    {
+      "id": "4f0ec0a0-0c5e-4d59-b45b-0700865f0ff4",
+      "type": "revenue",
+      "category": "penalty",
+      "amount": 5000,
+      "date": "2026-08-10T10:38:00.799Z",
+      "description": "Overdue Charge Penalty: Driver Babangida Ibrahim",
+      "cycleId": "CYC-050"
+    },
+    {
+      "id": "afdc1fcb-bfae-4085-a1a0-d015e85976ba",
+      "type": "revenue",
+      "category": "penalty",
+      "amount": 5000,
+      "date": "2026-08-10T10:38:00.799Z",
+      "description": "Overdue Charge Penalty: Driver Babangida Ibrahim",
+      "cycleId": "CYC-050"
+    },
+    {
+      "id": "fc169b9d-e3a9-41b7-9eb2-8b372284ceab",
+      "type": "revenue",
+      "category": "penalty",
+      "amount": 5000,
+      "date": "2026-08-10T10:38:00.799Z",
+      "description": "Overdue Charge Penalty: Driver Sani Yusuf Bello",
+      "cycleId": "CYC-050"
+    },
+    {
+      "id": "050762bb-a140-4368-854f-25dc25a660ae",
+      "type": "revenue",
+      "category": "penalty",
+      "amount": 5000,
+      "date": "2026-08-10T10:38:00.799Z",
+      "description": "Overdue Charge Penalty: Driver Sani Yusuf Bello",
+      "cycleId": "CYC-050"
+    },
+    {
+      "id": "dc7df668-f1f0-4c07-b9d0-a696d6b1f29b",
+      "type": "revenue",
+      "category": "penalty",
+      "amount": 5000,
+      "date": "2026-08-10T10:38:00.800Z",
+      "description": "Overdue Charge Penalty: Driver Ruqayya Kabir Mohammed",
+      "cycleId": "CYC-050"
+    },
+    {
+      "id": "dbbf176d-e3ff-4ca6-8de9-57c619be91e9",
+      "type": "revenue",
+      "category": "penalty",
+      "amount": 5000,
+      "date": "2026-08-10T10:38:00.800Z",
+      "description": "Overdue Charge Penalty: Driver Ruqayya Kabir Mohammed",
+      "cycleId": "CYC-050"
     }
   ],
-  "drivers": [],
   "shareholders": [
     {
-      "id": "SH-2026-001",
-      "user_id": "99e7f37c-b4e5-4db3-83e3-957347d5f0dc",
-      "full_name": "Alhaji Kabir Mohammed",
       "fullName": "Alhaji Kabir Mohammed",
-      "phone": "+234 803 555 0001",
-      "email": "kabir.m@ruqayyatransport.com",
-      "address": "Plot 12 Commercial Layout, Kano, Nigeria",
-      "investment_amount": 12000000,
-      "investmentAmount": 12000000,
-      "investment_date": "2026-01-15",
-      "investmentDate": "2026-01-15",
-      "passport_photo_url": "",
-      "passportPhoto": "",
+      "created_at": "2026-08-01T13:48:59.245Z",
       "ownership_percentage": 60,
-      "total_withdrawn": 0,
-      "total_reinvested": 0,
-      "created_at": "2026-08-01T13:48:59.245Z",
-      "status": "active"
-    },
-    {
-      "id": "SH-2026-002",
-      "user_id": "a6f3a796-a5f0-4a3a-a473-0e6fa093ebb2",
-      "full_name": "Hajiya Amina Garba",
-      "fullName": "Hajiya Amina Garba",
-      "phone": "+234 803 555 0002",
-      "email": "amina.g@ruqayyatransport.com",
-      "address": "No 45 GRA Maiduguri, Borno State, Nigeria",
-      "investment_amount": 8000000,
-      "investmentAmount": 8000000,
-      "investment_date": "2026-02-01",
-      "investmentDate": "2026-02-01",
-      "passport_photo_url": "",
       "passportPhoto": "",
-      "ownership_percentage": 40,
+      "investmentDate": "2026-01-15",
       "total_withdrawn": 0,
+      "address": "Plot 12 Commercial Layout, Kano, Nigeria",
+      "phone": "+234 803 555 0001",
+      "investment_amount": 12000000,
+      "investment_date": "2026-01-15",
+      "email": "kabir.m@ruqayyatransport.com",
       "total_reinvested": 0,
+      "status": "active",
+      "user_id": "99e7f37c-b4e5-4db3-83e3-957347d5f0dc",
+      "id": "SH-2026-001",
+      "full_name": "Alhaji Kabir Mohammed",
+      "passport_photo_url": "",
+      "investmentAmount": 12000000
+    },
+    {
+      "user_id": "a6f3a796-a5f0-4a3a-a473-0e6fa093ebb2",
+      "total_withdrawn": 0,
+      "address": "No 45 GRA Maiduguri, Borno State, Nigeria",
+      "full_name": "Hajiya Amina Garba",
+      "id": "SH-2026-002",
       "created_at": "2026-08-01T13:48:59.245Z",
+      "passportPhoto": "",
+      "investment_amount": 8000000,
+      "passport_photo_url": "",
+      "investmentAmount": 8000000,
+      "email": "amina.g@ruqayyatransport.com",
+      "total_reinvested": 0,
+      "investmentDate": "2026-02-01",
+      "ownership_percentage": 40,
+      "fullName": "Hajiya Amina Garba",
+      "investment_date": "2026-02-01",
+      "phone": "+234 803 555 0002",
       "status": "active"
-    }
-  ],
-  "guarantors": [],
-  "vehicles": [],
-  "vehicle_documents": [],
-  "driver_documents": [],
-  "company_documents": [],
-  "sessions": [
-    {
-      "id": "fd9e845d-f0c8-48f6-a729-ac05983569ff",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_admin_ADAM_7be155804f844646afe603eca39ed2d0",
-      "expires_at": "2026-08-19T12:10:45.500Z",
-      "user_ip": "102.91.101.154, 169.254.169.126",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-      "created_at": "2026-07-20T12:10:45.500Z",
-      "status": "active"
-    },
-    {
-      "id": "e73c82d9-58af-4c54-9477-6836c59cac96",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_fallback_ADAM",
-      "expires_at": "2026-08-19T12:21:25.867Z",
-      "user_ip": "127.0.0.1",
-      "user_agent": "curl/7.88.1",
-      "created_at": "2026-07-20T12:21:25.867Z",
-      "status": "active"
-    },
-    {
-      "id": "5b3ed410-cd4a-4102-b827-ac9340a705d7",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_admin_ADAM_aed10d60e06c4f69a000d54668275237",
-      "expires_at": "2026-08-28T07:37:26.664Z",
-      "user_ip": "102.92.22.141, 169.254.169.126",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-      "created_at": "2026-07-29T07:37:26.664Z",
-      "status": "active"
-    },
-    {
-      "id": "5c158f80-ccfc-4506-b2c5-17aa3e8a0eeb",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_admin_ADAM_38bae1d66da64dcab4eadf2d8ed1445c",
-      "expires_at": "2026-08-28T08:04:00.320Z",
-      "user_ip": "102.92.22.141, 169.254.169.126",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-      "created_at": "2026-07-29T08:04:00.320Z",
-      "status": "logged_out"
-    },
-    {
-      "id": "31f95bf5-0db9-4490-afcb-6c3035955a4d",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_admin_ADAM_317f11e158f64cfaa80611b9bd2ee7ba",
-      "expires_at": "2026-08-28T08:13:34.395Z",
-      "user_ip": "102.92.22.141, 169.254.169.126",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-      "created_at": "2026-07-29T08:13:34.395Z",
-      "status": "logged_out"
-    },
-    {
-      "id": "e71e1385-16c3-43b6-94b7-5fc845ce2706",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_fallback_ADAM_1785313401555",
-      "expires_at": "2026-08-28T08:23:23.644Z",
-      "user_ip": "102.92.22.141, 169.254.169.126",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-      "created_at": "2026-07-29T08:23:23.644Z",
-      "status": "logged_out"
-    },
-    {
-      "id": "227546a3-a50d-465b-8121-92df156e1a5d",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_admin_ADAM_6a92118c07c14fc9b1fb7aa41b3d2757",
-      "expires_at": "2026-08-28T08:28:18.762Z",
-      "user_ip": "102.92.22.141, 169.254.169.126",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-      "created_at": "2026-07-29T08:28:18.762Z",
-      "status": "active"
-    },
-    {
-      "id": "5a1a169c-3ee5-41c4-951f-817badb7a9ba",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_admin_ADAM_2b1337e46c024df7844b6b092f4ac5d2",
-      "expires_at": "2026-08-28T08:28:18.784Z",
-      "user_ip": "102.92.22.141, 169.254.169.126",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-      "created_at": "2026-07-29T08:28:18.785Z",
-      "status": "active"
-    },
-    {
-      "id": "5b2f7acf-bd9c-4716-83c7-30727284607d",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "token": "tok_admin_ADAM_d149d829c2d248a6b787c55d8c864dc1",
-      "expires_at": "2026-08-31T20:07:34.703Z",
-      "user_ip": "102.91.96.40, 169.254.169.126",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-      "created_at": "2026-08-01T20:07:34.703Z",
-      "status": "active"
-    }
-  ],
-  "audit_logs": [
-    {
-      "id": "AUD-1785616903695-8BEE7C15",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "COMPANY_OPERATIONS_PAUSE",
-      "previous_value": "Operational Mode",
-      "new_value": "Suspended company operations: Ok",
-      "ip_address": "102.91.93.217, 169.254.169.126",
-      "created_at": "2026-08-01T20:41:43.695Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785315808209-DC49283D",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "CYCLE_RESUME",
-      "previous_value": null,
-      "new_value": "Resumed operating cycle CYC-050",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T09:03:28.209Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785315797874-3C4C7C41",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "COMPANY_OPERATIONS_PAUSE",
-      "previous_value": "Operational Mode",
-      "new_value": "Suspended company operations: Jj",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T09:03:17.874Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785315768478-04702017",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "COMPANY_OPERATIONS_RESUME",
-      "previous_value": "Paused",
-      "new_value": "Resumed company operations: Resumed by administrator",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T09:02:48.478Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785315377994-5F9A30C1",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "CYCLE_PAUSE",
-      "previous_value": null,
-      "new_value": "Paused operating cycle CYC-050. Reason: Uu",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T08:56:17.994Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785315341241-D2AE80FA",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "COMPANY_OPERATIONS_RESUME",
-      "previous_value": "Paused",
-      "new_value": "Resumed company operations: Resumed by administrator",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T08:55:41.241Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785314040224-2A4C449C",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "CYCLE_PAUSE",
-      "previous_value": null,
-      "new_value": "Paused operating cycle CYC-050. Reason: Ok",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T08:34:00.224Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785313698787-67186800",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "SESSION_CREATED",
-      "previous_value": null,
-      "new_value": "Authorized username-only login session valid until 2026-08-28T08:28:18.784Z",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T08:28:18.787Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785313698766-8A73DF24",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "SESSION_CREATED",
-      "previous_value": null,
-      "new_value": "Authorized username-only login session valid until 2026-08-28T08:28:18.762Z",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T08:28:18.766Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785312814398-363E224B",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "SESSION_CREATED",
-      "previous_value": null,
-      "new_value": "Authorized username-only login session valid until 2026-08-28T08:13:34.395Z",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T08:13:34.398Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785312240325-0F415763",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "SESSION_CREATED",
-      "previous_value": null,
-      "new_value": "Authorized username-only login session valid until 2026-08-28T08:04:00.320Z",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T08:04:00.325Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1785311082567-705B1308",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "user_email": "admin@ruqayyatransport.com",
-      "user_role": "admin",
-      "action": "COMPANY_OPERATIONS_START",
-      "previous_value": "Setup Mode",
-      "new_value": "Activated live enterprise operations. First 30-day operating cycle commenced by Operations Admin ADAM",
-      "ip_address": "102.92.22.141, 169.254.169.126",
-      "created_at": "2026-07-29T07:44:42.567Z",
-      "status": "active"
-    },
-    {
-      "id": "AUD-1784549436127-SETUP",
-      "user_id": null,
-      "user_email": "system",
-      "user_role": "public",
-      "action": "SYSTEM_BOOTSTRAP",
-      "previous_value": null,
-      "new_value": "Clean ERP system initialized. Database is fresh and ready for operations.",
-      "ip_address": "127.0.0.1",
-      "created_at": "2026-07-20T12:10:36.127Z"
     }
   ],
   "notifications": [
     {
-      "id": "052c0ee6-d7cc-4a7e-8a90-a1c8a2db35d2",
-      "title_en": "System Action: COMPANY OPERATIONS PAUSE",
-      "title_ha": "Wani Abu Ya Faru: COMPANY OPERATIONS PAUSE",
-      "message_en": "Suspended company operations: Ok",
-      "message_ha": "Suspended company operations: Ok",
-      "type": "info",
-      "category": "system",
+      "id": "7d5f515d-fcf6-410b-811d-91eed63148f3",
+      "driver_id": "D-004",
+      "title_en": "Installment Overdue",
+      "message_en": "A ₦5,000 penalty has been applied.",
+      "type": "overdue",
       "read_status": 0,
+      "created_at": "2026-08-10T10:38:00.800Z"
+    },
+    {
+      "id": "cde929ea-52ac-453e-9f1a-aedf297c4e37",
+      "driver_id": "D-004",
+      "title_en": "Installment Overdue",
+      "message_en": "A ₦5,000 penalty has been applied.",
+      "type": "overdue",
+      "read_status": 0,
+      "created_at": "2026-08-10T10:38:00.800Z"
+    },
+    {
+      "id": "735f58a6-b85e-4c14-87fb-416ec5a9ae7e",
+      "driver_id": "D-003",
+      "title_en": "Installment Overdue",
+      "message_en": "A ₦5,000 penalty has been applied.",
+      "type": "overdue",
+      "read_status": 0,
+      "created_at": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "710a2e42-b880-48e0-aa46-bc1fe95370df",
+      "driver_id": "D-003",
+      "title_en": "Installment Overdue",
+      "message_en": "A ₦5,000 penalty has been applied.",
+      "type": "overdue",
+      "read_status": 0,
+      "created_at": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "e3058b5b-53d5-482d-a50a-34423faaf67e",
+      "driver_id": "D-002",
+      "title_en": "Installment Overdue",
+      "message_en": "A ₦5,000 penalty has been applied.",
+      "type": "overdue",
+      "read_status": 0,
+      "created_at": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "52740d48-ab4e-4ead-8bf6-f6f9a1e53ab0",
+      "driver_id": "D-002",
+      "title_en": "Installment Overdue",
+      "message_en": "A ₦5,000 penalty has been applied.",
+      "type": "overdue",
+      "read_status": 0,
+      "created_at": "2026-08-10T10:38:00.799Z"
+    },
+    {
+      "id": "9a8c0e57-6ab5-4008-90e1-74e50698f11b",
+      "driver_id": "D-001",
+      "title_en": "Installment Overdue",
+      "message_en": "A ₦5,000 penalty has been applied.",
+      "type": "overdue",
+      "read_status": 0,
+      "created_at": "2026-08-10T10:38:00.798Z"
+    },
+    {
+      "id": "b735b157-5d6e-4552-92db-d0945d2c5836",
+      "driver_id": "D-001",
+      "title_en": "Installment Overdue",
+      "message_en": "A ₦5,000 penalty has been applied.",
+      "type": "overdue",
+      "read_status": 0,
+      "created_at": "2026-08-10T10:38:00.798Z"
+    },
+    {
+      "message_en": "Suspended company operations: Ok",
+      "type": "info",
+      "target_role": "admin",
+      "title_en": "System Action: COMPANY OPERATIONS PAUSE",
+      "message_ha": "Suspended company operations: Ok",
       "created_at": "2026-08-01T20:41:43.695Z",
       "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "target_role": "admin"
+      "title_ha": "Wani Abu Ya Faru: COMPANY OPERATIONS PAUSE",
+      "id": "052c0ee6-d7cc-4a7e-8a90-a1c8a2db35d2",
+      "read_status": 0,
+      "category": "system"
     },
     {
-      "id": "d5c6b592-62d0-4f63-b4fd-d5f7352abde3",
       "title_en": "Operating Cycle Resumed",
-      "title_ha": "An Dawo da Zagayen Sufuri",
-      "message_en": "Operating Cycle CYC-050 was resumed by Operations Admin ADAM.",
+      "read_status": 0,
       "message_ha": "An dawo da Zagayen Gudanarwa CYC-050 ta hanyar Operations Admin ADAM.",
+      "id": "d5c6b592-62d0-4f63-b4fd-d5f7352abde3",
+      "message_en": "Operating Cycle CYC-050 was resumed by Operations Admin ADAM.",
       "type": "success",
-      "read_status": 0,
-      "created_at": "2026-07-29T09:03:28.205Z"
+      "created_at": "2026-07-29T09:03:28.205Z",
+      "title_ha": "An Dawo da Zagayen Sufuri"
     },
     {
+      "title_ha": "An Dakatar da Zagayen Sufuri",
+      "created_at": "2026-07-29T08:56:17.986Z",
       "id": "5ea39871-29b8-47ea-9da4-1cfc88e2e5ee",
-      "title_en": "Operating Cycle Paused",
-      "title_ha": "An Dakatar da Zagayen Sufuri",
-      "message_en": "Operating Cycle CYC-050 was paused by Operations Admin ADAM. Reason: Uu",
       "message_ha": "An dakatar da Zagayen Gudanarwa CYC-050 ta hanyar Operations Admin ADAM. Dalili: Uu",
-      "type": "warning",
+      "title_en": "Operating Cycle Paused",
+      "message_en": "Operating Cycle CYC-050 was paused by Operations Admin ADAM. Reason: Uu",
       "read_status": 0,
-      "created_at": "2026-07-29T08:56:17.986Z"
+      "type": "warning"
     },
     {
-      "id": "4f289833-8d87-4b47-be7c-ac597295fdc1",
-      "title_en": "Operating Cycle Paused",
-      "title_ha": "An Dakatar da Zagayen Sufuri",
-      "message_en": "Operating Cycle CYC-050 was paused by Operations Admin ADAM. Reason: Ok",
-      "message_ha": "An dakatar da Zagayen Gudanarwa CYC-050 ta hanyar Operations Admin ADAM. Dalili: Ok",
       "type": "warning",
+      "title_en": "Operating Cycle Paused",
       "read_status": 0,
+      "message_ha": "An dakatar da Zagayen Gudanarwa CYC-050 ta hanyar Operations Admin ADAM. Dalili: Ok",
+      "message_en": "Operating Cycle CYC-050 was paused by Operations Admin ADAM. Reason: Ok",
+      "id": "4f289833-8d87-4b47-be7c-ac597295fdc1",
+      "title_ha": "An Dakatar da Zagayen Sufuri",
       "created_at": "2026-07-29T08:34:00.214Z"
     }
   ],
-  "user_preferences": [
+  "drivers": [
     {
-      "id": "0bb1a867-c327-4b90-ac90-24828669f5b1",
-      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
-      "enablePush": true,
-      "enableSound": true,
-      "enableVibration": true,
-      "enableAnnouncement": true,
-      "enableFinanceAlerts": true,
-      "enableSecurityAlerts": true,
-      "quietHoursStart": "22:00",
-      "quietHoursEnd": "06:00",
-      "preferredLanguage": "en"
-    }
-  ],
-  "roles": [
-    {
-      "id": "role-director",
-      "name": "director",
-      "description": "Executive Boardroom Director",
-      "created_at": "2026-07-20T12:10:36.124Z",
-      "status": "active"
+      "id": "D-001",
+      "vehicle_model": "SinoTruck Heavy Freight",
+      "company_driver_id": "RQT-101",
+      "status": "suspended",
+      "fullName": "Alhaji Musa Goni",
+      "penalties_history": [
+        {
+          "id": "7d3b044a-e1bf-4ac6-8d0e-680fa9cbca0b",
+          "installmentNumber": 1,
+          "cycleId": "CYC-050",
+          "amount": 5000,
+          "appliedAt": "2026-08-10T10:38:00.798Z"
+        },
+        {
+          "id": "eb30cc16-afe3-4cdf-8ee4-4d896f113c73",
+          "installmentNumber": 2,
+          "cycleId": "CYC-050",
+          "amount": 5000,
+          "appliedAt": "2026-08-10T10:38:00.798Z"
+        }
+      ],
+      "total_penalty_amount": 10000,
+      "debt_amount": 10000,
+      "vehicle_purchase_price": 15000000,
+      "vehiclePurchasePrice": 15000000,
+      "total_amount_paid": 0,
+      "totalAmountPaid": 0,
+      "remaining_vehicle_balance": 15000000,
+      "remainingVehicleBalance": 15000000,
+      "ledger_balance": -100000,
+      "total_debits": 100000,
+      "total_credits": 0,
+      "next_installment_due_date": "2026-08-02"
     },
     {
-      "id": "role-admin",
-      "name": "admin",
-      "description": "Operations Control Center Admin",
-      "created_at": "2026-07-20T12:10:36.125Z",
-      "status": "active"
+      "vehicle_model": "Tricycle Cargo Van",
+      "id": "D-002",
+      "status": "suspended",
+      "fullName": "Babangida Ibrahim",
+      "company_driver_id": "RQT-102",
+      "penalties_history": [
+        {
+          "id": "ed2f7909-25db-40c3-b90c-831c3417fed8",
+          "installmentNumber": 1,
+          "cycleId": "CYC-050",
+          "amount": 5000,
+          "appliedAt": "2026-08-10T10:38:00.799Z"
+        },
+        {
+          "id": "433923a8-c48f-4067-a566-e224dd19a8b9",
+          "installmentNumber": 2,
+          "cycleId": "CYC-050",
+          "amount": 5000,
+          "appliedAt": "2026-08-10T10:38:00.799Z"
+        }
+      ],
+      "total_penalty_amount": 10000,
+      "debt_amount": 10000,
+      "vehicle_purchase_price": 15000000,
+      "vehiclePurchasePrice": 15000000,
+      "total_amount_paid": 0,
+      "totalAmountPaid": 0,
+      "remaining_vehicle_balance": 15000000,
+      "remainingVehicleBalance": 15000000,
+      "ledger_balance": -100000,
+      "total_debits": 100000,
+      "total_credits": 0,
+      "next_installment_due_date": "2026-08-02"
     },
     {
-      "id": "role-driver",
-      "name": "driver",
-      "description": "Logistics Fleet Driver",
-      "created_at": "2026-07-20T12:10:36.125Z",
-      "status": "active"
+      "status": "suspended",
+      "id": "D-003",
+      "fullName": "Sani Yusuf Bello",
+      "company_driver_id": "RQT-103",
+      "vehicle_model": "SinoTruck Tipper",
+      "penalties_history": [
+        {
+          "id": "e7a44cd6-c9f7-4151-92e2-0343195ded1b",
+          "installmentNumber": 1,
+          "cycleId": "CYC-050",
+          "amount": 5000,
+          "appliedAt": "2026-08-10T10:38:00.799Z"
+        },
+        {
+          "id": "51f7cdff-120c-41d1-9973-16f4e61d6b3d",
+          "installmentNumber": 2,
+          "cycleId": "CYC-050",
+          "amount": 5000,
+          "appliedAt": "2026-08-10T10:38:00.799Z"
+        }
+      ],
+      "total_penalty_amount": 10000,
+      "debt_amount": 10000,
+      "vehicle_purchase_price": 15000000,
+      "vehiclePurchasePrice": 15000000,
+      "total_amount_paid": 0,
+      "totalAmountPaid": 0,
+      "remaining_vehicle_balance": 15000000,
+      "remainingVehicleBalance": 15000000,
+      "ledger_balance": -100000,
+      "total_debits": 100000,
+      "total_credits": 0,
+      "next_installment_due_date": "2026-08-02"
     },
     {
-      "id": "role-shareholder",
-      "name": "shareholder",
-      "description": "Corporate Capital Investor",
-      "created_at": "2026-07-20T12:10:36.125Z",
-      "status": "active"
+      "vehicle_model": "Transport Transit",
+      "status": "suspended",
+      "id": "D-004",
+      "company_driver_id": "RQT-104",
+      "fullName": "Ruqayya Kabir Mohammed",
+      "penalties_history": [
+        {
+          "id": "d4999852-a220-46da-9f42-0a672491f814",
+          "installmentNumber": 1,
+          "cycleId": "CYC-050",
+          "amount": 5000,
+          "appliedAt": "2026-08-10T10:38:00.799Z"
+        },
+        {
+          "id": "5608edf4-c2c8-4854-8953-efe25f3df026",
+          "installmentNumber": 2,
+          "cycleId": "CYC-050",
+          "amount": 5000,
+          "appliedAt": "2026-08-10T10:38:00.800Z"
+        }
+      ],
+      "total_penalty_amount": 10000,
+      "debt_amount": 10000,
+      "vehicle_purchase_price": 15000000,
+      "vehiclePurchasePrice": 15000000,
+      "total_amount_paid": 0,
+      "totalAmountPaid": 0,
+      "remaining_vehicle_balance": 15000000,
+      "remainingVehicleBalance": 15000000,
+      "ledger_balance": -100000,
+      "total_debits": 100000,
+      "total_credits": 0,
+      "next_installment_due_date": "2026-08-02"
     }
   ],
   "permissions": [
@@ -469,214 +671,536 @@
     },
     {
       "id": "p3",
-      "name": "manage_financials",
-      "description": "Access and modify general ledger records"
+      "description": "Access and modify general ledger records",
+      "name": "manage_financials"
     },
     {
+      "description": "Approve driver fuel allocation vouchers",
       "id": "p4",
-      "name": "approve_vouchers",
-      "description": "Approve driver fuel allocation vouchers"
+      "name": "approve_vouchers"
     },
     {
-      "id": "p5",
       "name": "view_audit_logs",
-      "description": "Inspect corporate security records"
+      "description": "Inspect corporate security records",
+      "id": "p5"
     },
     {
-      "id": "p6",
+      "description": "Submit fuel purchase requests",
       "name": "request_vouchers",
-      "description": "Submit fuel purchase requests"
+      "id": "p6"
     }
   ],
-  "fuel_vouchers": [],
-  "financial_records": [],
-  "trip_manifests": [],
-  "cycles": [
-    {
-      "id": "CYC-050",
-      "startDate": "2026-07-29",
-      "endDate": "2026-08-30",
-      "endGoalTons": 200,
-      "status": "active",
-      "created_at": "2026-07-29T07:44:42.563Z",
-      "created_by": "Operations Admin ADAM",
-      "locked": false,
-      "financials": [],
-      "pauseReason": "",
-      "pausedAt": null,
-      "pausedBy": "Operations Admin ADAM",
-      "pauseHistory": [
-        {
-          "id": "cacf0fb2-8f9f-4f60-aaa9-005319c3f9ed",
-          "pausedBy": "Operations Admin ADAM",
-          "pausedAt": "2026-08-01T20:41:43.692Z",
-          "reason": "Ok",
-          "pauseDays": 2,
-          "extendedEndDate": "2026-08-30"
-        },
-        {
-          "id": "bfbae93f-27f2-4b57-9c78-c35b09f21118",
-          "pausedBy": "Operations Admin ADAM",
-          "pausedAt": "2026-07-29T09:03:17.870Z",
-          "reason": "Jj",
-          "resumedBy": "Operations Admin ADAM",
-          "resumedAt": "2026-07-29T09:03:28.205Z",
-          "resumeReason": "Ok"
-        },
-        {
-          "id": "f4b7a15b-437f-4bad-b7f6-40004c908da7",
-          "pausedBy": "Operations Admin ADAM",
-          "pausedAt": "2026-07-29T08:56:17.986Z",
-          "reason": "Uu",
-          "resumedBy": "Operations Admin ADAM",
-          "resumedAt": "2026-07-29T09:02:48.473Z",
-          "resumeReason": "Resumed by administrator"
-        },
-        {
-          "id": "46a5137f-9213-4861-997c-d62ecabe13a4",
-          "pausedBy": "Operations Admin ADAM",
-          "pausedAt": "2026-07-29T08:34:00.214Z",
-          "reason": "Ok",
-          "resumedBy": "Operations Admin ADAM",
-          "resumedAt": "2026-07-29T08:55:41.186Z",
-          "resumeReason": "Resumed by administrator"
-        }
-      ],
-      "resumedAt": "2026-07-29T09:03:28.205Z",
-      "resumedBy": "Operations Admin ADAM",
-      "pauseDays": 2,
-      "extendedDays": 2
-    }
-  ],
+  "vehicle_documents": [],
   "driver_payments": [],
-  "messages": [],
-  "announcements": [],
+  "driver_duty_sessions": [],
+  "roles": [
+    {
+      "description": "Executive Boardroom Director",
+      "created_at": "2026-07-20T12:10:36.124Z",
+      "status": "active",
+      "name": "director",
+      "id": "role-director"
+    },
+    {
+      "status": "active",
+      "name": "admin",
+      "created_at": "2026-07-20T12:10:36.125Z",
+      "description": "Operations Control Center Admin",
+      "id": "role-admin"
+    },
+    {
+      "status": "active",
+      "created_at": "2026-07-20T12:10:36.125Z",
+      "name": "driver",
+      "id": "role-driver",
+      "description": "Logistics Fleet Driver"
+    },
+    {
+      "name": "shareholder",
+      "status": "active",
+      "id": "role-shareholder",
+      "created_at": "2026-07-20T12:10:36.125Z",
+      "description": "Corporate Capital Investor"
+    }
+  ],
+  "admins": [
+    {
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "created_at": "2026-07-20T12:10:36.127Z",
+      "status": "active",
+      "passport_photo_url": "",
+      "id": "ba9fcd9e-c17f-4e36-ad8b-5103790ca861",
+      "company_id": "ADM-2026-001"
+    }
+  ],
+  "shareholder_cycle_earnings": [],
+  "vehicles": [],
+  "trip_manifests": [],
+  "users": [
+    {
+      "phone": "+234 803 111 0001",
+      "updated_at": "2026-07-20T12:10:36.126Z",
+      "created_at": "2026-07-20T12:10:36.126Z",
+      "status": "active",
+      "role_id": "role-director",
+      "password_hash": "d2c1c58593fddd645aa6fab3da4e12a68ff7506d9218c358cc959b11284973ce26b685de0277e780f4f524745899da190ad9e021eed1d0caf71b6c0b8aabf075",
+      "email": "director@ruqayyatransport.com",
+      "id": "36535156-2aed-4207-83ca-176b4f7059a0",
+      "username": "MMR",
+      "full_name": "Executive Director MMR"
+    },
+    {
+      "id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "updated_at": "2026-07-20T12:10:36.127Z",
+      "phone": "+234 803 222 0002",
+      "created_at": "2026-07-20T12:10:36.127Z",
+      "role_id": "role-admin",
+      "status": "active",
+      "full_name": "Operations Admin ADAM",
+      "password_hash": "caa211097e71777b95c779acc72d2a9432d0e4b32a8c74970d04c98e4c0630850eafec0efe5dbd7cdc4db3ddc98241337439445d921a7911ea4e467086cc167a",
+      "username": "ADAM",
+      "email": "admin@ruqayyatransport.com"
+    },
+    {
+      "updated_at": "2026-08-01T13:48:59.244Z",
+      "password_hash": "5c53323d04059d0c99cc75b8010b78e03a04c089a55044002882055d7507f2e171824cdfb09821f896b162efb103caa8a040ff56773bc0ec82197ab3e8e2042c",
+      "email": "kabir.m@ruqayyatransport.com",
+      "id": "99e7f37c-b4e5-4db3-83e3-957347d5f0dc",
+      "username": "KABIR",
+      "full_name": "Alhaji Kabir Mohammed",
+      "created_at": "2026-08-01T13:48:59.244Z",
+      "status": "active",
+      "phone": "+234 803 555 0001",
+      "role_id": "role-shareholder"
+    },
+    {
+      "id": "a6f3a796-a5f0-4a3a-a473-0e6fa093ebb2",
+      "updated_at": "2026-08-01T13:48:59.245Z",
+      "password_hash": "5c53323d04059d0c99cc75b8010b78e03a04c089a55044002882055d7507f2e171824cdfb09821f896b162efb103caa8a040ff56773bc0ec82197ab3e8e2042c",
+      "status": "active",
+      "created_at": "2026-08-01T13:48:59.245Z",
+      "role_id": "role-shareholder",
+      "email": "amina.g@ruqayyatransport.com",
+      "username": "AMINA",
+      "phone": "+234 803 555 0002",
+      "full_name": "Hajiya Amina Garba"
+    }
+  ],
+  "audit_logs": [
+    {
+      "new_value": "Authorized username-only login session valid until 2026-09-09T10:33:54.323Z",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "ip_address": "102.91.105.25, 169.254.169.126",
+      "id": "AUD-1786358034327-4A3CEBAA",
+      "user_role": "admin",
+      "action": "SESSION_CREATED",
+      "user_email": "admin@ruqayyatransport.com",
+      "created_at": "2026-08-10T10:33:54.327Z",
+      "status": "active",
+      "previous_value": null
+    },
+    {
+      "status": "active",
+      "new_value": "Suspended company operations: Ok",
+      "action": "COMPANY_OPERATIONS_PAUSE",
+      "created_at": "2026-08-01T20:41:43.695Z",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "ip_address": "102.91.93.217, 169.254.169.126",
+      "previous_value": "Operational Mode",
+      "user_role": "admin",
+      "id": "AUD-1785616903695-8BEE7C15"
+    },
+    {
+      "user_role": "admin",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "previous_value": null,
+      "id": "AUD-1785315808209-DC49283D",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "new_value": "Resumed operating cycle CYC-050",
+      "action": "CYCLE_RESUME",
+      "status": "active",
+      "user_email": "admin@ruqayyatransport.com",
+      "created_at": "2026-07-29T09:03:28.209Z"
+    },
+    {
+      "new_value": "Suspended company operations: Jj",
+      "created_at": "2026-07-29T09:03:17.874Z",
+      "user_email": "admin@ruqayyatransport.com",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "status": "active",
+      "action": "COMPANY_OPERATIONS_PAUSE",
+      "id": "AUD-1785315797874-3C4C7C41",
+      "user_role": "admin",
+      "previous_value": "Operational Mode",
+      "ip_address": "102.92.22.141, 169.254.169.126"
+    },
+    {
+      "id": "AUD-1785315768478-04702017",
+      "action": "COMPANY_OPERATIONS_RESUME",
+      "status": "active",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "user_role": "admin",
+      "user_email": "admin@ruqayyatransport.com",
+      "created_at": "2026-07-29T09:02:48.478Z",
+      "new_value": "Resumed company operations: Resumed by administrator",
+      "previous_value": "Paused",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596"
+    },
+    {
+      "previous_value": null,
+      "status": "active",
+      "id": "AUD-1785315377994-5F9A30C1",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "action": "CYCLE_PAUSE",
+      "user_role": "admin",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "new_value": "Paused operating cycle CYC-050. Reason: Uu",
+      "created_at": "2026-07-29T08:56:17.994Z",
+      "user_email": "admin@ruqayyatransport.com"
+    },
+    {
+      "action": "COMPANY_OPERATIONS_RESUME",
+      "status": "active",
+      "id": "AUD-1785315341241-D2AE80FA",
+      "new_value": "Resumed company operations: Resumed by administrator",
+      "user_email": "admin@ruqayyatransport.com",
+      "created_at": "2026-07-29T08:55:41.241Z",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "previous_value": "Paused",
+      "user_role": "admin",
+      "ip_address": "102.92.22.141, 169.254.169.126"
+    },
+    {
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "previous_value": null,
+      "user_role": "admin",
+      "id": "AUD-1785314040224-2A4C449C",
+      "new_value": "Paused operating cycle CYC-050. Reason: Ok",
+      "created_at": "2026-07-29T08:34:00.224Z",
+      "user_email": "admin@ruqayyatransport.com",
+      "status": "active",
+      "action": "CYCLE_PAUSE"
+    },
+    {
+      "user_role": "admin",
+      "user_email": "admin@ruqayyatransport.com",
+      "created_at": "2026-07-29T08:28:18.787Z",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "id": "AUD-1785313698787-67186800",
+      "previous_value": null,
+      "action": "SESSION_CREATED",
+      "new_value": "Authorized username-only login session valid until 2026-08-28T08:28:18.784Z",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "status": "active"
+    },
+    {
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "previous_value": null,
+      "user_role": "admin",
+      "new_value": "Authorized username-only login session valid until 2026-08-28T08:28:18.762Z",
+      "id": "AUD-1785313698766-8A73DF24",
+      "action": "SESSION_CREATED",
+      "created_at": "2026-07-29T08:28:18.766Z",
+      "user_email": "admin@ruqayyatransport.com",
+      "status": "active"
+    },
+    {
+      "user_role": "admin",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "action": "SESSION_CREATED",
+      "id": "AUD-1785312814398-363E224B",
+      "status": "active",
+      "new_value": "Authorized username-only login session valid until 2026-08-28T08:13:34.395Z",
+      "previous_value": null,
+      "created_at": "2026-07-29T08:13:34.398Z",
+      "user_email": "admin@ruqayyatransport.com"
+    },
+    {
+      "ip_address": "102.92.22.141, 169.254.169.126",
+      "id": "AUD-1785312240325-0F415763",
+      "new_value": "Authorized username-only login session valid until 2026-08-28T08:04:00.320Z",
+      "action": "SESSION_CREATED",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "status": "active",
+      "previous_value": null,
+      "user_role": "admin",
+      "user_email": "admin@ruqayyatransport.com",
+      "created_at": "2026-07-29T08:04:00.325Z"
+    },
+    {
+      "user_email": "admin@ruqayyatransport.com",
+      "created_at": "2026-07-29T07:44:42.567Z",
+      "id": "AUD-1785311082567-705B1308",
+      "status": "active",
+      "action": "COMPANY_OPERATIONS_START",
+      "user_role": "admin",
+      "previous_value": "Setup Mode",
+      "new_value": "Activated live enterprise operations. First 30-day operating cycle commenced by Operations Admin ADAM",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "ip_address": "102.92.22.141, 169.254.169.126"
+    },
+    {
+      "previous_value": null,
+      "action": "SYSTEM_BOOTSTRAP",
+      "new_value": "Clean ERP system initialized. Database is fresh and ready for operations.",
+      "user_email": "system",
+      "created_at": "2026-07-20T12:10:36.127Z",
+      "id": "AUD-1784549436127-SETUP",
+      "user_role": "public",
+      "ip_address": "127.0.0.1",
+      "user_id": null
+    }
+  ],
+  "directors": [
+    {
+      "user_id": "36535156-2aed-4207-83ca-176b4f7059a0",
+      "status": "active",
+      "company_id": "DIR-2026-001",
+      "created_at": "2026-07-20T12:10:36.127Z",
+      "id": "85d3c1b3-7abd-4d32-a682-88221474456d",
+      "passport_photo_url": ""
+    }
+  ],
+  "guarantors": [],
   "push_subscriptions": [
     {
-      "id": "fallback-sub-admin",
+      "created_at": "2026-07-29T07:36:15.971Z",
       "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "id": "fallback-sub-admin",
       "subscription": {
         "endpoint": "http://localhost:3000/api/notifications/fallback-push-endpoint",
         "keys": {
           "p256dh": "placeholder-p256dh",
           "auth": "placeholder-auth"
         }
-      },
-      "created_at": "2026-07-29T07:36:15.971Z"
+      }
     }
   ],
-  "vapid_keys": {
-    "publicKey": "BBTQfoPW8_OAvjAy5iR8e3ce-PvQN4AS9JkeK7rIC-49ONqCYCSn4EWD1BBKB7lDR-_8UOXhf2jLkvGfTq_ucrc",
-    "privateKey": "6huXoUbKJyFaCxjNwjvN6fq-HP3K5Js_L5y0yqKIaZc"
-  },
-  "company_settings": {
-    "companyName": "Ruqayya Transport Limited",
-    "companyLogo": "",
-    "companyAddress": "No 14 Zaria Road, Kano, Nigeria",
-    "phone": "+234 803 123 4567",
-    "email": "info@ruqayyatransport.com",
-    "currency": "\u20a6",
-    "timeZone": "Africa/Lagos",
-    "languageDefault": "en",
-    "themeDefault": "light",
-    "wallet_initial_amount": 0,
-    "wallet_balance": 0
-  },
-  "shareholder_settings": {
-    "distributionPercentage": 2
-  },
+  "fuel_vouchers": [],
   "company_operations_state": {
+    "currentDay": 13,
     "status": "Paused",
-    "currentCycle": "CYC-050",
-    "currentDay": 4,
-    "startedBy": "Operations Admin ADAM",
+    "auditLog": [
+      {
+        "timestamp": "2026-08-01T20:41:43.692Z",
+        "ip": "127.0.0.1",
+        "user": "Operations Admin ADAM",
+        "action": "Pause Operations",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "reason": "Ok",
+        "browser": "Chrome",
+        "id": "f77551b5-6721-4c6b-b848-61bc59e8f41c"
+      },
+      {
+        "browser": "Chrome",
+        "timestamp": "2026-07-29T09:03:17.870Z",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "reason": "Jj",
+        "action": "Pause Operations",
+        "ip": "127.0.0.1",
+        "user": "Operations Admin ADAM",
+        "id": "0569bd13-4bc5-460c-a653-81357264a172"
+      },
+      {
+        "reason": "Resumed by administrator",
+        "action": "Resume Operations",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "timestamp": "2026-07-29T09:02:48.472Z",
+        "id": "dea4d549-2325-46f6-b391-f392cc689764",
+        "browser": "Chrome",
+        "ip": "127.0.0.1",
+        "user": "Operations Admin ADAM"
+      },
+      {
+        "reason": "Resumed by administrator",
+        "user": "Operations Admin ADAM",
+        "action": "Resume Operations",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "timestamp": "2026-07-29T08:55:41.186Z",
+        "browser": "Chrome",
+        "ip": "127.0.0.1",
+        "id": "0bbae64d-352e-470e-882e-58b12ac0d1db"
+      },
+      {
+        "timestamp": "2026-07-29T07:44:42.563Z",
+        "ip": "127.0.0.1",
+        "browser": "Chrome",
+        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+        "reason": "Company ready for live transit & leasing business",
+        "action": "Start Operations",
+        "id": "c0ddaf42-52f0-4089-b282-3898d66944c4",
+        "user": "Operations Admin ADAM"
+      }
+    ],
     "startedAt": "2026-07-29T07:44:42.563Z",
     "pauseHistory": [
       {
+        "reason": "Ok",
         "id": "0dec47cc-e79c-418d-bc2c-d906124828c8",
         "pausedBy": "Operations Admin ADAM",
-        "pausedAt": "2026-08-01T20:41:43.692Z",
-        "reason": "Ok"
+        "pausedAt": "2026-08-01T20:41:43.692Z"
       },
       {
+        "pausedBy": "Operations Admin ADAM",
+        "resumeReason": "Ok",
         "id": "5620f83c-4b85-4fb3-88fc-4f0c7c5983f7",
-        "pausedBy": "Operations Admin ADAM",
-        "pausedAt": "2026-07-29T09:03:17.870Z",
         "reason": "Jj",
-        "resumedBy": "Operations Admin ADAM",
         "resumedAt": "2026-07-29T09:03:28.205Z",
-        "resumeReason": "Ok"
+        "resumedBy": "Operations Admin ADAM",
+        "pausedAt": "2026-07-29T09:03:17.870Z"
       },
       {
-        "id": "49a4275a-c7c4-4dfa-84d5-1d4103ac3224",
-        "pausedBy": "Operations Admin ADAM",
+        "resumeReason": "Resumed by administrator",
         "pausedAt": "2026-07-29T08:56:17.986Z",
-        "reason": "Uu",
-        "resumedBy": "Operations Admin ADAM",
         "resumedAt": "2026-07-29T09:02:48.472Z",
-        "resumeReason": "Resumed by administrator"
+        "resumedBy": "Operations Admin ADAM",
+        "reason": "Uu",
+        "id": "49a4275a-c7c4-4dfa-84d5-1d4103ac3224",
+        "pausedBy": "Operations Admin ADAM"
       },
       {
-        "id": "0c11e39a-7e15-48d8-bd20-21b362f5cd5d",
-        "pausedBy": "Operations Admin ADAM",
         "pausedAt": "2026-07-29T08:34:00.214Z",
+        "id": "0c11e39a-7e15-48d8-bd20-21b362f5cd5d",
         "reason": "Ok",
-        "resumedBy": "Operations Admin ADAM",
+        "pausedBy": "Operations Admin ADAM",
+        "resumeReason": "Resumed by administrator",
         "resumedAt": "2026-07-29T08:55:41.186Z",
-        "resumeReason": "Resumed by administrator"
+        "resumedBy": "Operations Admin ADAM"
       }
     ],
-    "auditLog": [
-      {
-        "id": "f77551b5-6721-4c6b-b848-61bc59e8f41c",
-        "action": "Pause Operations",
-        "user": "Operations Admin ADAM",
-        "timestamp": "2026-08-01T20:41:43.692Z",
-        "reason": "Ok",
-        "ip": "127.0.0.1",
-        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-        "browser": "Chrome"
-      },
-      {
-        "id": "0569bd13-4bc5-460c-a653-81357264a172",
-        "action": "Pause Operations",
-        "user": "Operations Admin ADAM",
-        "timestamp": "2026-07-29T09:03:17.870Z",
-        "reason": "Jj",
-        "ip": "127.0.0.1",
-        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-        "browser": "Chrome"
-      },
-      {
-        "id": "dea4d549-2325-46f6-b391-f392cc689764",
-        "action": "Resume Operations",
-        "user": "Operations Admin ADAM",
-        "timestamp": "2026-07-29T09:02:48.472Z",
-        "reason": "Resumed by administrator",
-        "ip": "127.0.0.1",
-        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-        "browser": "Chrome"
-      },
-      {
-        "id": "0bbae64d-352e-470e-882e-58b12ac0d1db",
-        "action": "Resume Operations",
-        "user": "Operations Admin ADAM",
-        "timestamp": "2026-07-29T08:55:41.186Z",
-        "reason": "Resumed by administrator",
-        "ip": "127.0.0.1",
-        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-        "browser": "Chrome"
-      },
-      {
-        "id": "c0ddaf42-52f0-4089-b282-3898d66944c4",
-        "action": "Start Operations",
-        "user": "Operations Admin ADAM",
-        "timestamp": "2026-07-29T07:44:42.563Z",
-        "reason": "Company ready for live transit & leasing business",
-        "ip": "127.0.0.1",
-        "device": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
-        "browser": "Chrome"
-      }
-    ]
-  }
+    "currentCycle": "CYC-050",
+    "startedBy": "Operations Admin ADAM"
+  },
+  "sessions": [
+    {
+      "status": "active",
+      "user_ip": "102.91.101.154, 169.254.169.126",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "created_at": "2026-07-20T12:10:45.500Z",
+      "token": "tok_admin_ADAM_7be155804f844646afe603eca39ed2d0",
+      "id": "fd9e845d-f0c8-48f6-a729-ac05983569ff",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "expires_at": "2026-08-19T12:10:45.500Z"
+    },
+    {
+      "created_at": "2026-07-20T12:21:25.867Z",
+      "status": "active",
+      "expires_at": "2026-08-19T12:21:25.867Z",
+      "token": "tok_fallback_ADAM",
+      "user_agent": "curl/7.88.1",
+      "id": "e73c82d9-58af-4c54-9477-6836c59cac96",
+      "user_ip": "127.0.0.1",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596"
+    },
+    {
+      "created_at": "2026-07-29T07:37:26.664Z",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "expires_at": "2026-08-28T07:37:26.664Z",
+      "id": "5b3ed410-cd4a-4102-b827-ac9340a705d7",
+      "token": "tok_admin_ADAM_aed10d60e06c4f69a000d54668275237",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "status": "active"
+    },
+    {
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "created_at": "2026-07-29T08:04:00.320Z",
+      "token": "tok_admin_ADAM_38bae1d66da64dcab4eadf2d8ed1445c",
+      "id": "5c158f80-ccfc-4506-b2c5-17aa3e8a0eeb",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "status": "logged_out",
+      "expires_at": "2026-08-28T08:04:00.320Z"
+    },
+    {
+      "expires_at": "2026-08-28T08:13:34.395Z",
+      "id": "31f95bf5-0db9-4490-afcb-6c3035955a4d",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:13:34.395Z",
+      "status": "logged_out",
+      "token": "tok_admin_ADAM_317f11e158f64cfaa80611b9bd2ee7ba"
+    },
+    {
+      "created_at": "2026-07-29T08:23:23.644Z",
+      "status": "logged_out",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "id": "e71e1385-16c3-43b6-94b7-5fc845ce2706",
+      "expires_at": "2026-08-28T08:23:23.644Z",
+      "token": "tok_fallback_ADAM_1785313401555",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36"
+    },
+    {
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "expires_at": "2026-08-28T08:28:18.762Z",
+      "id": "227546a3-a50d-465b-8121-92df156e1a5d",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "token": "tok_admin_ADAM_6a92118c07c14fc9b1fb7aa41b3d2757",
+      "status": "active",
+      "created_at": "2026-07-29T08:28:18.762Z"
+    },
+    {
+      "id": "5a1a169c-3ee5-41c4-951f-817badb7a9ba",
+      "expires_at": "2026-08-28T08:28:18.784Z",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "status": "active",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_ip": "102.92.22.141, 169.254.169.126",
+      "created_at": "2026-07-29T08:28:18.785Z",
+      "token": "tok_admin_ADAM_2b1337e46c024df7844b6b092f4ac5d2"
+    },
+    {
+      "expires_at": "2026-08-31T20:07:34.703Z",
+      "token": "tok_admin_ADAM_d149d829c2d248a6b787c55d8c864dc1",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "status": "active",
+      "user_ip": "102.91.96.40, 169.254.169.126",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "created_at": "2026-08-01T20:07:34.703Z",
+      "id": "5b2f7acf-bd9c-4716-83c7-30727284607d"
+    },
+    {
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_ip": "102.92.24.74, 169.254.169.126",
+      "id": "d7c7448e-a0b6-46ee-a12c-bce4d77c0940",
+      "created_at": "2026-08-10T07:15:33.471Z",
+      "expires_at": "2026-09-09T07:15:33.471Z",
+      "status": "active",
+      "token": "tok_admin_ADAM_7e19ca60243c49e09cc9f66690c6efd8",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36"
+    },
+    {
+      "id": "44b8f0de-b6dc-4e1f-8370-68bc5ee3d34e",
+      "status": "active",
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "user_ip": "102.91.105.25, 169.254.169.126",
+      "created_at": "2026-08-10T10:33:54.323Z",
+      "token": "tok_admin_ADAM_e570491dd9694b858863442ef337c144",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36",
+      "expires_at": "2026-09-09T10:33:54.323Z"
+    }
+  ],
+  "user_preferences": [
+    {
+      "quietHoursEnd": "06:00",
+      "preferredLanguage": "en",
+      "id": "0bb1a867-c327-4b90-ac90-24828669f5b1",
+      "enableFinanceAlerts": true,
+      "enableSound": true,
+      "enableVibration": true,
+      "quietHoursStart": "22:00",
+      "enableSecurityAlerts": true,
+      "enablePush": true,
+      "user_id": "fb30b905-d662-4420-9e2e-96de9a017596",
+      "enableAnnouncement": true
+    }
+  ],
+  "company_documents": []
 }
