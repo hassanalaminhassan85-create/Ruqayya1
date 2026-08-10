@@ -448,7 +448,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
         // Pre-fetch installments for active cycle
         const driverId = currentDriver?.id || 'me';
         const instRes = await api.request(`/api/drivers/${driverId}/installments?cycleId=${activeCycle.id}`).catch(() => ({ installments: [] }));
-        const fetchedInstallments = instRes.installments || [];
+        const fetchedInstallments = Array.isArray(instRes) ? instRes : (instRes?.installments || []);
         setInstallments(fetchedInstallments);
         if (fetchedInstallments.length > 0) {
           const liveDue = fetchedInstallments.find((i: any) => i.isCurrentRealTime && i.status !== 'Completed') ||
@@ -491,7 +491,7 @@ export const DriverDashboard: React.FC<DriverDashboardProps> = ({
 
       const driverId = currentDriver?.id || 'me';
       const instRes = await api.request(`/api/drivers/${driverId}/installments?cycleId=${cycleId}`).catch(() => ({ installments: [] }));
-      const fetchedInstallments = instRes.installments || [];
+      const fetchedInstallments = Array.isArray(instRes) ? instRes : (instRes?.installments || []);
       
       setInstallments(fetchedInstallments);
 

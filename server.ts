@@ -7423,7 +7423,7 @@ app.get("/api/drivers/:id/installments", authenticateSession, (req, res) => {
     
     const cycleIdQuery = req.query.cycleId as string;
     const activeCycle =
-      (cycleIdQuery ? db.cycles.find((c: any) => c.id === cycleIdQuery) : null) ||
+      (cycleIdQuery && cycleIdQuery !== "active" ? db.cycles.find((c: any) => c.id === cycleIdQuery || c.cycleId === cycleIdQuery) : null) ||
       db.cycles.find((c: any) => c.status === "active" || c.status === "paused") ||
       db.cycles[0] || { id: "CYC-001", startDate: new Date().toISOString() };
     

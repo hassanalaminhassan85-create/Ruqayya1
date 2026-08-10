@@ -5260,9 +5260,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         if (!drv)
           return buildResponse({ error: "Driver profile not found." }, 404);
 
-        const activeCycle = db.cycles.find((c: any) => c.status === "active");
-        const inst = calculateInstallmentsForDriver(drv, db, activeCycle);
-        return buildResponse(inst);
+        const urlObj = new URL(url);
+        const cycleIdQuery = urlObj.searchParams.get("cycleId");
+        const selectedCycle =
+          (cycleIdQuery && cycleIdQuery !== "active"
+            ? db.cycles.find((c: any) => c.id === cycleIdQuery || c.cycleId === cycleIdQuery)
+            : null) ||
+          db.cycles.find((c: any) => c.status === "active" || c.status === "paused") ||
+          db.cycles[0] ||
+          { id: "CYC-001", startDate: new Date().toISOString() };
+
+        const inst = calculateInstallmentsForDriver(drv, db, selectedCycle);
+        return buildResponse({ success: true, installments: inst, cycle: selectedCycle });
       }
     }
 

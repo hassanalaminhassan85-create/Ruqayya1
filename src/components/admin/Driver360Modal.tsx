@@ -146,9 +146,18 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
     setLoadingTrips(true);
     try {
       // Installments
-      const res = await api.request(`/api/drivers/${activeDriver.id}/installments`).catch(() => ({ installments: [] }));
-      if (res && res.success) {
-        setInstallments(res.installments || []);
+      const cycleParam = selectedCycleIdFilter && selectedCycleIdFilter !== 'active' ? `?cycleId=${selectedCycleIdFilter}` : '';
+      const res = await api.request(`/api/drivers/${activeDriver.id}/installments${cycleParam}`).catch(() => ({ installments: [] }));
+      
+      const fetchedInst = Array.isArray(res) ? res : (res?.installments || []);
+      setInstallments(fetchedInst);
+
+      if (res?.cycle) {
+        setActiveCycleInfo((prev) => ({
+          ...(prev || {}),
+          cycleId: res.cycle.id || res.cycle.cycleId || 'CYC-001',
+          endDate: res.cycle.endDate || '',
+        } as any));
       }
 
       // Trips
@@ -280,7 +289,7 @@ export const Driver360Modal: React.FC<Driver360ModalProps> = ({
       if (wsConnectTimeout) clearTimeout(wsConnectTimeout);
       window.removeEventListener('db-change', handleDBChange);
     };
-  }, [activeDriver?.id]);
+  }, [activeDriver?.id, selectedCycleIdFilter]);
 
   // Action Modals
   const [isLogAccidentOpen, setIsLogAccidentOpen] = useState(false);

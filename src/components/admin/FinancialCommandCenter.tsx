@@ -1500,7 +1500,7 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
                     <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Current Installment due</span>
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-md font-bold text-slate-900 font-mono">₦{installmentDue.toLocaleString()}</p>
-                      <Badge variant="primary" className="font-mono text-[9px]">Cycle #{selectedCycle || '1'} • Inst #{currentInstallmentNumber}</Badge>
+                      <Badge variant="primary" className="font-mono text-[9px]">Cycle ID: {activeCycle?.id || activeCycle?.cycleId || selectedCycle || 'CYC-001'} • Inst #{currentInstallmentNumber}</Badge>
                     </div>
                     <span className="text-[9px] text-text-muted block mt-1">Due every 5 operational days</span>
                   </div>
@@ -1897,6 +1897,30 @@ export const FinancialCommandCenter: React.FC<FinancialCommandCenterProps> = ({
           animate={{ opacity: 1, y: 0 }}
           className="grid grid-cols-1 lg:grid-cols-12 gap-6"
         >
+          {/* SYNCHRONIZED OPERATING CYCLE BANNER */}
+          <div className="lg:col-span-12 bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between text-white font-mono text-xs shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/10 rounded-lg border border-amber-500/20 text-brand-gold">
+                <Layers className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 font-sans">Operating Cycle Synchronized</span>
+                  <Badge variant="amber" className="text-[9px] uppercase font-mono px-2 py-0.5">
+                    {activeCycle?.id || activeCycle?.cycleId || 'CYC-001'}
+                  </Badge>
+                </div>
+                <p className="text-xs font-bold text-slate-200 mt-0.5">
+                  Real-time Operational Expenditure Ledger for Cycle: <span className="text-brand-gold">{activeCycle?.id || activeCycle?.cycleId || 'CYC-001'}</span>
+                </p>
+              </div>
+            </div>
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded">
+                ● REAL-TIME SYNCHRONIZED
+              </span>
+            </div>
+          </div>
           {/* LEFT: LOG EXPENSE FORM */}
           <Card className="lg:col-span-5 p-5 h-fit">
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-2">{t.recordExp}</h3>
